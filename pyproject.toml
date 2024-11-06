@@ -1,0 +1,8 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "opendg"
+authors = [{name = "Shenyang Huang", email = "shenyang.huang@mail.mcgill.ca"}]
+dynamic = ["version", "description"]
