@@ -13,7 +13,3 @@ Data Objects
    :nosignatures:
    :toctree: ../generated
    :template: autosummary/class.rst
-
-   {% for name in opendg.data %}
-     {{ name }}
-   {% endfor %}
