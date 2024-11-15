@@ -1,4 +1,4 @@
-from opendg.data import BaseData
+from opendg.data.data import BaseData
 from typing import (
     Any,
     Callable,

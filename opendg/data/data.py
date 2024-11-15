@@ -12,7 +12,7 @@ from typing import (
 
 
 class BaseData:
-    """Base class for all temporal graph data structures."""
+    r"""Base class for all temporal graph data structures."""
     def __getattr__(self, key: str) -> Any:
         raise NotImplementedError
 
@@ -119,6 +119,11 @@ class CTDG(BaseData):
         """Converts a continuous time dynamic graph to a list of snapshots."""
         # Implement this method
         pass
+
+    def load_csv(self, file_path: str) -> Any:
+        """Loads a continuous time dynamic graph from a csv file."""
+        # Implement this method
+        pass
     
 
 class DTDG(BaseData):
@@ -170,6 +175,12 @@ class DTDG(BaseData):
         """Converts a discrete time dynamic graph to a list of snapshots."""
         # Implement this method
         pass
+
+    def load_csv(self, file_path: str) -> Any:
+        """Loads a discrete time dynamic graph from a csv file."""
+        # Implement this method
+        pass
+    
 
     
     

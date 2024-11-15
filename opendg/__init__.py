@@ -1,6 +1,7 @@
 """ OpenDG library for fast ML on temporal graphs."""
 
-from .data import BaseData,CTDG,DTDG
+from .data.data import BaseData,CTDG,DTDG
+from .data.storage import EventStore
 
 __version__ = '0.1.0'
 
