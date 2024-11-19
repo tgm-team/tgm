@@ -1,6 +1,6 @@
 
 import copy
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, Mapping, Sequence
 from collections import defaultdict, namedtuple
 import torch
 from torch import Tensor
@@ -48,6 +48,7 @@ class BaseTGStore(MutableMapping):
         super().__init__()
         self._timestamp = timestamp
         self._mapping: Dict[str, Any] = {}
+        self._device = 'cpu'
         for key, value in (_mapping or {}).items():
             setattr(self, key, value)
         for key, value in kwargs.items():
@@ -60,7 +61,10 @@ class BaseTGStore(MutableMapping):
     @property
     def timestamp(self) -> int:
         return self._timestamp
-
+    
+    @property
+    def device(self) -> str:
+        return self._device
 
     def _pop_cache(self, key: str) -> None:
         for cache in getattr(self, '_cached_attr', {}).values():
@@ -177,6 +181,105 @@ class BaseTGStore(MutableMapping):
         only the ones given in :obj:`*args`.
         """
         return self.apply(lambda x: x.contiguous(), *args)
+    
+
+    # Accelerator Functionalities ##############################################
+
+    def apply_(self, func: Callable, *args: str) -> Self:
+        r"""Applies the in-place function :obj:`func`, either to all attributes
+        or only the ones given in :obj:`*args`.
+        """
+        for value in self.values(*args):
+            recursive_apply_(value, func)
+        return self
+
+    def apply(self, func: Callable, *args: str) -> Self:
+        r"""Applies the function :obj:`func`, either to all attributes or only
+        the ones given in :obj:`*args`.
+        """
+        for key, value in self.items(*args):
+            self[key] = recursive_apply(value, func)
+        return self
+    
+    def contiguous(self, *args: str) -> Self:
+        r"""Ensures a contiguous memory layout, either for all attributes or
+        only the ones given in :obj:`*args`.
+        """
+        return self.apply(lambda x: x.contiguous(), *args)
+
+    def to(
+        self,
+        device: Union[int, str],
+        *args: str,
+        non_blocking: bool = False,
+    ) -> Self:
+        r"""Performs tensor dtype and/or device conversion, either for all
+        attributes or only the ones given in :obj:`*args`.
+        """
+        self._device = device
+        return self.apply(
+            lambda x: x.to(device=device, non_blocking=non_blocking), *args)
+
+    def cpu(self, *args: str) -> Self:
+        r"""Copies attributes to CPU memory, either for all attributes or only
+        the ones given in :obj:`*args`.
+        """
+        self._device = 'cpu'
+        return self.apply(lambda x: x.cpu(), *args)
+
+    def cuda(
+        self,
+        device: Optional[Union[int, str]] = None,
+        *args: str,
+        non_blocking: bool = False,
+    ) -> Self:  # pragma: no cover
+        r"""Copies attributes to CUDA memory, either for all attributes or only
+        the ones given in :obj:`*args`.
+        """
+        if device is None:
+            device = 'cuda'
+        self._device = device
+        return self.apply(lambda x: x.cuda(device, non_blocking=non_blocking),
+                          *args)
+    
+    def pin_memory(self, *args: str) -> Self:
+        r"""Copies attributes to pinned memory, either for all attributes or
+        only the ones given in :obj:`*args`.
+        """
+        return self.apply(lambda x: x.pin_memory(), *args)
+
+    def share_memory_(self, *args: str) -> Self:
+        r"""Moves attributes to shared memory, either for all attributes or
+        only the ones given in :obj:`*args`.
+        """
+        return self.apply(lambda x: x.share_memory_(), *args)
+
+    def detach_(self, *args: str) -> Self:
+        r"""Detaches attributes from the computation graph, either for all
+        attributes or only the ones given in :obj:`*args`.
+        """
+        return self.apply(lambda x: x.detach_(), *args)
+
+    def detach(self, *args: str) -> Self:
+        r"""Detaches attributes from the computation graph by creating a new
+        tensor, either for all attributes or only the ones given in
+        :obj:`*args`.
+        """
+        return self.apply(lambda x: x.detach(), *args)
+    
+    def requires_grad_(self, *args: str, requires_grad: bool = True) -> Self:
+        r"""Tracks gradient computation, either for all attributes or only the
+        ones given in :obj:`*args`.
+        """
+        return self.apply(
+            lambda x: x.requires_grad_(requires_grad=requires_grad), *args)
+
+    def record_stream(self, stream: torch.cuda.Stream, *args: str) -> Self:
+        r"""Ensures that the tensor memory is not reused for another tensor
+        until all current work queued on :obj:`stream` has been completed,
+        either for all attributes or only the ones given in :obj:`*args`.
+        """
+        return self.apply_(lambda x: x.record_stream(stream), *args)
 
 
 
@@ -196,12 +299,13 @@ class EventStore(BaseTGStore):
         self._mapping['edges'] = edges
         self._mapping['node_feats'] = node_feats
         self._mapping['edge_feats'] = edge_feats
+        self._timestamp = timestamp
 
         if (edge_feats is not None):
             assert edges is not None, "Edge features provided but no edges are provided"
             assert edges.shape[1] == edge_feats.shape[0], "Number of edges and edge features do not match"
         
-        #! Continue debug here
+        #! not sure if we need these for now.
         # for key, value in self._mapping.items():
         #     setattr(self, key, value)
         # for key, value in kwargs.items():
@@ -216,5 +320,43 @@ class EventStore(BaseTGStore):
     def num_updated_nodes(self) -> Optional[int]:
         r"""Returns the number of nodes involved in node feature updates."""
         return len(self._mapping['node_feats'])
-    
+
     #! TODO add # of num calculation from edge_index
+
+
+
+def recursive_apply_(data: Any, func: Callable) -> Any:
+    if isinstance(data, Tensor):
+        func(data)
+    elif isinstance(data, tuple) and hasattr(data, '_fields'):  # namedtuple
+        for value in data:
+            recursive_apply_(value, func)
+    elif isinstance(data, Sequence) and not isinstance(data, str):
+        for value in data:
+            recursive_apply_(value, func)
+    elif isinstance(data, Mapping):
+        for value in data.values():
+            recursive_apply_(value, func)
+    else:
+        try:
+            func(data)
+        except Exception:
+            pass
+
+
+def recursive_apply(data: Any, func: Callable) -> Any:
+    if isinstance(data, Tensor):
+        return func(data)
+    elif isinstance(data, torch.nn.utils.rnn.PackedSequence):
+        return func(data)
+    elif isinstance(data, tuple) and hasattr(data, '_fields'):  # namedtuple
+        return type(data)(*(recursive_apply(d, func) for d in data))
+    elif isinstance(data, Sequence) and not isinstance(data, str):
+        return [recursive_apply(d, func) for d in data]
+    elif isinstance(data, Mapping):
+        return {key: recursive_apply(data[key], func) for key in data}
+    else:
+        try:
+            return func(data)
+        except Exception:
+            return data
