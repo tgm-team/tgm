@@ -53,7 +53,7 @@ def test_loading_EventStore():
 def test_loading_CTDG():
     r"""Test the loading of a CTDG from a csv file."""
     test_edges = [] # [(u,v,t)]
-    test_size = 100
+    test_size = 1000 #100000
     fname = 'test_ctdg.csv'
     for i in range(0,test_size):
         test_edges.append((i,i+1,i))
@@ -67,6 +67,8 @@ def test_loading_CTDG():
     #* test loading directly from csv
     tg = CTDG(fname)
     tg.load_csv(fname)
+
+    #* test functionalities of ctdg
     assert tg.num_edges == test_size
     assert tg.min_time == 0
     assert tg.max_time == test_size-1
@@ -75,6 +77,12 @@ def test_loading_CTDG():
 
     test_index = tg.aggregate_graph(0,50)
     assert test_index.shape[1] == 51
+
+    timestamps, edge_index = tg.to_events()
+    assert len(timestamps) == test_size
+    assert edge_index.shape[1] == test_size
+    os.remove(fname)
+
             
 
 

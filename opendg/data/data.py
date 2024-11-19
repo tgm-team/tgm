@@ -222,9 +222,17 @@ class CTDG(BaseData):
         return out_index
 
     def to_events(self) -> Any:
-        """Converts a continuous time dynamic graph to a list of events."""
+        r"""Converts a continuous time dynamic graph to a list of edge events.
+        Returns: a tuple of timestamps and edge index tensors."""
         # Implement this method
-        pass
+        edge_index = self._store['events'][self.min_time].edges
+        timestamps = [self.min_time]*(edge_index.shape[1])
+        for t in self._store['events'].keys():
+            if (t> self.min_time):
+                edge_index = torch.cat((edge_index, self._store['events'][t].edges), dim=1)
+                timestamps.extend([t]*(self._store['events'][t].edges.shape[1]))
+        timestamps = torch.tensor(timestamps)
+        return timestamps, edge_index
     
     def to_snapshots(self) -> Any:
         """Converts a continuous time dynamic graph to a list of snapshots."""
