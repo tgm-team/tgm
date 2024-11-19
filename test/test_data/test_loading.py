@@ -68,9 +68,13 @@ def test_loading_CTDG():
     tg = CTDG(fname)
     tg.load_csv(fname)
     assert tg.num_edges == test_size
+    assert tg.min_time == 0
+    assert tg.max_time == test_size-1
+    test_index = tg.aggregate_graph()
+    assert test_index.shape[1] == test_size
 
-    #! debug from here, why is it 200 instead of 100
-
+    test_index = tg.aggregate_graph(0,50)
+    assert test_index.shape[1] == 51
             
 
 

@@ -131,12 +131,18 @@ class CTDG(BaseData):
 
         #! add logic to insert node events too
         self.__dict__['_store']['events'] = self._to_eventStore(edge_dict)
+        ts_list = list(edge_dict.keys())
+        self.__dict__['_store']['min_time'] = ts_list[0]
+        self.__dict__['_store']['max_time'] = ts_list[-1]
+        self.__dict__['_store']['timestamps'] = ts_list
+        
 
     def _to_eventStore(self, edge_dict:Dict[int,list]) -> Dict[int, EventStore]:
         r"""Converts a dictionary of edges to a dictionary of events."""
         event_dict = {}
         for t, edges in edge_dict.items():
             edge_index = torch.tensor(edges)
+            edge_index = torch.transpose(edge_index, 0, 1)
             event_dict[t] = EventStore(timestamp=t,edges=edge_index,node_feats=None)
         return event_dict
 
@@ -196,11 +202,24 @@ class CTDG(BaseData):
     
     ###########################################################################
 
-    def aggregate_graph(self, start_time:int, end_time:int):
-        """Aggregates the graph between start_time and end_time."""
+    def aggregate_graph(self, start_time:int=None, end_time:int=None) -> torch.Tensor:
+        r"""Aggregates the graph between start_time and end_time, inclusive.
+        Args:
+            start_time (int, optional): The start time of the aggregation. (default: :obj:`None`)
+            end_time (int, optional): The end time of the aggregation. (default: :obj:`None`)
+        Returns:
+            :class:`torch.Tensor`: The aggregated edge index tensor."""
+        if (start_time is None):
+            start_time = self.min_time
+        if (end_time is None):
+            end_time = self.max_time
         assert start_time <= end_time, "start_time should be less or equal to end_time"
         assert isinstance(start_time, int) and isinstance(end_time, int), "start_time and end_time should be integers"
-        pass
+        out_index = self._store['events'][start_time].edges
+        for t in self._store['events'].keys():
+            if (t > start_time and t <= end_time):
+                out_index = torch.cat((out_index, self._store['events'][t].edges), dim=1)
+        return out_index
 
     def to_events(self) -> Any:
         """Converts a continuous time dynamic graph to a list of events."""
@@ -222,6 +241,22 @@ class CTDG(BaseData):
     def num_edges(self) -> Optional[int]:
         r"""Returns the number of edges in the temporal graph."""
         return sum([event.num_edges for event in self._store['events'].values()])
+    
+    @property
+    def min_time(self) -> int:
+        r"""Returns the minimum timestamp in the temporal graph."""
+        return self.__dict__['_store']['min_time']
+    
+    @property
+    def max_time(self) -> int:
+        r"""Returns the maximum timestamp in the temporal graph."""
+        return self.__dict__['_store']['max_time']
+    
+    @property
+    def timestamps(self) -> List[int]:
+        r"""Returns the list of timestamps in the temporal graph."""
+        return self.__dict__['_store']['timestamps']
+    
         
     
 
