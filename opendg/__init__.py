@@ -1,4 +1,4 @@
-""" OpenDG library for fast ML on temporal graphs."""
+""" OpenDG library for geometric learning on temporal graphs."""
 
 from .data.data import CTDG,DTDG
 from .data.storage import EventStore

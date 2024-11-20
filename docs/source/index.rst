@@ -1,4 +1,7 @@
-Welcome to fastTG's documentation!
+:github_url: https://github.com/shenyangHuang/openDG
+
+
+openDG's Documentation
 ===================================
 
 **OpenDG** is a Python library for scalable and efficent temporal graph learning methods. 
@@ -10,10 +13,19 @@ how to :ref:`installation` the project.
 
    This project is under active development.
 
+.. slack_button::
+
 Contents
 --------
+.. toctree::
+   :maxdepth: 1
+   :caption: Install openDG
+
+   install/usage
+
 
 .. toctree::
+   :maxdepth: 1
+   :caption: Package Reference
 
-   usage
-   data
+   modules/data

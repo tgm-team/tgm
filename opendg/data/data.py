@@ -94,15 +94,8 @@ class CTDG(BaseData):
         # data = CTDG(data=edge_dict)
 
         # Analyzing the graph structure:
-        data.num_nodes
+        data.num_edges
         >>> 23
-
-        data.is_directed()
-        >>> False
-
-        # # PyTorch tensor functionality:
-        # data = data.pin_memory()
-        # data = data.to('cuda:0', non_blocking=True)
 
     Args:
         file_path (str, optional): The path to the csv file to be loaded. (default: :obj:`None`)
