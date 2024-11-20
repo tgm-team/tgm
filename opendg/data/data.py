@@ -14,9 +14,10 @@ from collections.abc import MutableMapping
 import csv
 import torch
 import os.path
+from abc import ABC
 
 
-class BaseData:
+class BaseData(ABC):
     r"""Base class for all temporal graph data structures."""
     def __getattr__(self, key: str) -> Any:
         raise NotImplementedError
