@@ -1,0 +1,32 @@
+name: Ruff Format and Linting
+
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  ruff:
+    env:
+      UV_CACHE_DIR: /tmp/.uv-cache
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: "Run Ruff Linting"
+        uses: astral-sh/ruff-action@v1
+        with:
+          changed-files: "true"
+
+      - name: "Run Ruff Formatter"
+        uses: astral-sh/ruff-action@v1
+        with:
+          args: "format --check"
+          changed-files: "true"
