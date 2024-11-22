@@ -13,8 +13,9 @@ class UniformSampler(Sampler):
         self.num_neighbors = num_neighbors
         self.seed = seed
 
-    def sample(self, data: BaseData, start_time: int, end_time: int,
-               node_ids: List[int]):
+    def sample(
+        self, data: BaseData, start_time: int, end_time: int, node_ids: List[int]
+    ):
         _ = data.aggregate_graph(start_time, end_time)  # edge_index
         """
         sampling logic
@@ -22,8 +23,9 @@ class UniformSampler(Sampler):
 
 
 class OracleUniformSampler(Sampler):
-    def __init__(self, data: BaseData, num_neighbors: List[int],
-                 seed: Optional[int] = None):
+    def __init__(
+        self, data: BaseData, num_neighbors: List[int], seed: Optional[int] = None
+    ):
         super().__init__()
         self.num_neighbors = num_neighbors
         self.seed = seed
@@ -38,7 +40,8 @@ class OracleUniformSampler(Sampler):
         for node_id in node_ids:
             if node_id not in self.node_neighbors:
                 out_dict[node_id] = self.node_neighbors[
-                    node_id]  # filter here by time though
+                    node_id
+                ]  # filter here by time though
         return out_dict
 
 
@@ -49,6 +52,7 @@ class RecencySampler(Sampler):
         self.seed = seed
         self.stored_neighbors = {}
 
-    def sample(self, data: BaseData, start_time: int, end_time: int,
-               node_ids: List[int]):
+    def sample(
+        self, data: BaseData, start_time: int, end_time: int, node_ids: List[int]
+    ):
         pass

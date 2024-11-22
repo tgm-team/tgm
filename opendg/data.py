@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional
 
 class BaseData:
     """Base class for all temporal graph data structures."""
+
     def __getattr__(self, key: str) -> Any:
         raise NotImplementedError
 
@@ -69,6 +70,7 @@ class CTDG(BaseData):
     """Class for Continuous Time Dynamic Graphs, often represented as a stream of
     edges.
     """
+
     def __init__(self, data: Dict[str, Any]):
         self.data = data
 
@@ -105,7 +107,8 @@ class CTDG(BaseData):
         """Aggregates the graph between start_time and end_time."""
         assert start_time <= end_time, 'start_time should be less or equal to end_time'
         assert isinstance(start_time, int) and isinstance(
-            end_time, int), 'start_time and end_time should be integers'
+            end_time, int
+        ), 'start_time and end_time should be integers'
 
     def to_events(self) -> Any:
         """Converts a continuous time dynamic graph to a list of events."""
@@ -120,6 +123,7 @@ class DTDG(BaseData):
     """Class for Discrete Time Dynamic Graphs, often represented as a sequence of
     graph snapshots.
     """
+
     def __init__(self, data: Dict[str, Any]):
         self.data = data
 
@@ -156,7 +160,8 @@ class DTDG(BaseData):
         """Aggregates the graph between start_time and end_time."""
         assert start_time <= end_time, 'start_time should be less or equal to end_time'
         assert isinstance(start_time, int) and isinstance(
-            end_time, int), 'start_time and end_time should be integers'
+            end_time, int
+        ), 'start_time and end_time should be integers'
 
     def to_events(self) -> Any:
         """Converts a discrete time dynamic graph to a list of events."""
