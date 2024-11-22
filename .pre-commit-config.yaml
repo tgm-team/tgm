@@ -50,6 +50,9 @@ repos:
     rev: v0.6.9
     hooks:
       - id: ruff
+        name: Ruff Linting
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
         name: Ruff formatting
         args: [--fix, --exit-non-zero-on-fix]
 
