@@ -4,5 +4,12 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "opendg"
-authors = [{name = "Shenyang Huang", email = "shenyang.huang@mail.mcgill.ca"}]
-dynamic = ["version", "description"]
+version = "0.1.0"
+description = "An Open Library for Temporal Graph Learning"
+readme = "README.rst"
+requires-python = ">=3.9"
+authors = [
+    {name="Shenyang Huang", email="shenyang.huang@mail.mcgill.ca"},
+    {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
+]
+dependencies = []
