@@ -13,3 +13,76 @@ authors = [
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
 ]
 dependencies = []
+
+[dependency-groups]
+dev = [
+    "isort>=5.13.2",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.1",
+    "pytest-cov>=6.0.0",
+    "pytest>=8.3.3",
+    "ruff>=0.7.3",
+]
+
+[tool.mypy]
+files = ["opendg"]
+install_types = true
+non_interactive = true
+ignore_missing_imports = true
+show_error_codes = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = true
+skip = [".gitignore", "__init__.py"]
+
+[tool.ruff]
+src = ["opendg"]
+line-length = 88
+indent-width = 4
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "D",  # pydocstyle
+]
+ignore = [
+    "D100",  # Ignore "Missing docstring in public module"
+    "D101",  # Ignore "Missing docstring in public class"
+    "D102",  # Ignore "Missing docstring in public method"
+    "D103",  # Ignore "Missing docstring in public function"
+    "D104",  # Ignore "Missing docstring in public package"
+    "D105",  # Ignore "Missing docstring in magic method"
+    "D107",  # Ignore "Missing docstring in __init__"
+    "D205",  # Ignore "blank line required between summary line and description"
+]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+addopts = [
+    "--capture=no",
+    "--color=yes",
+    "-vvv",
+]
+
+[tool.coverage.run]
+source = ["opendg"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "pass",
+    "raise NotImplementedError",
+    "register_parameter",
+    "torch.cuda.is_available",
+]
