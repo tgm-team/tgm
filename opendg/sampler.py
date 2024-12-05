@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from opendg.data import BaseData
 
@@ -15,11 +15,12 @@ class UniformSampler(Sampler):
 
     def sample(
         self, data: BaseData, start_time: int, end_time: int, node_ids: List[int]
-    ):
+    ) -> Dict[int, List[int]]:
         _ = data.aggregate_graph(start_time, end_time)  # edge_index
         """
         sampling logic
         """
+        return {}
 
 
 class OracleUniformSampler(Sampler):
@@ -33,9 +34,11 @@ class OracleUniformSampler(Sampler):
         """
         find the neighbors of each node that it ever had
         """
-        self.node_neighbors = {}
+        self.node_neighbors: Dict[int, List[int]] = {}
 
-    def sample(self, start_time: int, end_time: int, node_ids: List[int]):
+    def sample(
+        self, start_time: int, end_time: int, node_ids: List[int]
+    ) -> Dict[int, List[int]]:
         out_dict = {}
         for node_id in node_ids:
             if node_id not in self.node_neighbors:
@@ -50,9 +53,9 @@ class RecencySampler(Sampler):
         super().__init__()
         self.num_neighbors = num_neighbors
         self.seed = seed
-        self.stored_neighbors = {}
+        self.stored_neighbors: Dict[int, List[int]] = {}
 
     def sample(
         self, data: BaseData, start_time: int, end_time: int, node_ids: List[int]
-    ):
-        pass
+    ) -> Dict[int, List[int]]:
+        return {}
