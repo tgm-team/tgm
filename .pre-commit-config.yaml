@@ -70,3 +70,9 @@ repos:
     hooks:
       - id: sphinx-lint
         name: Check Sphinx
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        name: mypy
