@@ -2,8 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Union
 
 from opendg.typing import Event, Snapshot
-
-import torch
+from torch import Tensor
 
 
 class DGStorageBase(ABC):
@@ -40,7 +39,7 @@ class DGStorageBase(ABC):
         """Return the list of neighbours for each node in the nodes list."""
 
     @abstractmethod
-    def materialize(self) -> torch.Tensor:
+    def materialize(self) -> Tensor:
         """Materialize the dynamic graph data."""
 
     @abstractmethod
