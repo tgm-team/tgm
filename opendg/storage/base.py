@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Union
 
-from opendg.typing import Event, Snapshot
 from torch import Tensor
+
+from opendg.typing import Event, Snapshot
 
 
 class DGStorageBase(ABC):
