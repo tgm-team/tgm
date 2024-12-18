@@ -3,6 +3,8 @@ from typing import Dict, List, Union
 
 from opendg.typing import Event, Snapshot
 
+import torch
+
 
 class DGStorageBase(ABC):
     """Base class for all temporal graph data structures."""
@@ -36,6 +38,10 @@ class DGStorageBase(ABC):
     @abstractmethod
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[int]]:
         """Return the list of neighbours for each node in the nodes list."""
+
+    @abstractmethod
+    def materialize(self) -> torch.Tensor:
+        """Materialize the dynamic graph data."""
 
     @abstractmethod
     def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
