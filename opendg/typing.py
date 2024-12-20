@@ -1,7 +1,3 @@
-import os
-import pathlib
-from typing import Tuple, Union
-
-FileType = Union[str, os.PathLike, pathlib.Path]
+from typing import Tuple
 
 Event = Tuple[int, int, int]  # Source Vertex, Target Vertex, TimeStamp
