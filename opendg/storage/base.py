@@ -3,7 +3,7 @@ from typing import Dict, List, Union
 
 from torch import Tensor
 
-from opendg.typing import Event, Snapshot
+from opendg.typing import Event
 
 
 class DGStorageBase(ABC):
@@ -14,18 +14,9 @@ class DGStorageBase(ABC):
     def from_events(cls, events: List[Event]) -> 'DGStorageBase':
         """Create dynamic graph from a list of events."""
 
-    @classmethod
-    @abstractmethod
-    def from_snapshots(cls, snapshots: List[Snapshot]) -> 'DGStorageBase':
-        """Create dynamic graph from a list of snapshots."""
-
     @abstractmethod
     def to_events(self) -> List[Event]:
         """Convert dynamic graph to a list of events."""
-
-    @abstractmethod
-    def to_snapshots(self) -> List[Snapshot]:
-        """Converts dynamic graph to a list of snapshots."""
 
     @abstractmethod
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
@@ -40,15 +31,21 @@ class DGStorageBase(ABC):
         """Return the list of neighbours for each node in the nodes list."""
 
     @abstractmethod
-    def materialize(self) -> Tensor:
-        """Materialize the dynamic graph data."""
+    def materialize_node_features(self) -> Tensor:
+        """Materialiize the dynamic graph node feature data."""
+
+    @abstractmethod
+    def materialize_edge_features(self) -> Tensor:
+        """Materialiize the dynamic graph edge feature data."""
 
     @abstractmethod
     def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
         """Update the dynamic graph with an event of list of events."""
 
     @abstractmethod
-    def reindex(self, time_delta: int) -> 'DGStorageBase':
+    def temporal_coarsening(
+        self, time_delta: int, agg_func: str = 'sum'
+    ) -> 'DGStorageBase':
         """Re-index the temporal axis of the dynamic graph."""
 
     @property
