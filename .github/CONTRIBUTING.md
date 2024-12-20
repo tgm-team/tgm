@@ -14,7 +14,7 @@ pip install uv
 
 #### Background
 
-_uv_ manages a lockfile which maintains a consistent and fixed dependency graph for all _OpenDG_ dependencies. These dependencies are bundled in a python virtual environment stored [here](../.venv).
+_uv_ manages a lockfile which maintains a consistent and fixed dependency graph for all _OpenDG_ dependencies. These dependencies are bundled in a python virtual environment stored in a hidden `.venv` folder in the root project directory. The virtual environment is generated on the fly based on the lockfile and is created upon calling `uv sync`.
 
 #### Running commands
 
@@ -36,7 +36,7 @@ To add or remove a _core_ dependency, issue `uv add <package>` and `uv remove <p
 uv add numpy
 ```
 
-Note, this will automatically update the [pyproject.toml](../pyproject.toml) and [uv lock file](../uv.lock) with the new package which will be reflected in version control.
+**Note**: this will automatically update the [pyproject.toml](../pyproject.toml) and [uv lock file](../uv.lock) with the new package which will be reflected in version control.
 
 In order to facilitate modularity and avoid burdening users with dependencies they don't need, it's recommended to minimize core dependencies to those that **all** users will require for **every** release. To support this, _uv_ has the notion of _dependency groups_, which facilitate auxilary dependencies. For instance, the _dev_ group is the set of dependencies required for openDG development, but is not necessarily shipped to end-users of the library.
 
@@ -48,7 +48,7 @@ uv add --dev hypothesis
 
 Note, that auxilary dependency groups can be synced by running `uv sync --group <group name>`.
 
-In general, any wheels published on [pypi](https://pypi.org/) can be directly added, making _uv_ a dropin replacement for _pip_. For more complex use cases such as non-python dependencies, or installing specific package versions, consult the [uv documentation](https://docs.astral.sh/uv/).
+In general, any wheels published on [pypi](https://pypi.org/) can be directly added, making _uv_ a drop-in replacement for _pip_. For more complex use cases such as non-python dependencies, or installing specific package versions, consult the [uv documentation](https://docs.astral.sh/uv/).
 
 #### Activating the virtual environment
 
@@ -58,7 +58,9 @@ Sometimes you will want to activate the virtual environment manually in order to
 . .venv/bin/activate
 ```
 
-to activate the environment. Note that after doing so, you will have direct access to all executable (e.g. Python) as usual.
+to activate the environment.
+
+**Note**: after doing so, you will have direct access to all executables (e.g. Python) as usual.
 
 ## Installation
 
@@ -73,9 +75,15 @@ uv sync
 
 ### Install pre-commit hooks:
 
+OpenDG ships with a set of [pre-commit hooks](../.pre-commit-config.yaml) that automatically apply code formatting, linting, static type analysis, and more.
+
+The hooks can be installed by issuing:
+
 ```sh
 uv run pre-commit install
 ```
+
+It is recommended to use these hooks when commiting code remotely but they can also be skipped by commiting with the `--no-verify` flag.
 
 ## Unit Testing
 
@@ -110,9 +118,9 @@ Everytime you send a Pull Request, your commit will be built and checked against
 
 To build the documentation:
 
-1. [Build and install](#developing-pyg) openDG from source.
+1. [Build and install](#Installation) openDG from source.
 1. Generate the documentation via:
-   ```bash
+   ```sh
    cd docs
    uv run make html
    ```
