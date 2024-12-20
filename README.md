@@ -24,6 +24,7 @@
 </div>
 
 ## About The Project
+
 _OpenDG_ is a Python library for scalable and efficent temporal graph learning methods.
 
 ### Library Highlights
@@ -40,8 +41,8 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 ## Citation
 
-
 ## Contributing
+
 To learn more about making a contribution to _OpenDG_ see our [contribution page](./.github/CONTRIBUTING.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
