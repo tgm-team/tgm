@@ -22,6 +22,8 @@ dev = [
     "pytest-cov>=6.0.0",
     "pytest>=8.3.3",
     "ruff>=0.7.3",
+    "sphinx>=7.4.7",
+    "sphinx-rtd-theme>=3.0.2",
 ]
 
 [tool.mypy]
