@@ -64,6 +64,10 @@ to activate the environment.
 
 ## Installation
 
+### Install openDG
+
+#### From Source
+
 ```sh
 # Clone the repo
 git clone https://github.com/shenyangHuang/openDG.git
