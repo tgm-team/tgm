@@ -6,7 +6,7 @@ Usage
 Installation
 ------------
 
-To use fastTG, first install it using pip:
+To use OpenDG, first install it using pip:
 
 .. code-block:: console
 

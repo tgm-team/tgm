@@ -1,4 +1,4 @@
-Welcome to fastTG's documentation!
+Welcome to OpenDG's documentation!
 ===================================
 
 **OpenDG** is a Python library for scalable and efficent temporal graph learning methods.
