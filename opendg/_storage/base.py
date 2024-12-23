@@ -6,12 +6,12 @@ from torch import Tensor
 from opendg.typing import Event
 
 
-class DGStorageBase(ABC):
+class DGStorage(ABC):
     r"""Base class for temporal graph storage engine."""
 
     @classmethod
     @abstractmethod
-    def from_events(cls, events: List[Event]) -> 'DGStorageBase':
+    def from_events(cls, events: List[Event]) -> 'DGStorage':
         r"""Create dynamic graph from a list of events."""
 
     @abstractmethod
@@ -19,11 +19,11 @@ class DGStorageBase(ABC):
         r"""Convert dynamic graph to a list of events."""
 
     @abstractmethod
-    def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
+    def slice_time(self, start_time: int, end_time: int) -> 'DGStorage':
         r"""Extract temporal slice of the dynamic graph between start_time and end_time."""
 
     @abstractmethod
-    def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
+    def slice_nodes(self, nodes: List[int]) -> 'DGStorage':
         r"""Extract topological slice of the dynamcic graph given the list of nodes."""
 
     @abstractmethod
@@ -39,13 +39,13 @@ class DGStorageBase(ABC):
         r"""Materialiize the dynamic graph edge feature data."""
 
     @abstractmethod
-    def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
+    def update(self, events: Union[Event, List[Event]]) -> 'DGStorage':
         r"""Update the dynamic graph with an event of list of events."""
 
     @abstractmethod
     def temporal_coarsening(
         self, time_delta: int, agg_func: str = 'sum'
-    ) -> 'DGStorageBase':
+    ) -> 'DGStorage':
         r"""Re-index the temporal axis of the dynamic graph."""
 
     @property

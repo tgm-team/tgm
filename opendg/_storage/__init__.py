@@ -1,6 +1,6 @@
-from .base import DGStorageBase
+from .base import DGStorage
 
 
 __all__ = [
-    'DGStorageBase',
+    'DGStorage',
 ]
