@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional, Tuple, Union
 
+from _pytest.config.argparsing import ArgumentError
 from torch import Tensor
 
 from opendg._storage import DGStorageBase
@@ -33,6 +34,14 @@ class DGStorageDictImpl(DGStorageBase):
         return events
 
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
+        if start_time > end_time:
+            raise ValueError(
+                f'Bad slice: start_time must be <= end_time but received: start_time ({start_time}) > end_time ({end_time})'
+            )
+        self._invalid_cache()
+        self._events_dict = {
+            k: v for k, v in self._events_dict.items() if start_time <= k < end_time
+        }
         return self
 
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
@@ -84,3 +93,10 @@ class DGStorageDictImpl(DGStorageBase):
         if self._num_timestamps is None:
             self._num_timestamps = len(self._events_dict)
         return self._num_timestamps
+
+    def _invalid_cache(self) -> None:
+        self._start_time = None
+        self._end_time = None
+        self._num_nodes = None
+        self._num_edges = None
+        self._num_timestamps = None
