@@ -2,7 +2,7 @@
 
 # -- Project information
 
-project = 'ftg'
+project = 'opendg'
 copyright = '2024, Shenyang'
 author = 'Shenyang Huang'
 

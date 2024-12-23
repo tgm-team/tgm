@@ -6,7 +6,7 @@ build-backend = "flit_core.buildapi"
 name = "opendg"
 version = "0.1.0"
 description = "An Open Library for Temporal Graph Learning"
-readme = "README.rst"
+readme = "README.md"
 requires-python = ">=3.9"
 authors = [
     {name="Shenyang Huang", email="shenyang.huang@mail.mcgill.ca"},
@@ -22,6 +22,8 @@ dev = [
     "pytest-cov>=6.0.0",
     "pytest>=8.3.3",
     "ruff>=0.7.3",
+    "sphinx>=7.4.7",
+    "sphinx-rtd-theme>=3.0.2",
 ]
 
 [tool.mypy]
