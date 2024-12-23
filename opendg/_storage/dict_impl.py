@@ -53,6 +53,10 @@ class DGStorageDictImpl(DGStorageBase):
         return None
 
     def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
+        if not isinstance(events, list):
+            events = [events]
+        for t, u, v in events:
+            self._events_dict[t] = (u, v)
         return self
 
     def temporal_coarsening(

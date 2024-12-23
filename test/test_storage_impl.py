@@ -47,3 +47,17 @@ def test_slice_time_bad_slice(DGStorageImpl):
     storage = DGStorageImpl(events_dict)
     with pytest.raises(ValueError):
         storage.slice_time(2, 1)
+
+
+def test_update_single_event(DGStorageImpl):
+    events = [(1, 2, 3)]
+    storage = DGStorageImpl.from_events(events)
+    storage = storage.update((5, 10, 20))
+    assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
+
+
+def test_update_multiple_events(DGStorageImpl):
+    events = []
+    storage = DGStorageImpl.from_events(events)
+    storage = storage.update([(1, 2, 3), (5, 10, 20)])
+    assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
