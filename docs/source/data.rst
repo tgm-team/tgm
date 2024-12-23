@@ -1,4 +1,4 @@
-ftg.data
+opendg.data
 ====================
 
 .. contents:: Contents
