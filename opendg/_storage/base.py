@@ -48,6 +48,10 @@ class DGStorageBase(ABC):
     ) -> 'DGStorageBase':
         r"""Re-index the temporal axis of the dynamic graph."""
 
+    def __len__(self) -> int:
+        r"""Returns the number of temporal length of the dynamic graph."""
+        return self.num_timestamps
+
     @property
     @abstractmethod
     def start_time(self) -> int:

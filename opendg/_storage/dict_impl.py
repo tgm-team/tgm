@@ -1,6 +1,5 @@
 from typing import Dict, List, Optional, Tuple, Union
 
-from _pytest.config.argparsing import ArgumentError
 from torch import Tensor
 
 from opendg._storage import DGStorageBase
