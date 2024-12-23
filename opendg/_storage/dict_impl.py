@@ -33,10 +33,7 @@ class DGStorageDictImpl(DGStorageBase):
         return events
 
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
-        if start_time > end_time:
-            raise ValueError(
-                f'Bad slice: start_time must be <= end_time but received: start_time ({start_time}) > end_time ({end_time})'
-            )
+        self._check_slice_time_args(start_time, end_time)
         self._invalid_cache()
         self._events_dict = {
             k: v for k, v in self._events_dict.items() if start_time <= k < end_time

@@ -76,3 +76,9 @@ class DGStorageBase(ABC):
     @abstractmethod
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the temporal graph."""
+
+    def _check_slice_time_args(self, start_time: int, end_time: int):
+        if start_time > end_time:
+            raise ValueError(
+                f'Bad slice: start_time must be <= end_time but received: start_time ({start_time}) > end_time ({end_time})'
+            )
