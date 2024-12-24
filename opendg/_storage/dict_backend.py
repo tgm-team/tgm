@@ -1,11 +1,12 @@
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
-from opendg._storage import DGStorageBase
 from opendg.typing import Event
 
+from .base import DGStorageBase
 
-class DGStorageDictImpl(DGStorageBase):
+
+class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
     def __init__(self, events_dict: Dict[int, Tuple[int, int]]) -> None:

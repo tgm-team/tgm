@@ -1,12 +1,36 @@
+from typing import Union, Type
+import inspect
+
 from .base import DGStorageBase
-from .dict_impl import DGStorageDictImpl
+from .dict_backend import DGStorageDictBackend
 
-DGStorageImplementations = [
-    DGStorageDictImpl,
-]
+DGStorageBackends = {
+    'DictionaryBackend': DGStorageDictBackend,
+}
 
-DGStorage = DGStorageDictImpl
+DGStorage = DGStorageDictBackend
+
+
+def get_dg_storage_backend() -> Type:
+    return DGStorage
+
+
+def set_dg_storage_backend(backend: Union[str, DGStorageBase]) -> None:
+    global DGStorage
+
+    if inspect.isclass(backend) and issubclass(backend, DGStorageBase):
+        DGStorage = backend
+    elif isinstance(backend, str) and backend in DGStorageBackends:
+        DGStorage = DGStorageBackends[backend]
+    else:
+        raise ValueError(
+            f'Unrecognized DGStorage backend: {backend}, expected on of: {list(DGStorageBackends.keys())}'
+        )
+
 
 __all__ = [
     'DGStorage',
+    'DGStorageBackends',
+    'get_dg_storage_backend',
+    'set_dg_storage_backend',
 ]

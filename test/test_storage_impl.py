@@ -1,9 +1,14 @@
 import pytest
 
-from opendg._storage import DGStorageImplementations
+from opendg._storage import (
+    DGStorageBackends,
+    DGStorageDictBackend,
+    get_dg_storage_backend,
+    set_dg_storage_backend,
+)
 
 
-@pytest.fixture(params=DGStorageImplementations)
+@pytest.fixture(params=DGStorageBackends.values())
 def DGStorageImpl(request):
     return request.param
 
@@ -99,3 +104,23 @@ def test_update_multiple_events(DGStorageImpl):
     storage = DGStorageImpl.from_events(events)
     storage = storage.update([(1, 2, 3), (5, 10, 20)])
     assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
+
+
+def test_get_dg_storage_backend():
+    backend = get_dg_storage_backend()
+    print(backend)
+
+
+def test_set_dg_storage_backend_with_class():
+    set_dg_storage_backend(DGStorageDictBackend)
+    assert get_dg_storage_backend() == DGStorageDictBackend
+
+
+def test_set_dg_storage_backend_with_str():
+    set_dg_storage_backend('DictionaryBackend')
+    assert get_dg_storage_backend() == DGStorageDictBackend
+
+
+def test_set_dg_storage_backend_with_bad_str():
+    with pytest.raises(ValueError):
+        set_dg_storage_backend('foo')
