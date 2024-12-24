@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple, Union
 
-from torch import Tensor
-
 from opendg.typing import Event
 
 
@@ -29,14 +27,6 @@ class DGStorageBase(ABC):
     @abstractmethod
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
         r"""Return a list of neighbour, timestamp pairs for each node in the nodes list."""
-
-    @abstractmethod
-    def materialize_node_features(self) -> Tensor:
-        r"""Materialiize the dynamic graph node feature data."""
-
-    @abstractmethod
-    def materialize_edge_features(self) -> Tensor:
-        r"""Materialiize the dynamic graph edge feature data."""
 
     @abstractmethod
     def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':

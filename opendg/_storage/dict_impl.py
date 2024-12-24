@@ -1,7 +1,5 @@
 from typing import Dict, List, Optional, Tuple, Union
 
-from torch import Tensor
-
 from opendg._storage import DGStorageBase
 from opendg.typing import Event
 
@@ -50,12 +48,6 @@ class DGStorageDictImpl(DGStorageBase):
         return self
 
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
-        raise NotImplementedError()
-
-    def materialize_node_features(self) -> Tensor:
-        raise NotImplementedError()
-
-    def materialize_edge_features(self) -> Tensor:
         raise NotImplementedError()
 
     def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
