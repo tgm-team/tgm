@@ -2,13 +2,7 @@ from typing import Union, Type
 import inspect
 
 from .base import DGStorageBase
-from .dict_backend import DGStorageDictBackend
-
-DGStorageBackends = {
-    'DictionaryBackend': DGStorageDictBackend,
-}
-
-DGStorage = DGStorageDictBackend
+from .backends import DGStorageBackends, DGStorage
 
 
 def get_dg_storage_backend() -> Type:

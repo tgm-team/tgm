@@ -2,10 +2,10 @@ import pytest
 
 from opendg._storage import (
     DGStorageBackends,
-    DGStorageDictBackend,
     get_dg_storage_backend,
     set_dg_storage_backend,
 )
+from opendg._storage.backends import DGStorageDictBackend
 
 
 @pytest.fixture(params=DGStorageBackends.values())

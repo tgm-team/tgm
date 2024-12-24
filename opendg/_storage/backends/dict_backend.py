@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from opendg.typing import Event
 
-from .base import DGStorageBase
+from ..base import DGStorageBase
 
 
 class DGStorageDictBackend(DGStorageBase):
