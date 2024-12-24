@@ -73,6 +73,20 @@ def test_slice_nodes_empty_slice(DGStorageImpl):
     assert storage.num_timestamps == 0
 
 
+def test_get_nbrs(DGStorageImpl):
+    events_dict = {1: (2, 3), 5: (10, 20)}
+    storage = DGStorageImpl(events_dict)
+    nbrs = storage.get_nbrs([0, 2, 20])
+    assert nbrs == {2: [(3, 1)], 20: [(10, 5)]}
+
+
+def test_get_nbrs_empty_nbrs(DGStorageImpl):
+    events_dict = {1: (2, 3), 5: (10, 20)}
+    storage = DGStorageImpl(events_dict)
+    nbrs = storage.get_nbrs([0])
+    assert nbrs == {}
+
+
 def test_update_single_event(DGStorageImpl):
     events = [(1, 2, 3)]
     storage = DGStorageImpl.from_events(events)

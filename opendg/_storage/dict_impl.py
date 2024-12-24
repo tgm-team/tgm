@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
 from opendg._storage import DGStorageBase
@@ -48,7 +49,14 @@ class DGStorageDictImpl(DGStorageBase):
         return self
 
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
-        raise NotImplementedError()
+        nbrs_dict = defaultdict(list)
+        for t, (u, v) in self._events_dict.items():
+            if u in nodes:
+                nbrs_dict[u].append((v, t))
+            if v in nodes:
+                nbrs_dict[v].append((u, t))
+
+        return dict(nbrs_dict)
 
     def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
         if not isinstance(events, list):
