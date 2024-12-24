@@ -41,16 +41,22 @@ class DGStorageDictImpl(DGStorageBase):
         return self
 
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
+        self._invalid_cache()
+        self._events_dict = {
+            k: v
+            for k, v in self._events_dict.items()
+            if len(set(v).intersection(nodes))
+        }
         return self
 
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
-        return {}
+        raise NotImplementedError()
 
     def materialize_node_features(self) -> Tensor:
-        return None
+        raise NotImplementedError()
 
     def materialize_edge_features(self) -> Tensor:
-        return None
+        raise NotImplementedError()
 
     def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
         if not isinstance(events, list):
@@ -62,17 +68,17 @@ class DGStorageDictImpl(DGStorageBase):
     def temporal_coarsening(
         self, time_delta: int, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
-        return self
+        raise NotImplementedError()
 
     @property
-    def start_time(self) -> int:
-        if self._start_time is None:
+    def start_time(self) -> Optional[int]:
+        if self._start_time is None and len(self._events_dict):
             self._start_time = min(self._events_dict)
         return self._start_time
 
     @property
-    def end_time(self) -> int:
-        if self._end_time is None:
+    def end_time(self) -> Optional[int]:
+        if self._end_time is None and len(self._events_dict):
             self._end_time = max(self._events_dict)
         return self._end_time
 

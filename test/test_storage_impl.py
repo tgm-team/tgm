@@ -49,6 +49,30 @@ def test_slice_time_bad_slice(DGStorageImpl):
         storage.slice_time(2, 1)
 
 
+def test_slice_nodes(DGStorageImpl):
+    events_dict = {1: (2, 3), 5: (10, 20)}
+    storage = DGStorageImpl(events_dict)
+    storage = storage.slice_nodes([1, 2])
+    assert storage.to_events() == [(1, 2, 3)]
+    assert storage.start_time == 1
+    assert storage.end_time == 1
+    assert storage.num_nodes == 2
+    assert storage.num_edges == 1
+    assert storage.num_timestamps == 1
+
+
+def test_slice_nodes_empty_slice(DGStorageImpl):
+    events_dict = {1: (2, 3), 5: (10, 20)}
+    storage = DGStorageImpl(events_dict)
+    storage = storage.slice_nodes([])
+    assert storage.to_events() == []
+    assert storage.start_time == None
+    assert storage.end_time == None
+    assert storage.num_nodes == 0
+    assert storage.num_edges == 0
+    assert storage.num_timestamps == 0
+
+
 def test_update_single_event(DGStorageImpl):
     events = [(1, 2, 3)]
     storage = DGStorageImpl.from_events(events)

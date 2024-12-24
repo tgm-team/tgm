@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from torch import Tensor
 
@@ -54,12 +54,12 @@ class DGStorageBase(ABC):
 
     @property
     @abstractmethod
-    def start_time(self) -> int:
+    def start_time(self) -> Optional[int]:
         r"""The start time of the temporal graph."""
 
     @property
     @abstractmethod
-    def end_time(self) -> int:
+    def end_time(self) -> Optional[int]:
         r"""The end time of the temporal graph."""
 
     @property
@@ -77,7 +77,7 @@ class DGStorageBase(ABC):
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the temporal graph."""
 
-    def _check_slice_time_args(self, start_time: int, end_time: int):
+    def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
         if start_time > end_time:
             raise ValueError(
                 f'Bad slice: start_time must be <= end_time but received: start_time ({start_time}) > end_time ({end_time})'
