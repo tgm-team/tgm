@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
-from opendg.typing import Event
+from opendg.typing import Event, EventsDict
 
 from ..base import DGStorageBase
 
@@ -9,8 +9,8 @@ from ..base import DGStorageBase
 class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
-    def __init__(self, events_dict: Dict[int, Tuple[int, int]]) -> None:
-        self._events_dict: Dict[int, Tuple[int, int]] = events_dict
+    def __init__(self, events_dict: EventsDict) -> None:
+        self._events_dict: EventsDict = events_dict
 
         # Cached Values
         self._start_time: Optional[int] = None
@@ -21,15 +21,16 @@ class DGStorageDictBackend(DGStorageBase):
 
     @classmethod
     def from_events(cls, events: List[Event]) -> 'DGStorageBase':
-        events_dict = {}
+        events_dict = defaultdict(list)
         for t, u, v in events:
-            events_dict[t] = (u, v)
+            events_dict[t].append((u, v))
         return cls(events_dict)
 
     def to_events(self) -> List[Event]:
         events: List[Event] = []
-        for t, (u, v) in self._events_dict.items():
-            events.append((t, u, v))
+        for t, edges in self._events_dict.items():
+            for u, v in edges:
+                events.append((t, u, v))
         return events
 
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
@@ -42,6 +43,8 @@ class DGStorageDictBackend(DGStorageBase):
 
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
         self._invalidate_cache()
+
+        # TODO: Fix events
         self._events_dict = {
             k: v
             for k, v in self._events_dict.items()
@@ -51,12 +54,12 @@ class DGStorageDictBackend(DGStorageBase):
 
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
         nbrs_dict = defaultdict(list)
-        for t, (u, v) in self._events_dict.items():
-            if u in nodes:
-                nbrs_dict[u].append((v, t))
-            if v in nodes:
-                nbrs_dict[v].append((u, t))
-
+        for t, edges in self._events_dict.items():
+            for u, v in edges:
+                if u in nodes:
+                    nbrs_dict[u].append((v, t))
+                if v in nodes:
+                    nbrs_dict[v].append((u, t))
         return dict(nbrs_dict)
 
     def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
@@ -64,7 +67,7 @@ class DGStorageDictBackend(DGStorageBase):
         if not isinstance(events, list):
             events = [events]
         for t, u, v in events:
-            self._events_dict[t] = (u, v)
+            self._events_dict[t].append((u, v))
         return self
 
     def temporal_coarsening(
@@ -80,10 +83,11 @@ class DGStorageDictBackend(DGStorageBase):
         # TODO: Support other time_delta formats
         interval_size = total_time // time_delta
 
-        events_dict = {}
-        for t, (u, v) in self._events_dict.items():
-            bin_t = -((t - self.start_time) // -interval_size)  # Ceiling division
-            events_dict[bin_t] = (u, v)
+        events_dict = defaultdict(list)
+        for t, edges in self._events_dict.items():
+            for u, v in edges:
+                bin_t = -((t - self.start_time) // -interval_size)  # Ceiling division
+                events_dict[bin_t].append((u, v))
 
         self._events_dict = events_dict
         self._invalidate_cache()
@@ -103,12 +107,14 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def num_nodes(self) -> int:
+        # TODO: Fix events
         if self._num_nodes is None:
             self._num_nodes = len(set(sum(map(list, self._events_dict.values()), [])))
         return self._num_nodes
 
     @property
     def num_edges(self) -> int:
+        # TODO: Fix events
         if self._num_edges is None:
             self._num_edges = len(set(self._events_dict.values()))
         return self._num_edges

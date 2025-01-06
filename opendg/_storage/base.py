@@ -5,7 +5,7 @@ from opendg.typing import Event
 
 
 class DGStorageBase(ABC):
-    r"""Base class for temporal graph storage engine."""
+    r"""Base class for dynamic graph storage engine."""
 
     @classmethod
     @abstractmethod
@@ -42,30 +42,34 @@ class DGStorageBase(ABC):
         r"""Returns the number of temporal length of the dynamic graph."""
         return self.num_timestamps
 
+    def __str__(self) -> str:
+        r"""Returns summary properties of the dynamic graph."""
+        return f'Dynamic Graph Storage Engine ({self.__class__.__name__}), Start Time: {self.start_time}, End Time: {self.end_time}, Nodes: {self.num_nodes}, Edges: {self.num_edges}, Timestamps: {self.num_timestamps}'
+
     @property
     @abstractmethod
     def start_time(self) -> Optional[int]:
-        r"""The start time of the temporal graph."""
+        r"""The start time of the dynamic graph."""
 
     @property
     @abstractmethod
     def end_time(self) -> Optional[int]:
-        r"""The end time of the temporal graph."""
+        r"""The end time of the dynamic graph."""
 
     @property
     @abstractmethod
     def num_nodes(self) -> int:
-        r"""The total number of unique nodes encountered over the temporal graph."""
+        r"""The total number of unique nodes encountered over the dynamic graph."""
 
     @property
     @abstractmethod
     def num_edges(self) -> int:
-        r"""The total number of unique edges encountered over the temporal graph."""
+        r"""The total number of unique edges encountered over the dynamic graph."""
 
     @property
     @abstractmethod
     def num_timestamps(self) -> int:
-        r"""The total number of unique timestamps encountered over the temporal graph."""
+        r"""The total number of unique timestamps encountered over the dynamic graph."""
 
     def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
         if start_time > end_time:
@@ -75,4 +79,4 @@ class DGStorageBase(ABC):
 
     def _check_temporal_coarsening_args(self, time_delta: int, agg_func: str) -> None:
         if not len(self):
-            raise ValueError('Cannot temporally coarsen an empty temporal graph')
+            raise ValueError('Cannot temporally coarsen an empty dynamic graph')
