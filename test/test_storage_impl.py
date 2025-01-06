@@ -107,8 +107,7 @@ def test_update_multiple_events(DGStorageImpl):
 
 
 def test_get_dg_storage_backend():
-    backend = get_dg_storage_backend()
-    print(backend)
+    assert get_dg_storage_backend() == DGStorageDictBackend
 
 
 def test_set_dg_storage_backend_with_class():
