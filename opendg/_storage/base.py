@@ -72,3 +72,7 @@ class DGStorageBase(ABC):
             raise ValueError(
                 f'Bad slice: start_time must be <= end_time but received: start_time ({start_time}) > end_time ({end_time})'
             )
+
+    def _check_temporal_coarsening_args(self, time_delta: int, agg_func: str) -> None:
+        if not len(self):
+            raise ValueError('Cannot temporally coarsen an empty temporal graph')

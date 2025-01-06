@@ -70,7 +70,24 @@ class DGStorageDictBackend(DGStorageBase):
     def temporal_coarsening(
         self, time_delta: int, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
-        raise NotImplementedError()
+        self._check_temporal_coarsening_args(time_delta, agg_func)
+
+        # This assert is here to make mypy happy
+        assert self.start_time is not None
+        assert self.end_time is not None
+        total_time = self.end_time - self.start_time
+
+        # TODO: Support other time_delta formats
+        interval_size = total_time // time_delta
+
+        events_dict = {}
+        for t, (u, v) in self._events_dict.items():
+            bin_t = -((t - self.start_time) // -interval_size)  # Ceiling division
+            events_dict[bin_t] = (u, v)
+
+        self._events_dict = events_dict
+        self._invalidate_cache()
+        return self
 
     @property
     def start_time(self) -> Optional[int]:

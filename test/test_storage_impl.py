@@ -128,6 +128,38 @@ def test_update_multiple_events(DGStorageImpl):
     assert storage.num_timestamps == 2
 
 
+@pytest.mark.skip(reason='Not implemented')
+def test_temporal_coarsening(DGStorageImpl):
+    pass
+
+
+@pytest.mark.skip(reason='Not implemented')
+def test_temporal_coarsening_single_event_graph(DGStorageImpl):
+    pass
+
+
+@pytest.mark.skip(reason='Not implemented')
+def test_temporal_coarsening_causes_time_gap(DGStorageImpl):
+    pass
+
+
+@pytest.mark.skip(reason='Not implemented')
+def test_temporal_coarsening_bad_time_delta(DGStorageImpl):
+    pass
+
+
+@pytest.mark.skip(reason='Not implemented')
+def test_temporal_coarsening_bad_agg_func(DGStorageImpl):
+    pass
+
+
+def test_temporal_coarsening_empty_graph(DGStorageImpl):
+    events = []
+    storage = DGStorageImpl.from_events(events)
+    with pytest.raises(ValueError):
+        storage.temporal_coarsening(10)
+
+
 def test_get_dg_storage_backend():
     assert get_dg_storage_backend() == DGStorageDictBackend
 
