@@ -95,15 +95,37 @@ def test_get_nbrs_empty_nbrs(DGStorageImpl):
 def test_update_single_event(DGStorageImpl):
     events = [(1, 2, 3)]
     storage = DGStorageImpl.from_events(events)
+    assert storage.start_time == 1
+    assert storage.end_time == 1
+    assert storage.num_nodes == 2
+    assert storage.num_edges == 1
+    assert storage.num_timestamps == 1
+
     storage = storage.update((5, 10, 20))
     assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
+    assert storage.start_time == 1
+    assert storage.end_time == 5
+    assert storage.num_nodes == 4
+    assert storage.num_edges == 2
+    assert storage.num_timestamps == 2
 
 
 def test_update_multiple_events(DGStorageImpl):
     events = []
     storage = DGStorageImpl.from_events(events)
+    assert storage.start_time == None
+    assert storage.end_time == None
+    assert storage.num_nodes == 0
+    assert storage.num_edges == 0
+    assert storage.num_timestamps == 0
+
     storage = storage.update([(1, 2, 3), (5, 10, 20)])
     assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
+    assert storage.start_time == 1
+    assert storage.end_time == 5
+    assert storage.num_nodes == 4
+    assert storage.num_edges == 2
+    assert storage.num_timestamps == 2
 
 
 def test_get_dg_storage_backend():

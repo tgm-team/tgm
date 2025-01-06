@@ -60,6 +60,7 @@ class DGStorageDictBackend(DGStorageBase):
         return dict(nbrs_dict)
 
     def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
+        self._invalidate_cache()
         if not isinstance(events, list):
             events = [events]
         for t, u, v in events:
