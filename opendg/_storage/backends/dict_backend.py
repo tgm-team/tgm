@@ -34,14 +34,14 @@ class DGStorageDictBackend(DGStorageBase):
 
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
         self._check_slice_time_args(start_time, end_time)
-        self._invalid_cache()
+        self._invalidate_cache()
         self._events_dict = {
             k: v for k, v in self._events_dict.items() if start_time <= k < end_time
         }
         return self
 
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
-        self._invalid_cache()
+        self._invalidate_cache()
         self._events_dict = {
             k: v
             for k, v in self._events_dict.items()
@@ -101,7 +101,7 @@ class DGStorageDictBackend(DGStorageBase):
             self._num_timestamps = len(self._events_dict)
         return self._num_timestamps
 
-    def _invalid_cache(self) -> None:
+    def _invalidate_cache(self) -> None:
         self._start_time = None
         self._end_time = None
         self._num_nodes = None
