@@ -23,6 +23,33 @@ def test_init(DGStorageImpl):
     assert storage.num_edges == 2
     assert storage.num_timestamps == 2
     assert storage.time_granularity == 4
+    assert len(storage) == 2
+
+
+def test_init_multiple_events_per_timestamp(DGStorageImpl):
+    events_dict = {1: [(2, 3), (10, 20)], 5: [(10, 20)]}
+    storage = DGStorageImpl(events_dict)
+    assert storage.to_events() == [(1, 2, 3), (1, 10, 20), (5, 10, 20)]
+    assert storage.start_time == 1
+    assert storage.end_time == 5
+    assert storage.num_nodes == 4
+    assert storage.num_edges == 2
+    assert storage.num_timestamps == 2
+    assert storage.time_granularity == 4
+    assert len(storage) == 2
+
+
+def test_init_empty(DGStorageImpl):
+    events_dict = {}
+    storage = DGStorageImpl(events_dict)
+    assert storage.to_events() == []
+    assert storage.start_time == None
+    assert storage.end_time == None
+    assert storage.num_nodes == 0
+    assert storage.num_edges == 0
+    assert storage.num_timestamps == 0
+    assert storage.time_granularity == -1
+    assert len(storage) == 0
 
 
 def test_init_from_events(DGStorageImpl):
@@ -35,6 +62,33 @@ def test_init_from_events(DGStorageImpl):
     assert storage.num_edges == 2
     assert storage.num_timestamps == 2
     assert storage.time_granularity == 4
+    assert len(storage) == 2
+
+
+def test_init_from_events_multiple_events_per_timestamp(DGStorageImpl):
+    events = [(1, 2, 3), (1, 10, 20), (5, 10, 20)]
+    storage = DGStorageImpl.from_events(events)
+    assert storage.to_events() == events
+    assert storage.start_time == 1
+    assert storage.end_time == 5
+    assert storage.num_nodes == 4
+    assert storage.num_edges == 2
+    assert storage.num_timestamps == 2
+    assert storage.time_granularity == 4
+    assert len(storage) == 2
+
+
+def test_init_from_events_empty(DGStorageImpl):
+    events = []
+    storage = DGStorageImpl.from_events(events)
+    assert storage.to_events() == []
+    assert storage.start_time == None
+    assert storage.end_time == None
+    assert storage.num_nodes == 0
+    assert storage.num_edges == 0
+    assert storage.num_timestamps == 0
+    assert storage.time_granularity == -1
+    assert len(storage) == 0
 
 
 def test_slice_time(DGStorageImpl):
@@ -48,6 +102,49 @@ def test_slice_time(DGStorageImpl):
     assert storage.num_edges == 1
     assert storage.num_timestamps == 1
     assert storage.time_granularity == -1
+    assert len(storage) == 1
+
+
+def test_slice_time_empty_slice(DGStorageImpl):
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
+    storage = DGStorageImpl(events_dict)
+    storage = storage.slice_time(2, 3)
+    assert storage.to_events() == []
+    assert storage.start_time == None
+    assert storage.end_time == None
+    assert storage.num_nodes == 0
+    assert storage.num_edges == 0
+    assert storage.num_timestamps == 0
+    assert storage.time_granularity == -1
+    assert len(storage) == 0
+
+
+def test_slice_time_full_slice(DGStorageImpl):
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
+    storage = DGStorageImpl(events_dict)
+    storage = storage.slice_time(0, 6)
+    assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
+    assert storage.start_time == 1
+    assert storage.end_time == 5
+    assert storage.num_nodes == 4
+    assert storage.num_edges == 2
+    assert storage.num_timestamps == 2
+    assert storage.time_granularity == 4
+    assert len(storage) == 2
+
+
+def test_slice_time_on_boundary(DGStorageImpl):
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
+    storage = DGStorageImpl(events_dict)
+    storage = storage.slice_time(1, 5)
+    assert storage.to_events() == [(1, 2, 3)]
+    assert storage.start_time == 1
+    assert storage.end_time == 1
+    assert storage.num_nodes == 2
+    assert storage.num_edges == 1
+    assert storage.num_timestamps == 1
+    assert storage.time_granularity == -1
+    assert len(storage) == 1
 
 
 def test_slice_time_bad_slice(DGStorageImpl):
@@ -68,6 +165,7 @@ def test_slice_nodes(DGStorageImpl):
     assert storage.num_edges == 1
     assert storage.num_timestamps == 1
     assert storage.time_granularity == -1
+    assert len(storage) == 1
 
 
 def test_slice_nodes_empty_slice(DGStorageImpl):
@@ -81,6 +179,7 @@ def test_slice_nodes_empty_slice(DGStorageImpl):
     assert storage.num_edges == 0
     assert storage.num_timestamps == 0
     assert storage.time_granularity == -1
+    assert len(storage) == 0
 
 
 def test_get_nbrs(DGStorageImpl):
@@ -106,6 +205,7 @@ def test_append_single_event(DGStorageImpl):
     assert storage.num_edges == 1
     assert storage.num_timestamps == 1
     assert storage.time_granularity == -1
+    assert len(storage) == 1
 
     storage = storage.append((5, 10, 20))
     assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
@@ -115,6 +215,7 @@ def test_append_single_event(DGStorageImpl):
     assert storage.num_edges == 2
     assert storage.num_timestamps == 2
     assert storage.time_granularity == 4
+    assert len(storage) == 2
 
 
 def test_append_multiple_events(DGStorageImpl):
@@ -126,6 +227,7 @@ def test_append_multiple_events(DGStorageImpl):
     assert storage.num_edges == 0
     assert storage.num_timestamps == 0
     assert storage.time_granularity == -1
+    assert len(storage) == 0
 
     storage = storage.append([(1, 2, 3), (5, 10, 20)])
     assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
@@ -135,6 +237,7 @@ def test_append_multiple_events(DGStorageImpl):
     assert storage.num_edges == 2
     assert storage.num_timestamps == 2
     assert storage.time_granularity == 4
+    assert len(storage) == 2
 
 
 @pytest.mark.skip(reason='Not implemented')
