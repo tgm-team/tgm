@@ -1,3 +1,4 @@
+import itertools
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -44,12 +45,12 @@ class DGStorageDictBackend(DGStorageBase):
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
         self._invalidate_cache()
 
-        # TODO: Fix events
-        self._events_dict = {
-            k: v
-            for k, v in self._events_dict.items()
-            if len(set(v).intersection(nodes))
-        }
+        events_dict = defaultdict(list)
+        for t, edges in self._events_dict.items():
+            for edge in edges:
+                if len(set(edge).intersection(nodes)):
+                    events_dict[t].append(edge)
+        self._events_dict = events_dict
         return self
 
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
@@ -107,16 +108,16 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def num_nodes(self) -> int:
-        # TODO: Fix events
         if self._num_nodes is None:
-            self._num_nodes = len(set(sum(map(list, self._events_dict.values()), [])))
+            edges = set(itertools.chain.from_iterable(self._events_dict.values()))
+            self._num_nodes = len(set(itertools.chain.from_iterable(edges)))
         return self._num_nodes
 
     @property
     def num_edges(self) -> int:
-        # TODO: Fix events
         if self._num_edges is None:
-            self._num_edges = len(set(self._events_dict.values()))
+            edges = set(itertools.chain.from_iterable(self._events_dict.values()))
+            self._num_edges = len(edges)
         return self._num_edges
 
     @property

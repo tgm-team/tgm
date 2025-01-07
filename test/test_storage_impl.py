@@ -14,7 +14,7 @@ def DGStorageImpl(request):
 
 
 def test_init(DGStorageImpl):
-    events_dict = {1: (2, 3), 5: (10, 20)}
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
     storage = DGStorageImpl(events_dict)
     assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
     assert storage.start_time == 1
@@ -36,7 +36,7 @@ def test_init_from_events(DGStorageImpl):
 
 
 def test_slice_time(DGStorageImpl):
-    events_dict = {1: (2, 3), 5: (10, 20)}
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
     storage = DGStorageImpl(events_dict)
     storage = storage.slice_time(1, 2)
     assert storage.to_events() == [(1, 2, 3)]
@@ -48,14 +48,14 @@ def test_slice_time(DGStorageImpl):
 
 
 def test_slice_time_bad_slice(DGStorageImpl):
-    events_dict = {1: (2, 3), 5: (10, 20)}
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
     storage = DGStorageImpl(events_dict)
     with pytest.raises(ValueError):
         storage.slice_time(2, 1)
 
 
 def test_slice_nodes(DGStorageImpl):
-    events_dict = {1: (2, 3), 5: (10, 20)}
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
     storage = DGStorageImpl(events_dict)
     storage = storage.slice_nodes([1, 2])
     assert storage.to_events() == [(1, 2, 3)]
@@ -67,7 +67,7 @@ def test_slice_nodes(DGStorageImpl):
 
 
 def test_slice_nodes_empty_slice(DGStorageImpl):
-    events_dict = {1: (2, 3), 5: (10, 20)}
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
     storage = DGStorageImpl(events_dict)
     storage = storage.slice_nodes([])
     assert storage.to_events() == []
@@ -79,14 +79,14 @@ def test_slice_nodes_empty_slice(DGStorageImpl):
 
 
 def test_get_nbrs(DGStorageImpl):
-    events_dict = {1: (2, 3), 5: (10, 20)}
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
     storage = DGStorageImpl(events_dict)
     nbrs = storage.get_nbrs([0, 2, 20])
     assert nbrs == {2: [(3, 1)], 20: [(10, 5)]}
 
 
 def test_get_nbrs_empty_nbrs(DGStorageImpl):
-    events_dict = {1: (2, 3), 5: (10, 20)}
+    events_dict = {1: [(2, 3)], 5: [(10, 20)]}
     storage = DGStorageImpl(events_dict)
     nbrs = storage.get_nbrs([0])
     assert nbrs == {}
