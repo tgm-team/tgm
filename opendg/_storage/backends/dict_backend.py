@@ -72,7 +72,7 @@ class DGStorageDictBackend(DGStorageBase):
         return self
 
     def temporal_coarsening(
-        self, time_delta: int, agg_func: str = 'sum'
+        self, time_delta: TimeDelta, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
         self._check_temporal_coarsening_args(time_delta, agg_func)
 
@@ -86,9 +86,10 @@ class DGStorageDictBackend(DGStorageBase):
 
         events_dict = defaultdict(list)
         for t, edges in self._events_dict.items():
-            for u, v in edges:
-                bin_t = -((t - self.start_time) // -interval_size)  # Ceiling division
-                events_dict[bin_t].append((u, v))
+            bin_t = -((t - self.start_time) // -interval_size)  # Ceiling division
+
+            # TODO: Use the agg_func
+            events_dict[bin_t].extend(edges)
 
         self._events_dict = events_dict
         self._invalidate_cache()
