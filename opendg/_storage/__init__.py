@@ -18,7 +18,7 @@ def set_dg_storage_backend(backend: Union[str, DGStorageBase]) -> None:
         DGStorage = DGStorageBackends[backend]
     else:
         raise ValueError(
-            f'Unrecognized DGStorage backend: {backend}, expected on of: {list(DGStorageBackends.keys())}'
+            f'Unrecognized DGStorage backend: {backend}, expected one of: {list(DGStorageBackends.keys())}'
         )
 
 
