@@ -19,6 +19,7 @@ class DGStorageDictBackend(DGStorageBase):
         self._num_nodes: Optional[int] = None
         self._num_edges: Optional[int] = None
         self._num_timestamps: Optional[int] = None
+        self._time_granularity: Optional[TimeDelta] = None
 
     @classmethod
     def from_events(cls, events: List[Event]) -> 'DGStorageBase':
@@ -108,6 +109,16 @@ class DGStorageDictBackend(DGStorageBase):
         return self._end_time
 
     @property
+    def time_granularity(self) -> Optional[TimeDelta]:
+        if self._time_granularity is None and len(self) > 1:
+            # TODO: Validate and construct a proper TimeDelta object
+            ts = list(self._events_dict.keys())
+            self._time_granularity = min(
+                [ts[i + 1] - ts[i] for i in range(len(ts) - 1)]
+            )
+        return self._time_granularity
+
+    @property
     def num_nodes(self) -> int:
         if self._num_nodes is None:
             edges = set(itertools.chain.from_iterable(self._events_dict.values()))
@@ -127,18 +138,10 @@ class DGStorageDictBackend(DGStorageBase):
             self._num_timestamps = len(self._events_dict)
         return self._num_timestamps
 
-    @property
-    def time_granularity(self) -> TimeDelta:
-        # TODO: Validate and construct a proper TimeDelta object
-        granularity = -1
-        if len(self) > 1:
-            ts = list(self._events_dict.keys())
-            granularity = min([ts[i + 1] - ts[i] for i in range(len(ts) - 1)])
-        return granularity
-
     def _invalidate_cache(self) -> None:
         self._start_time = None
         self._end_time = None
         self._num_nodes = None
         self._num_edges = None
         self._num_timestamps = None
+        self._time_granularity = None

@@ -34,7 +34,7 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def temporal_coarsening(
-        self, time_delta: int, agg_func: str = 'sum'
+        self, time_delta: TimeDelta, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
         r"""Re-index the temporal axis of the dynamic graph."""
 
@@ -49,12 +49,17 @@ class DGStorageBase(ABC):
     @property
     @abstractmethod
     def start_time(self) -> Optional[int]:
-        r"""The start time of the dynamic graph."""
+        r"""The start time of the dynamic graph. None if the graph is empty."""
 
     @property
     @abstractmethod
     def end_time(self) -> Optional[int]:
-        r"""The end time of the dynamic graph."""
+        r"""The end time of the dynamic graph. None, if the graph is empty."""
+
+    @property
+    @abstractmethod
+    def time_granularity(self) -> Optional[TimeDelta]:
+        r"""The time granularity of the dynamic graph. None, if the graph has less than 2 temporal events."""
 
     @property
     @abstractmethod
@@ -71,17 +76,16 @@ class DGStorageBase(ABC):
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the dynamic graph."""
 
-    @property
-    @abstractmethod
-    def time_granularity(self) -> TimeDelta:
-        r"""The specified time granularity of the temporal graph."""
-
     def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
         if start_time > end_time:
             raise ValueError(
                 f'Bad slice: start_time must be <= end_time but received: start_time ({start_time}) > end_time ({end_time})'
             )
 
-    def _check_temporal_coarsening_args(self, time_delta: int, agg_func: str) -> None:
+    def _check_temporal_coarsening_args(
+        self, time_delta: TimeDelta, agg_func: str
+    ) -> None:
         if not len(self):
             raise ValueError('Cannot temporally coarsen an empty dynamic graph')
+
+        # TODO: Validate time_delta and agg_func
