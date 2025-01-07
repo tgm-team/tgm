@@ -92,7 +92,7 @@ def test_get_nbrs_empty_nbrs(DGStorageImpl):
     assert nbrs == {}
 
 
-def test_update_single_event(DGStorageImpl):
+def test_append_single_event(DGStorageImpl):
     events = [(1, 2, 3)]
     storage = DGStorageImpl.from_events(events)
     assert storage.start_time == 1
@@ -101,7 +101,7 @@ def test_update_single_event(DGStorageImpl):
     assert storage.num_edges == 1
     assert storage.num_timestamps == 1
 
-    storage = storage.update((5, 10, 20))
+    storage = storage.append((5, 10, 20))
     assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
     assert storage.start_time == 1
     assert storage.end_time == 5
@@ -110,7 +110,7 @@ def test_update_single_event(DGStorageImpl):
     assert storage.num_timestamps == 2
 
 
-def test_update_multiple_events(DGStorageImpl):
+def test_append_multiple_events(DGStorageImpl):
     events = []
     storage = DGStorageImpl.from_events(events)
     assert storage.start_time == None
@@ -119,7 +119,7 @@ def test_update_multiple_events(DGStorageImpl):
     assert storage.num_edges == 0
     assert storage.num_timestamps == 0
 
-    storage = storage.update([(1, 2, 3), (5, 10, 20)])
+    storage = storage.append([(1, 2, 3), (5, 10, 20)])
     assert storage.to_events() == [(1, 2, 3), (5, 10, 20)]
     assert storage.start_time == 1
     assert storage.end_time == 5

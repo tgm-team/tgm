@@ -29,8 +29,8 @@ class DGStorageBase(ABC):
         r"""Return a list of neighbour, timestamp pairs for each node in the nodes list."""
 
     @abstractmethod
-    def update(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
-        r"""Update the dynamic graph with an event of list of events."""
+    def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
+        r"""Append events to the temporal end of the dynamic graph."""
 
     @abstractmethod
     def temporal_coarsening(
