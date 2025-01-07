@@ -2,7 +2,7 @@ import itertools
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
-from opendg.typing import Event, EventsDict
+from opendg.typing import Event, EventsDict, TimeDelta
 
 from ..base import DGStorageBase
 
@@ -125,6 +125,15 @@ class DGStorageDictBackend(DGStorageBase):
         if self._num_timestamps is None:
             self._num_timestamps = len(self._events_dict)
         return self._num_timestamps
+
+    @property
+    def time_granularity(self) -> TimeDelta:
+        # TODO: Validate and construct a proper TimeDelta object
+        granularity = -1
+        if len(self) > 1:
+            ts = list(self._events_dict.keys())
+            granularity = min([ts[i + 1] - ts[i] for i in range(len(ts) - 1)])
+        return granularity
 
     def _invalidate_cache(self) -> None:
         self._start_time = None

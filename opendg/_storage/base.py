@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple, Union
 
-from opendg.typing import Event
+from opendg.typing import Event, TimeDelta
 
 
 class DGStorageBase(ABC):
@@ -44,7 +44,7 @@ class DGStorageBase(ABC):
 
     def __str__(self) -> str:
         r"""Returns summary properties of the dynamic graph."""
-        return f'Dynamic Graph Storage Engine ({self.__class__.__name__}), Start Time: {self.start_time}, End Time: {self.end_time}, Nodes: {self.num_nodes}, Edges: {self.num_edges}, Timestamps: {self.num_timestamps}'
+        return f'Dynamic Graph Storage Engine ({self.__class__.__name__}), Start Time: {self.start_time}, End Time: {self.end_time}, Nodes: {self.num_nodes}, Edges: {self.num_edges}, Timestamps: {self.num_timestamps}, Time Granularity: {self.time_granularity}'
 
     @property
     @abstractmethod
@@ -70,6 +70,11 @@ class DGStorageBase(ABC):
     @abstractmethod
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the dynamic graph."""
+
+    @property
+    @abstractmethod
+    def time_granularity(self) -> TimeDelta:
+        r"""The specified time granularity of the temporal graph."""
 
     def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
         if start_time > end_time:
