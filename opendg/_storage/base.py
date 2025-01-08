@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple, Union
 
+from torch import Tensor
+
 from opendg.typing import Event, TimeDelta
 
 
@@ -75,6 +77,34 @@ class DGStorageBase(ABC):
     @abstractmethod
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the dynamic graph."""
+
+    @property
+    @abstractmethod
+    def node_feats(self) -> Optional[Tensor]:
+        r"""The aggregated node features over the dynamic graph.
+
+        Retuns a tensor of size T x V x d where
+
+        - T = Number of timestamps
+        - V = Number of nodes
+        - d = Node feature dimension
+
+        or None if there are no node features on the dynamic graph.
+        """
+
+    @property
+    @abstractmethod
+    def edge_feats(self) -> Optional[Tensor]:
+        r"""The aggregated edge features over the dynamic graph.
+
+        Retuns a tensor of size T x E x d where
+
+        - T = Number of timestamps
+        - E = Number of edges
+        - d = Edge feature dimension
+
+        or None if there are no edge features on the dynamic graph.
+        """
 
     def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
         if start_time > end_time:

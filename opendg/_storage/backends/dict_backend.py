@@ -2,6 +2,8 @@ import itertools
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
+from torch import Tensor
+
 from opendg.typing import Event, EventsDict, TimeDelta
 
 from ..base import DGStorageBase
@@ -10,8 +12,15 @@ from ..base import DGStorageBase
 class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
-    def __init__(self, events_dict: EventsDict) -> None:
+    def __init__(
+        self,
+        events_dict: EventsDict,
+        node_feats: Optional[Dict[int, Dict[int, Tensor]]] = None,
+        edge_feats: Optional[Dict[int, Tensor]] = None,
+    ) -> None:
         self._events_dict: EventsDict = events_dict
+        self._node_feats = node_feats
+        self._edge_featas = edge_feats
 
         # Cached Values
         self._start_time: Optional[int] = None
@@ -137,6 +146,16 @@ class DGStorageDictBackend(DGStorageBase):
         if self._num_timestamps is None:
             self._num_timestamps = len(self._events_dict)
         return self._num_timestamps
+
+    @property
+    def node_feats(self) -> Optional[Tensor]:
+        # TODO
+        return None
+
+    @property
+    def edge_feats(self) -> Optional[Tensor]:
+        # TODO
+        return None
 
     def _invalidate_cache(self) -> None:
         self._start_time = None
