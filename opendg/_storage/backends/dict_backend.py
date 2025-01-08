@@ -69,26 +69,26 @@ class DGStorageDictBackend(DGStorageBase):
         self._invalidate_cache()
 
         events_dict = defaultdict(list)
-        edge_feats: Optional[Dict[int, Tensor]] = {}
 
         for t, edges in self._events_dict.items():
-            for edge in edges:
+            keep_edge_indices = []
+            for i, edge in enumerate(edges):
                 if len(set(edge).intersection(nodes)):
-                    # TODO: Update edge_feats
+                    keep_edge_indices.append(i)
                     events_dict[t].append(edge)
+
+            if self._edge_feats is not None:
+                self._edge_feats[t] = self._edge_feats[t][keep_edge_indices]
+
         self._events_dict = events_dict
 
         if self._node_feats is not None:
-            node_feats: Optional[Dict[int, Dict[int, Tensor]]] = {}
             for t, node_feats_t in self._node_feats.items():
+                keep_node_feats_t = {}
                 for node in node_feats_t:
                     if node in nodes:
-                        # TODO Update node feats
-                        continue
-            self._node_feats = node_feats
-
-        if self._edge_feats is not None:
-            self._edge_feats = edge_feats
+                        keep_node_feats_t[node] = node_feats_t[node]
+                self._node_feats[t] = keep_node_feats_t
 
         return self
 
