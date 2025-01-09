@@ -3,7 +3,8 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from torch import Tensor
 
-from opendg.typing import Event, TimeDelta
+from opendg.events import Event
+from opendg.typing import TimeDelta
 
 
 class DGStorageBase(ABC):

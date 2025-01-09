@@ -1,10 +1,10 @@
-import itertools
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
 from torch import Tensor
 
-from opendg.typing import Event, EventsDict, TimeDelta
+from opendg.events import EdgeEvent, Event, NodeEvent
+from opendg.typing import TimeDelta
 
 from ..base import DGStorageBase
 
@@ -12,15 +12,8 @@ from ..base import DGStorageBase
 class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
-    def __init__(
-        self,
-        events_dict: EventsDict,
-        node_feats: Optional[Dict[int, Dict[int, Tensor]]] = None,
-        edge_feats: Optional[Dict[int, Tensor]] = None,
-    ) -> None:
-        self._events_dict: EventsDict = events_dict
-        self._node_feats: Optional[Dict[int, Dict[int, Tensor]]] = node_feats
-        self._edge_feats: Optional[Dict[int, Tensor]] = edge_feats
+    def __init__(self, events_dict: Dict[int, List[Event]]) -> None:
+        self._events_dict: Dict[int, List[Event]] = events_dict
 
         # Cached Values
         self._start_time: Optional[int] = None
@@ -32,18 +25,15 @@ class DGStorageDictBackend(DGStorageBase):
 
     @classmethod
     def from_events(cls, events: List[Event]) -> 'DGStorageBase':
-        # TODO: Figure out API for node/edge feats here
         events_dict = defaultdict(list)
-        for t, u, v in events:
-            events_dict[t].append((u, v))
+        for event in events:
+            events_dict[event.time].append(event)
         return cls(events_dict)
 
     def to_events(self) -> List[Event]:
-        # TODO: Figure out API for node/edge feats here
         events: List[Event] = []
-        for t, edges in self._events_dict.items():
-            for u, v in edges:
-                events.append((t, u, v))
+        for events in self._events_dict.values():
+            events.extend(events)
         return events
 
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
@@ -52,63 +42,41 @@ class DGStorageDictBackend(DGStorageBase):
         self._events_dict = {
             k: v for k, v in self._events_dict.items() if start_time <= k < end_time
         }
-
-        if self._node_feats is not None:
-            self._node_feats = {
-                k: v for k, v in self._node_feats.items() if start_time <= k < end_time
-            }
-
-        if self._edge_feats is not None:
-            self._edge_feats = {
-                k: v for k, v in self._edge_feats.items() if start_time <= k < end_time
-            }
-
         return self
 
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
         self._invalidate_cache()
 
-        events_dict = defaultdict(list)
-
-        for t, edges in self._events_dict.items():
-            keep_edge_indices = []
-            for i, edge in enumerate(edges):
-                if len(set(edge).intersection(nodes)):
-                    keep_edge_indices.append(i)
-                    events_dict[t].append(edge)
-
-            if self._edge_feats is not None:
-                self._edge_feats[t] = self._edge_feats[t][keep_edge_indices]
-
+        events_dict: Dict[int, List[Event]] = defaultdict(list)
+        for t, events in self._events_dict.items():
+            for event in events:
+                if isinstance(event, NodeEvent) and event.node_id in nodes:
+                    events_dict[t].append(event)
+                elif isinstance(event, EdgeEvent) and len(
+                    set(event.edge).intersection(nodes)
+                ):
+                    events_dict[t].append(event)
         self._events_dict = events_dict
-
-        if self._node_feats is not None:
-            for t, node_feats_t in self._node_feats.items():
-                keep_node_feats_t = {}
-                for node in node_feats_t:
-                    if node in nodes:
-                        keep_node_feats_t[node] = node_feats_t[node]
-                self._node_feats[t] = keep_node_feats_t
-
         return self
 
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
         nbrs_dict = defaultdict(list)
-        for t, edges in self._events_dict.items():
-            for u, v in edges:
-                if u in nodes:
-                    nbrs_dict[u].append((v, t))
-                if v in nodes:
-                    nbrs_dict[v].append((u, t))
+        for t, events in self._events_dict.items():
+            for event in events:
+                if isinstance(event, EdgeEvent):
+                    u, v = event.edge
+                    if u in nodes:
+                        nbrs_dict[u].append((v, t))
+                    if v in nodes:
+                        nbrs_dict[v].append((u, t))
         return dict(nbrs_dict)
 
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
-        # TODO: Figure out API for node/edge feats here
         self._invalidate_cache()
         if not isinstance(events, list):
             events = [events]
-        for t, u, v in events:
-            self._events_dict[t].append((u, v))
+        for event in events:
+            self._events_dict[event.time].append(event)
         return self
 
     def temporal_coarsening(
@@ -125,11 +93,11 @@ class DGStorageDictBackend(DGStorageBase):
         interval_size = total_time // time_delta
 
         events_dict = defaultdict(list)
-        for t, edges in self._events_dict.items():
+        for t, event in self._events_dict.items():
             bin_t = -((t - self.start_time) // -interval_size)  # Ceiling division
 
             # TODO: Use the agg_func
-            events_dict[bin_t].extend(edges)
+            events_dict[bin_t].extend(event)
 
         self._events_dict = events_dict
         self._invalidate_cache()
@@ -160,14 +128,24 @@ class DGStorageDictBackend(DGStorageBase):
     @property
     def num_nodes(self) -> int:
         if self._num_nodes is None:
-            edges = set(itertools.chain.from_iterable(self._events_dict.values()))
-            self._num_nodes = len(set(itertools.chain.from_iterable(edges)))
+            nodes = set()
+            for events in self._events_dict.values():
+                for event in events:
+                    if isinstance(event, NodeEvent):
+                        nodes.add(event.node_id)
+                    elif isinstance(event, EdgeEvent):
+                        nodes.update(event.edge)
+            self._num_nodes = len(nodes)
         return self._num_nodes
 
     @property
     def num_edges(self) -> int:
         if self._num_edges is None:
-            edges = set(itertools.chain.from_iterable(self._events_dict.values()))
+            edges = set()
+            for events in self._events_dict.values():
+                for event in events:
+                    if isinstance(event, EdgeEvent):
+                        edges.add((event.time, event.edge))
             self._num_edges = len(edges)
         return self._num_edges
 
@@ -179,20 +157,12 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def node_feats(self) -> Optional[Tensor]:
-        if self._node_feats is None:
-            return None
-
         # TODO
-        # self._node_feats: Optional[Dict[int, Dict[int, Tensor]]] = node_feats
         return None
 
     @property
     def edge_feats(self) -> Optional[Tensor]:
-        if self._edge_feats is None:
-            return None
-
         # TODO
-        # self._edge_feats: Optional[Dict[int, Tensor]] = edge_feats
         return None
 
     def _invalidate_cache(self) -> None:
