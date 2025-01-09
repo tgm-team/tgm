@@ -28,7 +28,7 @@ class NodeEvent(Event):
 
     @property
     def node_id(self) -> int:
-        return self.node_id
+        return self._node_id
 
     @property
     def features(self) -> Optional[Tensor]:
