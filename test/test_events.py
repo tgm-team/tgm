@@ -56,8 +56,8 @@ def test_event_ordering_between_int():
     e1 = NodeEvent(time=1337, node_id=0)
     assert e1 < 1338
     assert e1 <= 1338
-    assert e1 >= 1336
-    assert e1 > 1336
+    assert 1338 >= e1
+    assert 1338 > e1
 
 
 def test_event_ordering_bad_argument():
