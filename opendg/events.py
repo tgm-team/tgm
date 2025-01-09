@@ -13,10 +13,14 @@ class Event(ABC):
         self._time = time
 
     def __lt__(self, other: Any) -> bool:
-        if not isinstance(other, Event):
+        if isinstance(other, Event):
+            other_time = other.time
+        elif isinstance(other, int):
+            other_time = other
+        else:
             raise ValueError(f'Cannot compare Event type with type: {type(other)}')
 
-        return self.time < other.time
+        return self.time < other_time
 
     @property
     def time(self) -> int:
