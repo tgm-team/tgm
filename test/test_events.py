@@ -52,6 +52,12 @@ def test_event_ordering_between_events():
     assert e2 > e1
 
 
+def test_event_ordering_neq_between_same_time():
+    e1 = NodeEvent(time=1337, node_id=0)
+    e2 = EdgeEvent(time=1337, edge=(1, 2))
+    assert e1 != e2
+
+
 def test_event_ordering_between_int():
     e1 = NodeEvent(time=1337, node_id=0)
     assert e1 < 1338
