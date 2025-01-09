@@ -12,7 +12,9 @@ authors = [
     {name="Shenyang Huang", email="shenyang.huang@mail.mcgill.ca"},
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
 ]
-dependencies = []
+dependencies = [
+    "torch>=2.5.1",
+]
 
 [dependency-groups]
 dev = [
