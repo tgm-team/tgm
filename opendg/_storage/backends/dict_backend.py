@@ -2,7 +2,8 @@ import itertools
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
-from opendg.typing import Event, EventsDict, TimeDelta
+from opendg.typing import Event, EventsDict
+from opendg.timedelta import TimeDeltaTG
 
 from ..base import DGStorageBase
 
@@ -19,7 +20,7 @@ class DGStorageDictBackend(DGStorageBase):
         self._num_nodes: Optional[int] = None
         self._num_edges: Optional[int] = None
         self._num_timestamps: Optional[int] = None
-        self._time_granularity: Optional[TimeDelta] = None
+        self._time_granularity: Optional[TimeDeltaTG] = None
 
     @classmethod
     def from_events(cls, events: List[Event]) -> 'DGStorageBase':
@@ -73,7 +74,7 @@ class DGStorageDictBackend(DGStorageBase):
         return self
 
     def temporal_coarsening(
-        self, time_delta: TimeDelta, agg_func: str = 'sum'
+        self, time_delta: TimeDeltaTG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
         self._check_temporal_coarsening_args(time_delta, agg_func)
 
@@ -109,7 +110,7 @@ class DGStorageDictBackend(DGStorageBase):
         return self._end_time
 
     @property
-    def time_granularity(self) -> Optional[TimeDelta]:
+    def time_granularity(self) -> Optional[TimeDeltaTG]:
         if self._time_granularity is None and len(self) > 1:
             # TODO: Validate and construct a proper TimeDelta object
             ts = list(self._events_dict.keys())

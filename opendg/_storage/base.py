@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple, Union
 
-from opendg.typing import Event, TimeDelta
+from opendg.typing import Event
+from opendg.timedelta import TimeDeltaTG
+
 
 
 class DGStorageBase(ABC):
@@ -34,7 +36,7 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def temporal_coarsening(
-        self, time_delta: TimeDelta, agg_func: str = 'sum'
+        self, time_delta: TimeDeltaTG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
         r"""Re-index the temporal axis of the dynamic graph."""
 
@@ -58,7 +60,7 @@ class DGStorageBase(ABC):
 
     @property
     @abstractmethod
-    def time_granularity(self) -> Optional[TimeDelta]:
+    def time_granularity(self) -> Optional[TimeDeltaTG]:
         r"""The time granularity of the dynamic graph. None, if the graph has less than 2 temporal events."""
 
     @property
@@ -83,7 +85,7 @@ class DGStorageBase(ABC):
             )
 
     def _check_temporal_coarsening_args(
-        self, time_delta: TimeDelta, agg_func: str
+        self, time_delta: TimeDeltaTG, agg_func: str
     ) -> None:
         if not len(self):
             raise ValueError('Cannot temporally coarsen an empty dynamic graph')
