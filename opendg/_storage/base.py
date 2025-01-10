@@ -10,11 +10,6 @@ from opendg.typing import TimeDelta
 class DGStorageBase(ABC):
     r"""Base class for dynamic graph storage engine."""
 
-    @classmethod
-    @abstractmethod
-    def from_events(cls, events: List[Event]) -> 'DGStorageBase':
-        r"""Create dynamic graph from a list of events."""
-
     @abstractmethod
     def to_events(self) -> List[Event]:
         r"""Convert dynamic graph to a list of events."""

@@ -12,8 +12,10 @@ from ..base import DGStorageBase
 class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
-    def __init__(self, events_dict: Dict[int, List[Event]]) -> None:
-        self._events_dict: Dict[int, List[Event]] = events_dict
+    def __init__(self, events: List[Event]) -> None:
+        self._events_dict: Dict[int, List[Event]] = defaultdict(list)
+        for event in events:
+            self._events_dict[event.time].append(event)
 
         # Cached Values
         self._start_time: Optional[int] = None
@@ -22,13 +24,6 @@ class DGStorageDictBackend(DGStorageBase):
         self._num_edges: Optional[int] = None
         self._num_timestamps: Optional[int] = None
         self._time_granularity: Optional[TimeDelta] = None
-
-    @classmethod
-    def from_events(cls, events: List[Event]) -> 'DGStorageBase':
-        events_dict = defaultdict(list)
-        for event in events:
-            events_dict[event.time].append(event)
-        return cls(events_dict)
 
     def to_events(self) -> List[Event]:
         events: List[Event] = []
