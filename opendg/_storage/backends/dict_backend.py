@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
+import torch
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
@@ -152,13 +153,29 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def node_feats(self) -> Optional[Tensor]:
-        # TODO
-        return None
+        feats = []
+        for events in self._events_dict.values():
+            for event in events:
+                if isinstance(event, NodeEvent) and event.features is not None:
+                    feats.append(event.features)
+
+        if not len(feats):
+            return None
+
+        return torch.cat(feats)
 
     @property
     def edge_feats(self) -> Optional[Tensor]:
-        # TODO
-        return None
+        feats = []
+        for events in self._events_dict.values():
+            for event in events:
+                if isinstance(event, EdgeEvent) and event.features is not None:
+                    feats.append(event.features)
+
+        if not len(feats):
+            return None
+
+        return torch.cat(feats)
 
     def _invalidate_cache(self) -> None:
         self._start_time = None
