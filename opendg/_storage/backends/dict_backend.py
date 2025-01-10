@@ -28,8 +28,8 @@ class DGStorageDictBackend(DGStorageBase):
 
     def to_events(self) -> List[Event]:
         events: List[Event] = []
-        for events in self._events_dict.values():
-            events.extend(events)
+        for t_events in self._events_dict.values():
+            events += t_events
         return events
 
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
