@@ -82,15 +82,26 @@ def test_init_empty_features(DGStorageImpl):
     assert storage.edge_feats is None
 
 
-@pytest.mark.skip(reason='TODO: Handle incompatible event features')
-def test_init_incompatible_feature_dimension(DGStorageImpl):
+def test_init_incompatible_node_feature_dimension(DGStorageImpl):
     events = [
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(3, 6)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
 
-    _ = DGStorageImpl(events)
+    with pytest.raises(ValueError):
+        _ = DGStorageImpl(events)
+
+
+def test_init_incompatible_edge_feature_dimension(DGStorageImpl):
+    events = [
+        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
+        NodeEvent(time=5, node_id=10, features=torch.rand(2, 5)),
+        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
+    ]
+
+    with pytest.raises(ValueError):
+        _ = DGStorageImpl(events)
 
 
 def test_init_empty(DGStorageImpl):

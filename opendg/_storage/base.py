@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from torch import Tensor
 
-from opendg.events import Event
+from opendg.events import EdgeEvent, Event, NodeEvent
 from opendg.typing import TimeDelta
 
 
@@ -115,3 +115,22 @@ class DGStorageBase(ABC):
             raise ValueError('Cannot temporally coarsen an empty dynamic graph')
 
         # TODO: Validate time_delta and agg_func
+
+    def _check_event_feature_shapes(self, events: List[Event]) -> None:
+        node_feats_shape, edge_feats_shape = None, None
+
+        for event in events:
+            if isinstance(event, NodeEvent) and event.features is not None:
+                if node_feats_shape is None:
+                    node_feats_shape = event.features.shape
+                elif node_feats_shape != event.features.shape:
+                    raise ValueError(
+                        f'Incompatible node features shapes: {node_feats_shape} != {event.features.shape}'
+                    )
+            elif isinstance(event, EdgeEvent) and event.features is not None:
+                if edge_feats_shape is None:
+                    edge_feats_shape = event.features.shape
+                elif edge_feats_shape != event.features.shape:
+                    raise ValueError(
+                        f'Incompatible edge features shapes: {edge_feats_shape} != {event.features.shape}'
+                    )

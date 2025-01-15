@@ -14,6 +14,8 @@ class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
     def __init__(self, events: List[Event]) -> None:
+        self._check_event_feature_shapes(events)
+
         self._events_dict: Dict[int, List[Event]] = defaultdict(list)
         for event in events:
             self._events_dict[event.time].append(event)
