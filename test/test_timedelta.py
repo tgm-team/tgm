@@ -9,8 +9,8 @@ def test_timedelta():
     td1 = TimeDeltaTG('Y',1)
     td2 = TimeDeltaTG('M',1)
 
-    assert td1.type == 'Y'
-    assert td1.dur == 1
+    assert td1.unit == 'Y'
+    assert td1.value == 1
 
     rate1 = td1.convert('M')
     assert rate1 == (365/30)
