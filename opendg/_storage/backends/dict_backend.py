@@ -14,7 +14,8 @@ class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
     def __init__(self, events: List[Event]) -> None:
-        self._check_event_feature_shapes(events)
+        self._node_feats_shape = self._check_node_feature_shapes(events)
+        self._edge_feats_shape = self._check_edge_feature_shapes(events)
 
         self._events_dict: Dict[int, List[Event]] = defaultdict(list)
         for event in events:
@@ -36,15 +37,13 @@ class DGStorageDictBackend(DGStorageBase):
 
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
         self._check_slice_time_args(start_time, end_time)
-        self._invalidate_cache()
         self._events_dict = {
             k: v for k, v in self._events_dict.items() if start_time <= k < end_time
         }
+        self._invalidate_cache()
         return self
 
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
-        self._invalidate_cache()
-
         events_dict: Dict[int, List[Event]] = defaultdict(list)
         for t, events in self._events_dict.items():
             for event in events:
@@ -55,6 +54,7 @@ class DGStorageDictBackend(DGStorageBase):
                 ):
                     events_dict[t].append(event)
         self._events_dict = events_dict
+        self._invalidate_cache()
         return self
 
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
@@ -70,11 +70,20 @@ class DGStorageDictBackend(DGStorageBase):
         return dict(nbrs_dict)
 
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
-        self._invalidate_cache()
         if not isinstance(events, list):
             events = [events]
+
+        # Check that the new events have matching feature dimension
+        self._node_feats_shape = self._check_node_feature_shapes(
+            events, expected_shape=self._node_feats_shape
+        )
+        self._edge_feats_shape = self._check_edge_feature_shapes(
+            events, expected_shape=self._edge_feats_shape
+        )
+
         for event in events:
             self._events_dict[event.time].append(event)
+        self._invalidate_cache()
         return self
 
     def temporal_coarsening(

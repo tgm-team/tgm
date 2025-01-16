@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple, Union
 
+import torch
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
@@ -79,7 +80,7 @@ class DGStorageBase(ABC):
     def node_feats(self) -> Optional[Tensor]:
         r"""The aggregated node features over the dynamic graph.
 
-        Retuns a tensor of size T x V x d where
+        Returns a tensor.sparse_coo_tensor of size T x V x V x d where
 
         - T = Number of timestamps
         - V = Number of nodes
@@ -93,7 +94,7 @@ class DGStorageBase(ABC):
     def edge_feats(self) -> Optional[Tensor]:
         r"""The aggregated edge features over the dynamic graph.
 
-        Retuns a tensor of size T x E x d where
+        Returns a tensor.sparse_coo_tensor of size T x V x d where
 
         - T = Number of timestamps
         - E = Number of edges
@@ -116,8 +117,10 @@ class DGStorageBase(ABC):
 
         # TODO: Validate time_delta and agg_func
 
-    def _check_event_feature_shapes(self, events: List[Event]) -> None:
-        node_feats_shape, edge_feats_shape = None, None
+    def _check_node_feature_shapes(
+        self, events: List[Event], expected_shape: Optional[torch.Size] = None
+    ) -> Optional[torch.Size]:
+        node_feats_shape = expected_shape
 
         for event in events:
             if isinstance(event, NodeEvent) and event.features is not None:
@@ -127,10 +130,19 @@ class DGStorageBase(ABC):
                     raise ValueError(
                         f'Incompatible node features shapes: {node_feats_shape} != {event.features.shape}'
                     )
-            elif isinstance(event, EdgeEvent) and event.features is not None:
+        return node_feats_shape
+
+    def _check_edge_feature_shapes(
+        self, events: List[Event], expected_shape: Optional[torch.Size] = None
+    ) -> Optional[torch.Size]:
+        edge_feats_shape = expected_shape
+
+        for event in events:
+            if isinstance(event, EdgeEvent) and event.features is not None:
                 if edge_feats_shape is None:
                     edge_feats_shape = event.features.shape
                 elif edge_feats_shape != event.features.shape:
                     raise ValueError(
                         f'Incompatible edge features shapes: {edge_feats_shape} != {event.features.shape}'
                     )
+        return edge_feats_shape
