@@ -176,9 +176,6 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def node_feats(self) -> Optional[Tensor]:
-        if self._node_feats_shape is None:
-            return None
-
         feats = []
         for events in self._events_dict.values():
             for event in events:
