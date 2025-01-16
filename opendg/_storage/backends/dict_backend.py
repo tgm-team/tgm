@@ -146,15 +146,15 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def num_nodes(self) -> int:
-        if self._num_nodes is None:
-            nodes = set()
-            for events in self._events_dict.values():
-                for event in events:
-                    if isinstance(event, NodeEvent):
-                        nodes.add(event.node_id)
-                    elif isinstance(event, EdgeEvent):
-                        nodes.update(event.edge)
-            self._num_nodes = len(nodes)
+        max_node_id = -1  # We assume the ids are >= 0
+        for events in self._events_dict.values():
+            for event in events:
+                if isinstance(event, NodeEvent):
+                    max_node_id = max(max_node_id, event.node_id)
+                elif isinstance(event, EdgeEvent):
+                    max_node_id = max(max_node_id, event.edge[0], event.edge[1])
+
+        self._num_nodes = max_node_id + 1
         return self._num_nodes
 
     @property
@@ -195,8 +195,7 @@ class DGStorageDictBackend(DGStorageBase):
             map(list, zip(*indices))
         )  # https://pytorch.org/docs/stable/sparse.html#construction
 
-        max_node_id = self._get_max_node_id()  # Probably should be cached
-        shape = (self.end_time + 1, max_node_id + 1, *self._node_feats_shape)
+        shape = (self.end_time + 1, self.num_nodes, *self._node_feats_shape)
 
         return torch.sparse_coo_tensor(indices, values, shape)
 
@@ -221,25 +220,13 @@ class DGStorageDictBackend(DGStorageBase):
             map(list, zip(*indices))
         )  # https://pytorch.org/docs/stable/sparse.html#construction
 
-        max_node_id = self._get_max_node_id()  # Probably should be cached
         shape = (
             self.end_time + 1,
-            max_node_id + 1,
-            max_node_id + 1,
+            self.num_nodes,
+            self.num_nodes,
             *self._edge_feats_shape,
         )
         return torch.sparse_coo_tensor(indices, values, shape)
-
-    def _get_max_node_id(self) -> int:
-        max_node_id = -1  # We assume the ids are >= 0
-        for events in self._events_dict.values():
-            for event in events:
-                if isinstance(event, NodeEvent):
-                    max_node_id = max(max_node_id, event.node_id)
-                elif isinstance(event, EdgeEvent):
-                    max_node_id = max(max_node_id, event.edge[0], event.edge[1])
-
-        return max_node_id
 
     def _invalidate_cache(self) -> None:
         self._start_time = None
