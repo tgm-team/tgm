@@ -74,11 +74,23 @@ class DGStorageDictBackend(DGStorageBase):
             events = [events]
 
         # Check that the new events have matching feature dimension
+        if len(self):
+            # Node/edge feature shape must match our current feature shape
+            exp_node_feats_shape = self._node_feats_shape
+            exp_edge_feats_shape = self._edge_feats_shape
+        else:
+            # Except if our storage is empty, in which case the new event feature
+            # shapes need not match previous events. This could happen if we had a
+            # non-empty storage which was sliced to empty, and then appended to.
+            exp_node_feats_shape = None
+            exp_edge_feats_shape = None
+
+        # We update our node/edge feature shapes in case they were previously None
         self._node_feats_shape = self._check_node_feature_shapes(
-            events, expected_shape=self._node_feats_shape
+            events, expected_shape=exp_node_feats_shape
         )
         self._edge_feats_shape = self._check_edge_feature_shapes(
-            events, expected_shape=self._edge_feats_shape
+            events, expected_shape=exp_edge_feats_shape
         )
 
         for event in events:
@@ -164,6 +176,9 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def node_feats(self) -> Optional[Tensor]:
+        if self._node_feats_shape is None:
+            return None
+
         feats = []
         for events in self._events_dict.values():
             for event in events:
