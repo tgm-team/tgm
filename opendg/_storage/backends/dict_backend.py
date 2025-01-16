@@ -190,14 +190,13 @@ class DGStorageDictBackend(DGStorageBase):
         assert self._node_feats_shape is not None
         assert self.end_time is not None
 
-        values = torch.stack(values)
-        indices = list(
-            map(list, zip(*indices))
-        )  # https://pytorch.org/docs/stable/sparse.html#construction
+        values_tensor = torch.stack(values)
+        indices_tensor = torch.tensor(
+            indices
+        ).t()  # https://pytorch.org/docs/stable/sparse.html#construction
 
         shape = (self.end_time + 1, self.num_nodes, *self._node_feats_shape)
-
-        return torch.sparse_coo_tensor(indices, values, shape)
+        return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     @property
     def edge_feats(self) -> Optional[Tensor]:
@@ -215,10 +214,10 @@ class DGStorageDictBackend(DGStorageBase):
         assert self._edge_feats_shape is not None
         assert self.end_time is not None
 
-        values = torch.stack(values)
-        indices = list(
-            map(list, zip(*indices))
-        )  # https://pytorch.org/docs/stable/sparse.html#construction
+        values_tensor = torch.stack(values)
+        indices_tensor = torch.tensor(
+            indices
+        ).t()  # https://pytorch.org/docs/stable/sparse.html#construction
 
         shape = (
             self.end_time + 1,
@@ -226,7 +225,7 @@ class DGStorageDictBackend(DGStorageBase):
             self.num_nodes,
             *self._edge_feats_shape,
         )
-        return torch.sparse_coo_tensor(indices, values, shape)
+        return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     def _invalidate_cache(self) -> None:
         self._start_time = None
