@@ -349,6 +349,53 @@ def test_append_multiple_events(DGStorageImpl):
     assert torch.equal(storage.edge_feats, expected_edge_feats)
 
 
+def test_append_incompatible_node_feature_dimension(DGStorageImpl):
+    events = [
+        NodeEvent(time=1, node_id=1, features=torch.rand(2, 5)),
+    ]
+    storage = DGStorageImpl(events)
+
+    new_event = NodeEvent(time=5, node_id=10, features=torch.rand(3, 6))
+    with pytest.raises(ValueError):
+        _ = storage.append(new_event)
+
+
+def test_append_incompatible_edge_feature_dimension(DGStorageImpl):
+    events = [
+        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
+    ]
+    storage = DGStorageImpl(events)
+
+    new_event = EdgeEvent(time=5, edge=(10, 20), features=torch.rand(3, 6))
+    with pytest.raises(ValueError):
+        _ = storage.append(new_event)
+
+
+def test_append_different_feature_dimension_after_slicing_to_empty(DGStorageImpl):
+    events = [
+        NodeEvent(time=1, node_id=1, features=torch.rand(2, 5)),
+        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
+    ]
+    storage = DGStorageImpl(events)
+
+    storage = storage.slice_nodes([])
+    assert len(storage) == 0
+    assert storage.node_feats is None
+    assert storage.edge_feats is None
+
+    new_events = [
+        NodeEvent(time=5, node_id=10, features=torch.rand(3, 6)),
+        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(3, 6)),
+    ]
+    storage = storage.append(new_events)
+    assert len(storage) == 1
+
+    expected_node_feats = new_events[0].features
+    expected_edge_feats = new_events[1].features
+    assert torch.equal(storage.node_feats, expected_node_feats)
+    assert torch.equal(storage.edge_feats, expected_edge_feats)
+
+
 @pytest.mark.skip(reason='Not implemented')
 def test_temporal_coarsening(DGStorageImpl):
     pass
