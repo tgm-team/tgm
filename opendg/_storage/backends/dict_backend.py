@@ -176,29 +176,70 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def node_feats(self) -> Optional[Tensor]:
-        feats = []
+        indices, values = [], []
         for events in self._events_dict.values():
             for event in events:
                 if isinstance(event, NodeEvent) and event.features is not None:
-                    feats.append(event.features)
+                    indices.append([event.time, event.node_id])
+                    values.append(event.features)
 
-        if not len(feats):
+        if not len(values):
             return None
 
-        return torch.cat(feats)
+        # This assert is here to make mypy happy
+        assert self._node_feats_shape is not None
+        assert self.end_time is not None
+
+        values = torch.stack(values)
+        indices = list(
+            map(list, zip(*indices))
+        )  # https://pytorch.org/docs/stable/sparse.html#construction
+
+        max_node_id = self._get_max_node_id()  # Probably should be cached
+        shape = (self.end_time + 1, max_node_id + 1, *self._node_feats_shape)
+
+        return torch.sparse_coo_tensor(indices, values, shape)
 
     @property
     def edge_feats(self) -> Optional[Tensor]:
-        feats = []
+        indices, values = [], []
         for events in self._events_dict.values():
             for event in events:
                 if isinstance(event, EdgeEvent) and event.features is not None:
-                    feats.append(event.features)
+                    indices.append([event.time, event.edge[0], event.edge[1]])
+                    values.append(event.features)
 
-        if not len(feats):
+        if not len(values):
             return None
 
-        return torch.cat(feats)
+        # This assert is here to make mypy happy
+        assert self._edge_feats_shape is not None
+        assert self.end_time is not None
+
+        values = torch.stack(values)
+        indices = list(
+            map(list, zip(*indices))
+        )  # https://pytorch.org/docs/stable/sparse.html#construction
+
+        max_node_id = self._get_max_node_id()  # Probably should be cached
+        shape = (
+            self.end_time + 1,
+            max_node_id + 1,
+            max_node_id + 1,
+            *self._edge_feats_shape,
+        )
+        return torch.sparse_coo_tensor(indices, values, shape)
+
+    def _get_max_node_id(self) -> int:
+        max_node_id = -1  # We assume the ids are >= 0
+        for events in self._events_dict.values():
+            for event in events:
+                if isinstance(event, NodeEvent):
+                    max_node_id = max(max_node_id, event.node_id)
+                elif isinstance(event, EdgeEvent):
+                    max_node_id = max(max_node_id, event.edge[0], event.edge[1])
+
+        return max_node_id
 
     def _invalidate_cache(self) -> None:
         self._start_time = None

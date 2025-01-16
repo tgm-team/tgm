@@ -80,13 +80,13 @@ class DGStorageBase(ABC):
     def node_feats(self) -> Optional[Tensor]:
         r"""The aggregated node features over the dynamic graph.
 
-        Returns a tensor.sparse_coo_tensor of size T x V x V x d where
+        Returns a tensor.sparse_coo_tensor of size T x V x d where
 
         - T = Number of timestamps
         - V = Number of nodes
         - d = Node feature dimension
-
         or None if there are no node features on the dynamic graph.
+
         """
 
     @property
@@ -94,7 +94,7 @@ class DGStorageBase(ABC):
     def edge_feats(self) -> Optional[Tensor]:
         r"""The aggregated edge features over the dynamic graph.
 
-        Returns a tensor.sparse_coo_tensor of size T x V x d where
+        Returns a tensor.sparse_coo_tensor of size T x V x V x  d where
 
         - T = Number of timestamps
         - E = Number of edges
