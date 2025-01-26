@@ -70,9 +70,17 @@ def write_csv(
                         'No feature column provided but events had features'
                     )
 
+                if len(features.shape) > 1:
+                    raise ValueError('Multi-dimensional features not supported')
+
+                if len(features) != len(feature_cols):
+                    raise ValueError(
+                        f'Got {len(features)}-dimensional feature tensor but only '
+                        f'specified {len(feature_cols)} feature column names.'
+                    )
+
                 features = features.tolist()
                 for i, feature_col in enumerate(feature_cols):
-                    # TODO: This doesn't work for multi dimensional array
                     row[feature_col] = features[i]
 
             writer.writerow(row)

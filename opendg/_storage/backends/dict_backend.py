@@ -190,14 +190,14 @@ class DGStorageDictBackend(DGStorageBase):
         assert self._node_feats_shape is not None
         assert self.end_time is not None
 
-        torch.stack(values)
+        values_tensor = torch.stack(values)
         indices_tensor = torch.tensor(
             indices
         ).t()  # https://pytorch.org/docs/stable/sparse.html#construction
 
         shape = (self.end_time + 1, self.num_nodes, *self._node_feats_shape)
 
-        return torch.sparse_coo_tensor(indices, values, shape)
+        return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     @property
     def edge_feats(self) -> Optional[Tensor]:
