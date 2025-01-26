@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import torch
 from torch import Tensor
 
-from opendg.events import EdgeEvent, Event, NodeEvent
+from opendg._events import EdgeEvent, Event, NodeEvent
 from opendg.typing import TimeDelta
 
 from ..base import DGStorageBase
@@ -190,13 +190,14 @@ class DGStorageDictBackend(DGStorageBase):
         assert self._node_feats_shape is not None
         assert self.end_time is not None
 
-        values_tensor = torch.stack(values)
+        torch.stack(values)
         indices_tensor = torch.tensor(
             indices
         ).t()  # https://pytorch.org/docs/stable/sparse.html#construction
 
         shape = (self.end_time + 1, self.num_nodes, *self._node_feats_shape)
-        return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
+
+        return torch.sparse_coo_tensor(indices, values, shape)
 
     @property
     def edge_feats(self) -> Optional[Tensor]:

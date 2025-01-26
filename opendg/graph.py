@@ -1,7 +1,8 @@
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
+from opendg._events import Event
+from opendg._io import read_csv, write_csv
 from opendg._storage import DGStorage
-from opendg.events import Event
 from opendg.typing import TimeDelta
 
 
@@ -12,24 +13,30 @@ class DGraph:
         self._storage = DGStorage(events)
 
     @classmethod
-    def from_csv(cls, file_path: str) -> 'DGraph':
+    def from_csv(cls, file_path: str, *args: Any, **kwargs: Any) -> 'DGraph':
         r"""Load a Dynamic Graph from a csv_file.
 
         Args:
             file_path (str): The os.pathlike object to read from.
+            args (Any): Optional positional arguments.
+            kwargs (Any): Optional keyword arguments.
 
         Returns:
            DGraph: The newly constructed dynamic graph.
         """
-        raise NotImplementedError()
+        events = read_csv(file_path, *args, **kwargs)
+        return cls(events)
 
-    def to_csv(self, file_path: str) -> None:
+    def to_csv(self, file_path: str, *args: Any, **kwargs: Any) -> None:
         r"""Write a Dynamic Graph to a csv_file.
 
         Args:
             file_path (str): The os.pathlike object to write to.
+            args (Any): Optional positional arguments.
+            kwargs (Any): Optional keyword arguments.
         """
-        raise NotImplementedError()
+        events = self._storage.to_events()
+        write_csv(events, file_path, *args, **kwargs)
 
     def slice_time(self, start_time: int, end_time: int) -> None:
         r"""Extract temporal slice of the dynamic graph between start_time and end_time.
