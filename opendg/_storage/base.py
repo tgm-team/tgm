@@ -1,16 +1,15 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple, Union
 
-from opendg.typing import Event, TimeDelta
+import torch
+from torch import Tensor
+
+from opendg.events import EdgeEvent, Event, NodeEvent
+from opendg.typing import TimeDelta
 
 
 class DGStorageBase(ABC):
     r"""Base class for dynamic graph storage engine."""
-
-    @classmethod
-    @abstractmethod
-    def from_events(cls, events: List[Event]) -> 'DGStorageBase':
-        r"""Create dynamic graph from a list of events."""
 
     @abstractmethod
     def to_events(self) -> List[Event]:
@@ -76,6 +75,34 @@ class DGStorageBase(ABC):
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the dynamic graph."""
 
+    @property
+    @abstractmethod
+    def node_feats(self) -> Optional[Tensor]:
+        r"""The aggregated node features over the dynamic graph.
+
+        Returns a tensor.sparse_coo_tensor of size T x V x d where
+
+        - T = Number of timestamps
+        - V = Number of nodes
+        - d = Node feature dimension
+        or None if there are no node features on the dynamic graph.
+
+        """
+
+    @property
+    @abstractmethod
+    def edge_feats(self) -> Optional[Tensor]:
+        r"""The aggregated edge features over the dynamic graph.
+
+        Returns a tensor.sparse_coo_tensor of size T x V x V x  d where
+
+        - T = Number of timestamps
+        - E = Number of edges
+        - d = Edge feature dimension
+
+        or None if there are no edge features on the dynamic graph.
+        """
+
     def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
         if start_time > end_time:
             raise ValueError(
@@ -89,3 +116,33 @@ class DGStorageBase(ABC):
             raise ValueError('Cannot temporally coarsen an empty dynamic graph')
 
         # TODO: Validate time_delta and agg_func
+
+    def _check_node_feature_shapes(
+        self, events: List[Event], expected_shape: Optional[torch.Size] = None
+    ) -> Optional[torch.Size]:
+        node_feats_shape = expected_shape
+
+        for event in events:
+            if isinstance(event, NodeEvent) and event.features is not None:
+                if node_feats_shape is None:
+                    node_feats_shape = event.features.shape
+                elif node_feats_shape != event.features.shape:
+                    raise ValueError(
+                        f'Incompatible node features shapes: {node_feats_shape} != {event.features.shape}'
+                    )
+        return node_feats_shape
+
+    def _check_edge_feature_shapes(
+        self, events: List[Event], expected_shape: Optional[torch.Size] = None
+    ) -> Optional[torch.Size]:
+        edge_feats_shape = expected_shape
+
+        for event in events:
+            if isinstance(event, EdgeEvent) and event.features is not None:
+                if edge_feats_shape is None:
+                    edge_feats_shape = event.features.shape
+                elif edge_feats_shape != event.features.shape:
+                    raise ValueError(
+                        f'Incompatible edge features shapes: {edge_feats_shape} != {event.features.shape}'
+                    )
+        return edge_feats_shape
