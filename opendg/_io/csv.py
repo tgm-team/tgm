@@ -26,8 +26,10 @@ def read_csv(
                 features = None
             else:
                 # TODO: This doesn't work for multi dimensional array
-                features = [float(row[feature_col]) for feature_col in feature_cols]
-                features = torch.tensor(features)
+                features_list = [
+                    float(row[feature_col]) for feature_col in feature_cols
+                ]
+                features = torch.tensor(features_list)
 
             event = EdgeEvent(time, (src_id, dst_id), features)
             events.append(event)
@@ -79,8 +81,8 @@ def write_csv(
                         f'specified {len(feature_cols)} feature column names.'
                     )
 
-                features = features.tolist()
-                for i, feature_col in enumerate(feature_cols):
-                    row[feature_col] = features[i]
+                features_list = features.tolist()
+                for feature_col, feature_val in zip(feature_cols, features_list):
+                    row[feature_col] = feature_val
 
             writer.writerow(row)
