@@ -1,13 +1,13 @@
 import pytest
 import torch
 
+from opendg._events import EdgeEvent, NodeEvent
 from opendg._storage import (
     DGStorageBackends,
     get_dg_storage_backend,
     set_dg_storage_backend,
 )
 from opendg._storage.backends import DGStorageDictBackend
-from opendg.events import EdgeEvent, NodeEvent
 
 
 @pytest.fixture(params=DGStorageBackends.values())
