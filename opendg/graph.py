@@ -1,12 +1,14 @@
 from typing import Any, List, Optional, Union
 
+import torch
+
 from opendg._events import Event
 from opendg._io import read_csv, write_csv
 from opendg._storage import DGStorage
 from opendg.typing import TimeDelta
 
 
-class DGraph:
+class DGraph(torch.utils.data.Dataset):
     r"""The Dynamic Graph Object."""
 
     def __init__(self, events: List[Event]) -> None:
@@ -68,6 +70,9 @@ class DGraph:
     def __len__(self) -> int:
         r"""Returns the number of temporal length of the dynamic graph."""
         return self._storage.num_timestamps
+
+    # TODO: Make DGraph a map-stype dataset, need to implement this
+    # def __getitem__(self, idx):
 
     def __str__(self) -> str:
         r"""Returns summary properties of the dynamic graph."""
