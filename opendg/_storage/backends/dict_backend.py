@@ -5,7 +5,7 @@ import torch
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
-from opendg.typing import TimeDelta
+from opendg.timedelta import TimeDeltaTG
 
 from ..base import DGStorageBase
 
@@ -27,7 +27,7 @@ class DGStorageDictBackend(DGStorageBase):
         self._num_nodes: Optional[int] = None
         self._num_edges: Optional[int] = None
         self._num_timestamps: Optional[int] = None
-        self._time_granularity: Optional[TimeDelta] = None
+        self._time_granularity: Optional[TimeDeltaTG] = None
 
     def to_events(self) -> List[Event]:
         events: List[Event] = []
@@ -99,27 +99,27 @@ class DGStorageDictBackend(DGStorageBase):
         return self
 
     def temporal_coarsening(
-        self, time_delta: TimeDelta, agg_func: str = 'sum'
+        self, time_delta: TimeDeltaTG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
-        self._check_temporal_coarsening_args(time_delta, agg_func)
+        # self._check_temporal_coarsening_args(time_delta, agg_func)
 
-        # This assert is here to make mypy happy
-        assert self.start_time is not None
-        assert self.end_time is not None
-        total_time = self.end_time - self.start_time
+        # # This assert is here to make mypy happy
+        # assert self.start_time is not None
+        # assert self.end_time is not None
+        # total_time = self.end_time - self.start_time
 
-        # TODO: Support other time_delta formats
-        interval_size = total_time // time_delta
+        # # TODO: Support other time_delta formats
+        # interval_size = total_time // time_delta.get_seconds()
 
-        events_dict = defaultdict(list)
-        for t, event in self._events_dict.items():
-            bin_t = -((t - self.start_time) // -interval_size)  # Ceiling division
+        # events_dict = defaultdict(list)
+        # for t, event in self._events_dict.items():
+        #     bin_t = -((t - self.start_time) // -interval_size)  # Ceiling division
 
-            # TODO: Use the agg_func
-            events_dict[bin_t].extend(event)
+        #     # TODO: Use the agg_func
+        #     events_dict[bin_t].extend(event)
 
-        self._events_dict = events_dict
-        self._invalidate_cache()
+        # self._events_dict = events_dict
+        # self._invalidate_cache()
         return self
 
     @property
@@ -135,13 +135,13 @@ class DGStorageDictBackend(DGStorageBase):
         return self._end_time
 
     @property
-    def time_granularity(self) -> Optional[TimeDelta]:
-        if self._time_granularity is None and len(self) > 1:
-            # TODO: Validate and construct a proper TimeDelta object
-            ts = list(self._events_dict.keys())
-            self._time_granularity = min(
-                [ts[i + 1] - ts[i] for i in range(len(ts) - 1)]
-            )
+    def time_granularity(self) -> Optional[TimeDeltaTG]:
+        # if self._time_granularity is None and len(self) > 1:
+        #     # TODO: Validate and construct a proper TimeDelta object
+        #     ts = list(self._events_dict.keys())
+        #     self._time_granularity = min(
+        #         [ts[i + 1] - ts[i] for i in range(len(ts) - 1)]
+        #     )
         return self._time_granularity
 
     @property
