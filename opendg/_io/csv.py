@@ -23,7 +23,7 @@ def read_csv(
             time = int(row[time_col])
 
             if feature_cols is None:
-                features = None
+                features = None  # TODO:: Infer the feature columns
             else:
                 features_list = [
                     float(row[feature_col]) for feature_col in feature_cols

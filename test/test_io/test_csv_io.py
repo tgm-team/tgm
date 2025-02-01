@@ -17,13 +17,7 @@ def test_csv_conversion_no_features():
         write_csv(events, f.name)
         recovered_events = read_csv(f.name)
 
-    # Need an event __eq__
-    assert len(events) == len(recovered_events)
-    for i in range(len(events)):
-        # Only works for edge events
-        assert events[i].time == recovered_events[i].time
-        assert events[i].edge == recovered_events[i].edge
-        assert events[i].features == recovered_events[i].features
+    _assert_events_equal(events, recovered_events)
 
 
 def test_csv_conversion_no_features_custom_cols():
@@ -38,13 +32,7 @@ def test_csv_conversion_no_features_custom_cols():
         write_csv(events, f.name, **col_names)
         recovered_events = read_csv(f.name, **col_names)
 
-    # Need an event __eq__
-    assert len(events) == len(recovered_events)
-    for i in range(len(events)):
-        # Only works for edge events
-        assert events[i].time == recovered_events[i].time
-        assert events[i].edge == recovered_events[i].edge
-        assert events[i].features == recovered_events[i].features
+    _assert_events_equal(events, recovered_events)
 
 
 def test_csv_conversion_with_features():
@@ -59,13 +47,7 @@ def test_csv_conversion_with_features():
         write_csv(events, f.name, feature_cols=feature_cols)
         recovered_events = read_csv(f.name, feature_cols=feature_cols)
 
-    # Need an event __eq__
-    assert len(events) == len(recovered_events)
-    for i in range(len(events)):
-        # Only works for edge events
-        assert events[i].time == recovered_events[i].time
-        assert events[i].edge == recovered_events[i].edge
-        torch.testing.assert_close(events[i].features, recovered_events[i].features)
+    _assert_events_equal(events, recovered_events)
 
 
 def test_csv_conversion_with_features_custom_cols():
@@ -81,13 +63,7 @@ def test_csv_conversion_with_features_custom_cols():
         write_csv(events, f.name, feature_cols=feature_cols, **col_names)
         recovered_events = read_csv(f.name, feature_cols=feature_cols, **col_names)
 
-    # Need an event __eq__
-    assert len(events) == len(recovered_events)
-    for i in range(
-        len(events)
-    ):  # Only works for edge events assert events[i].time == recovered_events[i].time
-        assert events[i].edge == recovered_events[i].edge
-        torch.testing.assert_close(events[i].features, recovered_events[i].features)
+    _assert_events_equal(events, recovered_events)
 
 
 def test_csv_conversion_with_features_no_feature_cols_provided():
@@ -110,3 +86,17 @@ def test_csv_conversion_with_features_bad_feature_col_shape():
     with tempfile.NamedTemporaryFile() as f:
         with pytest.raises(ValueError):
             _ = write_csv(events, f.name, feature_cols=feature_cols)
+
+
+def _assert_events_equal(expected_events, actual_events):
+    assert len(expected_events) == len(actual_events)
+    for i in range(len(expected_events)):
+        expected_event = expected_events[i]
+        actual_event = actual_events[i]
+
+        assert isinstance(expected_event, EdgeEvent)
+        assert isinstance(actual_event, EdgeEvent)
+
+        assert expected_event.time == actual_event.time
+        assert expected_event.edge == actual_event.edge
+        torch.testing.assert_close(expected_event.features, actual_event.features)
