@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Union
 import torch
 from torch import Tensor
 
-from opendg.events import EdgeEvent, Event, NodeEvent
+from opendg._events import EdgeEvent, Event, NodeEvent
 from opendg.timedelta import TimeDeltaDG
 
 from ..base import DGStorageBase
@@ -160,6 +160,7 @@ class DGStorageDictBackend(DGStorageBase):
         ).t()  # https://pytorch.org/docs/stable/sparse.html#construction
 
         shape = (self.end_time + 1, self.num_nodes, *self._node_feats_shape)
+
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     @property
