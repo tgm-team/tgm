@@ -13,6 +13,7 @@ def test_init_default_value(temporal_unit):
     assert td.unit == temporal_unit
     assert td.value == 1
     assert str(td) == f"TimeDeltaDG(unit='{temporal_unit}', value=1)"
+    assert not td.is_ordered
 
 
 def test_init_non_default_value(temporal_unit):
@@ -21,6 +22,7 @@ def test_init_non_default_value(temporal_unit):
     assert td.unit == temporal_unit
     assert td.value == value
     assert str(td) == f"TimeDeltaDG(unit='{temporal_unit}', value={value})"
+    assert not td.is_ordered
 
 
 def test_init_ordered():
@@ -29,6 +31,7 @@ def test_init_ordered():
     assert td.unit == temporal_unit
     assert td.value == 1
     assert str(td) == f"TimeDeltaDG(unit='{temporal_unit}')"
+    assert td.is_ordered
 
 
 @pytest.mark.parametrize('bad_unit', ['mock'])
