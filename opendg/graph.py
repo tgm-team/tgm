@@ -3,21 +3,25 @@ from typing import Any, List, Optional, Union
 from opendg._events import Event
 from opendg._io import read_csv, write_csv
 from opendg._storage import DGStorage
-from opendg.typing import TimeDelta
+from opendg.timedelta import TimeDeltaDG
 
 
 class DGraph:
     r"""The Dynamic Graph Object."""
 
-    def __init__(self, events: List[Event]) -> None:
-        self._storage = DGStorage(events)
+    def __init__(self, events: List[Event], time_delta: TimeDeltaDG) -> None:
+        r"""Initialize a dynamic graph from a list of events and a time delta."""
+        self._storage = DGStorage(events, time_delta)
 
     @classmethod
-    def from_csv(cls, file_path: str, *args: Any, **kwargs: Any) -> 'DGraph':
+    def from_csv(
+        cls, file_path: str, time_delta: TimeDeltaDG, *args: Any, **kwargs: Any
+    ) -> 'DGraph':
         r"""Load a Dynamic Graph from a csv_file.
 
         Args:
             file_path (str): The os.pathlike object to read from.
+            time_delta (TimeDeltaDG): The time delta granularity to assign to the DGraph.
             args (Any): Optional positional arguments.
             kwargs (Any): Optional keyword arguments.
 
@@ -25,7 +29,7 @@ class DGraph:
            DGraph: The newly constructed dynamic graph.
         """
         events = read_csv(file_path, *args, **kwargs)
-        return cls(events)
+        return cls(events, time_delta)
 
     def to_csv(self, file_path: str, *args: Any, **kwargs: Any) -> None:
         r"""Write a Dynamic Graph to a csv_file.
@@ -56,11 +60,13 @@ class DGraph:
         """
         self._storage.append(events)
 
-    def temporal_coarsening(self, time_delta: TimeDelta, agg_func: str = 'sum') -> None:
+    def temporal_coarsening(
+        self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
+    ) -> None:
         r"""Re-index the temporal axis of the dynamic graph.
 
         Args:
-            time_delta (TimeDelta): The time granularity to use.
+            time_delta (TimeDeltaDG): The time granularity to use.
             agg_func (Union[str, Callable]): The aggregation / reduction function to apply.
         """
         self._storage.temporal_coarsening(time_delta, agg_func)
@@ -84,9 +90,9 @@ class DGraph:
         return self._storage.end_time
 
     @property
-    def time_granularity(self) -> Optional[TimeDelta]:
-        r"""The time granularity of the dynamic graph. None, if the graph has less than 2 temporal events."""
-        return self._storage.time_granularity
+    def time_delta(self) -> Optional[TimeDeltaDG]:
+        r"""The time granularity of the dynamic graph."""
+        return self._storage.time_delta
 
     @property
     def num_nodes(self) -> int:
