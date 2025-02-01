@@ -25,7 +25,6 @@ def read_csv(
             if feature_cols is None:
                 features = None
             else:
-                # TODO: This doesn't work for multi dimensional array
                 features_list = [
                     float(row[feature_col]) for feature_col in feature_cols
                 ]

@@ -90,26 +90,6 @@ def test_csv_conversion_with_features_custom_cols():
         torch.testing.assert_close(events[i].features, recovered_events[i].features)
 
 
-@pytest.mark.skip('Multi-dimensional feature IO not supported')
-def test_csv_conversion_with_multi_dimensional_features():
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(3, 37)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(3, 37)),
-    ]
-
-    with tempfile.NamedTemporaryFile() as f:
-        write_csv(events, f.name, feature_cols=['dim_0', 'dim_1', 'dim_2'])
-        recovered_events = read_csv(f.name, feature_cols=['dim_0', 'dim_1', 'dim_2'])
-
-    # Need an event __eq__
-    assert len(events) == len(recovered_events)
-    for i in range(len(events)):
-        # Only works for edge events
-        assert events[i].time == recovered_events[i].time
-        assert events[i].edge == recovered_events[i].edge
-        torch.testing.assert_close(events[i].features, recovered_events[i].features)
-
-
 def test_csv_conversion_with_features_no_feature_cols_provided():
     events = [
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(1, 3, 37)),
