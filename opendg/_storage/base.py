@@ -4,7 +4,7 @@ from typing import List, Optional, Union
 import torch
 from torch import Tensor
 
-from opendg.events import EdgeEvent, Event, NodeEvent
+from opendg._events import EdgeEvent, Event, NodeEvent
 from opendg.timedelta import TimeDeltaDG
 
 
