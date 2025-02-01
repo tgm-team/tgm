@@ -1,11 +1,11 @@
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 import torch
 from torch import Tensor
 
 from opendg._events import EdgeEvent, Event, NodeEvent
-from opendg.typing import TimeDelta
+from opendg.timedelta import TimeDeltaDG
 
 from ..base import DGStorageBase
 
@@ -13,7 +13,7 @@ from ..base import DGStorageBase
 class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
-    def __init__(self, events: List[Event]) -> None:
+    def __init__(self, events: List[Event], time_delta: TimeDeltaDG) -> None:
         self._node_feats_shape = self._check_node_feature_shapes(events)
         self._edge_feats_shape = self._check_edge_feature_shapes(events)
 
@@ -21,13 +21,14 @@ class DGStorageDictBackend(DGStorageBase):
         for event in events:
             self._events_dict[event.time].append(event)
 
+        self._time_delta = time_delta  # Note: will need to cache when temporal_coarsening is implemented
+
         # Cached Values
         self._start_time: Optional[int] = None
         self._end_time: Optional[int] = None
         self._num_nodes: Optional[int] = None
         self._num_edges: Optional[int] = None
         self._num_timestamps: Optional[int] = None
-        self._time_granularity: Optional[TimeDelta] = None
 
     def to_events(self) -> List[Event]:
         events: List[Event] = []
@@ -56,18 +57,6 @@ class DGStorageDictBackend(DGStorageBase):
         self._events_dict = events_dict
         self._invalidate_cache()
         return self
-
-    def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
-        nbrs_dict = defaultdict(list)
-        for t, events in self._events_dict.items():
-            for event in events:
-                if isinstance(event, EdgeEvent):
-                    u, v = event.edge
-                    if u in nodes:
-                        nbrs_dict[u].append((v, t))
-                    if v in nodes:
-                        nbrs_dict[v].append((u, t))
-        return dict(nbrs_dict)
 
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
         if not isinstance(events, list):
@@ -99,28 +88,9 @@ class DGStorageDictBackend(DGStorageBase):
         return self
 
     def temporal_coarsening(
-        self, time_delta: TimeDelta, agg_func: str = 'sum'
+        self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
-        self._check_temporal_coarsening_args(time_delta, agg_func)
-
-        # This assert is here to make mypy happy
-        assert self.start_time is not None
-        assert self.end_time is not None
-        total_time = self.end_time - self.start_time
-
-        # TODO: Support other time_delta formats
-        interval_size = total_time // time_delta
-
-        events_dict = defaultdict(list)
-        for t, event in self._events_dict.items():
-            bin_t = -((t - self.start_time) // -interval_size)  # Ceiling division
-
-            # TODO: Use the agg_func
-            events_dict[bin_t].extend(event)
-
-        self._events_dict = events_dict
-        self._invalidate_cache()
-        return self
+        raise NotImplementedError('Temporal Coarsening is not implemented')
 
     @property
     def start_time(self) -> Optional[int]:
@@ -135,14 +105,8 @@ class DGStorageDictBackend(DGStorageBase):
         return self._end_time
 
     @property
-    def time_granularity(self) -> Optional[TimeDelta]:
-        if self._time_granularity is None and len(self) > 1:
-            # TODO: Validate and construct a proper TimeDelta object
-            ts = list(self._events_dict.keys())
-            self._time_granularity = min(
-                [ts[i + 1] - ts[i] for i in range(len(ts) - 1)]
-            )
-        return self._time_granularity
+    def time_delta(self) -> TimeDeltaDG:
+        return self._time_delta
 
     @property
     def num_nodes(self) -> int:
@@ -234,4 +198,3 @@ class DGStorageDictBackend(DGStorageBase):
         self._num_nodes = None
         self._num_edges = None
         self._num_timestamps = None
-        self._time_granularity = None

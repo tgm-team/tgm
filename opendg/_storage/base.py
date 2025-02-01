@@ -1,15 +1,19 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import torch
 from torch import Tensor
 
 from opendg._events import EdgeEvent, Event, NodeEvent
-from opendg.typing import TimeDelta
+from opendg.timedelta import TimeDeltaDG
 
 
 class DGStorageBase(ABC):
     r"""Base class for dynamic graph storage engine."""
+
+    @abstractmethod
+    def __init__(self, events: List[Event], time_delta: TimeDeltaDG) -> None:
+        r"""Initialize a dynamic graph from a list of events and a time delta."""
 
     @abstractmethod
     def to_events(self) -> List[Event]:
@@ -24,16 +28,12 @@ class DGStorageBase(ABC):
         r"""Extract topological slice of the dynamcic graph given the list of nodes."""
 
     @abstractmethod
-    def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
-        r"""Return a list of neighbour, timestamp pairs for each node in the nodes list."""
-
-    @abstractmethod
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
         r"""Append events to the temporal end of the dynamic graph."""
 
     @abstractmethod
     def temporal_coarsening(
-        self, time_delta: TimeDelta, agg_func: str = 'sum'
+        self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
         r"""Re-index the temporal axis of the dynamic graph."""
 
@@ -43,7 +43,7 @@ class DGStorageBase(ABC):
 
     def __str__(self) -> str:
         r"""Returns summary properties of the dynamic graph."""
-        return f'Dynamic Graph Storage Engine ({self.__class__.__name__}), Start Time: {self.start_time}, End Time: {self.end_time}, Nodes: {self.num_nodes}, Edges: {self.num_edges}, Timestamps: {self.num_timestamps}, Time Granularity: {self.time_granularity}'
+        return f'Dynamic Graph Storage Engine ({self.__class__.__name__}), Start Time: {self.start_time}, End Time: {self.end_time}, Nodes: {self.num_nodes}, Edges: {self.num_edges}, Timestamps: {self.num_timestamps}, Time Delta: {self.time_delta}'
 
     @property
     @abstractmethod
@@ -57,8 +57,8 @@ class DGStorageBase(ABC):
 
     @property
     @abstractmethod
-    def time_granularity(self) -> Optional[TimeDelta]:
-        r"""The time granularity of the dynamic graph. None, if the graph has less than 2 temporal events."""
+    def time_delta(self) -> TimeDeltaDG:
+        r"""The time granularity of the dynamic graph."""
 
     @property
     @abstractmethod
@@ -110,7 +110,7 @@ class DGStorageBase(ABC):
             )
 
     def _check_temporal_coarsening_args(
-        self, time_delta: TimeDelta, agg_func: str
+        self, time_delta: TimeDeltaDG, agg_func: str
     ) -> None:
         if not len(self):
             raise ValueError('Cannot temporally coarsen an empty dynamic graph')
