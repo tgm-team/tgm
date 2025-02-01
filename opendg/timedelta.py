@@ -4,12 +4,12 @@ from typing import Optional, Union
 class TimeDeltaDG:
     r"""TimeGranularity class to represent time granularity in dynamic graph."""
 
-    def __init__(self, unit: str, value: Optional[int] = 1):
+    def __init__(self, unit: str, value: Optional[int] = 1) -> None:
         r"""Args:
         unit (str): unit of time granularity. Possible values are 'Y', 'M', 'W', 'D', 'h', 'm', 's', 'ms', 'us', 'ns', 'r'.
         value (int, optional): value of the specified time granularity. Defaults to 1.
         """
-        self.time_dict = {
+        self._time_dict = {
             'r': 'ordered',
             'Y': 'year',
             'M': 'month',
@@ -22,37 +22,35 @@ class TimeDeltaDG:
             'us': 'microsecond',
             'ns': 'nanosecond',
         }
-        self.non_convert = {'r': 'ordered'}
-
-        SECONDS_IN_A_YEAR = 31536000  # 365 days
-        SECONDS_IN_A_MONTH = 2592000
-        SECONDS_IN_A_WEEK = 604800
-        SECONDS_IN_A_DAY = 86400
-        SECONDS_IN_AN_HOUR = 3600
-        SECONDS_IN_A_MINUTE = 60
-        self.time_constant = {
-            'Y': SECONDS_IN_A_YEAR,
-            'M': SECONDS_IN_A_MONTH,
-            'W': SECONDS_IN_A_WEEK,
-            'D': SECONDS_IN_A_DAY,
-            'h': SECONDS_IN_AN_HOUR,
-            'm': SECONDS_IN_A_MINUTE,
-            's': 1,
-            'ms': 1 / 1000,
-            'us': 1 / 1_000_000,
-            'ns': 1 / 1_000_000_000,
+        self._non_convert = {'r': 'ordered'}
+        self._time_constant = {
+            'Y': 1000 * 1000 * 1000 * 60 * 60 * 24 * 365,
+            'M': 1000 * 1000 * 1000 * 60 * 60 * 24 * 30,
+            'W': 1000 * 1000 * 1000 * 60 * 60 * 24 * 7,
+            'D': 1000 * 1000 * 1000 * 60 * 60 * 24,
+            'h': 1000 * 1000 * 1000 * 60 * 60,
+            'm': 1000 * 1000 * 1000 * 60,
+            's': 1000 * 1000 * 1000,
+            'ms': 1000 * 1000,
+            'us': 1000,
+            'ns': 1,
         }
 
-        if self._is_valid_unit(unit):
+        if unit in self._time_dict:
             self._unit = unit
         else:
             raise ValueError(f'Invalid time granularity unit: {unit}')
 
-        if isinstance(value, int):
+        if isinstance(value, int) and value > 0:
             self._value = value
         else:
             raise ValueError(
-                f'TimeDeltaDG value should be an integer, got {str(value)}'
+                f'TimeDeltaDG value must be a positive integer, got {value}'
+            )
+
+        if unit in self._non_convert and value != 1:
+            raise ValueError(
+                'Only value=1 is supported for time granularity unit: {unit}'
             )
 
     @property
@@ -76,13 +74,8 @@ class TimeDeltaDG:
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
 
-        if not isinstance(time_delta, TimeDeltaDG):
-            raise ValueError(
-                f'Invalid time granularity unit for conversion: {time_delta}'
-            )
-
-        if (time_delta.unit in self.non_convert) or (
-            self._unit in time_delta.non_convert
+        if (time_delta.unit in self._non_convert) or (
+            self._unit in time_delta._non_convert
         ):
             raise ValueError(
                 f'Conversion not allowed for time granularity unit {self._unit} : {time_delta.unit}'
@@ -90,23 +83,30 @@ class TimeDeltaDG:
 
         return self._convert_from_delta(time_delta)
 
-    def get_seconds(self) -> float:
-        r"""Returns the time granularity in seconds."""
-        return self._value * self.time_constant[self._unit]
-
-    def _is_valid_unit(self, unit: str) -> bool:
-        r"""Check if the specified time granularity unit is valid."""
-        return unit in self.time_dict
-
     def __str__(self) -> str:
-        return f'time granularity is {self._unit} : {self.time_dict[self._unit]}'
+        if self.unit in self._non_convert:
+            return f"TimeDeltaDG(unit='{self.unit}')"
+        return f"TimeDeltaDG(unit='{self.unit}', value={self.value})"
 
-    def __len__(self) -> int:
-        r"""Returns the number of value of the specified time granularity."""
-        return self._value
+    def _convert_from_delta(self, other: 'TimeDeltaDG') -> float:
+        self_nanos = self._time_constant[self.unit]
+        other_nanos = self._time_constant[other.unit]
 
-    def _convert_from_delta(self, td: 'TimeDeltaDG') -> float:
-        r"""Convert the time granularity to the specified time granularity unit."""
-        new_secs = td.get_seconds()
-        cur_secs = self.get_seconds()
-        return cur_secs / new_secs
+        invert_unit_ratio = False
+        if self_nanos > other_nanos:
+            # The unit ratio is safe to integer divide without precision error
+            unit_ratio = (
+                self._time_constant[self.unit] // self._time_constant[other.unit]
+            )
+        else:
+            invert_unit_ratio = True
+            unit_ratio = (
+                self._time_constant[other.unit] // self._time_constant[self.unit]
+            )
+
+        value_ratio = self.value / other.value
+
+        if invert_unit_ratio:
+            return value_ratio / unit_ratio
+
+        return unit_ratio * value_ratio
