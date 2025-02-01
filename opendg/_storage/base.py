@@ -5,14 +5,14 @@ import torch
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
-from opendg.timedelta import TimeDeltaTG
+from opendg.timedelta import TimeDeltaDG
 
 
 class DGStorageBase(ABC):
     r"""Base class for dynamic graph storage engine."""
 
     @abstractmethod
-    def __init__(self, events: List[Event], time_delta: TimeDeltaTG) -> None:
+    def __init__(self, events: List[Event], time_delta: TimeDeltaDG) -> None:
         r"""Initialize a dynamic graph from a list of events and a time delta."""
 
     @abstractmethod
@@ -33,7 +33,7 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def temporal_coarsening(
-        self, time_delta: TimeDeltaTG, agg_func: str = 'sum'
+        self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
         r"""Re-index the temporal axis of the dynamic graph."""
 
@@ -57,7 +57,7 @@ class DGStorageBase(ABC):
 
     @property
     @abstractmethod
-    def time_delta(self) -> TimeDeltaTG:
+    def time_delta(self) -> TimeDeltaDG:
         r"""The time granularity of the dynamic graph."""
 
     @property
@@ -110,7 +110,7 @@ class DGStorageBase(ABC):
             )
 
     def _check_temporal_coarsening_args(
-        self, time_delta: TimeDeltaTG, agg_func: str
+        self, time_delta: TimeDeltaDG, agg_func: str
     ) -> None:
         if not len(self):
             raise ValueError('Cannot temporally coarsen an empty dynamic graph')

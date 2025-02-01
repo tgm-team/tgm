@@ -8,7 +8,7 @@ from opendg._storage import (
 )
 from opendg._storage.backends import DGStorageDictBackend
 from opendg.events import EdgeEvent, NodeEvent
-from opendg.timedelta import TimeDeltaTG
+from opendg.timedelta import TimeDeltaDG
 
 
 @pytest.fixture(params=DGStorageBackends.values())
@@ -22,7 +22,7 @@ def test_init(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     assert storage.to_events() == events
     assert storage.start_time == 1
@@ -50,7 +50,7 @@ def test_init_multiple_events_per_timestamp(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     assert storage.to_events() == events
     assert storage.start_time == 1
@@ -78,7 +78,7 @@ def test_init_empty_features(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20)),
         NodeEvent(time=6, node_id=7),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     assert storage.to_events() == events
     assert storage.start_time == 1
@@ -119,7 +119,7 @@ def test_init_incompatible_edge_feature_dimension(DGStorageImpl):
 
 def test_init_empty(DGStorageImpl):
     events = []
-    td = TimeDeltaTG('r')
+    td = TimeDeltaDG('r')
     storage = DGStorageImpl(events, td)
     assert storage.to_events() == []
     assert storage.start_time == None
@@ -140,7 +140,7 @@ def test_slice_time(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     storage = storage.slice_time(1, 2)
     assert storage.to_events() == [events[0]]
@@ -165,7 +165,7 @@ def test_slice_time_empty_slice(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     storage = storage.slice_time(2, 3)
     assert storage.to_events() == []
@@ -187,7 +187,7 @@ def test_slice_time_full_slice(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     storage = storage.slice_time(0, 7)
     assert storage.to_events() == events
@@ -215,7 +215,7 @@ def test_slice_time_on_boundary(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     storage = storage.slice_time(1, 5)
     assert storage.to_events() == [events[0]]
@@ -240,7 +240,7 @@ def test_slice_time_bad_slice(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     with pytest.raises(ValueError):
         storage.slice_time(2, 1)
@@ -252,7 +252,7 @@ def test_slice_nodes(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     storage = storage.slice_nodes([1, 2])
     assert storage.to_events() == [events[0]]
@@ -277,7 +277,7 @@ def test_slice_nodes_empty_slice(DGStorageImpl):
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
         NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
     ]
-    td = TimeDeltaTG('Y', 1)
+    td = TimeDeltaDG('Y', 1)
     storage = DGStorageImpl(events, td)
     storage = storage.slice_nodes([])
     assert storage.to_events() == []
@@ -297,7 +297,7 @@ def test_append_single_event(DGStorageImpl):
     events = [
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
     ]
-    td = TimeDeltaTG('r')
+    td = TimeDeltaDG('r')
     storage = DGStorageImpl(events, td)
     assert storage.start_time == 1
     assert storage.end_time == 1
@@ -334,7 +334,7 @@ def test_append_single_event(DGStorageImpl):
 
 def test_append_multiple_events(DGStorageImpl):
     events = []
-    td = TimeDeltaTG('r')
+    td = TimeDeltaDG('r')
     storage = DGStorageImpl(events, td)
     assert storage.start_time == None
     assert storage.end_time == None
@@ -373,7 +373,7 @@ def test_append_incompatible_node_feature_dimension(DGStorageImpl):
     events = [
         NodeEvent(time=1, node_id=1, features=torch.rand(2, 5)),
     ]
-    td = TimeDeltaTG('r')
+    td = TimeDeltaDG('r')
     storage = DGStorageImpl(events, td)
 
     new_event = NodeEvent(time=5, node_id=10, features=torch.rand(3, 6))
@@ -385,7 +385,7 @@ def test_append_incompatible_edge_feature_dimension(DGStorageImpl):
     events = [
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
     ]
-    td = TimeDeltaTG('r')
+    td = TimeDeltaDG('r')
     storage = DGStorageImpl(events, td)
 
     new_event = EdgeEvent(time=5, edge=(10, 20), features=torch.rand(3, 6))
@@ -398,7 +398,7 @@ def test_append_different_feature_dimension_after_slicing_to_empty(DGStorageImpl
         NodeEvent(time=1, node_id=1, features=torch.rand(2, 5)),
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
     ]
-    td = TimeDeltaTG('r')
+    td = TimeDeltaDG('r')
     storage = DGStorageImpl(events, td)
 
     storage = storage.slice_nodes([])

@@ -1,7 +1,7 @@
 from typing import Optional, Union
 
 
-class TimeDeltaTG:
+class TimeDeltaDG:
     r"""TimeGranularity class to represent time granularity in dynamic graph."""
 
     def __init__(self, unit: str, value: Optional[int] = 1):
@@ -52,7 +52,7 @@ class TimeDeltaTG:
             self._value = value
         else:
             raise ValueError(
-                f'TimeDeltaTG value should be an integer, got {str(value)}'
+                f'TimeDeltaDG value should be an integer, got {str(value)}'
             )
 
     @property
@@ -65,18 +65,18 @@ class TimeDeltaTG:
         r"""The time granularity value."""
         return self._value
 
-    def convert(self, time_delta: Union[str, 'TimeDeltaTG']) -> float:
-        r"""Convert the time granularity to the specified time granularity unit, can be either a string or a TimeDeltaTG object.
+    def convert(self, time_delta: Union[str, 'TimeDeltaDG']) -> float:
+        r"""Convert the time granularity to the specified time granularity unit, can be either a string or a TimeDeltaDG object.
 
         Args:
-            time_delta (str or TimeDeltaTG): unit of time granularity. Possible values are 'Y', 'M', 'W', 'D', 'h', 'm', 's', 'ms', 'us', 'ns' or a TimeDeltaTG object
+            time_delta (str or TimeDeltaDG): unit of time granularity. Possible values are 'Y', 'M', 'W', 'D', 'h', 'm', 's', 'ms', 'us', 'ns' or a TimeDeltaDG object
         Returns:
             float: conversion rate
         """
         if isinstance(time_delta, str):
-            time_delta = TimeDeltaTG(time_delta)
+            time_delta = TimeDeltaDG(time_delta)
 
-        if not isinstance(time_delta, TimeDeltaTG):
+        if not isinstance(time_delta, TimeDeltaDG):
             raise ValueError(
                 f'Invalid time granularity unit for conversion: {time_delta}'
             )
@@ -105,7 +105,7 @@ class TimeDeltaTG:
         r"""Returns the number of value of the specified time granularity."""
         return self._value
 
-    def _convert_from_delta(self, td: 'TimeDeltaTG') -> float:
+    def _convert_from_delta(self, td: 'TimeDeltaDG') -> float:
         r"""Convert the time granularity to the specified time granularity unit."""
         new_secs = td.get_seconds()
         cur_secs = self.get_seconds()

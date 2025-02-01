@@ -5,7 +5,7 @@ import torch
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
-from opendg.timedelta import TimeDeltaTG
+from opendg.timedelta import TimeDeltaDG
 
 from ..base import DGStorageBase
 
@@ -13,7 +13,7 @@ from ..base import DGStorageBase
 class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
-    def __init__(self, events: List[Event], time_delta: TimeDeltaTG) -> None:
+    def __init__(self, events: List[Event], time_delta: TimeDeltaDG) -> None:
         self._node_feats_shape = self._check_node_feature_shapes(events)
         self._edge_feats_shape = self._check_edge_feature_shapes(events)
 
@@ -88,7 +88,7 @@ class DGStorageDictBackend(DGStorageBase):
         return self
 
     def temporal_coarsening(
-        self, time_delta: TimeDeltaTG, agg_func: str = 'sum'
+        self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
         raise NotImplementedError('Temporal Coarsening is not implemented')
 
@@ -105,7 +105,7 @@ class DGStorageDictBackend(DGStorageBase):
         return self._end_time
 
     @property
-    def time_delta(self) -> TimeDeltaTG:
+    def time_delta(self) -> TimeDeltaDG:
         return self._time_delta
 
     @property
