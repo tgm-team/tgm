@@ -63,7 +63,7 @@ class TimeDeltaDG:
     @property
     def is_ordered(self) -> bool:
         r"""Whether or not the time granularity is 'ordered', in which case conversions are prohibited."""
-        return self.unit in self._ordered_unit
+        return self.unit == self._ordered_unit
 
     def convert(self, time_delta: Union[str, 'TimeDeltaDG']) -> float:
         r"""Convert the current granularity to the specified time_delta (either a unit string or a TimeDeltaDG object).
