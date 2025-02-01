@@ -279,28 +279,6 @@ def test_slice_nodes_empty_slice(DGStorageImpl):
     assert storage.edge_feats is None
 
 
-def test_get_nbrs(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3)),
-        EdgeEvent(time=5, edge=(10, 20)),
-        NodeEvent(time=6, node_id=7),
-    ]
-    storage = DGStorageImpl(events)
-    nbrs = storage.get_nbrs([0, 2, 20])
-    assert nbrs == {2: [(3, 1)], 20: [(10, 5)]}
-
-
-def test_get_nbrs_empty_nbrs(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3)),
-        EdgeEvent(time=5, edge=(10, 20)),
-        NodeEvent(time=6, node_id=7),
-    ]
-    storage = DGStorageImpl(events)
-    nbrs = storage.get_nbrs([0])
-    assert nbrs == {}
-
-
 def test_append_single_event(DGStorageImpl):
     events = [
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),

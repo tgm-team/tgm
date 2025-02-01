@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 import torch
 from torch import Tensor
@@ -56,18 +56,6 @@ class DGStorageDictBackend(DGStorageBase):
         self._events_dict = events_dict
         self._invalidate_cache()
         return self
-
-    def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
-        nbrs_dict = defaultdict(list)
-        for t, events in self._events_dict.items():
-            for event in events:
-                if isinstance(event, EdgeEvent):
-                    u, v = event.edge
-                    if u in nodes:
-                        nbrs_dict[u].append((v, t))
-                    if v in nodes:
-                        nbrs_dict[v].append((u, t))
-        return dict(nbrs_dict)
 
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
         if not isinstance(events, list):
