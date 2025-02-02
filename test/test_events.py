@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from opendg._events import EdgeEvent, NodeEvent
+from opendg.events import EdgeEvent, NodeEvent
 
 
 def test_node_event_without_node_feat():

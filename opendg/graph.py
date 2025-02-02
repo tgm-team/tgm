@@ -1,8 +1,8 @@
 from typing import Any, List, Optional, Union
 
-from opendg._events import Event
 from opendg._io import read_csv, write_csv
 from opendg._storage import DGStorage
+from opendg.events import Event
 from opendg.timedelta import TimeDeltaDG
 
 
