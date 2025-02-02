@@ -16,4 +16,4 @@ Contents
 .. toctree::
 
    usage
-   data
+   modules
