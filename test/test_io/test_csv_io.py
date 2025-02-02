@@ -3,8 +3,8 @@ import tempfile
 import pytest
 import torch
 
-from opendg._events import EdgeEvent
 from opendg._io import read_csv, write_csv
+from opendg.events import EdgeEvent
 
 
 def test_csv_conversion_no_features():

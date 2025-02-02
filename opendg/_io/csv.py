@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-from opendg._events import EdgeEvent, Event, NodeEvent
+from opendg.events import EdgeEvent, Event, NodeEvent
 
 
 def read_csv(
