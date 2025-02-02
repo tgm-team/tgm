@@ -4,6 +4,14 @@ opendg package
 Submodules
 ----------
 
+opendg.events module
+--------------------
+
+.. automodule:: opendg.events
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 opendg.graph module
 -------------------
 
