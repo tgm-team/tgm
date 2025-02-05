@@ -26,7 +26,7 @@ class DGraph:
     def from_csv(
         cls,
         file_path: str,
-        time_delta: Optional[TimeDeltaDG],
+        time_delta: Optional[TimeDeltaDG] = None,
         *args: Any,
         **kwargs: Any,
     ) -> 'DGraph':
