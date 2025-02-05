@@ -51,6 +51,14 @@ class DGraph:
         """
         self._storage.slice_time(start_time, end_time)
 
+    def slice_nodes(self, nodes: List[int]) -> None:
+        r"""Extract topological slice of the dynamcic graph given the list of nodes.
+
+        Args:
+            nodes (List[int]): The list of node ids to slice from.
+        """
+        self._storage.slice_nodes(nodes)
+
     def append(self, events: Union[Event, List[Event]]) -> None:
         r"""Append events to the temporal end of the dynamic graph.
 
