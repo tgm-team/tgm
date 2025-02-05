@@ -7,21 +7,35 @@ from opendg.timedelta import TimeDeltaDG
 
 
 class DGraph:
-    r"""The Dynamic Graph Object."""
+    r"""The Dynamic Graph Object.
 
-    def __init__(self, events: List[Event], time_delta: TimeDeltaDG) -> None:
-        r"""Initialize a dynamic graph from a list of events and a time delta."""
+    Args:
+        events (List[event]): The list of temporal events (node/edge events) that define the dynamic graph.
+        time_delta (Optional[TimeDeltaDG]): Describes the time granularity associated with the event stream.
+            If None, then the events are assumed 'ordered', with no specific time unit.
+    """
+
+    def __init__(
+        self, events: List[Event], time_delta: Optional[TimeDeltaDG] = None
+    ) -> None:
+        if time_delta is None:
+            time_delta = TimeDeltaDG('r')  # Default to ordered if granularity
         self._storage = DGStorage(events, time_delta)
 
     @classmethod
     def from_csv(
-        cls, file_path: str, time_delta: TimeDeltaDG, *args: Any, **kwargs: Any
+        cls,
+        file_path: str,
+        time_delta: Optional[TimeDeltaDG],
+        *args: Any,
+        **kwargs: Any,
     ) -> 'DGraph':
         r"""Load a Dynamic Graph from a csv_file.
 
         Args:
             file_path (str): The os.pathlike object to read from.
-            time_delta (TimeDeltaDG): The time delta granularity to assign to the DGraph.
+            time_delta (Optional[TimeDeltaDG]): Describes the time granularity associated with the event stream.
+                If None, then the events are assumed 'ordered', with no specific time unit.
             args (Any): Optional positional arguments.
             kwargs (Any): Optional keyword arguments.
 
