@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -16,6 +16,10 @@ class DGStorageBase(ABC):
         r"""Initialize a dynamic graph from a list of events and a time delta."""
 
     @abstractmethod
+    def materialize(self, override_self: bool = False) -> 'DGStorageBase':
+        r"""Materialize and propodate any lazy ops on the dynamic graph."""
+
+    @abstractmethod
     def to_events(self) -> List[Event]:
         r"""Convert dynamic graph to a list of events."""
 
@@ -26,6 +30,10 @@ class DGStorageBase(ABC):
     @abstractmethod
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
         r"""Extract topological slice of the dynamcic graph given the list of nodes."""
+
+    @abstractmethod
+    def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
+        r"""Return a list of neighbour, timestamp pairs for each node in the nodes list."""
 
     @abstractmethod
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
