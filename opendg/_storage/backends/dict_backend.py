@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -23,8 +23,6 @@ class DGStorageDictBackend(DGStorageBase):
 
         self._time_delta = time_delta  # Note: will need to cache when temporal_coarsening is implemented
 
-        # Lazy ops
-
         # Cached Values
         self._start_time: Optional[int] = None
         self._end_time: Optional[int] = None
@@ -32,10 +30,33 @@ class DGStorageDictBackend(DGStorageBase):
         self._num_edges: Optional[int] = None
         self._num_timestamps: Optional[int] = None
 
+        # Lazy ops
+        # TODO: There are all cache misses
+        self._max_start_time: int = self.start_time  # type: ignore
+        self._min_end_time: int = self.end_time  # type: ignore
+        self._node_slice: Set[int] = set(range(self.num_nodes))
+
     def materialize(self, override_self: bool = False) -> 'DGStorageBase':
-        # TODO: Make a fast copy
+        events_dict: Dict[int, List[Event]] = {}
+        for time, events in self._events_dict.items():
+            if self._max_start_time <= time <= self._min_end_time:
+                for e in events:
+                    if isinstance(e, NodeEvent) and e.node_id in self._node_slice:
+                        events_dict[time].append(e)
+                    elif isinstance(e, EdgeEvent) and len(
+                        set(e.edge).intersection(self._node_slice)
+                    ):
+                        events_dict[time].append(e)
+
         if override_self:
+            # This refreshes the caches
+            self._events_dict = events_dict
+            self._max_start_time = self.start_time  # type: ignore
+            self._min_end_time = self.end_time  # type: ignore
+            self._node_slice = set(range(self.num_nodes))
             return self
+
+        # TODO: Make a fast copy
         return DGStorageDictBackend(self.to_events(), self.time_delta)
 
     def get_nbrs(self, nodes: List[int]) -> Dict[int, List[Tuple[int, int]]]:
@@ -62,30 +83,26 @@ class DGStorageDictBackend(DGStorageBase):
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
         self._check_slice_time_args(start_time, end_time)
 
-        # TODO: Update lazy ops
-        self._events_dict = {
-            k: v for k, v in self._events_dict.items() if start_time <= k < end_time
-        }
+        if start_time > self._max_start_time:
+            self._max_start_time = start_time
+
+        if end_time < self._min_end_time:
+            self._min_end_time = end_time
+
+        # TODO Cache check
         self._invalidate_cache()
         return self
 
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
-        # TODO: Update lazy ops
-        events_dict: Dict[int, List[Event]] = defaultdict(list)
-        for t, events in self._events_dict.items():
-            for event in events:
-                if isinstance(event, NodeEvent) and event.node_id in nodes:
-                    events_dict[t].append(event)
-                elif isinstance(event, EdgeEvent) and len(
-                    set(event.edge).intersection(nodes)
-                ):
-                    events_dict[t].append(event)
-        self._events_dict = events_dict
+        self._node_slice &= set(nodes)
+
+        # TODO Cache check
         self._invalidate_cache()
         return self
 
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
         self.materialize(override_self=True)  # TODO: Must we?
+
         if not isinstance(events, list):
             events = [events]
 
@@ -121,15 +138,17 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def start_time(self) -> Optional[int]:
-        # TODO: Use lazy ops
-        if self._start_time is None and len(self._events_dict):
+        if self._max_start_time is not None:
+            self._start_time = self._max_start_time
+        elif self._start_time is None and len(self._events_dict):
             self._start_time = min(self._events_dict)
         return self._start_time
 
     @property
     def end_time(self) -> Optional[int]:
-        # TODO: Use lazy ops
-        if self._end_time is None and len(self._events_dict):
+        if self._min_end_time is not None:
+            self._end_time = self._min_end_time
+        elif self._end_time is None and len(self._events_dict):
             self._end_time = max(self._events_dict)
         return self._end_time
 
@@ -139,6 +158,10 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def num_nodes(self) -> int:
+        if self._num_nodes is not None:
+            # This means node_slice was initialized and we are safe to use it moving forward
+            return len(self._node_slice)
+
         # TODO: Use lazy ops
         max_node_id = -1  # We assume the ids are >= 0
         for events in self._events_dict.values():
@@ -154,6 +177,7 @@ class DGStorageDictBackend(DGStorageBase):
     @property
     def num_edges(self) -> int:
         # TODO: Use lazy ops
+        self.materialize(override_self=True)
         if self._num_edges is None:
             edges = set()
             for events in self._events_dict.values():
@@ -166,13 +190,14 @@ class DGStorageDictBackend(DGStorageBase):
     @property
     def num_timestamps(self) -> int:
         # TODO: Use lazy ops
+        self.materialize(override_self=True)
         if self._num_timestamps is None:
             self._num_timestamps = len(self._events_dict)
         return self._num_timestamps
 
     @property
     def node_feats(self) -> Optional[Tensor]:
-        self.materialize(override_self=True)  # TODO: Must we?
+        self.materialize(override_self=True)
 
         indices, values = [], []
         for events in self._events_dict.values():
@@ -199,7 +224,7 @@ class DGStorageDictBackend(DGStorageBase):
 
     @property
     def edge_feats(self) -> Optional[Tensor]:
-        self.materialize(override_self=True)  # TODO: Must we?
+        self.materialize(override_self=True)
 
         indices, values = [], []
         for events in self._events_dict.values():
