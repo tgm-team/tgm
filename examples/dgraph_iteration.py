@@ -14,11 +14,14 @@ parser.add_argument(
 )
 
 
+def run_graph_iteration(dataset_file: str) -> None:
+    DG = DGraph.from_csv(dataset_file)
+    print(DG)
+
+
 def main() -> None:
     args = parser.parse_args()
-
-    DG = DGraph.from_csv(args.dataset_file)
-    print(DG)
+    run_graph_iteration(args.dataset_file)
 
 
 if __name__ == '__main__':
