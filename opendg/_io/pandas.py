@@ -10,7 +10,7 @@ def read_pandas(
     df: pd.DataFrame,
     src_col: str,
     dst_col: str,
-    ts_col: Optional[str] = None,
+    time_col: Optional[str] = None,
     edge_feature_col: Optional[str] = None,
 ) -> List[Event]:
     events: List[Event] = []
@@ -19,8 +19,8 @@ def read_pandas(
         src_id = row[src_col]
         dst_id = row[dst_col]
 
-        if ts_col is not None:
-            time = row[ts_col]
+        if time_col is not None:
+            time = row[time_col]
         else:
             time = len(events)
 
