@@ -1,6 +1,8 @@
 from typing import Any, List, Optional, Union
 
-from opendg._io import read_csv, write_csv
+import pandas as pd
+
+from opendg._io import read_csv, read_pandas, write_csv
 from opendg._storage import DGStorage
 from opendg.events import Event
 from opendg.timedelta import TimeDeltaDG
@@ -43,6 +45,37 @@ class DGraph:
            DGraph: The newly constructed dynamic graph.
         """
         events = read_csv(file_path, *args, **kwargs)
+        return cls(events, time_delta)
+
+    @classmethod
+    def from_pandas(
+        cls,
+        df: pd.DataFrame,
+        src_col: str,
+        dst_col: str,
+        ts_col: Optional[str] = None,
+        feature_col: Optional[str] = None,
+        time_delta: Optional[TimeDeltaDG] = None,
+    ) -> 'DGraph':
+        r"""Load a Dynamic Graph from a Pandas DataFrame.
+
+        Args:
+            df (pd.DataFrame): The dataframe to read from.
+            src_col (str): Column in the dataframe corresponding to the source edge id.
+            dst_col (str): Column in the dataframe corresponding to the destination edge id.
+            ts_col (str): Column in the dataframe corresponding to the timestamp.
+            feature_col (Optional[str]): Optional column in the dataframe corresponding to the edge features.
+            time_delta (Optional[TimeDeltaDG]): Describes the time granularity associated with the event stream.
+                If None, then the events are assumed 'ordered', with no specific time unit.
+
+        Returns:
+           DGraph: The newly constructed dynamic graph.
+        """
+        non_ordered_time_delta = time_delta is not None and not time_delta.is_ordered
+        if ts_col is None and non_ordered_time_delta:
+            raise ValueError('Must specify "ts_col" when using non-ordered time delta.')
+
+        events = read_pandas(df, src_col, dst_col, ts_col, feature_col)
         return cls(events, time_delta)
 
     def to_csv(self, file_path: str, *args: Any, **kwargs: Any) -> None:
