@@ -6,7 +6,7 @@ class DGDataLoader(DGBaseLoader):
     r"""Load data from DGraph without any sampling."""
 
     def sample(self, batch: 'DGraph') -> 'DGraph':
-        r"""DGDataLoader performs no subsampling. Reutnrs the full batch.
+        r"""DGDataLoader performs no subsampling. Returns the full batch.
 
         Args:
             batch (DGraph): Incoming batch of data. May not be materialized.
