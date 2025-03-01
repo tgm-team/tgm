@@ -38,25 +38,23 @@ class DGStorageDictBackend(DGStorageBase):
 
     def slice_time(self, start_time: int, end_time: int) -> 'DGStorageBase':
         self._check_slice_time_args(start_time, end_time)
-        self._events_dict = {
-            k: v for k, v in self._events_dict.items() if start_time <= k < end_time
-        }
-        self._invalidate_cache()
-        return self
+        events: List[Event] = []
+        for t, t_events in self._events_dict.items():
+            if start_time <= t < end_time:
+                events += t_events
+        return DGStorageDictBackend(events, self.time_delta)
 
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
-        events_dict: Dict[int, List[Event]] = defaultdict(list)
-        for t, events in self._events_dict.items():
-            for event in events:
+        events: List[Event] = []
+        for _, t_events in self._events_dict.items():
+            for event in t_events:
                 if isinstance(event, NodeEvent) and event.node_id in nodes:
-                    events_dict[t].append(event)
+                    events.append(event)
                 elif isinstance(event, EdgeEvent) and len(
                     set(event.edge).intersection(nodes)
                 ):
-                    events_dict[t].append(event)
-        self._events_dict = events_dict
-        self._invalidate_cache()
-        return self
+                    events.append(event)
+        return DGStorageDictBackend(events, self.time_delta)
 
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
         if not isinstance(events, list):

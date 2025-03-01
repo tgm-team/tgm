@@ -56,22 +56,30 @@ class DGraph:
         events = self._storage.to_events()
         write_csv(events, file_path, *args, **kwargs)
 
-    def slice_time(self, start_time: int, end_time: int) -> None:
+    def slice_time(self, start_time: int, end_time: int) -> 'DGraph':
         r"""Extract temporal slice of the dynamic graph between start_time and end_time.
 
         Args:
             start_time (int): The start of the temporal slice.
             end_time (int): The end of the temporal slice (exclusive).
-        """
-        self._storage.slice_time(start_time, end_time)
 
-    def slice_nodes(self, nodes: List[int]) -> None:
+        Returns:
+            DGraph copy of events between start and end_time.
+        """
+        events = self._storage.slice_time(start_time, end_time).to_events()
+        return DGraph(events, time_delta=self.time_delta)
+
+    def slice_nodes(self, nodes: List[int]) -> 'DGraph':
         r"""Extract topological slice of the dynamcic graph given the list of nodes.
 
         Args:
             nodes (List[int]): The list of node ids to slice from.
+
+        Retursn:
+            DGraph copy of events related to the input nodes.
         """
-        self._storage.slice_nodes(nodes)
+        events = self._storage.slice_nodes(nodes).to_events()
+        return DGraph(events, time_delta=self.time_delta)
 
     def append(self, events: Union[Event, List[Event]]) -> None:
         r"""Append events to the temporal end of the dynamic graph.
