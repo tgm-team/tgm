@@ -46,8 +46,9 @@ def test_init_bad_value(temporal_unit, bad_value):
         _ = TimeDeltaDG(temporal_unit, bad_value)
 
 
-@pytest.mark.parametrize('bad_value', [-1, 0])
+@pytest.mark.parametrize('bad_value', [-1, 0, 2])
 def test_init_ordered_bad_value(bad_value):
+    # Note: Only '1' accepted as the value for an ordered type
     temporal_unit = 'r'
     with pytest.raises(ValueError):
         _ = TimeDeltaDG(temporal_unit, bad_value)
