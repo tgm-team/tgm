@@ -112,7 +112,7 @@ class DGraph:
         return self._storage.end_time
 
     @property
-    def time_delta(self) -> Optional[TimeDeltaDG]:
+    def time_delta(self) -> TimeDeltaDG:
         r"""The time granularity of the dynamic graph."""
         return self._storage.time_delta
 

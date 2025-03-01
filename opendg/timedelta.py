@@ -44,9 +44,6 @@ class TimeDeltaDG:
         if not (isinstance(value, int)) or value <= 0:
             raise ValueError(f'Value must be a positive integer, got: {value}')
 
-        if unit == self._ordered_unit and value != 1:
-            raise ValueError(f"Only value=1 is supported for 'ordered' TimeDelta unit")
-
         self._unit = unit
         self._value = value
 
