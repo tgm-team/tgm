@@ -1,5 +1,6 @@
 from typing import List, Optional
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -13,7 +14,12 @@ def read_pandas(
     time_col: Optional[str] = None,
     edge_feature_col: Optional[str] = None,
 ) -> List[Event]:
-    events: List[Event] = []
+    # Pre-allocating buffer of events with the right size, and adding an index column
+    # into the dataframe, so that the df.apply() call below is thread safe, and can
+    # be run without the GIL. This index ensures that everything is processed in order.
+    _mock_event = EdgeEvent(time=-1, edge=(-1, -1))
+    events: List[Event] = [_mock_event] * len(df)
+    df['index'] = np.arange(len(df))
 
     def _construct_event_from_row(row: pd.Series) -> None:
         src_id = row[src_col]
@@ -22,7 +28,7 @@ def read_pandas(
         if time_col is not None:
             time = row[time_col]
         else:
-            time = len(events)
+            time = row['index']
 
         if edge_feature_col is not None:
             edge_features = torch.tensor(row[edge_feature_col])
@@ -30,9 +36,9 @@ def read_pandas(
             edge_features = None
 
         event = EdgeEvent(time, (src_id, dst_id), edge_features)
-        events.append(event)
+        events[row['index']] = event
 
-    # Note: This is not thread-safe. Should not be run without the GIL
     df.apply(_construct_event_from_row, axis=1)
+    df.drop('index', axis=1)  # Clean up temporary index column
 
     return events
