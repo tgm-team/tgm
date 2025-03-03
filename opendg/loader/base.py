@@ -14,12 +14,12 @@ class DGBaseLoader(ABC):
 
     Note:
         Ordered batch_unit ('r') iterates using normal batch size semantics
-            e.g. batch_size=5, batch_unit='r' -> yield 5 events at time
+            e.g. batch_size=5, batch_unit='r' -> yield 5 _events at time
 
         Unordered batch_unit iterates uses the appropriate temporal unit
             e.g. batch_size=5, batch_unit='s' -> yield 5 seconds of data at a time
 
-        When using the ordered batch_unit, the order of yielded events within the same timestamp
+        When using the ordered batch_unit, the order of yielded _events within the same timestamp
         is non-deterministic.
     """
 
@@ -53,9 +53,13 @@ class DGBaseLoader(ABC):
 
         self._iterate_by_node_count = not dg_is_ordered and batch_unit_is_ordered
 
-        self._current_time = self._dg.start_time
-        self._end_time = self._dg.end_time
-        self._batch = None
+        self._idx = 0
+        self._events = []
+        if self._iterate_by_node_count and len(self._dg):
+            self._events = self._dg._storage.to_events()
+        elif len(self._dg):
+            assert self._dg.start_time is not None
+            self._idx = self._dg.start_time
 
     @abstractmethod
     def sample(self, batch: 'DGraph') -> 'DGraph':
@@ -76,53 +80,20 @@ class DGBaseLoader(ABC):
             raise StopIteration
 
         if self._iterate_by_node_count:
-            batch = self._get_next_batch_by_node_count()
+            _events = self._events[self._idx : self._idx + self._batch_size]
+            batch = DGraph(_events, time_delta=self._dg.time_delta)
         else:
-            batch = self._get_next_batch_by_time_slice()
+            batch = self._dg.slice_time(self._idx, self._idx + self._batch_size)
 
+        self._idx += self._batch_size
         return self.sample(batch)
-
-    def _get_next_batch_by_node_count(self) -> 'DGraph':
-        # TODO: Copy semantics are broken
-        batch = DGraph([], time_delta=self._dg.time_delta)
-        num_left = self._batch_size - batch.num_nodes
-        while num_left > 0:
-            if self._batch is not None:
-                next_batch = self._batch
-            else:
-                # TODO: No good way of getting nex timestamp
-                next_batch = self._dg.slice_time(
-                    self._dg.start_time, self._dg.start_time + 1
-                )
-
-            if next_batch is None:
-                if self._drop_last:
-                    raise StopIteration
-                else:
-                    return batch
-
-            # TODO: No good way of getting the nodes in the DGraph
-            curr_batch = next_batch.slice_nodes(next_batch.nodes[:num_left])
-            next_batch = next_batch.slice_nodes(next_batch.nodes[num_left:])
-            batch.append(curr_batch)
-            self._batch = next_batch
-
-            num_left = self._batch_size - batch.num_nodes
-        return batch
-
-    def _get_next_batch_by_time_slice(self) -> 'DGraph':
-        # TODO: Copy semantics are broken
-        assert self._current_time is not None  # For mypy
-        batch_end_time = self._current_time + self._batch_size
-        batch = self._dg.slice_time(self._current_time, batch_end_time)
-        self._current_time = batch_end_time
-        return batch
 
     def _done_iteration(self) -> bool:
         if not len(self._dg):
             return True
 
-        # For mypy
-        assert self._current_time is not None
-        assert self._dg.end_time is not None
-        return self._current_time > self._dg.end_time
+        if self._iterate_by_node_count:
+            return self._idx + self._batch_size >= len(self._events) and self._drop_last
+        else:
+            assert self._dg.end_time is not None
+            return self._idx > self._dg.end_time
