@@ -51,11 +51,11 @@ class DGBaseLoader(ABC):
             conversion_ratio = self._dg.time_delta.convert(self._batch_unit)
             self._batch_size = int(self._batch_size * conversion_ratio)
 
-        self._iterate_by_node_count = not dg_is_ordered and batch_unit_is_ordered
+        self._iterate_by_events = not dg_is_ordered and batch_unit_is_ordered
 
         self._idx = 0
         self._events = []
-        if self._iterate_by_node_count and len(self._dg):
+        if self._iterate_by_events and len(self._dg):
             self._events = self._dg._storage.to_events()
         elif len(self._dg):
             assert self._dg.start_time is not None
@@ -79,9 +79,9 @@ class DGBaseLoader(ABC):
         if self._done_iteration():
             raise StopIteration
 
-        if self._iterate_by_node_count:
-            _events = self._events[self._idx : self._idx + self._batch_size]
-            batch = DGraph(_events, time_delta=self._dg.time_delta)
+        if self._iterate_by_events:
+            events = self._events[self._idx : self._idx + self._batch_size]
+            batch = DGraph(events, time_delta=self._dg.time_delta)
         else:
             batch = self._dg.slice_time(self._idx, self._idx + self._batch_size)
 
@@ -92,7 +92,7 @@ class DGBaseLoader(ABC):
         if not len(self._dg):
             return True
 
-        if self._iterate_by_node_count:
+        if self._iterate_by_events:
             return self._idx + self._batch_size >= len(self._events) and self._drop_last
         else:
             assert self._dg.end_time is not None
