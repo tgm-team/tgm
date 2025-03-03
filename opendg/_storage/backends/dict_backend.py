@@ -28,64 +28,30 @@ class DGStorageDictBackend(DGStorageBase):
         node_slice: Optional[Set[int]] = None,
     ) -> List[Event]:
         events: List[Event] = []
-
-        lb_time = float('-inf') if start_time is None else start_time
-        ub_time = float('inf') if end_time is None else end_time
-
         for t, t_events in self._events_dict.items():
-            if lb_time <= t < ub_time:
-                if node_slice is None:
-                    events += t_events
-                else:
-                    for event in t_events:
-                        if isinstance(event, NodeEvent) and event.node_id in node_slice:
-                            events.append(event)
-                        elif isinstance(event, EdgeEvent) and len(
-                            set(event.edge).intersection(node_slice)
-                        ):
-                            events.append(event)
+            for event in t_events:
+                if self._valid_slice(t, event, start_time, end_time, node_slice):
+                    events.append(event)
         return events
 
     def get_start_time(self, node_slice: Optional[Set[int]] = None) -> Optional[int]:
         start_time = None
         for t, t_events in self._events_dict.items():
-            valid_slice = False
-            if node_slice is None:
-                valid_slice = True
-            else:
-                for event in t_events:
-                    if isinstance(event, NodeEvent) and event.node_id in node_slice:
-                        valid_slice = True
-                        break
-                    elif isinstance(event, EdgeEvent) and len(
-                        set(event.edge).intersection(node_slice)
-                    ):
-                        valid_slice = True
-                        break
-
-            if valid_slice and (start_time is None or t < start_time):
-                start_time = t
+            for event in t_events:
+                if self._valid_slice(t, event, node_slice=node_slice):
+                    if start_time is None or t < start_time:
+                        start_time = t
+                    break
         return start_time
 
     def get_end_time(self, node_slice: Optional[Set[int]] = None) -> Optional[int]:
         end_time = None
         for t, t_events in self._events_dict.items():
-            valid_slice = False
-            if node_slice is None:
-                valid_slice = True
-            else:
-                for event in t_events:
-                    if isinstance(event, NodeEvent) and event.node_id in node_slice:
-                        valid_slice = True
-                        break
-                    elif isinstance(event, EdgeEvent) and len(
-                        set(event.edge).intersection(node_slice)
-                    ):
-                        valid_slice = True
-                        break
-
-            if valid_slice and (end_time is None or t > end_time):
-                end_time = t
+            for event in t_events:
+                if self._valid_slice(t, event, node_slice=node_slice):
+                    if end_time is None or t > end_time:
+                        end_time = t
+                    break
         return end_time
 
     def get_nodes(
@@ -94,13 +60,11 @@ class DGStorageDictBackend(DGStorageBase):
         end_time: Optional[int] = None,
     ) -> Set[int]:
         nodes = set()
-
-        lb_time = float('-inf') if start_time is None else start_time
-        ub_time = float('inf') if end_time is None else end_time
-
         for t, t_events in self._events_dict.items():
-            if lb_time <= t < ub_time:
-                for event in t_events:
+            for event in t_events:
+                if self._valid_slice(
+                    t, event, start_time=start_time, end_time=end_time
+                ):
                     if isinstance(event, NodeEvent):
                         nodes.add(event.node_id)
                     elif isinstance(event, EdgeEvent):
@@ -114,18 +78,16 @@ class DGStorageDictBackend(DGStorageBase):
         node_slice: Optional[Set[int]] = None,
     ) -> int:
         edges = set()
-
-        lb_time = float('-inf') if start_time is None else start_time
-        ub_time = float('inf') if end_time is None else end_time
-
         for t, t_events in self._events_dict.items():
-            if lb_time <= t < ub_time:
-                for event in t_events:
-                    if isinstance(event, EdgeEvent):
-                        if node_slice is None:
-                            edges.add((event.time, event.edge))
-                        elif len(set(event.edge).intersection(node_slice)):
-                            edges.add((event.time, event.edge))
+            for event in t_events:
+                if isinstance(event, EdgeEvent) and self._valid_slice(
+                    t,
+                    event,
+                    start_time=start_time,
+                    end_time=end_time,
+                    node_slice=node_slice,
+                ):
+                    edges.add((event.time, event.edge))
         return len(edges)
 
     def get_num_timestamps(
@@ -135,25 +97,17 @@ class DGStorageDictBackend(DGStorageBase):
         node_slice: Optional[Set[int]] = None,
     ) -> int:
         timestamps = set()
-
-        lb_time = float('-inf') if start_time is None else start_time
-        ub_time = float('inf') if end_time is None else end_time
-
         for t, t_events in self._events_dict.items():
-            if lb_time <= t < ub_time:
-                for event in t_events:
-                    if node_slice is None:
-                        timestamps.add(t)
-                        break
-
-                    if isinstance(event, NodeEvent) and event.node_id in node_slice:
-                        timestamps.add(t)
-                        break
-                    elif isinstance(event, EdgeEvent) and len(
-                        set(event.edge).intersection(node_slice)
-                    ):
-                        timestamps.add(t)
-                        break
+            for event in t_events:
+                if self._valid_slice(
+                    t,
+                    event,
+                    start_time=start_time,
+                    end_time=end_time,
+                    node_slice=node_slice,
+                ):
+                    timestamps.add(t)
+                    break
         return len(timestamps)
 
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
@@ -195,20 +149,27 @@ class DGStorageDictBackend(DGStorageBase):
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
     ) -> Optional[Tensor]:
-        lb_time = float('-inf') if start_time is None else start_time
-        ub_time = float('inf') if end_time is None else end_time
+        # Assuming these are both non-negative
+        max_time, max_node_id = -1, -1
 
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
 
         indices, values = [], []
         for t, t_events in self._events_dict.items():
-            if lb_time <= t < ub_time:
-                for event in t_events:
-                    if isinstance(event, NodeEvent) and event.features is not None:
-                        if node_slice is None or event.node_id in node_slice:
-                            indices.append([event.time, event.node_id])
-                            values.append(event.features)
+            for event in t_events:
+                if isinstance(event, NodeEvent) and self._valid_slice(
+                    t,
+                    event,
+                    start_time=start_time,
+                    end_time=end_time,
+                    node_slice=node_slice,
+                ):
+                    indices.append([event.time, event.node_id])
+                    values.append(event.features)
+
+                    max_time = max(max_time, t)
+                    max_node_id = max(max_node_id, event.node_id)
 
                             max_time = max(max_time, t)
                             max_node_id = max(max_node_id, event.node_id)
@@ -232,22 +193,27 @@ class DGStorageDictBackend(DGStorageBase):
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
     ) -> Optional[Tensor]:
-        lb_time = float('-inf') if start_time is None else start_time
-        ub_time = float('inf') if end_time is None else end_time
+        # Assuming these are both non-negative
+        max_time, max_node_id = -1, -1
 
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
 
         indices, values = [], []
         for t, t_events in self._events_dict.items():
-            if lb_time <= t < ub_time:
-                for event in t_events:
-                    if isinstance(event, EdgeEvent) and event.features is not None:
-                        if node_slice is None or len(
-                            set(event.edge).intersection(node_slice)
-                        ):
-                            indices.append([event.time, event.edge[0], event.edge[1]])
-                            values.append(event.features)
+            for event in t_events:
+                if isinstance(event, EdgeEvent) and self._valid_slice(
+                    t,
+                    event,
+                    start_time=start_time,
+                    end_time=end_time,
+                    node_slice=node_slice,
+                ):
+                    indices.append([event.time, event.edge[0], event.edge[1]])
+                    values.append(event.features)
+
+                    max_time = max(max_time, t)
+                    max_node_id = max(max_node_id, event.edge[0], event.edge[1])
 
                             max_time = max(max_time, t)
                             max_node_id = max(max_node_id, event.edge[0], event.edge[1])
@@ -270,3 +236,27 @@ class DGStorageDictBackend(DGStorageBase):
         )
 
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
+
+    def _valid_slice(
+        self,
+        time: int,
+        event: Event,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        node_slice: Optional[Set[int]] = None,
+    ) -> bool:
+        lb_time = float('-inf') if start_time is None else start_time
+        ub_time = float('inf') if end_time is None else end_time
+
+        time_valid = lb_time <= time < ub_time
+        node_valid = (
+            node_slice is None
+            or (isinstance(event, NodeEvent) and event.node_id in node_slice)
+            or (
+                isinstance(event, EdgeEvent)
+                and len(set(event.edge).intersection(node_slice)) > 0
+            )
+        )
+        # TODO: This can be optimized by returning these seperately, and hence early
+        # returning out of the event loop if we already know the timestamp is not valid
+        return time_valid and node_valid
