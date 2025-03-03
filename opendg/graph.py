@@ -1,13 +1,13 @@
 from typing import Any, List, Optional, Union
 
 from opendg._io import read_csv, write_csv
-from opendg._storage import DGStorage
+from opendg._storage import DGStorage, DGStorageBase
 from opendg.events import Event
 from opendg.timedelta import TimeDeltaDG
 
 
 class DGraph:
-    r"""The Dynamic Graph Object.
+    r"""The Dynamic Graph Object. Provides a 'view' over an internal DGStorage backend.
 
     Args:
         events (List[event]): The list of temporal events (node/edge events) that define the dynamic graph.
@@ -16,11 +16,23 @@ class DGraph:
     """
 
     def __init__(
-        self, events: List[Event], time_delta: Optional[TimeDeltaDG] = None
+        self,
+        events: Optional[List[Event]] = None,
+        time_delta: Optional[TimeDeltaDG] = None,
+        _storage: Optional[DGStorageBase] = None,
     ) -> None:
-        if time_delta is None:
-            time_delta = TimeDeltaDG('r')  # Default to ordered if granularity
-        self._storage = DGStorage(events, time_delta)
+        if _storage is not None:
+            if events is not None or time_delta is not None:
+                raise ValueError(
+                    'Cannot simultaneously initialize a DGraph with _storage and events/time_delta.'
+                )
+
+            self._storage = _storage
+        else:
+            events_list = [] if events is None else events
+            if time_delta is None:
+                time_delta = TimeDeltaDG('r')  # Default to ordered granularity
+            self._storage = DGStorage(events_list, time_delta)
 
     @classmethod
     def from_csv(
@@ -75,7 +87,7 @@ class DGraph:
         Args:
             nodes (List[int]): The list of node ids to slice from.
 
-        Retursn:
+        Returns:
             DGraph copy of events related to the input nodes.
         """
         events = self._storage.slice_nodes(nodes).to_events()
