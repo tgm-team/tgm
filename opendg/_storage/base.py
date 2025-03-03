@@ -12,7 +12,7 @@ class DGStorageBase(ABC):
     r"""Base class for dynamic graph storage engine."""
 
     @abstractmethod
-    def __init__(self, events: List[Event], time_delta: TimeDeltaDG) -> None:
+    def __init__(self, events: List[Event]) -> None:
         r"""Initialize a dynamic graph from a list of events and a time delta."""
 
     @abstractmethod
@@ -41,10 +41,6 @@ class DGStorageBase(ABC):
         r"""Returns the number of temporal length of the dynamic graph."""
         return self.num_timestamps
 
-    def __str__(self) -> str:
-        r"""Returns summary properties of the dynamic graph."""
-        return f'Dynamic Graph Storage Engine ({self.__class__.__name__}), Start Time: {self.start_time}, End Time: {self.end_time}, Nodes: {self.num_nodes}, Edges: {self.num_edges}, Timestamps: {self.num_timestamps}, Time Delta: {self.time_delta}'
-
     @property
     @abstractmethod
     def start_time(self) -> Optional[int]:
@@ -54,11 +50,6 @@ class DGStorageBase(ABC):
     @abstractmethod
     def end_time(self) -> Optional[int]:
         r"""The end time of the dynamic graph. None, if the graph is empty."""
-
-    @property
-    @abstractmethod
-    def time_delta(self) -> TimeDeltaDG:
-        r"""The time granularity of the dynamic graph."""
 
     @property
     @abstractmethod

@@ -30,9 +30,12 @@ class DGraph:
             self._storage = _storage
         else:
             events_list = [] if events is None else events
-            if time_delta is None:
-                time_delta = TimeDeltaDG('r')  # Default to ordered granularity
-            self._storage = DGStorage(events_list, time_delta)
+            self._storage = DGStorage(events_list)
+
+        if time_delta is None:
+            self._time_delta = TimeDeltaDG('r')  # Default to ordered granularity
+        else:
+            self._time_delta = time_delta
 
     @classmethod
     def from_csv(
@@ -119,7 +122,7 @@ class DGraph:
 
     def __str__(self) -> str:
         r"""Returns summary properties of the dynamic graph."""
-        return self._storage.__str__()
+        return f'Dynamic Graph Storage Engine ({self._storage.__class__.__name__}), Start Time: {self.start_time}, End Time: {self.end_time}, Nodes: {self.num_nodes}, Edges: {self.num_edges}, Timestamps: {self.num_timestamps}, Time Delta: {self.time_delta}'
 
     @property
     def start_time(self) -> Optional[int]:
@@ -132,9 +135,9 @@ class DGraph:
         return self._storage.end_time
 
     @property
-    def time_delta(self) -> Optional[TimeDeltaDG]:
+    def time_delta(self) -> TimeDeltaDG:
         r"""The time granularity of the dynamic graph."""
-        return self._storage.time_delta
+        return self._time_delta
 
     @property
     def num_nodes(self) -> int:

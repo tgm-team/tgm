@@ -13,15 +13,13 @@ from ..base import DGStorageBase
 class DGStorageDictBackend(DGStorageBase):
     r"""Dictionary implementation of temporal graph storage engine."""
 
-    def __init__(self, events: List[Event], time_delta: TimeDeltaDG) -> None:
+    def __init__(self, events: List[Event]) -> None:
         self._node_feats_shape = self._check_node_feature_shapes(events)
         self._edge_feats_shape = self._check_edge_feature_shapes(events)
 
         self._events_dict: Dict[int, List[Event]] = defaultdict(list)
         for event in events:
             self._events_dict[event.time].append(event)
-
-        self._time_delta = time_delta  # Note: will need to cache when temporal_coarsening is implemented
 
         # Cached Values
         self._start_time: Optional[int] = None
@@ -42,7 +40,7 @@ class DGStorageDictBackend(DGStorageBase):
         for t, t_events in self._events_dict.items():
             if start_time <= t < end_time:
                 events += t_events
-        return DGStorageDictBackend(events, self.time_delta)
+        return DGStorageDictBackend(events)
 
     def slice_nodes(self, nodes: List[int]) -> 'DGStorageBase':
         events: List[Event] = []
@@ -54,7 +52,7 @@ class DGStorageDictBackend(DGStorageBase):
                     set(event.edge).intersection(nodes)
                 ):
                     events.append(event)
-        return DGStorageDictBackend(events, self.time_delta)
+        return DGStorageDictBackend(events)
 
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
         if not isinstance(events, list):
@@ -101,10 +99,6 @@ class DGStorageDictBackend(DGStorageBase):
         if self._end_time is None and len(self._events_dict):
             self._end_time = max(self._events_dict)
         return self._end_time
-
-    @property
-    def time_delta(self) -> TimeDeltaDG:
-        return self._time_delta
 
     @property
     def num_nodes(self) -> int:
