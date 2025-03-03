@@ -40,6 +40,9 @@ class DGraph:
         else:
             self._time_delta = time_delta
 
+        self._check_node_feature_shapes()
+        self._check_edge_feature_shapes()
+
         # Cached values
         self._start_time: Optional[int] = None
         self._end_time: Optional[int] = None

@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Set, Union
 
+import torch
 from torch import Tensor
 
-from opendg.events import Event
+from opendg.events import Event, NodeEvent, EdgeEvent
 from opendg.timedelta import TimeDeltaDG
 
 
@@ -82,3 +83,33 @@ class DGStorageBase(ABC):
         node_slice: Optional[Set[int]] = None,
     ) -> Optional[Tensor]:
         pass
+
+    def _check_node_feature_shapes(
+        self, events: List[Event], expected_shape: Optional[torch.Size] = None
+    ) -> Optional[torch.Size]:
+        node_feats_shape = expected_shape
+
+        for event in events:
+            if isinstance(event, NodeEvent) and event.features is not None:
+                if node_feats_shape is None:
+                    node_feats_shape = event.features.shape
+                elif node_feats_shape != event.features.shape:
+                    raise ValueError(
+                        f'Incompatible node features shapes: {node_feats_shape} != {event.features.shape}'
+                    )
+        return node_feats_shape
+
+    def _check_edge_feature_shapes(
+        self, events: List[Event], expected_shape: Optional[torch.Size] = None
+    ) -> Optional[torch.Size]:
+        edge_feats_shape = expected_shape
+
+        for event in events:
+            if isinstance(event, EdgeEvent) and event.features is not None:
+                if edge_feats_shape is None:
+                    edge_feats_shape = event.features.shape
+                elif edge_feats_shape != event.features.shape:
+                    raise ValueError(
+                        f'Incompatible edge features shapes: {edge_feats_shape} != {event.features.shape}'
+                    )
+        return edge_feats_shape
