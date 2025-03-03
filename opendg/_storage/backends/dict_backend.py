@@ -198,6 +198,9 @@ class DGStorageDictBackend(DGStorageBase):
         lb_time = float('-inf') if start_time is None else start_time
         ub_time = float('inf') if end_time is None else end_time
 
+        # Assuming these are both non-negative
+        max_time, max_node_id = -1, -1
+
         indices, values = [], []
         for t, t_events in self._events_dict.items():
             if lb_time <= t < ub_time:
@@ -207,6 +210,9 @@ class DGStorageDictBackend(DGStorageBase):
                             indices.append([event.time, event.node_id])
                             values.append(event.features)
 
+                            max_time = max(max_time, t)
+                            max_node_id = max(max_node_id, event.node_id)
+
         if not len(values):
             return None
 
@@ -215,8 +221,8 @@ class DGStorageDictBackend(DGStorageBase):
             indices
         ).t()  # https://pytorch.org/docs/stable/sparse.html#construction
 
-        # TODO: Fix shape
-        shape = (self.end_time + 1, self.num_nodes, *self._node_feats_shape)
+        assert self._node_feats_shape is not None
+        shape = (max_time + 1, max_node_id + 1, *self._node_feats_shape)
 
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
@@ -229,6 +235,9 @@ class DGStorageDictBackend(DGStorageBase):
         lb_time = float('-inf') if start_time is None else start_time
         ub_time = float('inf') if end_time is None else end_time
 
+        # Assuming these are both non-negative
+        max_time, max_node_id = -1, -1
+
         indices, values = [], []
         for t, t_events in self._events_dict.items():
             if lb_time <= t < ub_time:
@@ -240,6 +249,9 @@ class DGStorageDictBackend(DGStorageBase):
                             indices.append([event.time, event.edge[0], event.edge[1]])
                             values.append(event.features)
 
+                            max_time = max(max_time, t)
+                            max_node_id = max(max_node_id, event.edge[0], event.edge[1])
+
         if not len(values):
             return None
 
@@ -248,11 +260,13 @@ class DGStorageDictBackend(DGStorageBase):
             indices
         ).t()  # https://pytorch.org/docs/stable/sparse.html#construction
 
-        # TODO: shape
+        assert self._edge_feats_shape is not None
+
         shape = (
-            self.end_time + 1,
-            self.num_nodes,
-            self.num_nodes,
+            max_time + 1,
+            max_node_id + 1,
+            max_node_id + 1,
             *self._edge_feats_shape,
         )
+
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)

@@ -1,11 +1,11 @@
 import copy
-from typing import Any, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Union
 
-import torch
+from torch import Tensor
 
 from opendg._io import read_csv, write_csv
 from opendg._storage import DGStorage, DGStorageBase
-from opendg.events import EdgeEvent, Event, NodeEvent
+from opendg.events import Event
 from opendg.timedelta import TimeDeltaDG
 
 
@@ -40,16 +40,7 @@ class DGraph:
         else:
             self._time_delta = time_delta
 
-        self._check_node_feature_shapes()
-        self._check_edge_feature_shapes()
-
-        # Cached values
-        self._start_time: Optional[int] = None
-        self._end_time: Optional[int] = None
-        self._num_nodes: Optional[int] = None
-        self._num_edges: Optional[int] = None
-        self._num_timestamps: Optional[int] = None
-        self._node_slice: Optional[Set[int]] = None
+        self._cache: Dict[str, Any] = {}
 
     @classmethod
     def from_csv(
@@ -82,9 +73,10 @@ class DGraph:
             args (Any): Optional positional arguments.
             kwargs (Any): Optional keyword arguments.
         """
-        # TODO: materialize
         events = self._storage.to_events(
-            self._start_time, self._end_time, self._node_slice
+            start_time=self._cache.get('start_time'),
+            end_time=self._cache.get('end_time'),
+            node_slice=self._cache.get('node_slice'),
         )
         write_csv(events, file_path, *args, **kwargs)
 
@@ -98,20 +90,21 @@ class DGraph:
         Returns:
             DGraph view of events between start and end_time.
         """
-        # TODO: Check args here
+        self._check_slice_time_args(start_time, end_time)
+
         dg = copy.copy(self)
-        force_cache_refresh = False
+        new_start_time, new_end_time = None, None
 
         if self.start_time is not None and start_time > self.start_time:
-            dg._start_time = start_time
-            force_cache_refresh = True
+            new_start_time = start_time
 
         if self.end_time is not None and end_time < self.end_time:
-            dg._end_time = end_time
-            force_cache_refresh = True
+            new_end_time = end_time
 
-        if force_cache_refresh:
-            dg._invalidate_cache()
+        if new_start_time is not None or new_end_time is not None:
+            dg._cache.clear()  # Force cache refresh
+            dg._cache['start_time'] = new_start_time
+            dg._cache['end_time'] = new_end_time
 
         return dg
 
@@ -125,11 +118,12 @@ class DGraph:
             DGraph copy of events related to the input nodes.
         """
         dg = copy.copy(self)
-        dg._invalidate_cache()
+        dg._cache.clear()
 
-        if self._node_slice is None:
-            self._node_slice = set(range(self.num_nodes))
-        dg._node_slice = self._node_slice & set(nodes)
+        if self._cache.get('node_slice') is None:
+            self._cache['node_slice'] = set(range(self.num_nodes))
+
+        dg._cache['node_slice'] = self._cache['node_slice'] & set(nodes)
 
         return dg
 
@@ -164,16 +158,20 @@ class DGraph:
     @property
     def start_time(self) -> Optional[int]:
         r"""The start time of the dynamic graph. None if the graph is empty."""
-        if self._start_time is None:
-            self._start_time = self._storage.get_start_time(self._node_slice)
-        return self._start_time
+        if self._cache.get('start_time') is None:
+            self._cache['start_time'] = self._storage.get_start_time(
+                self._cache.get('node_slice')
+            )
+        return self._cache['start_time']
 
     @property
     def end_time(self) -> Optional[int]:
         r"""The end time of the dynamic graph. None, if the graph is empty."""
-        if self._end_time is None:
-            self._end_time = self._storage.get_end_time(self._node_slice)
-        return self._end_time
+        if self._cache.get('end_time') is None:
+            self._cache['end_time'] = self._storage.get_end_time(
+                self._cache.get('node_slice')
+            )
+        return self._cache['end_time']
 
     @property
     def time_delta(self) -> TimeDeltaDG:
@@ -183,80 +181,78 @@ class DGraph:
     @property
     def num_nodes(self) -> int:
         r"""The total number of unique nodes encountered over the dynamic graph."""
-        if self._num_nodes is None:
-            if self._node_slice is None:
-                self._node_slice = self._storage.get_nodes(
-                    self._start_time, self._end_time
+        if self._cache.get('num_nodes') is None:
+            if self._cache.get('node_slice') is None:
+                self._cache['node_slice'] = self._storage.get_nodes(
+                    self._cache.get('start_time'), self._cache.get('end_time')
                 )
-            self._num_nodes = max(self._node_slice) + 1
-        return self._num_nodes
+            self._cache['num_nodes'] = max(self._cache['node_slice']) + 1
+        return self._cache['num_nodes']
 
     @property
     def num_edges(self) -> int:
         r"""The total number of unique edges encountered over the dynamic graph."""
-        if self._num_edges is None:
-            self._num_edges = self._storage.get_num_edges(
-                self._start_time, self._end_time, self._node_slice
+        if self._cache.get('num_edges') is None:
+            self._cache['num_edges'] = self._storage.get_num_edges(
+                self._cache.get('start_time'),
+                self._cache.get('end_time'),
+                self._cache.get('node_slice'),
             )
-        return self._num_edges
+        return self._cache['num_edges']
 
     @property
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the dynamic graph."""
-        if self._num_timestamps is None:
-            self._num_timestamps = self._storage.get_num_timestamps(
-                self._start_time, self._end_time, self._node_slice
+        if self._cache.get('num_timestamps') is None:
+            self._cache['num_timestamps'] = self._storage.get_num_timestamps(
+                self._cache.get('start_time'),
+                self._cache.get('end_time'),
+                self._cache.get('node_slice'),
             )
-        return self._num_timestamps
+        return self._cache['num_timestamps']
 
-    def _invalidate_cache(self) -> None:
-        self._start_time = None
-        self._end_time = None
-        self._num_nodes = None
-        self._num_edges = None
-        self._num_timestamps = None
-        self._node_slice = None
+    @property
+    def node_feats(self) -> Optional[Tensor]:
+        r"""The aggregated node features over the dynamic graph.
+
+        Returns a tensor.sparse_coo_tensor of size T x V x d where
+
+        - T = Number of timestamps
+        - V = Number of nodes
+        - d = Node feature dimension
+        or None if there are no node features on the dynamic graph.
+
+        """
+        if self._cache.get('node_feats') is None:
+            self._cache['node_feats'] = self._storage.get_node_feats(
+                self._cache.get('start_time'),
+                self._cache.get('end_time'),
+                self._cache.get('node_slice'),
+            )
+        return self._cache['node_feats']
+
+    @property
+    def edge_feats(self) -> Optional[Tensor]:
+        r"""The aggregated edge features over the dynamic graph.
+
+        Returns a tensor.sparse_coo_tensor of size T x V x V x d where
+
+        - T = Number of timestamps
+        - E = Number of edges
+        - d = Edge feature dimension
+
+        or None if there are no edge features on the dynamic graph.
+        """
+        if self._cache.get('edge_feats') is None:
+            self._cache['edge_feats_feats'] = self._storage.get_edge_feats(
+                self._cache.get('start_time'),
+                self._cache.get('end_time'),
+                self._cache.get('node_slice'),
+            )
+        return self._cache['edge_feats']
 
     def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
         if start_time > end_time:
             raise ValueError(
                 f'Bad slice: start_time must be <= end_time but received: start_time ({start_time}) > end_time ({end_time})'
             )
-
-    def _check_temporal_coarsening_args(
-        self, time_delta: TimeDeltaDG, agg_func: str
-    ) -> None:
-        if not len(self):
-            raise ValueError('Cannot temporally coarsen an empty dynamic graph')
-
-        # TODO: Validate time_delta and agg_func
-
-    def _check_node_feature_shapes(
-        self, events: List[Event], expected_shape: Optional[torch.Size] = None
-    ) -> Optional[torch.Size]:
-        node_feats_shape = expected_shape
-
-        for event in events:
-            if isinstance(event, NodeEvent) and event.features is not None:
-                if node_feats_shape is None:
-                    node_feats_shape = event.features.shape
-                elif node_feats_shape != event.features.shape:
-                    raise ValueError(
-                        f'Incompatible node features shapes: {node_feats_shape} != {event.features.shape}'
-                    )
-        return node_feats_shape
-
-    def _check_edge_feature_shapes(
-        self, events: List[Event], expected_shape: Optional[torch.Size] = None
-    ) -> Optional[torch.Size]:
-        edge_feats_shape = expected_shape
-
-        for event in events:
-            if isinstance(event, EdgeEvent) and event.features is not None:
-                if edge_feats_shape is None:
-                    edge_feats_shape = event.features.shape
-                elif edge_feats_shape != event.features.shape:
-                    raise ValueError(
-                        f'Incompatible edge features shapes: {edge_feats_shape} != {event.features.shape}'
-                    )
-        return edge_feats_shape
