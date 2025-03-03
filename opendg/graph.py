@@ -71,8 +71,8 @@ class DGraph:
         Returns:
            DGraph: The newly constructed dynamic graph.
         """
-        non_ordered_time_delta = time_delta is not None and not time_delta.is_ordered
-        if time_col is None and non_ordered_time_delta:
+        ordered_time_delta = time_delta is None or time_delta.is_ordered
+        if time_col is None and not ordered_time_delta:
             raise ValueError(
                 'Must specify "time_col" when using non-ordered time delta.'
             )
