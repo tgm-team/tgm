@@ -24,16 +24,7 @@ class DGraph:
         time_delta: Optional[TimeDeltaDG] = None,
         _storage: Optional[DGStorageBase] = None,
     ) -> None:
-        if _storage is not None:
-            if events is not None or time_delta is not None:
-                raise ValueError(
-                    'Cannot simultaneously initialize a DGraph with _storage and events/time_delta.'
-                )
-
-            self._storage = _storage
-        else:
-            events_list = [] if events is None else events
-            self._storage = DGStorage(events_list)
+        self._storage = self._check_storage_args(events, time_delta, _storage)
 
         if time_delta is None:
             self._time_delta = TimeDeltaDG('r')  # Default to ordered granularity
@@ -134,6 +125,7 @@ class DGraph:
             events (Union[Event, List[Event]]): The event of list of events to add to the temporal graph.
 
         """
+        self._check_append_args(events)
         raise NotImplementedError
 
     def temporal_coarsening(
@@ -251,8 +243,37 @@ class DGraph:
             )
         return self._cache['edge_feats']
 
+    def _check_storage_args(
+        self,
+        events: Optional[List[Event]] = None,
+        time_delta: Optional[TimeDeltaDG] = None,
+        _storage: Optional[DGStorageBase] = None,
+    ) -> 'DGStorageBase':
+        if _storage is not None:
+            if events is not None or time_delta is not None:
+                raise ValueError(
+                    'Cannot simultaneously initialize a DGraph with _storage and events/time_delta.'
+                )
+
+            return _storage
+        else:
+            events_list = [] if events is None else events
+            return DGStorage(events_list)
+
     def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
         if start_time > end_time:
             raise ValueError(
                 f'Bad slice: start_time must be <= end_time but received: start_time ({start_time}) > end_time ({end_time})'
+            )
+
+    def _check_append_args(self, events: Union[Event, List[Event]]) -> None:
+        if not isinstance(events, List):
+            events = [events]
+
+        min_new_event_time = min([event.time for event in events])
+        if self.end_time is not None and min_new_event_time < self.end_time:
+            raise ValueError(
+                'Appending is only supported at the end of a DGraph. '
+                f'Tried to append a new event with time: {min_new_event_time} which is strictly less '
+                f'than the current end time: {self.end_time}'
             )
