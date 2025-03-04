@@ -152,9 +152,6 @@ class DGStorageDictBackend(DGStorageBase):
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
 
-        # Assuming these are both non-negative
-        max_time, max_node_id = -1, -1
-
         indices, values = [], []
         for t, t_events in self._events_dict.items():
             for event in t_events:
@@ -170,9 +167,6 @@ class DGStorageDictBackend(DGStorageBase):
 
                     max_time = max(max_time, t)
                     max_node_id = max(max_node_id, event.node_id)
-
-                            max_time = max(max_time, t)
-                            max_node_id = max(max_node_id, event.node_id)
 
         if not len(values):
             return None
@@ -196,9 +190,6 @@ class DGStorageDictBackend(DGStorageBase):
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
 
-        # Assuming these are both non-negative
-        max_time, max_node_id = -1, -1
-
         indices, values = [], []
         for t, t_events in self._events_dict.items():
             for event in t_events:
@@ -214,9 +205,6 @@ class DGStorageDictBackend(DGStorageBase):
 
                     max_time = max(max_time, t)
                     max_node_id = max(max_node_id, event.edge[0], event.edge[1])
-
-                            max_time = max(max_time, t)
-                            max_node_id = max(max_node_id, event.edge[0], event.edge[1])
 
         if not len(values):
             return None
