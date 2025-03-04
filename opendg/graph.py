@@ -126,6 +126,7 @@ class DGraph:
 
         """
         self._check_append_args(events)
+        # TODO: Materialize / copy on write
         raise NotImplementedError
 
     def temporal_coarsening(
