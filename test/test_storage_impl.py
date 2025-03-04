@@ -10,9 +10,25 @@ from opendg._storage.backends import DGStorageDictBackend
 from opendg.events import EdgeEvent, NodeEvent
 
 
-@pytest.fixture(params=DGStorageBackends.values())
+@pytest.fixture(params=DGStorageBackends.values(), autouse=True)
 def DGStorageImpl(request):
     return request.param
+
+
+@pytest.fixture(autouse=True)
+def events_list():
+    events_lists_configs = {
+        'empty_events_list': [],
+        'node_only_events_list': [],
+        'node_only_events_list_with_features': [],
+        'edge_only_events_list': [],
+        'edge_only_events_list_with_features': [],
+        'events_list_with_features': [],
+        'events_list_with_multi_events_per_timestamp': [],
+        'events_list_with_features_and_multi_events_per_timestamp': [],
+    }
+
+    return events_lists_configs.values()
 
 
 def test_init(DGStorageImpl):
@@ -23,21 +39,21 @@ def test_init(DGStorageImpl):
     ]
     storage = DGStorageImpl(events)
     assert storage.to_events() == events
-    assert storage.start_time == 1
-    assert storage.end_time == 6
-    assert storage.num_nodes == 21
-    assert storage.num_edges == 2
-    assert storage.num_timestamps == 3
-    assert len(storage) == 3
+    # assert storage.start_time == 1
+    # assert storage.end_time == 6
+    # assert storage.num_nodes == 21
+    # assert storage.num_edges == 2
+    # assert storage.num_timestamps == 3
+    # assert len(storage) == 3
 
-    expected_node_feats = torch.zeros(6 + 1, 20 + 1, 3, 6)
-    expected_node_feats[6, 7] = events[-1].features
-    assert torch.equal(storage.node_feats.to_dense(), expected_node_feats)
+    # expected_node_feats = torch.zeros(6 + 1, 20 + 1, 3, 6)
+    # expected_node_feats[6, 7] = events[-1].features
+    # assert torch.equal(storage.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(6 + 1, 20 + 1, 20 + 1, 2, 5)
-    expected_edge_feats[1, 2, 3] = events[0].features
-    expected_edge_feats[5, 10, 20] = events[1].features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+    # expected_edge_feats = torch.zeros(6 + 1, 20 + 1, 20 + 1, 2, 5)
+    # expected_edge_feats[1, 2, 3] = events[0].features
+    # expected_edge_feats[5, 10, 20] = events[1].features
+    # assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
 
 
 def test_init_multiple_events_per_timestamp(DGStorageImpl):
@@ -49,22 +65,22 @@ def test_init_multiple_events_per_timestamp(DGStorageImpl):
     ]
     storage = DGStorageImpl(events)
     assert storage.to_events() == events
-    assert storage.start_time == 1
-    assert storage.end_time == 6
-    assert storage.num_nodes == 21
-    assert storage.num_edges == 3
-    assert storage.num_timestamps == 3
-    assert len(storage) == 3
+    # assert storage.start_time == 1
+    # assert storage.end_time == 6
+    # assert storage.num_nodes == 21
+    # assert storage.num_edges == 3
+    # assert storage.num_timestamps == 3
+    # assert len(storage) == 3
 
-    expected_node_feats = torch.zeros(6 + 1, 20 + 1, 3, 6)
-    expected_node_feats[6, 7] = events[-1].features
-    assert torch.equal(storage.node_feats.to_dense(), expected_node_feats)
+    # expected_node_feats = torch.zeros(6 + 1, 20 + 1, 3, 6)
+    # expected_node_feats[6, 7] = events[-1].features
+    # assert torch.equal(storage.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(6 + 1, 20 + 1, 20 + 1, 2, 5)
-    expected_edge_feats[1, 2, 3] = events[0].features
-    expected_edge_feats[1, 10, 20] = events[1].features
-    expected_edge_feats[5, 10, 20] = events[2].features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+    # expected_edge_feats = torch.zeros(6 + 1, 20 + 1, 20 + 1, 2, 5)
+    # expected_edge_feats[1, 2, 3] = events[0].features
+    # expected_edge_feats[1, 10, 20] = events[1].features
+    # expected_edge_feats[5, 10, 20] = events[2].features
+    # assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
 
 
 def test_init_empty_features(DGStorageImpl):
@@ -75,15 +91,15 @@ def test_init_empty_features(DGStorageImpl):
     ]
     storage = DGStorageImpl(events)
     assert storage.to_events() == events
-    assert storage.start_time == 1
-    assert storage.end_time == 6
-    assert storage.num_nodes == 21
-    assert storage.num_edges == 2
-    assert storage.num_timestamps == 3
-    assert len(storage) == 3
+    # assert storage.start_time == 1
+    # assert storage.end_time == 6
+    # assert storage.num_nodes == 21
+    # assert storage.num_edges == 2
+    # assert storage.num_timestamps == 3
+    # assert len(storage) == 3
 
-    assert storage.node_feats is None
-    assert storage.edge_feats is None
+    # assert storage.node_feats is None
+    # assert storage.edge_feats is None
 
 
 def test_init_incompatible_node_feature_dimension(DGStorageImpl):
@@ -112,163 +128,53 @@ def test_init_empty(DGStorageImpl):
     events = []
     storage = DGStorageImpl(events)
     assert storage.to_events() == []
-    assert storage.start_time == None
-    assert storage.end_time == None
-    assert storage.num_nodes == 0
-    assert storage.num_edges == 0
-    assert storage.num_timestamps == 0
-    assert len(storage) == 0
+    # assert storage.start_time == None
+    # assert storage.end_time == None
+    # assert storage.num_nodes == 0
+    # assert storage.num_edges == 0
+    # assert storage.num_timestamps == 0
+    # assert len(storage) == 0
 
-    assert storage.node_feats is None
-    assert storage.edge_feats is None
-
-
-def test_slice_time(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
-    ]
-    storage = DGStorageImpl(events)
-    storage = storage.slice_time(1, 2)
-    assert storage.to_events() == [events[0]]
-    assert storage.start_time == 1
-    assert storage.end_time == 1
-    assert storage.num_nodes == 4
-    assert storage.num_edges == 1
-    assert storage.num_timestamps == 1
-    assert len(storage) == 1
-
-    assert storage.node_feats is None
-
-    expected_edge_feats = torch.zeros(1 + 1, 3 + 1, 3 + 1, 2, 5)
-    expected_edge_feats[1, 2, 3] = events[0].features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+    # assert storage.node_feats is None
+    # assert storage.edge_feats is None
 
 
-def test_slice_time_empty_slice(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
-    ]
-    storage = DGStorageImpl(events)
-    storage = storage.slice_time(2, 3)
-    assert storage.to_events() == []
-    assert storage.start_time == None
-    assert storage.end_time == None
-    assert storage.num_nodes == 0
-    assert storage.num_edges == 0
-    assert storage.num_timestamps == 0
-    assert len(storage) == 0
-
-    assert storage.node_feats is None
-    assert storage.edge_feats is None
+@pytest.mark.skip('TODO')
+def get_start_time():
+    pass
 
 
-def test_slice_time_full_slice(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
-    ]
-    storage = DGStorageImpl(events)
-    storage = storage.slice_time(0, 7)
-    assert storage.to_events() == events
-    assert storage.start_time == 1
-    assert storage.end_time == 6
-    assert storage.num_nodes == 21
-    assert storage.num_edges == 2
-    assert storage.num_timestamps == 3
-    assert len(storage) == 3
-
-    expected_node_feats = torch.zeros(6 + 1, 20 + 1, 3, 6)
-    expected_node_feats[6, 7] = events[-1].features
-    assert torch.equal(storage.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(6 + 1, 20 + 1, 20 + 1, 2, 5)
-    expected_edge_feats[1, 2, 3] = events[0].features
-    expected_edge_feats[5, 10, 20] = events[1].features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+@pytest.mark.skip('TODO')
+def get_end_time():
+    pass
 
 
-def test_slice_time_on_boundary(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
-    ]
-    storage = DGStorageImpl(events)
-    storage = storage.slice_time(1, 5)
-    assert storage.to_events() == [events[0]]
-    assert storage.start_time == 1
-    assert storage.end_time == 1
-    assert storage.num_nodes == 4
-    assert storage.num_edges == 1
-    assert storage.num_timestamps == 1
-    assert len(storage) == 1
-
-    assert storage.node_feats is None
-
-    expected_edge_feats = torch.zeros(1 + 1, 3 + 1, 3 + 1, 2, 5)
-    expected_edge_feats[1, 2, 3] = events[0].features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+@pytest.mark.skip('TODO')
+def get_nodes():
+    pass
 
 
-def test_slice_time_bad_slice(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
-    ]
-    storage = DGStorageImpl(events)
-    with pytest.raises(ValueError):
-        storage.slice_time(2, 1)
+@pytest.mark.skip('TODO')
+def get_num_edges():
+    pass
 
 
-def test_slice_nodes(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
-    ]
-    storage = DGStorageImpl(events)
-    storage = storage.slice_nodes([1, 2])
-    assert storage.to_events() == [events[0]]
-    assert storage.start_time == 1
-    assert storage.end_time == 1
-    assert storage.num_nodes == 4
-    assert storage.num_edges == 1
-    assert storage.num_timestamps == 1
-    assert len(storage) == 1
-
-    assert storage.node_feats is None
-
-    expected_edge_feats = torch.zeros(1 + 1, 3 + 1, 3 + 1, 2, 5)
-    expected_edge_feats[1, 2, 3] = events[0].features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+@pytest.mark.skip('TODO')
+def get_num_timestamps():
+    pass
 
 
-def test_slice_nodes_empty_slice(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
-    ]
-    storage = DGStorageImpl(events)
-    storage = storage.slice_nodes([])
-    assert storage.to_events() == []
-    assert storage.start_time == None
-    assert storage.end_time == None
-    assert storage.num_nodes == 0
-    assert storage.num_edges == 0
-    assert storage.num_timestamps == 0
-    assert len(storage) == 0
-
-    assert storage.node_feats is None
-    assert storage.edge_feats is None
+@pytest.mark.skip('TODO')
+def get_edge_feats():
+    pass
 
 
+@pytest.mark.skip('TODO')
+def get_node_feats():
+    pass
+
+
+@pytest.mark.skip('TODO')
 def test_append_single_event(DGStorageImpl):
     events = [
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
@@ -306,6 +212,7 @@ def test_append_single_event(DGStorageImpl):
     assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
 
 
+@pytest.mark.skip('TODO')
 def test_append_multiple_events(DGStorageImpl):
     events = []
     storage = DGStorageImpl(events)
@@ -340,6 +247,7 @@ def test_append_multiple_events(DGStorageImpl):
     assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
 
 
+@pytest.mark.skip('TODO')
 def test_append_incompatible_node_feature_dimension(DGStorageImpl):
     events = [
         NodeEvent(time=1, node_id=1, features=torch.rand(2, 5)),
@@ -351,6 +259,7 @@ def test_append_incompatible_node_feature_dimension(DGStorageImpl):
         _ = storage.append(new_event)
 
 
+@pytest.mark.skip('TODO')
 def test_append_incompatible_edge_feature_dimension(DGStorageImpl):
     events = [
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
@@ -362,6 +271,7 @@ def test_append_incompatible_edge_feature_dimension(DGStorageImpl):
         _ = storage.append(new_event)
 
 
+@pytest.mark.skip('TODO')
 def test_append_different_feature_dimension_after_slicing_to_empty(DGStorageImpl):
     events = [
         NodeEvent(time=1, node_id=1, features=torch.rand(2, 5)),

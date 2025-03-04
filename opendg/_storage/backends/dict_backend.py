@@ -15,6 +15,8 @@ class DGStorageDictBackend(DGStorageBase):
     def __init__(self, events: List[Event]) -> None:
         self._node_feats_shape = self._check_node_feature_shapes(events)
         self._edge_feats_shape = self._check_edge_feature_shapes(events)
+        # TODO: Maintain sorted list invariant and create temporal index
+        # to avoid brute force linear search when start/end times are given
         self._events = events
 
     def to_events(
