@@ -673,29 +673,86 @@ def test_get_node_feats_with_multi_events_per_timestamp(
     )
 
 
-@pytest.mark.skip('TODO')
 def test_append_single_event(DGStorageImpl):
-    pass
+    events = [
+        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
+        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(3, 6)),
+    ]
+    storage = DGStorageImpl(events)
+
+    new_events = [NodeEvent(time=5, node_id=4, features=torch.rand(2, 5))]
+    storage.append(new_events)
+
+    assert storage.to_events() == events + new_events
 
 
-@pytest.mark.skip('TODO')
+def test_append_single_event_from_empty(DGStorageImpl):
+    events = []
+    storage = DGStorageImpl(events)
+
+    new_events = [NodeEvent(time=5, node_id=4, features=torch.rand(2, 5))]
+    storage.append(new_events)
+
+    assert storage.to_events() == events + new_events
+
+
 def test_append_multiple_events(DGStorageImpl):
-    pass
+    events = [
+        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
+        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(3, 6)),
+    ]
+    storage = DGStorageImpl(events)
+
+    new_events = [
+        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
+        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(3, 6)),
+    ]
+    storage.append(new_events)
+
+    assert storage.to_events() == events + new_events
 
 
-@pytest.mark.skip('TODO')
+def test_append_multiple_events_from_empty(DGStorageImpl):
+    events = []
+    storage = DGStorageImpl(events)
+
+    new_events = [
+        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
+        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(3, 6)),
+    ]
+    storage.append(new_events)
+
+    assert storage.to_events() == events + new_events
+
+
 def test_append_incompatible_node_feature_dimension(DGStorageImpl):
-    pass
+    events = [
+        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
+        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(3, 6)),
+    ]
+    storage = DGStorageImpl(events)
+
+    new_events = [
+        NodeEvent(time=5, node_id=4, features=torch.rand(3, 6)),  # Bad shape
+        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(3, 6)),
+    ]
+    with pytest.raises(ValueError):
+        storage.append(new_events)
 
 
-@pytest.mark.skip('TODO')
 def test_append_incompatible_edge_feature_dimension(DGStorageImpl):
-    pass
+    events = [
+        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
+        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(3, 6)),
+    ]
+    storage = DGStorageImpl(events)
 
-
-@pytest.mark.skip('TODO')
-def test_append_different_feature_dimension_after_slicing_to_empty(DGStorageImpl):
-    pass
+    new_events = [
+        NodeEvent(time=5, node_id=4, features=torch.rand(2, 2)),
+        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),  # Bad shape
+    ]
+    with pytest.raises(ValueError):
+        storage.append(new_events)
 
 
 @pytest.mark.skip(reason='Not implemented')

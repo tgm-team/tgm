@@ -4,7 +4,7 @@ from typing import List, Optional, Set, Union
 import torch
 from torch import Tensor
 
-from opendg.events import Event, NodeEvent, EdgeEvent
+from opendg.events import EdgeEvent, Event, NodeEvent
 from opendg.timedelta import TimeDeltaDG
 
 
@@ -57,7 +57,7 @@ class DGStorageBase(ABC):
         pass
 
     @abstractmethod
-    def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
+    def append(self, events: Union[Event, List[Event]]) -> None:
         pass
 
     @abstractmethod

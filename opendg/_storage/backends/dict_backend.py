@@ -17,7 +17,7 @@ class DGStorageDictBackend(DGStorageBase):
         self._edge_feats_shape = self._check_edge_feature_shapes(events)
         # TODO: Maintain sorted list invariant and create temporal index
         # to avoid brute force linear search when start/end times are given
-        self._events = events
+        self._events = events[:]  # Make a copy
 
     def to_events(
         self,
@@ -96,7 +96,7 @@ class DGStorageDictBackend(DGStorageBase):
                 timestamps.add(event.time)
         return len(timestamps)
 
-    def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
+    def append(self, events: Union[Event, List[Event]]) -> None:
         if not isinstance(events, list):
             events = [events]
 
@@ -121,7 +121,6 @@ class DGStorageDictBackend(DGStorageBase):
         )
 
         self._events += events
-        return self
 
     def temporal_coarsening(
         self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
