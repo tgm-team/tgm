@@ -1,5 +1,4 @@
-from collections import defaultdict
-from typing import Dict, List, Optional, Set, Union
+from typing import List, Optional, Set, Union
 
 import torch
 from torch import Tensor
@@ -16,10 +15,7 @@ class DGStorageDictBackend(DGStorageBase):
     def __init__(self, events: List[Event]) -> None:
         self._node_feats_shape = self._check_node_feature_shapes(events)
         self._edge_feats_shape = self._check_edge_feature_shapes(events)
-
-        self._events_dict: Dict[int, List[Event]] = defaultdict(list)
-        for event in events:
-            self._events_dict[event.time].append(event)
+        self._events = events
 
     def to_events(
         self,
@@ -28,30 +24,25 @@ class DGStorageDictBackend(DGStorageBase):
         node_slice: Optional[Set[int]] = None,
     ) -> List[Event]:
         events: List[Event] = []
-        for t, t_events in self._events_dict.items():
-            for event in t_events:
-                if self._valid_slice(t, event, start_time, end_time, node_slice):
-                    events.append(event)
+        for event in self._events:
+            if self._valid_slice(event, start_time, end_time, node_slice):
+                events.append(event)
         return events
 
     def get_start_time(self, node_slice: Optional[Set[int]] = None) -> Optional[int]:
         start_time = None
-        for t, t_events in self._events_dict.items():
-            for event in t_events:
-                if self._valid_slice(t, event, node_slice=node_slice):
-                    if start_time is None or t < start_time:
-                        start_time = t
-                    break
+        for event in self._events:
+            if self._valid_slice(event, node_slice=node_slice):
+                if start_time is None or event.time < start_time:
+                    start_time = event.time
         return start_time
 
     def get_end_time(self, node_slice: Optional[Set[int]] = None) -> Optional[int]:
         end_time = None
-        for t, t_events in self._events_dict.items():
-            for event in t_events:
-                if self._valid_slice(t, event, node_slice=node_slice):
-                    if end_time is None or t > end_time:
-                        end_time = t
-                    break
+        for event in self._events:
+            if self._valid_slice(event, node_slice=node_slice):
+                if end_time is None or event.time > end_time:
+                    end_time = event.time
         return end_time
 
     def get_nodes(
@@ -60,15 +51,12 @@ class DGStorageDictBackend(DGStorageBase):
         end_time: Optional[int] = None,
     ) -> Set[int]:
         nodes = set()
-        for t, t_events in self._events_dict.items():
-            for event in t_events:
-                if self._valid_slice(
-                    t, event, start_time=start_time, end_time=end_time
-                ):
-                    if isinstance(event, NodeEvent):
-                        nodes.add(event.node_id)
-                    elif isinstance(event, EdgeEvent):
-                        nodes.union(event.edge)
+        for event in self._events:
+            if self._valid_slice(event, start_time=start_time, end_time=end_time):
+                if isinstance(event, NodeEvent):
+                    nodes.add(event.node_id)
+                elif isinstance(event, EdgeEvent):
+                    nodes.union(event.edge)
         return nodes
 
     def get_num_edges(
@@ -78,16 +66,14 @@ class DGStorageDictBackend(DGStorageBase):
         node_slice: Optional[Set[int]] = None,
     ) -> int:
         edges = set()
-        for t, t_events in self._events_dict.items():
-            for event in t_events:
-                if isinstance(event, EdgeEvent) and self._valid_slice(
-                    t,
-                    event,
-                    start_time=start_time,
-                    end_time=end_time,
-                    node_slice=node_slice,
-                ):
-                    edges.add((event.time, event.edge))
+        for event in self._events:
+            if isinstance(event, EdgeEvent) and self._valid_slice(
+                event,
+                start_time=start_time,
+                end_time=end_time,
+                node_slice=node_slice,
+            ):
+                edges.add((event.time, event.edge))
         return len(edges)
 
     def get_num_timestamps(
@@ -97,17 +83,14 @@ class DGStorageDictBackend(DGStorageBase):
         node_slice: Optional[Set[int]] = None,
     ) -> int:
         timestamps = set()
-        for t, t_events in self._events_dict.items():
-            for event in t_events:
-                if self._valid_slice(
-                    t,
-                    event,
-                    start_time=start_time,
-                    end_time=end_time,
-                    node_slice=node_slice,
-                ):
-                    timestamps.add(t)
-                    break
+        for event in self._events:
+            if self._valid_slice(
+                event,
+                start_time=start_time,
+                end_time=end_time,
+                node_slice=node_slice,
+            ):
+                timestamps.add(event.time)
         return len(timestamps)
 
     def append(self, events: Union[Event, List[Event]]) -> 'DGStorageBase':
@@ -115,7 +98,7 @@ class DGStorageDictBackend(DGStorageBase):
             events = [events]
 
         # Check that the new events have matching feature dimension
-        if len(self._events_dict):
+        if len(self._events):
             # Node/edge feature shape must match our current feature shape
             exp_node_feats_shape = self._node_feats_shape
             exp_edge_feats_shape = self._edge_feats_shape
@@ -134,8 +117,7 @@ class DGStorageDictBackend(DGStorageBase):
             events, expected_shape=exp_edge_feats_shape
         )
 
-        for event in events:
-            self._events_dict[event.time].append(event)
+        self._events += events
         return self
 
     def temporal_coarsening(
@@ -153,20 +135,18 @@ class DGStorageDictBackend(DGStorageBase):
         max_time, max_node_id = -1, -1
 
         indices, values = [], []
-        for t, t_events in self._events_dict.items():
-            for event in t_events:
-                if isinstance(event, NodeEvent) and self._valid_slice(
-                    t,
-                    event,
-                    start_time=start_time,
-                    end_time=end_time,
-                    node_slice=node_slice,
-                ):
-                    indices.append([event.time, event.node_id])
-                    values.append(event.features)
+        for event in self._events:
+            if isinstance(event, NodeEvent) and self._valid_slice(
+                event,
+                start_time=start_time,
+                end_time=end_time,
+                node_slice=node_slice,
+            ):
+                indices.append([event.time, event.node_id])
+                values.append(event.features)
 
-                    max_time = max(max_time, t)
-                    max_node_id = max(max_node_id, event.node_id)
+                max_time = max(max_time, event.time)
+                max_node_id = max(max_node_id, event.node_id)
 
         if not len(values):
             return None
@@ -191,20 +171,18 @@ class DGStorageDictBackend(DGStorageBase):
         max_time, max_node_id = -1, -1
 
         indices, values = [], []
-        for t, t_events in self._events_dict.items():
-            for event in t_events:
-                if isinstance(event, EdgeEvent) and self._valid_slice(
-                    t,
-                    event,
-                    start_time=start_time,
-                    end_time=end_time,
-                    node_slice=node_slice,
-                ):
-                    indices.append([event.time, event.edge[0], event.edge[1]])
-                    values.append(event.features)
+        for event in self._events:
+            if isinstance(event, EdgeEvent) and self._valid_slice(
+                event,
+                start_time=start_time,
+                end_time=end_time,
+                node_slice=node_slice,
+            ):
+                indices.append([event.time, event.edge[0], event.edge[1]])
+                values.append(event.features)
 
-                    max_time = max(max_time, t)
-                    max_node_id = max(max_node_id, event.edge[0], event.edge[1])
+                max_time = max(max_time, event.time)
+                max_node_id = max(max_node_id, event.edge[0], event.edge[1])
 
         if not len(values):
             return None
@@ -227,7 +205,6 @@ class DGStorageDictBackend(DGStorageBase):
 
     def _valid_slice(
         self,
-        time: int,
         event: Event,
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
@@ -236,7 +213,7 @@ class DGStorageDictBackend(DGStorageBase):
         lb_time = float('-inf') if start_time is None else start_time
         ub_time = float('inf') if end_time is None else end_time
 
-        time_valid = lb_time <= time < ub_time
+        time_valid = lb_time <= event.time < ub_time
         node_valid = (
             node_slice is None
             or (isinstance(event, NodeEvent) and event.node_id in node_slice)
