@@ -10,96 +10,137 @@ from opendg._storage.backends import DGStorageDictBackend
 from opendg.events import EdgeEvent, NodeEvent
 
 
-@pytest.fixture(params=DGStorageBackends.values(), autouse=True)
+@pytest.fixture(params=DGStorageBackends.values())
 def DGStorageImpl(request):
     return request.param
 
 
-@pytest.fixture(autouse=True)
-def events_list():
-    events_lists_configs = {
-        'empty_events_list': [],
-        'node_only_events_list': [],
-        'node_only_events_list_with_features': [],
-        'edge_only_events_list': [],
-        'edge_only_events_list_with_features': [],
-        'events_list_with_features': [],
-        'events_list_with_multi_events_per_timestamp': [],
-        'events_list_with_features_and_multi_events_per_timestamp': [],
-    }
-
-    return events_lists_configs.values()
+@pytest.fixture
+def empty_events_list():
+    return []
 
 
-def test_init(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
+@pytest.fixture
+def node_only_events_list():
+    return [
+        NodeEvent(time=1, node_id=2),
+        NodeEvent(time=5, node_id=4),
+        NodeEvent(time=10, node_id=6),
     ]
+
+
+@pytest.fixture
+def node_only_events_list_with_features():
+    return [
+        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
+        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
+        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
+    ]
+
+
+@pytest.fixture
+def edge_only_events_list():
+    return [
+        EdgeEvent(time=1, edge=(2, 2)),
+        EdgeEvent(time=5, edge=(2, 4)),
+        EdgeEvent(time=10, edge=(6, 8)),
+    ]
+
+
+@pytest.fixture
+def edge_only_events_list_with_features():
+    return [
+        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
+        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
+        EdgeEvent(time=10, edge=(6, 8), features=torch.rand(2, 5)),
+    ]
+
+
+@pytest.fixture
+def events_list_with_multi_events_per_timestamp():
+    return [
+        NodeEvent(time=1, node_id=2),
+        EdgeEvent(time=1, edge=(2, 2)),
+        NodeEvent(time=5, node_id=4),
+        EdgeEvent(time=5, edge=(2, 4)),
+        NodeEvent(time=10, node_id=6),
+        EdgeEvent(time=20, edge=(1, 8)),
+    ]
+
+
+@pytest.fixture
+def events_list_with_features_multi_events_per_timestamp():
+    return [
+        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
+        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
+        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
+        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
+        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
+        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
+    ]
+
+
+def test_empty_events_list_to_events(DGStorageImpl, empty_events_list):
+    storage = DGStorageImpl(empty_events_list)
+    assert storage.to_events() == empty_events_list
+
+    assert storage.to_events(start_time=5) == empty_events_list
+    assert storage.to_events(start_time=5, end_time=10) == empty_events_list
+    assert storage.to_events(node_slice={1, 2, 3}) == empty_events_list
+    assert (
+        storage.to_events(start_time=5, end_time=10, node_slice={1, 2, 3})
+        == empty_events_list
+    )
+
+
+@pytest.mark.parametrize(
+    'events', ['node_only_events_list', 'node_only_events_list_with_features']
+)
+def test_node_only_events_list_to_events(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
     storage = DGStorageImpl(events)
     assert storage.to_events() == events
-    # assert storage.start_time == 1
-    # assert storage.end_time == 6
-    # assert storage.num_nodes == 21
-    # assert storage.num_edges == 2
-    # assert storage.num_timestamps == 3
-    # assert len(storage) == 3
 
-    # expected_node_feats = torch.zeros(6 + 1, 20 + 1, 3, 6)
-    # expected_node_feats[6, 7] = events[-1].features
-    # assert torch.equal(storage.node_feats.to_dense(), expected_node_feats)
-
-    # expected_edge_feats = torch.zeros(6 + 1, 20 + 1, 20 + 1, 2, 5)
-    # expected_edge_feats[1, 2, 3] = events[0].features
-    # expected_edge_feats[5, 10, 20] = events[1].features
-    # assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+    assert storage.to_events(start_time=5) == events[1:]
+    assert storage.to_events(start_time=5, end_time=10) == [events[1]]
+    assert storage.to_events(node_slice={1, 2, 3}) == [events[0]]
+    assert storage.to_events(start_time=5, end_time=10, node_slice={1, 2, 3}) == []
 
 
-def test_init_multiple_events_per_timestamp(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(10, 20), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
-    ]
+@pytest.mark.parametrize(
+    'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
+)
+def test_edge_events_list_to_events(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
     storage = DGStorageImpl(events)
     assert storage.to_events() == events
-    # assert storage.start_time == 1
-    # assert storage.end_time == 6
-    # assert storage.num_nodes == 21
-    # assert storage.num_edges == 3
-    # assert storage.num_timestamps == 3
-    # assert len(storage) == 3
 
-    # expected_node_feats = torch.zeros(6 + 1, 20 + 1, 3, 6)
-    # expected_node_feats[6, 7] = events[-1].features
-    # assert torch.equal(storage.node_feats.to_dense(), expected_node_feats)
-
-    # expected_edge_feats = torch.zeros(6 + 1, 20 + 1, 20 + 1, 2, 5)
-    # expected_edge_feats[1, 2, 3] = events[0].features
-    # expected_edge_feats[1, 10, 20] = events[1].features
-    # expected_edge_feats[5, 10, 20] = events[2].features
-    # assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+    assert storage.to_events(start_time=5) == events[1:]
+    assert storage.to_events(start_time=5, end_time=10) == [events[1]]
+    assert storage.to_events(node_slice={1, 2, 3}) == events[0:2]
+    assert storage.to_events(start_time=6, end_time=10, node_slice={1, 2, 3}) == []
 
 
-def test_init_empty_features(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3)),
-        EdgeEvent(time=5, edge=(10, 20)),
-        NodeEvent(time=6, node_id=7),
-    ]
+@pytest.mark.parametrize(
+    'events',
+    [
+        'events_list_with_multi_events_per_timestamp',
+        'events_list_with_features_multi_events_per_timestamp',
+    ],
+)
+def test_events_list_with_multi_events_per_timestamp_to_events(
+    DGStorageImpl, events, request
+):
+    events = request.getfixturevalue(events)
     storage = DGStorageImpl(events)
     assert storage.to_events() == events
-    # assert storage.start_time == 1
-    # assert storage.end_time == 6
-    # assert storage.num_nodes == 21
-    # assert storage.num_edges == 2
-    # assert storage.num_timestamps == 3
-    # assert len(storage) == 3
 
-    # assert storage.node_feats is None
-    # assert storage.edge_feats is None
+    assert storage.to_events(start_time=5) == events[2:]
+    assert storage.to_events(start_time=5, end_time=10) == events[2:-2]
+    assert storage.to_events(node_slice={1, 2, 3}) == events[0:2] + [events[3]] + [
+        events[-1]
+    ]
+    assert storage.to_events(start_time=6, end_time=10, node_slice={1, 2, 3}) == []
 
 
 def test_init_incompatible_node_feature_dimension(DGStorageImpl):
@@ -124,181 +165,537 @@ def test_init_incompatible_edge_feature_dimension(DGStorageImpl):
         _ = DGStorageImpl(events)
 
 
-def test_init_empty(DGStorageImpl):
-    events = []
+def test_get_start_time_empty_events(DGStorageImpl, empty_events_list):
+    storage = DGStorageImpl(empty_events_list)
+    assert storage.get_start_time() == None
+    assert storage.get_start_time(node_slice={4, 5}) == None
+    assert storage.get_start_time(node_slice={100}) == None
+
+
+@pytest.mark.parametrize(
+    'events', ['node_only_events_list', 'node_only_events_list_with_features']
+)
+def test_get_start_time_node_only_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
     storage = DGStorageImpl(events)
-    assert storage.to_events() == []
-    # assert storage.start_time == None
-    # assert storage.end_time == None
-    # assert storage.num_nodes == 0
-    # assert storage.num_edges == 0
-    # assert storage.num_timestamps == 0
-    # assert len(storage) == 0
-
-    # assert storage.node_feats is None
-    # assert storage.edge_feats is None
+    assert storage.get_start_time() == events[0].time
+    assert storage.get_start_time(node_slice={4, 5}) == 5
+    assert storage.get_start_time(node_slice={100}) == None
 
 
-@pytest.mark.skip('TODO')
-def get_start_time():
-    pass
+@pytest.mark.parametrize(
+    'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
+)
+def test_get_start_time_edge_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_start_time() == events[0].time
+    assert storage.get_start_time(node_slice={4, 5}) == 5
+    assert storage.get_start_time(node_slice={100}) == None
 
 
-@pytest.mark.skip('TODO')
-def get_end_time():
-    pass
+@pytest.mark.parametrize(
+    'events',
+    [
+        'events_list_with_multi_events_per_timestamp',
+        'events_list_with_features_multi_events_per_timestamp',
+    ],
+)
+def test_get_start_time_events_list_with_multi_events_per_timestamp(
+    DGStorageImpl, events, request
+):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_start_time() == events[0].time
+    assert storage.get_start_time(node_slice={4, 5}) == 5
+    assert storage.get_start_time(node_slice={100}) == None
 
 
-@pytest.mark.skip('TODO')
-def get_nodes():
-    pass
+def test_get_end_time_empty_events(DGStorageImpl, empty_events_list):
+    storage = DGStorageImpl(empty_events_list)
+    assert storage.get_end_time() == None
+    assert storage.get_end_time(node_slice={2, 3}) == None
+    assert storage.get_end_time(node_slice={100}) == None
 
 
-@pytest.mark.skip('TODO')
-def get_num_edges():
-    pass
+@pytest.mark.parametrize(
+    'events', ['node_only_events_list', 'node_only_events_list_with_features']
+)
+def test_get_end_time_node_only_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_end_time() == events[-1].time
+    assert storage.get_end_time(node_slice={2, 3}) == 1
+    assert storage.get_end_time(node_slice={100}) == None
 
 
-@pytest.mark.skip('TODO')
-def get_num_timestamps():
-    pass
+@pytest.mark.parametrize(
+    'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
+)
+def test_get_end_time_edge_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_end_time() == events[-1].time
+    assert storage.get_end_time(node_slice={2, 3}) == 5
+    assert storage.get_end_time(node_slice={100}) == None
 
 
-@pytest.mark.skip('TODO')
-def get_edge_feats():
-    pass
+@pytest.mark.parametrize(
+    'events',
+    [
+        'events_list_with_multi_events_per_timestamp',
+        'events_list_with_features_multi_events_per_timestamp',
+    ],
+)
+def test_get_end_time_events_list_with_multi_events_per_timestamp(
+    DGStorageImpl, events, request
+):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_end_time() == events[-1].time
+    assert storage.get_end_time(node_slice={2, 3}) == 5
+    assert storage.get_end_time(node_slice={100}) == None
 
 
-@pytest.mark.skip('TODO')
-def get_node_feats():
-    pass
+def test_get_nodes_empty_events(DGStorageImpl, empty_events_list):
+    storage = DGStorageImpl(empty_events_list)
+    assert storage.get_nodes() == set()
+    assert storage.get_nodes(start_time=5) == set()
+    assert storage.get_nodes(end_time=5) == set()
+    assert storage.get_nodes(start_time=5, end_time=10) == set()
+
+
+@pytest.mark.parametrize(
+    'events', ['node_only_events_list', 'node_only_events_list_with_features']
+)
+def test_get_nodes_node_only_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_nodes() == set([2, 4, 6])
+    assert storage.get_nodes(start_time=5) == set([4, 6])
+    assert storage.get_nodes(end_time=5) == set([2])
+    assert storage.get_nodes(start_time=5, end_time=10) == set([4])
+
+
+@pytest.mark.parametrize(
+    'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
+)
+def test_get_nodes_edge_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_nodes() == set([2, 4, 6, 8])
+    assert storage.get_nodes(start_time=5) == set([2, 4, 6, 8])
+    assert storage.get_nodes(end_time=5) == set([2])
+    assert storage.get_nodes(start_time=5, end_time=10) == set([2, 4])
+
+
+@pytest.mark.parametrize(
+    'events',
+    [
+        'events_list_with_multi_events_per_timestamp',
+        'events_list_with_features_multi_events_per_timestamp',
+    ],
+)
+def test_get_nodes_events_list_with_multi_events_per_timestamp(
+    DGStorageImpl, events, request
+):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_nodes() == set([1, 2, 4, 6, 8])
+    assert storage.get_nodes(start_time=5) == set([1, 2, 4, 6, 8])
+    assert storage.get_nodes(end_time=5) == set([2])
+    assert storage.get_nodes(start_time=5, end_time=10) == set([2, 4])
+
+
+def test_get_num_edges_empty_events(DGStorageImpl, empty_events_list):
+    storage = DGStorageImpl(empty_events_list)
+    assert storage.get_num_edges() == 0
+    assert storage.get_num_edges(start_time=5) == 0
+    assert storage.get_num_edges(end_time=5) == 0
+    assert storage.get_num_edges(start_time=5, end_time=10) == 0
+    assert storage.get_num_edges(node_slice={1, 2, 3}) == 0
+    assert storage.get_num_edges(start_time=5, end_time=10, node_slice={1, 2, 3}) == 0
+
+
+@pytest.mark.parametrize(
+    'events', ['node_only_events_list', 'node_only_events_list_with_features']
+)
+def test_get_num_edges_node_only_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_num_edges() == 0
+    assert storage.get_num_edges(start_time=5) == 0
+    assert storage.get_num_edges(end_time=5) == 0
+    assert storage.get_num_edges(start_time=5, end_time=10) == 0
+    assert storage.get_num_edges(node_slice={1, 2, 3}) == 0
+    assert storage.get_num_edges(start_time=5, end_time=10, node_slice={1, 2, 3}) == 0
+
+
+@pytest.mark.parametrize(
+    'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
+)
+def test_get_num_edges_edge_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_num_edges() == 3
+    assert storage.get_num_edges(start_time=5) == 2
+    assert storage.get_num_edges(end_time=5) == 1
+    assert storage.get_num_edges(start_time=5, end_time=10) == 1
+    assert storage.get_num_edges(node_slice={1, 2, 3}) == 2
+    assert storage.get_num_edges(start_time=5, end_time=10, node_slice={1, 2, 3}) == 1
+
+
+@pytest.mark.parametrize(
+    'events',
+    [
+        'events_list_with_multi_events_per_timestamp',
+        'events_list_with_features_multi_events_per_timestamp',
+    ],
+)
+def test_get_num_edges_events_list_with_multi_events_per_timestamp(
+    DGStorageImpl, events, request
+):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_num_edges() == 3
+    assert storage.get_num_edges(start_time=5) == 2
+    assert storage.get_num_edges(end_time=5) == 1
+    assert storage.get_num_edges(start_time=5, end_time=10) == 1
+    assert storage.get_num_edges(node_slice={2, 3}) == 2
+    assert storage.get_num_edges(start_time=5, end_time=10, node_slice={1, 2, 3}) == 1
+
+
+def test_get_num_timestamps_empty_events(DGStorageImpl, empty_events_list):
+    storage = DGStorageImpl(empty_events_list)
+    assert storage.get_num_timestamps() == 0
+    assert storage.get_num_timestamps(start_time=5) == 0
+    assert storage.get_num_timestamps(end_time=5) == 0
+    assert storage.get_num_timestamps(start_time=5, end_time=10) == 0
+    assert storage.get_num_timestamps(node_slice={2, 3}) == 0
+    assert (
+        storage.get_num_timestamps(start_time=5, end_time=10, node_slice={1, 2, 3}) == 0
+    )
+
+
+@pytest.mark.parametrize(
+    'events', ['node_only_events_list', 'node_only_events_list_with_features']
+)
+def test_get_num_timestamps_node_only_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_num_timestamps() == 3
+    assert storage.get_num_timestamps(start_time=5) == 2
+    assert storage.get_num_timestamps(end_time=5) == 1
+    assert storage.get_num_timestamps(start_time=5, end_time=10) == 1
+    assert storage.get_num_timestamps(node_slice={2, 3}) == 1
+    assert (
+        storage.get_num_timestamps(start_time=5, end_time=10, node_slice={1, 2, 3}) == 0
+    )
+
+
+@pytest.mark.parametrize(
+    'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
+)
+def test_get_num_timestamps_edge_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_num_timestamps() == 3
+    assert storage.get_num_timestamps(start_time=5) == 2
+    assert storage.get_num_timestamps(end_time=5) == 1
+    assert storage.get_num_timestamps(start_time=5, end_time=10) == 1
+    assert storage.get_num_timestamps(node_slice={2, 3}) == 2
+    assert (
+        storage.get_num_timestamps(start_time=5, end_time=10, node_slice={1, 2, 3}) == 1
+    )
+
+
+@pytest.mark.parametrize(
+    'events',
+    [
+        'events_list_with_multi_events_per_timestamp',
+        'events_list_with_features_multi_events_per_timestamp',
+    ],
+)
+def test_get_num_timetamps_events_list_with_multi_events_per_timestamp(
+    DGStorageImpl, events, request
+):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_num_timestamps() == 4
+    assert storage.get_num_timestamps(start_time=5) == 3
+    assert storage.get_num_timestamps(end_time=5) == 1
+    assert storage.get_num_timestamps(start_time=5, end_time=10) == 1
+    assert storage.get_num_timestamps(node_slice={2, 3}) == 2
+    assert (
+        storage.get_num_timestamps(start_time=5, end_time=10, node_slice={1, 2, 3}) == 1
+    )
+
+
+@pytest.mark.parametrize(
+    'events',
+    [
+        'empty_events_list',
+        'node_only_events_list',
+        'node_only_events_list_with_features',
+        'edge_only_events_list',
+        'events_list_with_multi_events_per_timestamp',
+    ],
+)
+def test_get_edge_feats_no_edge_feats(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_edge_feats() is None
+    assert storage.get_edge_feats(start_time=5) is None
+    assert storage.get_edge_feats(end_time=5) is None
+    assert storage.get_edge_feats(start_time=5, end_time=10) is None
+    assert storage.get_edge_feats(node_slice={2, 3}) is None
+    assert (
+        storage.get_edge_feats(start_time=5, end_time=10, node_slice={1, 2, 3}) is None
+    )
+
+
+def test_get_edge_feats_edge_events_list(
+    DGStorageImpl, edge_only_events_list_with_features
+):
+    events = edge_only_events_list_with_features
+    storage = DGStorageImpl(events)
+
+    expected_edge_feats = torch.zeros(10 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats[1, 2, 2] = events[0].features
+    expected_edge_feats[5, 2, 4] = events[1].features
+    expected_edge_feats[10, 6, 8] = events[2].features
+    assert torch.equal(storage.get_edge_feats().to_dense(), expected_edge_feats)
+
+    expected_edge_feats = torch.zeros(10 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats[5, 2, 4] = events[1].features
+    expected_edge_feats[10, 6, 8] = events[2].features
+    assert torch.equal(
+        storage.get_edge_feats(start_time=5).to_dense(), expected_edge_feats
+    )
+
+    expected_edge_feats = torch.zeros(1 + 1, 2 + 1, 2 + 1, 2, 5)
+    expected_edge_feats[1, 2, 2] = events[0].features
+    assert torch.equal(
+        storage.get_edge_feats(end_time=5).to_dense(), expected_edge_feats
+    )
+
+    expected_edge_feats = torch.zeros(5 + 1, 4 + 1, 4 + 1, 2, 5)
+    expected_edge_feats[5, 2, 4] = events[1].features
+    assert torch.equal(
+        storage.get_edge_feats(start_time=5, end_time=10).to_dense(),
+        expected_edge_feats,
+    )
+    expected_edge_feats = torch.zeros(5 + 1, 4 + 1, 4 + 1, 2, 5)
+    expected_edge_feats[1, 2, 2] = events[0].features
+    expected_edge_feats[5, 2, 4] = events[1].features
+    assert torch.equal(
+        storage.get_edge_feats(node_slice={1, 2, 3}).to_dense(),
+        expected_edge_feats,
+    )
+
+    expected_edge_feats = torch.zeros(5 + 1, 4 + 1, 4 + 1, 2, 5)
+    expected_edge_feats[5, 2, 4] = events[1].features
+    assert torch.equal(
+        storage.get_edge_feats(
+            start_time=5, end_time=10, node_slice={1, 2, 3}
+        ).to_dense(),
+        expected_edge_feats,
+    )
+
+    assert (
+        storage.get_edge_feats(start_time=6, end_time=10, node_slice={1, 2, 3}) is None
+    )
+
+
+def test_get_edge_feats_with_multi_events_per_timestamp(
+    DGStorageImpl, events_list_with_features_multi_events_per_timestamp
+):
+    events = events_list_with_features_multi_events_per_timestamp
+    storage = DGStorageImpl(events)
+
+    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats[1, 2, 2] = events[1].features
+    expected_edge_feats[5, 2, 4] = events[3].features
+    expected_edge_feats[20, 1, 8] = events[-1].features
+    assert torch.equal(storage.get_edge_feats().to_dense(), expected_edge_feats)
+
+    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats[5, 2, 4] = events[3].features
+    expected_edge_feats[20, 1, 8] = events[-1].features
+    assert torch.equal(
+        storage.get_edge_feats(start_time=5).to_dense(), expected_edge_feats
+    )
+
+    expected_edge_feats = torch.zeros(1 + 1, 2 + 1, 2 + 1, 2, 5)
+    expected_edge_feats[1, 2, 2] = events[1].features
+    assert torch.equal(
+        storage.get_edge_feats(end_time=5).to_dense(), expected_edge_feats
+    )
+
+    expected_edge_feats = torch.zeros(5 + 1, 4 + 1, 4 + 1, 2, 5)
+    expected_edge_feats[5, 2, 4] = events[3].features
+    assert torch.equal(
+        storage.get_edge_feats(start_time=5, end_time=10).to_dense(),
+        expected_edge_feats,
+    )
+
+    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats[1, 2, 2] = events[1].features
+    expected_edge_feats[5, 2, 4] = events[3].features
+    expected_edge_feats[20, 1, 8] = events[-1].features
+    assert torch.equal(
+        storage.get_edge_feats(node_slice={1, 2, 3}).to_dense(),
+        expected_edge_feats,
+    )
+
+    expected_edge_feats = torch.zeros(5 + 1, 4 + 1, 4 + 1, 2, 5)
+    expected_edge_feats[5, 2, 4] = events[3].features
+    assert torch.equal(
+        storage.get_edge_feats(
+            start_time=5, end_time=10, node_slice={1, 2, 3}
+        ).to_dense(),
+        expected_edge_feats,
+    )
+
+    assert (
+        storage.get_edge_feats(start_time=6, end_time=10, node_slice={1, 2, 3}) is None
+    )
+
+
+@pytest.mark.parametrize(
+    'events',
+    [
+        'empty_events_list',
+        'edge_only_events_list',
+        'edge_only_events_list_with_features',
+        'node_only_events_list',
+        'events_list_with_multi_events_per_timestamp',
+    ],
+)
+def test_get_node_feats_no_node_feats(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_node_feats() is None
+    assert storage.get_node_feats(start_time=5) is None
+    assert storage.get_node_feats(end_time=5) is None
+    assert storage.get_node_feats(start_time=5, end_time=10) is None
+    assert storage.get_node_feats(node_slice={2, 3}) is None
+    assert (
+        storage.get_node_feats(start_time=5, end_time=10, node_slice={1, 2, 3}) is None
+    )
+
+
+def test_get_node_feats_node_events_list(
+    DGStorageImpl, node_only_events_list_with_features
+):
+    events = node_only_events_list_with_features
+    storage = DGStorageImpl(events)
+
+    expected_node_feats = torch.zeros(10 + 1, 6 + 1, 2, 5)
+    expected_node_feats[1, 2] = events[0].features
+    expected_node_feats[5, 4] = events[1].features
+    expected_node_feats[10, 6] = events[2].features
+    assert torch.equal(storage.get_node_feats().to_dense(), expected_node_feats)
+
+    expected_node_feats = torch.zeros(10 + 1, 6 + 1, 2, 5)
+    expected_node_feats[5, 4] = events[1].features
+    expected_node_feats[10, 6] = events[2].features
+    assert torch.equal(
+        storage.get_node_feats(start_time=5).to_dense(), expected_node_feats
+    )
+
+    expected_node_feats = torch.zeros(1 + 1, 2 + 1, 2, 5)
+    expected_node_feats[1, 2] = events[0].features
+    assert torch.equal(
+        storage.get_node_feats(end_time=5).to_dense(), expected_node_feats
+    )
+
+    expected_node_feats = torch.zeros(5 + 1, 4 + 1, 2, 5)
+    expected_node_feats[5, 4] = events[1].features
+    assert torch.equal(
+        storage.get_node_feats(start_time=5, end_time=10).to_dense(),
+        expected_node_feats,
+    )
+
+    expected_node_feats = torch.zeros(1 + 1, 2 + 1, 2, 5)
+    expected_node_feats[1, 2] = events[0].features
+    assert torch.equal(
+        storage.get_node_feats(node_slice={1, 2, 3}).to_dense(),
+        expected_node_feats,
+    )
+
+    assert (
+        storage.get_node_feats(start_time=5, end_time=10, node_slice={1, 2, 3}) is None
+    )
+
+
+def test_get_node_feats_with_multi_events_per_timestamp(
+    DGStorageImpl, events_list_with_features_multi_events_per_timestamp
+):
+    events = events_list_with_features_multi_events_per_timestamp
+    storage = DGStorageImpl(events)
+
+    expected_node_feats = torch.zeros(10 + 1, 6 + 1, 2, 5)
+    expected_node_feats[1, 2] = events[0].features
+    expected_node_feats[5, 4] = events[2].features
+    expected_node_feats[10, 6] = events[4].features
+    assert torch.equal(storage.get_node_feats().to_dense(), expected_node_feats)
+
+    expected_node_feats = torch.zeros(10 + 1, 6 + 1, 2, 5)
+    expected_node_feats[5, 4] = events[2].features
+    expected_node_feats[10, 6] = events[4].features
+    assert torch.equal(
+        storage.get_node_feats(start_time=5).to_dense(), expected_node_feats
+    )
+
+    expected_node_feats = torch.zeros(1 + 1, 2 + 1, 2, 5)
+    expected_node_feats[1, 2] = events[0].features
+    assert torch.equal(
+        storage.get_node_feats(end_time=5).to_dense(), expected_node_feats
+    )
+
+    expected_node_feats = torch.zeros(5 + 1, 4 + 1, 2, 5)
+    expected_node_feats[5, 4] = events[2].features
+    assert torch.equal(
+        storage.get_node_feats(start_time=5, end_time=10).to_dense(),
+        expected_node_feats,
+    )
+
+    expected_node_feats = torch.zeros(1 + 1, 2 + 1, 2, 5)
+    expected_node_feats[1, 2] = events[0].features
+    assert torch.equal(
+        storage.get_node_feats(node_slice={1, 2, 3}).to_dense(),
+        expected_node_feats,
+    )
+
+    assert (
+        storage.get_node_feats(start_time=5, end_time=10, node_slice={1, 2, 3}) is None
+    )
 
 
 @pytest.mark.skip('TODO')
 def test_append_single_event(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-    ]
-    storage = DGStorageImpl(events)
-    assert storage.start_time == 1
-    assert storage.end_time == 1
-    assert storage.num_nodes == 4
-    assert storage.num_edges == 1
-    assert storage.num_timestamps == 1
-    assert len(storage) == 1
-
-    assert storage.node_feats is None
-
-    expected_edge_feats = torch.zeros(1 + 1, 3 + 1, 3 + 1, 2, 5)
-    expected_edge_feats[1, 2, 3] = events[0].features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
-
-    new_event = EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5))
-    storage = storage.append(new_event)
-    assert storage.to_events() == events + [new_event]
-    assert storage.start_time == 1
-    assert storage.end_time == 5
-    assert storage.num_nodes == 21
-    assert storage.num_edges == 2
-    assert storage.num_timestamps == 2
-    # assert storage.time_delta == 4 # TODO
-    assert len(storage) == 2
-
-    assert storage.node_feats is None
-
-    expected_edge_feats = torch.zeros(5 + 1, 20 + 1, 20 + 1, 2, 5)
-    expected_edge_feats[1, 2, 3] = events[0].features
-    expected_edge_feats[5, 10, 20] = new_event.features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+    pass
 
 
 @pytest.mark.skip('TODO')
 def test_append_multiple_events(DGStorageImpl):
-    events = []
-    storage = DGStorageImpl(events)
-    assert storage.start_time == None
-    assert storage.end_time == None
-    assert storage.num_nodes == 0
-    assert storage.num_edges == 0
-    assert storage.num_timestamps == 0
-    assert len(storage) == 0
-
-    new_events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(2, 5)),
-        NodeEvent(time=6, node_id=7, features=torch.rand(3, 6)),
-    ]
-    storage = storage.append(new_events)
-    assert storage.to_events() == events + new_events
-    assert storage.start_time == 1
-    assert storage.end_time == 6
-    assert storage.num_nodes == 21
-    assert storage.num_edges == 2
-    assert storage.num_timestamps == 3
-    assert len(storage) == 3
-
-    expected_node_feats = torch.zeros(6 + 1, 20 + 1, 3, 6)
-    expected_node_feats[6, 7] = new_events[-1].features
-    assert torch.equal(storage.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(6 + 1, 20 + 1, 20 + 1, 2, 5)
-    expected_edge_feats[1, 2, 3] = new_events[0].features
-    expected_edge_feats[5, 10, 20] = new_events[1].features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+    pass
 
 
 @pytest.mark.skip('TODO')
 def test_append_incompatible_node_feature_dimension(DGStorageImpl):
-    events = [
-        NodeEvent(time=1, node_id=1, features=torch.rand(2, 5)),
-    ]
-    storage = DGStorageImpl(events)
-
-    new_event = NodeEvent(time=5, node_id=10, features=torch.rand(3, 6))
-    with pytest.raises(ValueError):
-        _ = storage.append(new_event)
+    pass
 
 
 @pytest.mark.skip('TODO')
 def test_append_incompatible_edge_feature_dimension(DGStorageImpl):
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-    ]
-    storage = DGStorageImpl(events)
-
-    new_event = EdgeEvent(time=5, edge=(10, 20), features=torch.rand(3, 6))
-    with pytest.raises(ValueError):
-        _ = storage.append(new_event)
+    pass
 
 
 @pytest.mark.skip('TODO')
 def test_append_different_feature_dimension_after_slicing_to_empty(DGStorageImpl):
-    events = [
-        NodeEvent(time=1, node_id=1, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(2, 5)),
-    ]
-    storage = DGStorageImpl(events)
-
-    storage = storage.slice_nodes([])
-    assert len(storage) == 0
-    assert storage.node_feats is None
-    assert storage.edge_feats is None
-
-    new_events = [
-        NodeEvent(time=5, node_id=10, features=torch.rand(3, 6)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(3, 6)),
-    ]
-    storage = storage.append(new_events)
-    assert len(storage) == 1
-
-    expected_node_feats = torch.zeros(5 + 1, 20 + 1, 3, 6)
-    expected_node_feats[5, 10] = new_events[0].features
-
-    assert torch.equal(storage.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(5 + 1, 20 + 1, 20 + 1, 3, 6)
-    expected_edge_feats[5, 10, 20] = new_events[1].features
-    assert torch.equal(storage.edge_feats.to_dense(), expected_edge_feats)
+    pass
 
 
 @pytest.mark.skip(reason='Not implemented')

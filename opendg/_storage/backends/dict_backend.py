@@ -58,7 +58,8 @@ class DGStorageDictBackend(DGStorageBase):
                 if isinstance(event, NodeEvent):
                     nodes.add(event.node_id)
                 elif isinstance(event, EdgeEvent):
-                    nodes.union(event.edge)
+                    nodes.add(event.edge[0])
+                    nodes.add(event.edge[1])
         return nodes
 
     def get_num_edges(
@@ -138,11 +139,15 @@ class DGStorageDictBackend(DGStorageBase):
 
         indices, values = [], []
         for event in self._events:
-            if isinstance(event, NodeEvent) and self._valid_slice(
-                event,
-                start_time=start_time,
-                end_time=end_time,
-                node_slice=node_slice,
+            if (
+                isinstance(event, NodeEvent)
+                and event.features is not None
+                and self._valid_slice(
+                    event,
+                    start_time=start_time,
+                    end_time=end_time,
+                    node_slice=node_slice,
+                )
             ):
                 indices.append([event.time, event.node_id])
                 values.append(event.features)
@@ -174,11 +179,15 @@ class DGStorageDictBackend(DGStorageBase):
 
         indices, values = [], []
         for event in self._events:
-            if isinstance(event, EdgeEvent) and self._valid_slice(
-                event,
-                start_time=start_time,
-                end_time=end_time,
-                node_slice=node_slice,
+            if (
+                isinstance(event, EdgeEvent)
+                and event.features is not None
+                and self._valid_slice(
+                    event,
+                    start_time=start_time,
+                    end_time=end_time,
+                    node_slice=node_slice,
+                )
             ):
                 indices.append([event.time, event.edge[0], event.edge[1]])
                 values.append(event.features)
