@@ -27,6 +27,7 @@ dev = [
     "ruff>=0.7.3",
     "sphinx>=7.4.7",
     "sphinx-rtd-theme>=3.0.2",
+    "pandas>=2.2.3",
 ]
 
 [tool.mypy]
