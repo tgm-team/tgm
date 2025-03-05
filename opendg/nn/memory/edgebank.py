@@ -84,12 +84,6 @@ class EdgeBankPredictor:
     def _update_unlimited_memory(
         self, update_src: np.ndarray, update_dst: np.ndarray
     ) -> None:
-        r"""Update self.memory with newly arrived src and dst.
-
-        Args:
-            update_src(np.ndarray): source node id of the edges.
-            update_dst(np.ndarray): destination node id of the edges.
-        """
         for src, dst in zip(update_src, update_dst):
             if (src, dst) not in self.memory:
                 self.memory[(src, dst)] = 1
@@ -97,14 +91,6 @@ class EdgeBankPredictor:
     def _update_time_window_memory(
         self, update_src: np.ndarray, update_dst: np.ndarray, update_ts: np.ndarray
     ) -> None:
-        r"""Move the time window forward until end of dst timestamp here.
-        also need to remove earlier edges from memory which is not in the time window.
-
-        Args:
-            update_src(np.ndarray): source node id of the edges.
-            update_dst(np.ndarray): destination node id of the edges.
-            update_ts(np.ndarray): timestamp of the edges.
-        """
         # * update the memory if it is not empty
         if update_ts.max() > self.cur_t:
             self.cur_t = update_ts.max()
