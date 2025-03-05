@@ -13,21 +13,7 @@ def test_csv_conversion_no_features():
         EdgeEvent(time=5, edge=(10, 20)),
     ]
 
-    with tempfile.NamedTemporaryFile() as f:
-        write_csv(events, f.name)
-        recovered_events = read_csv(f.name)
-
-    _assert_events_equal(events, recovered_events)
-
-
-def test_csv_conversion_no_features_custom_cols():
-    events = [
-        EdgeEvent(time=1, edge=(2, 3)),
-        EdgeEvent(time=5, edge=(10, 20)),
-    ]
-
-    col_names = {'src_node_id_col': 'foo', 'dst_node_id_col': 'bar', 'time_col': 'baz'}
-
+    col_names = {'src_col': 'src_id', 'dst_col': 'dst_id', 'time_col': 'time'}
     with tempfile.NamedTemporaryFile() as f:
         write_csv(events, f.name, **col_names)
         recovered_events = read_csv(f.name, **col_names)
@@ -41,27 +27,14 @@ def test_csv_conversion_with_features():
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(5)),
     ]
 
-    feature_cols = [f'dim_{i}' for i in range(5)]
+    edge_feature_col = [f'dim_{i}' for i in range(5)]
+    col_names = {'src_col': 'src_id', 'dst_col': 'dst_id', 'time_col': 'time'}
 
     with tempfile.NamedTemporaryFile() as f:
-        write_csv(events, f.name, feature_cols=feature_cols)
-        recovered_events = read_csv(f.name, feature_cols=feature_cols)
-
-    _assert_events_equal(events, recovered_events)
-
-
-def test_csv_conversion_with_features_custom_cols():
-    events = [
-        EdgeEvent(time=1, edge=(2, 3), features=torch.rand(5)),
-        EdgeEvent(time=5, edge=(10, 20), features=torch.rand(5)),
-    ]
-
-    col_names = {'src_node_id_col': 'foo', 'dst_node_id_col': 'bar', 'time_col': 'baz'}
-    feature_cols = [f'dim_{i}' for i in range(5)]
-
-    with tempfile.NamedTemporaryFile() as f:
-        write_csv(events, f.name, feature_cols=feature_cols, **col_names)
-        recovered_events = read_csv(f.name, feature_cols=feature_cols, **col_names)
+        write_csv(events, f.name, edge_feature_col=edge_feature_col, **col_names)
+        recovered_events = read_csv(
+            f.name, edge_feature_col=edge_feature_col, **col_names
+        )
 
     _assert_events_equal(events, recovered_events)
 
@@ -71,10 +44,11 @@ def test_csv_conversion_with_features_no_feature_cols_provided():
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(1, 3, 37)),
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(1, 3, 37)),
     ]
+    col_names = {'src_col': 'src_id', 'dst_col': 'dst_id', 'time_col': 'time'}
 
     with tempfile.NamedTemporaryFile() as f:
         with pytest.raises(ValueError):
-            _ = write_csv(events, f.name)
+            _ = write_csv(events, f.name, **col_names)
 
 
 def test_csv_conversion_with_features_bad_feature_col_shape():
@@ -82,10 +56,13 @@ def test_csv_conversion_with_features_bad_feature_col_shape():
         EdgeEvent(time=1, edge=(2, 3), features=torch.rand(37)),
         EdgeEvent(time=5, edge=(10, 20), features=torch.rand(37)),
     ]
-    feature_cols = [f'dim_{i}' for i in range(3)]  # Bad: should have 37 names
+    edge_feature_col = [f'dim_{i}' for i in range(3)]  # Bad: should have 37 names
+    col_names = {'src_col': 'src_id', 'dst_col': 'dst_id', 'time_col': 'time'}
     with tempfile.NamedTemporaryFile() as f:
         with pytest.raises(ValueError):
-            _ = write_csv(events, f.name, feature_cols=feature_cols)
+            _ = write_csv(
+                events, f.name, edge_feature_col=edge_feature_col, **col_names
+            )
 
 
 def _assert_events_equal(expected_events, actual_events):
