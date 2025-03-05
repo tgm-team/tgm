@@ -30,7 +30,7 @@ class DGraph:
         file_path: str,
         src_col: str,
         dst_col: str,
-        time_col: Optional[str] = None,
+        time_col: str,
         edge_feature_col: Optional[List[str]] = None,
         time_delta: Optional[TimeDeltaDG] = None,
     ) -> 'DGraph':
@@ -40,7 +40,7 @@ class DGraph:
             file_path (str): The os.pathlike object to read from.
             src_col (str): Column in the csv corresponding to the source edge id.
             dst_col (str): Column in the csv corresponding to the destination edge id.
-            time_col (Optional[str]): Column in the csv corresponding to the timestamp.
+            time_col (str): Column in the csv corresponding to the timestamp.
             edge_feature_col (Optional[List[str]]): Column list in the csv corresponding to the edge features.
             time_delta (Optional[TimeDeltaDG]): Describes the time granularity associated with the event stream.
                 If None, then the events are assumed 'ordered', with no specific time unit.
@@ -48,11 +48,6 @@ class DGraph:
         Returns:
            DGraph: The newly constructed dynamic graph.
         """
-        ordered_time_delta = time_delta is None or time_delta.is_ordered
-        if time_col is None and not ordered_time_delta:
-            raise ValueError(
-                'Must specify "time_col" when using non-ordered time delta.'
-            )
         events = read_csv(file_path, src_col, dst_col, time_col, edge_feature_col)
         return cls(events, time_delta)
 
@@ -62,7 +57,7 @@ class DGraph:
         df: pd.DataFrame,
         src_col: str,
         dst_col: str,
-        time_col: Optional[str] = None,
+        time_col: str,
         edge_feature_col: Optional[str] = None,
         time_delta: Optional[TimeDeltaDG] = None,
     ) -> 'DGraph':
@@ -80,12 +75,6 @@ class DGraph:
         Returns:
            DGraph: The newly constructed dynamic graph.
         """
-        ordered_time_delta = time_delta is None or time_delta.is_ordered
-        if time_col is None and not ordered_time_delta:
-            raise ValueError(
-                'Must specify "time_col" when using non-ordered time delta.'
-            )
-
         events = read_pandas(df, src_col, dst_col, time_col, edge_feature_col)
         return cls(events, time_delta)
 

@@ -10,18 +10,17 @@ def read_csv(
     file_path: str,
     src_col: str,
     dst_col: str,
-    time_col: Optional[str] = None,
+    time_col: str,
     edge_feature_col: Optional[List[str]] = None,
 ) -> List[Event]:
-    # TODO: Node Feature not supported
+    # TODO: Node Events not supported
     events: List[Event] = []
     with open(file_path, newline='') as f:
         reader = csv.DictReader(f)
-        for i, row in enumerate(reader):
+        for row in reader:
             src_id = int(row[src_col])
             dst_id = int(row[dst_col])
-
-            time = int(row[time_col]) if time_col is not None else i
+            time = int(row[time_col])
 
             if edge_feature_col is None:
                 features = None  # TODO:: Infer the feature columns

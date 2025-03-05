@@ -6,22 +6,7 @@ from opendg._io import read_pandas
 from opendg.events import EdgeEvent
 
 
-def test_read_pandas_no_features_no_features_no_timestamp():
-    events_dict = {
-        'src_id': [2, 10],
-        'dst_id': [3, 20],
-    }
-    events_df = pd.DataFrame(events_dict)
-
-    events = read_pandas(events_df, src_col='src_id', dst_col='dst_id')
-    assert len(events) == len(events_df)
-    for i in range(len(events)):
-        assert isinstance(events[i], EdgeEvent)
-        assert events[i].time == i
-        assert events[i].edge == (events_df.src_id.iloc[i], events_df.dst_id.iloc[i])
-
-
-def test_read_pandas_no_features_with_timestamp():
+def test_read_pandas_no_features():
     events_dict = {
         'src_id': [2, 10],
         'dst_id': [3, 20],
@@ -37,28 +22,7 @@ def test_read_pandas_no_features_with_timestamp():
         assert events[i].edge == (events_df.src_id.iloc[i], events_df.dst_id.iloc[i])
 
 
-def test_read_pandas_with_features_no_timestamp():
-    events_dict = {
-        'src_id': [2, 10],
-        'dst_id': [3, 20],
-        'edge_features': [torch.rand(5).tolist(), torch.rand(5).tolist()],
-    }
-    events_df = pd.DataFrame(events_dict)
-
-    events = read_pandas(
-        events_df, src_col='src_id', dst_col='dst_id', edge_feature_col='edge_features'
-    )
-    assert len(events) == len(events_df)
-    for i in range(len(events)):
-        assert isinstance(events[i], EdgeEvent)
-        assert events[i].time == i
-        assert events[i].edge == (events_df.src_id.iloc[i], events_df.dst_id.iloc[i])
-        torch.testing.assert_close(
-            events[i].features.tolist(), events_df.edge_features.iloc[i]
-        )
-
-
-def test_read_pandas_with_features_with_timestamp():
+def test_read_pandas_with_features():
     events_dict = {
         'src_id': [2, 10],
         'dst_id': [3, 20],
