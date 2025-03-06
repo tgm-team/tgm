@@ -34,7 +34,10 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def get_nodes(
-        self, start_time: Optional[int] = None, end_time: Optional[int] = None
+        self,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        node_slice: Optional[Set[int]] = None,
     ) -> Set[int]:
         pass
 

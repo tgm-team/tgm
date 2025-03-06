@@ -141,6 +141,7 @@ class DGraph:
         # Force cache refresh on the new copy if we actually sliced the graph
         if new_start_time != self.start_time or new_end_time != self.end_time:
             dg._cache.clear()
+            dg._cache['node_slice'] = self._cache.get('node_slice')
 
         new_end_time += 1  # Keep the end-range exclusive value in cache
         dg._cache['start_time'] = new_start_time
@@ -167,6 +168,33 @@ class DGraph:
             self._cache['node_slice'] = set(range(self.num_nodes))
 
         dg._cache['node_slice'] = self._cache['node_slice'] & set(nodes)
+
+        start_time_with_node_slice = self._storage.get_start_time(
+            dg._cache.get('node_slice')
+        )
+        if self._cache.get('start_time') is None:
+            dg._cache['start_time'] = start_time_with_node_slice
+        else:
+            dg._cache['start_time'] = (
+                max(start_time_with_node_slice, self._cache['start_time'])
+                if start_time_with_node_slice is not None
+                else self._cache['start_time']
+            )
+
+        end_time_with_node_slice = self._storage.get_end_time(
+            dg._cache.get('node_slice')
+        )
+        if self._cache.get('end_time') is None:
+            dg._cache['end_time'] = end_time_with_node_slice
+        else:
+            dg._cache['end_time'] = (
+                min(end_time_with_node_slice, self._cache['end_time'])
+                if end_time_with_node_slice is not None
+                else self._cache['end_time']
+            )
+
+        if dg._cache['end_time'] is not None:
+            dg._cache['end_time'] += 1
 
         return dg
 
@@ -245,10 +273,11 @@ class DGraph:
     def num_nodes(self) -> int:
         r"""The total number of unique nodes encountered over the dynamic graph."""
         if self._cache.get('num_nodes') is None:
-            if self._cache.get('node_slice') is None:
-                self._cache['node_slice'] = self._storage.get_nodes(
-                    self._cache.get('start_time'), self._cache.get('end_time')
-                )
+            self._cache['node_slice'] = self._storage.get_nodes(
+                self._cache.get('start_time'),
+                self._cache.get('end_time'),
+                self._cache.get('node_slice'),
+            )
             if len(self._cache['node_slice']):
                 self._cache['num_nodes'] = max(self._cache['node_slice']) + 1
             else:

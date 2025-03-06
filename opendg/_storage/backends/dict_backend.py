@@ -51,10 +51,13 @@ class DGStorageDictBackend(DGStorageBase):
         self,
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
+        node_slice: Optional[Set[int]] = None,
     ) -> Set[int]:
         nodes = set()
         for event in self._events:
-            if self._valid_slice(event, start_time=start_time, end_time=end_time):
+            if self._valid_slice(
+                event, start_time=start_time, end_time=end_time, node_slice=node_slice
+            ):
                 if isinstance(event, NodeEvent):
                     nodes.add(event.node_id)
                 elif isinstance(event, EdgeEvent):
