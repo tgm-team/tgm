@@ -48,13 +48,13 @@ def test_init_from_events():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -214,13 +214,13 @@ def test_slice_time_full_graph():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -248,13 +248,13 @@ def test_slice_time_no_cache_refresh():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -282,13 +282,13 @@ def test_slice_time_at_end_time():
     assert dg.num_edges == 2
     assert dg.num_timestamps == 3
 
-    expected_node_feats = torch.zeros(19 + 1, 6 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(19 + 1, 6 + 1, 6 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
@@ -301,13 +301,15 @@ def test_slice_time_at_end_time():
     assert dg1.num_edges == 3
     assert dg1.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg1.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 2, 5
+    )
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -336,13 +338,15 @@ def test_slice_time_to_empty():
     assert dg1.num_edges == 2
     assert dg1.num_timestamps == 3
 
-    expected_node_feats = torch.zeros(14 + 1, 6 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg1.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(14 + 1, 6 + 1, 6 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 2, 5
+    )
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg1.edge_feats.to_dense(), expected_edge_feats)
@@ -355,13 +359,13 @@ def test_slice_time_to_empty():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -378,12 +382,14 @@ def test_slice_time_to_empty():
     assert dg2.num_edges == 1
     assert dg2.num_timestamps == 2
 
-    expected_node_feats = torch.zeros(14 + 1, 6 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 2, 5)
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg2.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(14 + 1, 6 + 1, 6 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg2.end_time + 1, dg2.num_nodes, dg2.num_nodes, 2, 5
+    )
     expected_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg2.edge_feats.to_dense(), expected_edge_feats)
 
@@ -395,13 +401,13 @@ def test_slice_time_to_empty():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -418,7 +424,7 @@ def test_slice_time_to_empty():
     assert dg3.num_edges == 0
     assert dg3.num_timestamps == 1
 
-    expected_node_feats = torch.zeros(10 + 1, 6 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 2, 5)
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg3.node_feats.to_dense(), expected_node_feats)
 
@@ -432,13 +438,13 @@ def test_slice_time_to_empty():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -465,13 +471,13 @@ def test_slice_time_to_empty():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -505,13 +511,13 @@ def test_slice_nodes_full_graph():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -540,12 +546,14 @@ def test_slice_nodes_to_empty():
     assert dg1.num_edges == 3
     assert dg1.num_timestamps == 3
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     assert torch.equal(dg1.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 2, 5
+    )
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -559,13 +567,13 @@ def test_slice_nodes_to_empty():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -583,12 +591,14 @@ def test_slice_nodes_to_empty():
     assert dg2.num_edges == 3
     assert dg2.num_timestamps == 3
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     assert torch.equal(dg2.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg2.end_time + 1, dg2.num_nodes, dg2.num_nodes, 2, 5
+    )
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -602,13 +612,13 @@ def test_slice_nodes_to_empty():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -625,11 +635,13 @@ def test_slice_nodes_to_empty():
     assert dg3.num_edges == 1
     assert dg3.num_timestamps == 1
 
-    expected_node_feats = torch.zeros(5 + 1, 5, 2, 5)
+    expected_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 2, 5)
     expected_node_feats[5, 4] = events[2].features
     assert torch.equal(dg3.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(5 + 1, 5, 5, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg3.end_time + 1, dg3.num_nodes, dg3.num_nodes, 2, 5
+    )
     expected_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg3.edge_feats.to_dense(), expected_edge_feats)
 
@@ -641,13 +653,13 @@ def test_slice_nodes_to_empty():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -673,13 +685,13 @@ def test_slice_nodes_to_empty():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -708,12 +720,14 @@ def test_interleave_slice_time_slice_nodes():
     assert dg1.num_edges == 3
     assert dg1.num_timestamps == 3
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     assert torch.equal(dg1.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 2, 5
+    )
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -727,13 +741,13 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -750,12 +764,14 @@ def test_interleave_slice_time_slice_nodes():
     assert dg2.num_edges == 2
     assert dg2.num_timestamps == 2
 
-    expected_node_feats = torch.zeros(14 + 1, 5, 2, 5)
+    expected_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     assert torch.equal(dg2.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(14 + 1, 5, 5, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg2.end_time + 1, dg2.num_nodes, dg2.num_nodes, 2, 5
+    )
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg2.edge_feats.to_dense(), expected_edge_feats)
@@ -768,13 +784,13 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -790,11 +806,13 @@ def test_interleave_slice_time_slice_nodes():
     assert dg3.num_edges == 1
     assert dg3.num_timestamps == 1
 
-    expected_node_feats = torch.zeros(5 + 1, 5, 2, 5)
+    expected_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 2, 5)
     expected_node_feats[5, 4] = events[2].features
     assert torch.equal(dg3.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(5 + 1, 5, 5, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg3.end_time + 1, dg3.num_nodes, dg3.num_nodes, 2, 5
+    )
     expected_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg3.edge_feats.to_dense(), expected_edge_feats)
 
@@ -806,13 +824,13 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -829,11 +847,13 @@ def test_interleave_slice_time_slice_nodes():
     assert dg4.num_edges == 1
     assert dg4.num_timestamps == 1
 
-    expected_node_feats = torch.zeros(5 + 1, 5, 2, 5)
+    expected_node_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, 2, 5)
     expected_node_feats[5, 4] = events[2].features
     assert torch.equal(dg4.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(5 + 1, 5, 5, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg4.end_time + 1, dg4.num_nodes, dg4.num_nodes, 2, 5
+    )
     expected_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg4.edge_feats.to_dense(), expected_edge_feats)
 
@@ -845,13 +865,13 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -868,11 +888,13 @@ def test_interleave_slice_time_slice_nodes():
     assert dg4.num_edges == 1
     assert dg4.num_timestamps == 1
 
-    expected_node_feats = torch.zeros(5 + 1, 5, 2, 5)
+    expected_node_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, 2, 5)
     expected_node_feats[5, 4] = events[2].features
     assert torch.equal(dg4.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(5 + 1, 5, 5, 2, 5)
+    expected_edge_feats = torch.zeros(
+        dg4.end_time + 1, dg4.num_nodes, dg4.num_nodes, 2, 5
+    )
     expected_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg4.edge_feats.to_dense(), expected_edge_feats)
 
@@ -884,13 +906,13 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -917,13 +939,13 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
@@ -944,7 +966,7 @@ def test_append_single_event():
     assert dg.num_edges == 0
     assert dg.num_timestamps == 1
 
-    expected_node_feats = torch.zeros(1 + 1, 2 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = event.features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
@@ -972,13 +994,13 @@ def test_append_multiple_events():
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
