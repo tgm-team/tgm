@@ -158,7 +158,10 @@ class DGraph:
             DGraph copy of events related to the input nodes.
         """
         dg = copy.copy(self)
-        dg._cache = {}
+
+        # Cache must be deep copied to avoid aliased properties
+        dg._cache = copy.deepcopy(self._cache)
+        dg._cache.clear()
 
         if self._cache.get('node_slice') is None:
             self._cache['node_slice'] = set(range(self.num_nodes))
