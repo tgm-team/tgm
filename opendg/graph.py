@@ -129,20 +129,22 @@ class DGraph:
         # Cache must be deep copied to avoid aliased properties
         dg._cache = copy.deepcopy(self._cache)
 
-        new_start_time, new_end_time = None, None
+        new_start_time = start_time
+        new_end_time = end_time - 1  # Because slicing is end range exclusive
 
-        if self.start_time is not None and start_time > self.start_time:
-            new_start_time = start_time
+        if self.start_time is not None and self.start_time > new_start_time:
+            new_start_time = self.start_time  # Keep our previous start time
 
-        if self.end_time is not None and end_time - 1 < self.end_time:
-            # Slice_time and _cache are end_time exclusive but self.end_time is inclusive
-            # hence we compare end_time - 1 but cache end_time
-            new_end_time = end_time
+        if self.end_time is not None and self.end_time < new_end_time:
+            new_end_time = self.end_time  # Keep our previous end time
 
-        if new_start_time is not None or new_end_time is not None:
-            dg._cache.clear()  # Force cache refresh
-            dg._cache['start_time'] = new_start_time
-            dg._cache['end_time'] = new_end_time
+        # Force cache refresh on the new copy if we actually sliced the graph
+        if new_start_time != self.start_time or new_end_time != self.end_time:
+            dg._cache.clear()
+
+        new_end_time += 1  # Keep the end-range exclusive value in cache
+        dg._cache['start_time'] = new_start_time
+        dg._cache['end_time'] = new_end_time
 
         return dg
 
