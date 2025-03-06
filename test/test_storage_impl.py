@@ -460,13 +460,13 @@ def test_get_edge_feats_edge_events_list(
     events = edge_only_events_list_with_features
     storage = DGStorageImpl(events)
 
-    expected_edge_feats = torch.zeros(10 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(11, 8 + 1, 8 + 1, 2, 5)
     expected_edge_feats[1, 2, 2] = events[0].features
     expected_edge_feats[5, 2, 4] = events[1].features
     expected_edge_feats[10, 6, 8] = events[2].features
     assert torch.equal(storage.get_edge_feats().to_dense(), expected_edge_feats)
 
-    expected_edge_feats = torch.zeros(10 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(11, 8 + 1, 8 + 1, 2, 5)
     expected_edge_feats[5, 2, 4] = events[1].features
     expected_edge_feats[10, 6, 8] = events[2].features
     assert torch.equal(
@@ -485,7 +485,7 @@ def test_get_edge_feats_edge_events_list(
         storage.get_edge_feats(start_time=5, end_time=10).to_dense(),
         expected_edge_feats,
     )
-    expected_edge_feats = torch.zeros(5 + 1, 4 + 1, 4 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(6, 4 + 1, 4 + 1, 2, 5)
     expected_edge_feats[1, 2, 2] = events[0].features
     expected_edge_feats[5, 2, 4] = events[1].features
     assert torch.equal(
@@ -513,13 +513,13 @@ def test_get_edge_feats_with_multi_events_per_timestamp(
     events = events_list_with_features_multi_events_per_timestamp
     storage = DGStorageImpl(events)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(21, 8 + 1, 8 + 1, 2, 5)
     expected_edge_feats[1, 2, 2] = events[1].features
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(storage.get_edge_feats().to_dense(), expected_edge_feats)
 
-    expected_edge_feats = torch.zeros(20 + 1, 8 + 1, 8 + 1, 2, 5)
+    expected_edge_feats = torch.zeros(21, 8 + 1, 8 + 1, 2, 5)
     expected_edge_feats[5, 2, 4] = events[3].features
     expected_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(
@@ -591,13 +591,13 @@ def test_get_node_feats_node_events_list(
     events = node_only_events_list_with_features
     storage = DGStorageImpl(events)
 
-    expected_node_feats = torch.zeros(10 + 1, 6 + 1, 2, 5)
+    expected_node_feats = torch.zeros(11, 6 + 1, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[1].features
     expected_node_feats[10, 6] = events[2].features
     assert torch.equal(storage.get_node_feats().to_dense(), expected_node_feats)
 
-    expected_node_feats = torch.zeros(10 + 1, 6 + 1, 2, 5)
+    expected_node_feats = torch.zeros(11, 6 + 1, 2, 5)
     expected_node_feats[5, 4] = events[1].features
     expected_node_feats[10, 6] = events[2].features
     assert torch.equal(
@@ -617,7 +617,7 @@ def test_get_node_feats_node_events_list(
         expected_node_feats,
     )
 
-    expected_node_feats = torch.zeros(1 + 1, 2 + 1, 2, 5)
+    expected_node_feats = torch.zeros(2, 2 + 1, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     assert torch.equal(
         storage.get_node_feats(node_slice={1, 2, 3}).to_dense(),
@@ -635,13 +635,13 @@ def test_get_node_feats_with_multi_events_per_timestamp(
     events = events_list_with_features_multi_events_per_timestamp
     storage = DGStorageImpl(events)
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(21, 8 + 1, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(storage.get_node_feats().to_dense(), expected_node_feats)
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(21, 8 + 1, 2, 5)
     expected_node_feats[5, 4] = events[2].features
     expected_node_feats[10, 6] = events[4].features
     assert torch.equal(
@@ -661,7 +661,7 @@ def test_get_node_feats_with_multi_events_per_timestamp(
         expected_node_feats,
     )
 
-    expected_node_feats = torch.zeros(20 + 1, 8 + 1, 2, 5)
+    expected_node_feats = torch.zeros(21, 8 + 1, 2, 5)
     expected_node_feats[1, 2] = events[0].features
     assert torch.equal(
         storage.get_node_feats(node_slice={1, 2, 3}).to_dense(),

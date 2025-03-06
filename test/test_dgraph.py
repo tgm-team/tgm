@@ -8,6 +8,18 @@ from opendg.graph import DGraph
 from opendg.timedelta import TimeDeltaDG
 
 
+@pytest.fixture
+def events():
+    return [
+        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
+        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
+        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
+        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
+        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
+        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
+    ]
+
+
 @pytest.mark.parametrize(
     'time_delta', [TimeDeltaDG('Y'), TimeDeltaDG('s'), TimeDeltaDG('r'), None]
 )
@@ -28,15 +40,7 @@ def test_init_empty(time_delta):
     assert dg.edge_feats is None
 
 
-def test_init_from_events():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
+def test_init_from_events(events):
     dg = DGraph(events=events)
 
     assert dg.time_delta.is_ordered
@@ -61,29 +65,13 @@ def test_init_from_events():
     assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
 
 
-def test_init_from_storage():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
+def test_init_from_storage(events):
     dg_tmp = DGraph(events=events)
     dg = DGraph(_storage=dg_tmp._storage)
     assert id(dg_tmp._storage) == id(dg._storage)
 
 
-def test_init_bad_constructor_args():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
+def test_init_bad_constructor_args(events):
     dg_tmp = DGraph(events=events)
 
     with pytest.raises(ValueError):
@@ -193,107 +181,12 @@ def test_to_csv_with_multi_dim_features():
             dg.to_csv(f.name, **col_names)
 
 
-def test_slice_time_full_graph():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
-    dg1 = DGraph(events=events)
+def test_slice_time_full_graph(events):
+    dg = DGraph(events=events)
 
-    dg = dg1.slice_time(1, 21)
-    assert id(dg._storage) == id(dg1._storage)
+    dg1 = dg.slice_time(1, 21)
+    assert id(dg1._storage) == id(dg._storage)
 
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
-
-
-def test_slice_time_no_cache_refresh():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
-    dg1 = DGraph(events=events)
-
-    dg = dg1.slice_time(0, 100)
-    assert id(dg._storage) == id(dg1._storage)
-
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
-
-
-def test_slice_time_at_end_time():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
-    dg1 = DGraph(events=events)
-
-    dg = dg1.slice_time(1, 20)
-    assert id(dg._storage) == id(dg1._storage)
-
-    assert len(dg) == 3
-    assert dg.start_time == 1
-    assert dg.end_time == 19  # Note: this is 19 despite no events in [10, 19)
-    assert dg.num_nodes == 7
-    assert dg.num_edges == 2
-    assert dg.num_timestamps == 3
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
-
-    # Check original graph cache is not updated
     assert len(dg1) == 4
     assert dg1.start_time == 1
     assert dg1.end_time == 20
@@ -316,24 +209,43 @@ def test_slice_time_at_end_time():
     assert torch.equal(dg1.edge_feats.to_dense(), expected_edge_feats)
 
 
-def test_slice_time_to_empty():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
+def test_slice_time_no_cache_refresh(events):
     dg = DGraph(events=events)
 
-    # Slice Number 1
-    dg1 = dg.slice_time(1, 15)
+    dg1 = dg.slice_time(0, 100)
+    assert id(dg1._storage) == id(dg._storage)
+
+    assert len(dg1) == 4
+    assert dg1.start_time == 1
+    assert dg1.end_time == 20
+    assert dg1.num_nodes == 9
+    assert dg1.num_edges == 3
+    assert dg1.num_timestamps == 4
+
+    expected_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 2, 5)
+    expected_node_feats[1, 2] = events[0].features
+    expected_node_feats[5, 4] = events[2].features
+    expected_node_feats[10, 6] = events[4].features
+    assert torch.equal(dg1.node_feats.to_dense(), expected_node_feats)
+
+    expected_edge_feats = torch.zeros(
+        dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 2, 5
+    )
+    expected_edge_feats[1, 2, 2] = events[1].features
+    expected_edge_feats[5, 2, 4] = events[3].features
+    expected_edge_feats[20, 1, 8] = events[-1].features
+    assert torch.equal(dg1.edge_feats.to_dense(), expected_edge_feats)
+
+
+def test_slice_time_at_end_time(events):
+    dg = DGraph(events=events)
+
+    dg1 = dg.slice_time(1, 20)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
     assert dg1.start_time == 1
-    assert dg1.end_time == 14
+    assert dg1.end_time == 19  # Note: this is 19 despite no events in [10, 19)
     assert dg1.num_nodes == 7
     assert dg1.num_edges == 2
     assert dg1.num_timestamps == 3
@@ -371,6 +283,54 @@ def test_slice_time_to_empty():
     expected_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
 
+
+def test_slice_time_to_empty(events):
+    dg = DGraph(events=events)
+
+    original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
+    original_node_feats[1, 2] = events[0].features
+    original_node_feats[5, 4] = events[2].features
+    original_node_feats[10, 6] = events[4].features
+
+    original_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
+    original_edge_feats[1, 2, 2] = events[1].features
+    original_edge_feats[5, 2, 4] = events[3].features
+    original_edge_feats[20, 1, 8] = events[-1].features
+
+    # Slice Number 1
+    dg1 = dg.slice_time(1, 15)
+    assert id(dg1._storage) == id(dg._storage)
+
+    assert len(dg1) == 3
+    assert dg1.start_time == 1
+    assert dg1.end_time == 14
+    assert dg1.num_nodes == 7
+    assert dg1.num_edges == 2
+    assert dg1.num_timestamps == 3
+
+    expected_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 2, 5)
+    expected_node_feats[1, 2] = events[0].features
+    expected_node_feats[5, 4] = events[2].features
+    expected_node_feats[10, 6] = events[4].features
+    assert torch.equal(dg1.node_feats.to_dense(), expected_node_feats)
+
+    expected_edge_feats = torch.zeros(
+        dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 2, 5
+    )
+    expected_edge_feats[1, 2, 2] = events[1].features
+    expected_edge_feats[5, 2, 4] = events[3].features
+    assert torch.equal(dg1.edge_feats.to_dense(), expected_edge_feats)
+
+    # Check original graph cache is not updated
+    assert len(dg) == 4
+    assert dg.start_time == 1
+    assert dg.end_time == 20
+    assert dg.num_nodes == 9
+    assert dg.num_edges == 3
+    assert dg.num_timestamps == 4
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
+
     # Slice Number 2
     dg2 = dg1.slice_time(5, 15)
     assert id(dg2._storage) == id(dg._storage)
@@ -400,18 +360,8 @@ def test_slice_time_to_empty():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice number 3
     dg3 = dg2.slice_time(7, 11)
@@ -437,18 +387,8 @@ def test_slice_time_to_empty():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice number 4 (to empty)
     dg4 = dg3.slice_time(0, 8)
@@ -470,18 +410,8 @@ def test_slice_time_to_empty():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
 
 def test_slice_time_bad_args():
@@ -490,15 +420,7 @@ def test_slice_time_bad_args():
         dg.slice_time(2, 1)
 
 
-def test_slice_nodes_full_graph():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
+def test_slice_nodes_full_graph(events):
     dg1 = DGraph(events=events)
 
     dg = dg1.slice_nodes({1, 2, 3, 4, 6, 8})  # Extra node (3) should just be ignored
@@ -524,16 +446,18 @@ def test_slice_nodes_full_graph():
     assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
 
 
-def test_slice_nodes_to_empty():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
+def test_slice_nodes_to_empty(events):
     dg = DGraph(events=events)
+
+    original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
+    original_node_feats[1, 2] = events[0].features
+    original_node_feats[5, 4] = events[2].features
+    original_node_feats[10, 6] = events[4].features
+
+    original_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
+    original_edge_feats[1, 2, 2] = events[1].features
+    original_edge_feats[5, 2, 4] = events[3].features
+    original_edge_feats[20, 1, 8] = events[-1].features
 
     # Slice Number 1
     dg1 = dg.slice_nodes({1, 2, 4, 8})
@@ -566,18 +490,8 @@ def test_slice_nodes_to_empty():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 2
     dg2 = dg1.slice_nodes({1, 2, 4, 6})  # 6 should be gone since we sliced it away
@@ -611,18 +525,8 @@ def test_slice_nodes_to_empty():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 3: Edge 4 -> 2 should cause node 2 to come back
     dg3 = dg2.slice_nodes({4})
@@ -652,18 +556,8 @@ def test_slice_nodes_to_empty():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice number 4 (to empty)
     dg4 = dg3.slice_nodes({5})  # Should be empty since 2 was previously sliced
@@ -684,30 +578,22 @@ def test_slice_nodes_to_empty():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
 
-def test_interleave_slice_time_slice_nodes():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
+def test_interleave_slice_time_slice_nodes(events):
     dg = DGraph(events=events)
+
+    original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
+    original_node_feats[1, 2] = events[0].features
+    original_node_feats[5, 4] = events[2].features
+    original_node_feats[10, 6] = events[4].features
+
+    original_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
+    original_edge_feats[1, 2, 2] = events[1].features
+    original_edge_feats[5, 2, 4] = events[3].features
+    original_edge_feats[20, 1, 8] = events[-1].features
 
     # Slice Number 1
     dg1 = dg.slice_nodes({1, 2, 4, 8})
@@ -740,18 +626,8 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 2
     dg2 = dg1.slice_time(1, 15)
@@ -783,18 +659,8 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 3
     dg3 = dg2.slice_nodes({1, 4})  # Node 1 at time 20 was previously sliced off
@@ -823,18 +689,8 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 4
     dg4 = dg3.slice_time(0, 20)  # Ensure previous slice not changed
@@ -864,18 +720,8 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 5
     dg5 = dg4.slice_nodes({2})
@@ -905,18 +751,8 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice 6 (to empty)
     dg6 = dg5.slice_time(1, 5)
@@ -938,18 +774,8 @@ def test_interleave_slice_time_slice_nodes():
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
-
-    expected_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 2, 5)
-    expected_node_feats[1, 2] = events[0].features
-    expected_node_feats[5, 4] = events[2].features
-    expected_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), expected_node_feats)
-
-    expected_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 2, 5)
-    expected_edge_feats[1, 2, 2] = events[1].features
-    expected_edge_feats[5, 2, 4] = events[3].features
-    expected_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), expected_edge_feats)
+    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
+    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
 
 def test_append_single_event():
@@ -973,18 +799,8 @@ def test_append_single_event():
     assert dg.edge_feats is None
 
 
-def test_append_multiple_events():
+def test_append_multiple_events(events):
     dg = DGraph()
-
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
-
     dg.append(events)
 
     assert len(dg) == 4
@@ -1022,15 +838,7 @@ def test_slice_then_append_twice_then_slice():
     pass
 
 
-def test_append_bad_args():
-    events = [
-        NodeEvent(time=1, node_id=2, features=torch.rand(2, 5)),
-        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2, 5)),
-        NodeEvent(time=5, node_id=4, features=torch.rand(2, 5)),
-        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2, 5)),
-        NodeEvent(time=10, node_id=6, features=torch.rand(2, 5)),
-        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2, 5)),
-    ]
+def test_append_bad_args(events):
     dg = DGraph(events=events)
 
     new_event = EdgeEvent(time=15, edge=(1, 1))  # Time 15 < 20
