@@ -138,24 +138,31 @@ class DGStorageDictBackend(DGStorageBase):
 
         indices, values = [], []
         for event in self._events:
-            if (
-                isinstance(event, NodeEvent)
-                and event.features is not None
-                and self._valid_slice(
-                    event,
-                    start_time=start_time,
-                    end_time=end_time,
-                    node_slice=node_slice,
-                )
+            if self._valid_slice(
+                event, start_time=start_time, end_time=end_time, node_slice=node_slice
             ):
-                indices.append([event.time, event.node_id])
-                values.append(event.features)
+                if isinstance(event, NodeEvent):
+                    max_time = max(max_time, event.time)
+                    max_node_id = max(max_node_id, event.node_id)
 
-                max_time = max(max_time, event.time)
-                max_node_id = max(max_node_id, event.node_id)
+                    if event.features is not None:
+                        indices.append([event.time, event.node_id])
+                        values.append(event.features)
+
+                elif isinstance(event, EdgeEvent):
+                    max_time = max(max_time, event.time)
+                    max_node_id = max(max_node_id, event.edge[0], event.edge[1])
 
         if not len(values):
             return None
+
+        # If the end_time is given, then it determines the dimension of the temporal axis
+        # This is true even if there are no events at the end time, which could occur after
+        # calling slice_time on a graph.
+        if end_time is not None:
+            max_time = end_time
+        else:
+            max_time = max_time + 1
 
         values_tensor = torch.stack(values)
         indices_tensor = torch.tensor(
@@ -163,7 +170,7 @@ class DGStorageDictBackend(DGStorageBase):
         ).t()  # https://pytorch.org/docs/stable/sparse.html#construction
 
         assert self._node_feats_shape is not None
-        shape = (max_time + 1, max_node_id + 1, *self._node_feats_shape)
+        shape = (max_time, max_node_id + 1, *self._node_feats_shape)
 
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
@@ -178,21 +185,19 @@ class DGStorageDictBackend(DGStorageBase):
 
         indices, values = [], []
         for event in self._events:
-            if (
-                isinstance(event, EdgeEvent)
-                and event.features is not None
-                and self._valid_slice(
-                    event,
-                    start_time=start_time,
-                    end_time=end_time,
-                    node_slice=node_slice,
-                )
+            if self._valid_slice(
+                event, start_time=start_time, end_time=end_time, node_slice=node_slice
             ):
-                indices.append([event.time, event.edge[0], event.edge[1]])
-                values.append(event.features)
+                if isinstance(event, NodeEvent):
+                    max_time = max(max_time, event.time)
+                    max_node_id = max(max_node_id, event.node_id)
+                elif isinstance(event, EdgeEvent):
+                    max_time = max(max_time, event.time)
+                    max_node_id = max(max_node_id, event.edge[0], event.edge[1])
 
-                max_time = max(max_time, event.time)
-                max_node_id = max(max_node_id, event.edge[0], event.edge[1])
+                    if event.features is not None:
+                        indices.append([event.time, event.edge[0], event.edge[1]])
+                        values.append(event.features)
 
         if not len(values):
             return None
@@ -204,8 +209,16 @@ class DGStorageDictBackend(DGStorageBase):
 
         assert self._edge_feats_shape is not None
 
+        # If the end_time is given, then it determines the dimension of the temporal axis
+        # This is true even if there are no events at the end time, which could occur after
+        # calling slice_time on a graph.
+        if end_time is not None:
+            max_time = end_time
+        else:
+            max_time = max_time + 1
+
         shape = (
-            max_time + 1,
+            max_time,
             max_node_id + 1,
             max_node_id + 1,
             *self._edge_feats_shape,
