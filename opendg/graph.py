@@ -125,27 +125,24 @@ class DGraph:
         self._check_slice_time_args(start_time, end_time)
 
         dg = copy.copy(self)
-
-        # Cache must be deep copied to avoid aliased properties
-        dg._cache = copy.deepcopy(self._cache)
+        dg._cache = copy.deepcopy(self._cache)  # Deep copy cache to avoid dict alias
 
         new_start_time = start_time
         new_end_time = end_time - 1  # Because slicing is end range exclusive
 
         if self.start_time is not None and self.start_time > new_start_time:
-            new_start_time = self.start_time  # Keep our previous start time
+            new_start_time = self.start_time
 
         if self.end_time is not None and self.end_time < new_end_time:
-            new_end_time = self.end_time  # Keep our previous end time
+            new_end_time = self.end_time
 
         # Force cache refresh on the new copy if we actually sliced the graph
         if new_start_time != self.start_time or new_end_time != self.end_time:
             dg._cache.clear()
             dg._cache['node_slice'] = self._cache.get('node_slice')
 
-        new_end_time += 1  # Keep the end-range exclusive value in cache
         dg._cache['start_time'] = new_start_time
-        dg._cache['end_time'] = new_end_time
+        dg._cache['end_time'] = new_end_time + 1  # End-range exclusive value in cache
 
         return dg
 
@@ -159,32 +156,33 @@ class DGraph:
             DGraph copy of events related to the input nodes.
         """
         dg = copy.copy(self)
-
-        # Cache must be deep copied to avoid aliased properties
-        dg._cache = copy.deepcopy(self._cache)
+        dg._cache = copy.deepcopy(self._cache)  # Deep copy cache to avoid dict alias
         dg._cache.clear()
 
         if self._cache.get('node_slice') is None:
             self._cache['node_slice'] = set(range(self.num_nodes))
 
+        # Take intersection of nodes
         dg._cache['node_slice'] = self._cache['node_slice'] & set(nodes)
 
+        # Update start time
         start_time_with_node_slice = self._storage.get_start_time(
             dg._cache.get('node_slice')
         )
-        if self._cache.get('start_time') is None:
+        if self.start_time is None:
             dg._cache['start_time'] = start_time_with_node_slice
         else:
             dg._cache['start_time'] = (
                 max(start_time_with_node_slice, self._cache['start_time'])
                 if start_time_with_node_slice is not None
-                else self._cache['start_time']
+                else self.start_time
             )
 
+        # Update end time
         end_time_with_node_slice = self._storage.get_end_time(
             dg._cache.get('node_slice')
         )
-        if self._cache.get('end_time') is None:
+        if self.end_time is None:
             dg._cache['end_time'] = end_time_with_node_slice
         else:
             dg._cache['end_time'] = (
@@ -193,6 +191,7 @@ class DGraph:
                 else self._cache['end_time']
             )
 
+        # Cache end-exclusive result
         if dg._cache['end_time'] is not None:
             dg._cache['end_time'] += 1
 
@@ -333,7 +332,7 @@ class DGraph:
         Returns a tensor.sparse_coo_tensor of size T x V x V x d where
 
         - T = Number of timestamps
-        - E = Number of edges
+        - V = Number of nodes
         - d = Edge feature dimension
 
         or None if there are no edge features on the dynamic graph.
