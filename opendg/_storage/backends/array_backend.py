@@ -9,8 +9,8 @@ from opendg.timedelta import TimeDeltaDG
 from ..base import DGStorageBase
 
 
-class DGStorageDictBackend(DGStorageBase):
-    r"""Dictionary implementation of temporal graph storage engine."""
+class DGStorageArrayBackend(DGStorageBase):
+    r"""Array backed implementation of temporal graph storage engine."""
 
     def __init__(self, events: List[Event]) -> None:
         self._node_feats_shape = self._check_node_feature_shapes(events)

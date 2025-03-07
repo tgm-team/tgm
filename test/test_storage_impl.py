@@ -6,7 +6,7 @@ from opendg._storage import (
     get_dg_storage_backend,
     set_dg_storage_backend,
 )
-from opendg._storage.backends import DGStorageDictBackend
+from opendg._storage.backends import DGStorageArrayBackend
 from opendg.events import EdgeEvent, NodeEvent
 
 
@@ -770,17 +770,17 @@ def test_temporal_coarsening_empty_graph(DGStorageImpl):
 
 
 def test_get_dg_storage_backend():
-    assert get_dg_storage_backend() == DGStorageDictBackend
+    assert get_dg_storage_backend() == DGStorageArrayBackend
 
 
 def test_set_dg_storage_backend_with_class():
-    set_dg_storage_backend(DGStorageDictBackend)
-    assert get_dg_storage_backend() == DGStorageDictBackend
+    set_dg_storage_backend(DGStorageArrayBackend)
+    assert get_dg_storage_backend() == DGStorageArrayBackend
 
 
 def test_set_dg_storage_backend_with_str():
-    set_dg_storage_backend('DictionaryBackend')
-    assert get_dg_storage_backend() == DGStorageDictBackend
+    set_dg_storage_backend('ArrayBackend')
+    assert get_dg_storage_backend() == DGStorageArrayBackend
 
 
 def test_set_dg_storage_backend_with_bad_str():
