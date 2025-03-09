@@ -112,6 +112,10 @@ class DGraph:
     ) -> 'DGraph':
         r"""Extract temporal slice of the dynamic graph between start_time and end_time.
 
+        If not specified, the start_time (resp. end_time) defaults to `self.start_time` (resp. `self.end_time`).
+        The end_time parameter is exclusive, meaning the returned view contains all events up to, but not including
+        those at time end_time. The returned view may or may not have events at the new temporal boundaries.
+
         Args:
             start_time (Optional[int]): The start of the temporal slice. If None, slices the graph with no lower bound on time.
             end_time (Optional[int]): The end of the temporal slice (inclusive). If None, slices the graph with no upper bound on time.
@@ -143,6 +147,11 @@ class DGraph:
 
     def slice_nodes(self, nodes: List[int]) -> 'DGraph':
         r"""Extract topological slice of the dynamcic graph given the list of nodes.
+
+        The returned view contains events which interact with the list of input nodes. This means
+        the edges with at least one endpoint node in the input list are included in the returned view.
+        The start_time and end_time of the returned view correspond to the minimum (resp. maximum) timestamp
+        in the newly sliced graph (or None if the newly created view is empty).
 
         Args:
             nodes (List[int]): The list of node ids to slice from.
