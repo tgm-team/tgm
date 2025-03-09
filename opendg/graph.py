@@ -26,12 +26,7 @@ class DGraph:
         _storage: Optional[DGStorageBase] = None,
     ) -> None:
         self._storage = self._check_storage_args(events, _storage)
-
-        if time_delta is None:
-            self._time_delta = TimeDeltaDG('r')  # Default to ordered granularity
-        else:
-            self._time_delta = time_delta
-
+        self._time_delta = self._check_time_delta_args(time_delta)
         self._cache: Dict[str, Any] = {}
 
     @classmethod
@@ -359,6 +354,17 @@ class DGraph:
         else:
             events_list = [] if events is None else events
             return DGStorage(events_list)
+
+    def _check_time_delta_args(
+        self, time_delta: Optional[TimeDeltaDG]
+    ) -> 'TimeDeltaDG':
+        if time_delta is None:
+            return TimeDeltaDG('r')  # Default to ordered granularity
+        if not isinstance(time_delta, TimeDeltaDG):
+            raise ValueError(
+                f'Expected time_delta to be of type TimeDeltaDG, but got: {type(time_delta)}'
+            )
+        return time_delta
 
     def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
         if start_time > end_time:
