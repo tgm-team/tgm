@@ -207,6 +207,78 @@ def test_slice_time_full_graph(events):
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
+def test_slice_time_no_time_bounds(events):
+    dg = DGraph(events=events)
+
+    dg1 = dg.slice_time()
+    assert id(dg1._storage) == id(dg._storage)
+
+    assert len(dg1) == 4
+    assert dg1.start_time == 1
+    assert dg1.end_time == 20
+    assert dg1.num_nodes == 9
+    assert dg1.num_edges == 3
+    assert dg1.num_timestamps == 4
+
+    exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
+    assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
+
+    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
+    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
+
+
+def test_slice_time_no_upper_bound(events):
+    dg = DGraph(events=events)
+
+    dg1 = dg.slice_time(5)
+    assert id(dg1._storage) == id(dg._storage)
+
+    assert len(dg1) == 3
+    assert dg1.start_time == 5
+    assert dg1.end_time == 20
+    assert dg1.num_nodes == 9
+    assert dg1.num_edges == 2
+    assert dg1.num_timestamps == 3
+
+    exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
+    assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
+
+    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
+    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
+
+
+def test_slice_time_no_lower_bound(events):
+    dg = DGraph(events=events)
+
+    dg1 = dg.slice_time(end_time=5)
+    assert id(dg1._storage) == id(dg._storage)
+
+    assert len(dg1) == 1
+    assert dg1.start_time == 1
+    assert dg1.end_time == 4
+    assert dg1.num_nodes == 3
+    assert dg1.num_edges == 1
+    assert dg1.num_timestamps == 1
+
+    exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
+    exp_node_feats[1, 2] = events[0].features
+    assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
+
+    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
+    exp_edge_feats[1, 2, 2] = events[1].features
+    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
+
+
 def test_slice_time_no_cache_refresh(events):
     dg = DGraph(events=events)
 
