@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 from torch import Tensor
@@ -107,23 +107,23 @@ class DGraph:
         )
         write_csv(events, file_path, src_col, dst_col, time_col, edge_feature_col)
 
-    def slice_time(self, start_time: int, end_time: int) -> 'DGraph':
+    def slice_time(
+        self, start_time: Optional[int] = None, end_time: Optional[int] = None
+    ) -> 'DGraph':
         r"""Extract temporal slice of the dynamic graph between start_time and end_time.
 
         Args:
-            start_time (int): The start of the temporal slice.
-            end_time (int): The end of the temporal slice (inclusive).
+            start_time (Optional[int]): The start of the temporal slice. If None, slices the graph with no lower bound on time.
+            end_time (Optional[int]): The end of the temporal slice (inclusive). If None, slices the graph with no upper bound on time.
 
         Returns:
             DGraph view of events between start and end_time.
         """
-        self._check_slice_time_args(start_time, end_time)
+        new_start_time, new_end_time = self._check_slice_time_args(start_time, end_time)
+        new_end_time -= 1  # Because slicing is end range exclusive
 
         dg = copy.copy(self)
         dg._cache = copy.deepcopy(self._cache)  # Deep copy cache to avoid dict alias
-
-        new_start_time = start_time
-        new_end_time = end_time - 1  # Because slicing is end range exclusive
 
         if self.start_time is not None and self.start_time > new_start_time:
             new_start_time = self.start_time
@@ -366,11 +366,16 @@ class DGraph:
             )
         return time_delta
 
-    def _check_slice_time_args(self, start_time: int, end_time: int) -> None:
-        if start_time > end_time:
+    def _check_slice_time_args(
+        self, start_time: Optional[int], end_time: Optional[int]
+    ) -> Tuple[Union[int, float], Union[int, float]]:
+        new_start_time = start_time if start_time is not None else float('-inf')
+        new_end_time = end_time if end_time is not None else float('inf')
+        if new_start_time > new_end_time:
             raise ValueError(
-                f'Bad slice: start_time must be <= end_time but received: start_time ({start_time}) > end_time ({end_time})'
+                f'Bad slice: start_time must be <= end_time but received: start_time ({new_start_time}) > end_time ({new_end_time})'
             )
+        return new_start_time, new_end_time
 
     def _check_append_args(self, events: Union[Event, List[Event]]) -> None:
         if not isinstance(events, List):
