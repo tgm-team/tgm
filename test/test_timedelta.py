@@ -26,7 +26,7 @@ def test_init_non_default_value(time_granularity):
 
 
 def test_init_ordered():
-    time_granularity = 'r'
+    time_granularity = TimeDeltaUnit.ORDERED
     td = TimeDeltaDG(time_granularity)
     assert td.unit == time_granularity
     assert td.value == 1
@@ -67,7 +67,7 @@ def test_init_bad_value(time_granularity, bad_value):
 @pytest.mark.parametrize('bad_value', [-1, 0, 2])
 def test_init_ordered_bad_value(bad_value):
     # Note: Only '1' accepted as the value for an ordered type
-    time_granularity = 'r'
+    time_granularity = TimeDeltaUnit.ORDERED
     with pytest.raises(ValueError):
         _ = TimeDeltaDG(time_granularity, bad_value)
 
@@ -171,7 +171,7 @@ def test_convert_between_different_units():
 
 
 def test_bad_convert_from_ordered():
-    td1 = TimeDeltaDG('r')
+    td1 = TimeDeltaDG(TimeDeltaUnit.ORDERED)
     td2 = TimeDeltaDG('Y', 1)
 
     with pytest.raises(ValueError):
@@ -180,7 +180,7 @@ def test_bad_convert_from_ordered():
 
 def test_bad_convert_to_ordered():
     td1 = TimeDeltaDG('Y', 1)
-    td2 = TimeDeltaDG('r')
+    td2 = TimeDeltaDG(TimeDeltaUnit.ORDERED)
 
     with pytest.raises(ValueError):
         _ = td1.convert(td2)

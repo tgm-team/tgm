@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from opendg.graph import DGraph
+from opendg.timedelta import TimeDeltaUnit
 
 
 class DGBaseLoader(ABC):
@@ -13,11 +14,11 @@ class DGBaseLoader(ABC):
         drop_last (bool): Set to True to drop the last incomplete batch.
 
     Note:
-        Ordered batch_unit ('r') iterates using normal batch size semantics
-            e.g. batch_size=5, batch_unit='r' -> yield 5 _events at time
+        Ordered batch_unit ('TimeDeltaUnit.ORDERED) iterates using normal batch size semantics
+            e.g. batch_size=5, batch_unit=TimeDeltaUnit.ORDERED -> yield 5 _events at time
 
         Unordered batch_unit iterates uses the appropriate temporal unit
-            e.g. batch_size=5, batch_unit='s' -> yield 5 seconds of data at a time
+            e.g. batch_size=5, batch_unit=TimeDeltaUnit.SECONDS -> yield 5 seconds of data at a time
 
         When using the ordered batch_unit, the order of yielded _events within the same timestamp
         is non-deterministic.
@@ -27,19 +28,19 @@ class DGBaseLoader(ABC):
         self,
         dg: DGraph,
         batch_size: int = 1,
-        batch_unit: str = 'r',  # TODO: Define enum
+        batch_unit: str = TimeDeltaUnit.ORDERED,
         drop_last: bool = False,
     ) -> None:
         if batch_size <= 0:
             raise ValueError(f'batch_size must be > 0 but got {batch_size}')
 
-        self._dg = dg  # TODO: Clone the graph
+        self._dg = dg
         self._batch_size = batch_size
-        self._batch_unit = batch_unit
+        self._batch_unit = TimeDeltaUnit.from_string(batch_unit)
         self._drop_last = drop_last
 
         dg_is_ordered = self._dg.time_delta.is_ordered
-        batch_unit_is_ordered = self._batch_unit == 'r'
+        batch_unit_is_ordered = self._batch_unit == TimeDeltaUnit.ORDERED
 
         if dg_is_ordered and not batch_unit_is_ordered:
             raise ValueError(

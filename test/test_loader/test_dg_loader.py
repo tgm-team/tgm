@@ -3,7 +3,7 @@ import pytest
 from opendg.events import EdgeEvent
 from opendg.graph import DGraph
 from opendg.loader import DGDataLoader
-from opendg.timedelta import TimeDeltaDG
+from opendg.timedelta import TimeDeltaDG, TimeDeltaUnit
 
 
 def test_init_default_args():
@@ -11,7 +11,7 @@ def test_init_default_args():
     dg = DGraph(events)
     loader = DGDataLoader(dg)
     assert loader._batch_size == 1
-    assert loader._batch_unit == 'r'
+    assert loader._batch_unit == TimeDeltaUnit.ORDERED
 
 
 @pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
