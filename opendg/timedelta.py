@@ -122,11 +122,11 @@ class TimeDeltaUnit(str, Enum):
     def __str__(self) -> str:
         return self.value
 
-    def is_more_granular_than(self, other: 'TimeDeltaUnit') -> bool:
+    def is_more_granular_than(self, other: Union[str, 'TimeDeltaUnit']) -> bool:
         r"""Return True iff self is strictly more granular than other.
 
         Args:
-            other ('TimeDeltaUnit'): The other unit to compare to.
+            other (Union[str, 'TimeDeltaUnit']): The other unit to compare to.
 
         Raises:
             ValueError if either self or other is TimeDeltaUnit.ORDERED.

@@ -48,7 +48,16 @@ class DGBaseLoader(ABC):
             )
 
         if not dg_is_ordered and not batch_unit_is_ordered:
-            # TODO: Int conversion loss of information
+            # Check to ensure the graph time unit is smaller (more granular) than batch time unit.
+            # If this is not the case, temporal iteration losses information, so we throw an Exception.
+            # We explicitly re-construct TimeDeltaUnit.from_string() to avoid alphabetic comparison in unit strings.
+            if self._batch_unit.is_more_granular_than(self._dg.time_delta.unit):
+                raise ValueError(
+                    f'Tried to construct a data loader with batch_unit: {batch_unit} '
+                    f'which is strictly more granular than the DGraph time unit: {self._dg.time_delta.unit}. '
+                    'Cannot iterate a non-ordered DGraph with a more granular batch_unit due to loss of informmation. '
+                    'Either choose a larger batch time unit or iterate using ordered batching.'
+                )
             conversion_ratio = self._dg.time_delta.convert(self._batch_unit)
             self._batch_size = int(self._batch_size * conversion_ratio)
 
