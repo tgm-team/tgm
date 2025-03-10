@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from opendg.graph import DGraph
-from opendg.timedelta import TimeDeltaUnit
+from opendg.timedelta import TimeDeltaDG, TimeDeltaUnit
 
 
 class DGBaseLoader(ABC):
@@ -58,7 +58,11 @@ class DGBaseLoader(ABC):
                     'Cannot iterate a non-ordered DGraph with a more granular batch_unit due to loss of informmation. '
                     'Either choose a larger batch time unit or iterate using ordered batching.'
                 )
-            conversion_ratio = self._dg.time_delta.convert(self._batch_unit)
+
+            # This could probably logic that sits in DGraph.temporal_modify
+            conversion_ratio = TimeDeltaDG(self._batch_unit).convert(
+                self._dg.time_delta
+            )
             self._batch_size = int(self._batch_size * conversion_ratio)
 
         # TODO: Check for time gap?

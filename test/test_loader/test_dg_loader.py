@@ -116,13 +116,70 @@ def test_iteration_equal_unit_batch_larger_than_dg(batch_unit, drop_last):
     assert batch_num == 0 if drop_last else 1
 
 
-@pytest.mark.skip(reason='Not implemented')
-@pytest.mark.parametrize('batch_size', [1, 3, 10])
 @pytest.mark.parametrize('drop_last', [True, False])
-def test_iteration_non_ordered_dg_non_ordered_batch_with_conversion(
-    batch_size, drop_last
+def test_iteration_non_ordered_dg_non_ordered_batch_with_conversion(drop_last):
+    events = [
+        EdgeEvent(time=0, edge=(1, 2)),  # Batch 1
+        EdgeEvent(time=0, edge=(2, 3)),  # Batch 1
+        EdgeEvent(time=100, edge=(3, 4)),  # Batch 1
+        EdgeEvent(time=100, edge=(4, 5)),  # Batch 1
+        EdgeEvent(time=100, edge=(5, 6)),  # Batch 1
+        EdgeEvent(time=120, edge=(6, 7)),  # Batch 2
+        EdgeEvent(time=180, edge=(7, 8)),  # Batch 2
+        EdgeEvent(time=240, edge=(8, 9)),  # Batch 3
+        EdgeEvent(time=240, edge=(9, 10)),  # Batch 3
+    ]
+    dg = DGraph(events, time_delta=TimeDeltaDG(TimeDeltaUnit.SECOND))
+    loader = DGDataLoader(
+        dg, batch_size=2, batch_unit=TimeDeltaUnit.MINUTE, drop_last=drop_last
+    )
+
+    batch_num = 0
+    for batch in loader:
+        assert isinstance(batch, DGraph)
+        if batch_num == 0:
+            expected_events = events[:5]
+        elif batch_num == 1:
+            expected_events = events[5:6]
+        elif batch_num == 2:
+            expected_events = events[6:]
+        else:
+            assert False
+        # assert batch.to_events() == expected_events
+        batch_num += 1
+
+    # assert batch_num == 3
+
+
+@pytest.mark.parametrize('drop_last', [True, False])
+def test_iteration_non_ordered_dg_non_ordered_batch_with_conversion_units_mismatch(
+    drop_last,
 ):
-    pass
+    events = [
+        EdgeEvent(time=60, edge=(1, 2)),  # Batch 1
+        EdgeEvent(time=60, edge=(2, 3)),  # Batch 1
+        EdgeEvent(time=100, edge=(3, 4)),  # Batch 1
+        EdgeEvent(time=100, edge=(4, 5)),  # Batch 1
+        EdgeEvent(time=100, edge=(5, 6)),  # Batch 1
+        EdgeEvent(time=120, edge=(6, 7)),  # Batch 2
+        EdgeEvent(time=180, edge=(7, 8)),  # Batch 2
+        EdgeEvent(time=240, edge=(8, 9)),  # Batch 3
+        EdgeEvent(time=240, edge=(9, 10)),  # Batch 3
+    ]
+    dg = DGraph(events, time_delta=TimeDeltaDG(TimeDeltaUnit.SECOND))
+    loader = DGDataLoader(
+        dg, batch_size=2, batch_unit=TimeDeltaUnit.MINUTE, drop_last=drop_last
+    )
+
+    batch_num = 0
+    for batch in loader:
+        assert isinstance(batch, DGraph)
+        # input()
+        # assert len(batch) == 5
+        # assert batch.to_events() == events
+        batch_num += 1
+
+    # assert batch_num == 3
 
 
 def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
