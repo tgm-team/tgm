@@ -1,7 +1,7 @@
-from opendg._storage.backends.dict_backend import DGStorageDictBackend
+from opendg._storage.backends.array_backend import DGStorageArrayBackend
 
 DGStorageBackends = {
-    'DictionaryBackend': DGStorageDictBackend,
+    'ArrayBackend': DGStorageArrayBackend,
 }
 
-DGStorage = DGStorageDictBackend
+DGStorage = DGStorageArrayBackend
