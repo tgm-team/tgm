@@ -184,3 +184,22 @@ def test_bad_convert_to_ordered():
 
     with pytest.raises(ValueError):
         _ = td1.convert(td2)
+
+
+def test_time_unit_ordering():
+    # This ensures consistent ordering behaviour between units
+    # The convention we use is that we order from more granular (smaller unit) to less granular (larger unit)
+    units = TimeDeltaUnit._member_names_
+    assert units == [
+        'ORDERED',
+        'NANOSECOND',
+        'MICROSECOND',
+        'MILLISECOND',
+        'SECOND',
+        'MINUTE',
+        'HOUR',
+        'DAY',
+        'WEEK',
+        'MONTH',
+        'YEAR',
+    ]
