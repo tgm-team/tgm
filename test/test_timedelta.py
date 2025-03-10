@@ -187,8 +187,8 @@ def test_bad_convert_to_ordered():
 
 
 def test_time_unit_ordering():
-    # This ensures consistent ordering behaviour between units
-    # The convention we use is that we order from more granular (smaller unit) to less granular (larger unit)
+    # This ensures consistent ordering behaviour between units.
+    # The convention we use is that we order from more granular (smaller unit) to less granular (larger unit).
     units = TimeDeltaUnit._member_names_
     assert units == [
         'ORDERED',
@@ -203,3 +203,52 @@ def test_time_unit_ordering():
         'MONTH',
         'YEAR',
     ]
+
+
+def test_time_unit_is_more_granular_than():
+    # Start i at index 1 since ORDERED enum value is not comparable (see test cases below)
+    for i in range(1, len(TimeDeltaUnit._member_names_)):
+        for j in range(i, len(TimeDeltaUnit._member_names_)):
+            unit_i = TimeDeltaUnit.from_string(TimeDeltaUnit._member_names_[i])
+            unit_j = TimeDeltaUnit.from_string(TimeDeltaUnit._member_names_[j])
+
+            if i == j:
+                assert not unit_i.is_more_granular_than(unit_j)
+                assert not unit_j.is_more_granular_than(unit_i)
+            else:
+                assert unit_i.is_more_granular_than(unit_j)
+                assert not unit_j.is_more_granular_than(unit_i)
+
+
+def test_time_unit_is_more_granular_than_with_string():
+    # Start i at index 1 since ORDERED enum value is not comparable (see test cases below)
+    for i in range(1, len(TimeDeltaUnit._member_names_)):
+        for j in range(i, len(TimeDeltaUnit._member_names_)):
+            unit_i = TimeDeltaUnit.from_string(TimeDeltaUnit._member_names_[i])
+            unit_j = TimeDeltaUnit.from_string(TimeDeltaUnit._member_names_[j])
+
+            if i == j:
+                assert not unit_i.is_more_granular_than(TimeDeltaUnit._member_names_[j])
+                assert not unit_j.is_more_granular_than(TimeDeltaUnit._member_names_[i])
+            else:
+                assert unit_i.is_more_granular_than(TimeDeltaUnit._member_names_[j])
+                assert not unit_j.is_more_granular_than(TimeDeltaUnit._member_names_[i])
+
+
+def test_time_unit_is_more_granular_than_with_ordered(time_granularity):
+    unit = TimeDeltaUnit.from_string(time_granularity)
+    with pytest.raises(ValueError):
+        unit.is_more_granular_than(TimeDeltaUnit.ORDERED)
+
+    unit = TimeDeltaUnit.from_string(time_granularity)
+    with pytest.raises(ValueError):
+        TimeDeltaUnit.ORDERED.is_more_granular_than(unit)
+
+
+def test_time_unit_is_more_granular_than_with_ordered_string(time_granularity):
+    unit = TimeDeltaUnit.from_string(time_granularity)
+    with pytest.raises(ValueError):
+        unit.is_more_granular_than('r')
+
+    with pytest.raises(ValueError):
+        TimeDeltaUnit.ORDERED.is_more_granular_than(time_granularity)

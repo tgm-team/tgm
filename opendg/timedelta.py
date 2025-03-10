@@ -122,6 +122,23 @@ class TimeDeltaUnit(str, Enum):
     def __str__(self) -> str:
         return self.value
 
+    def is_more_granular_than(self, other: 'TimeDeltaUnit') -> bool:
+        r"""Return True iff self is strictly more granular than other.
+
+        Args:
+            other ('TimeDeltaUnit'): The other unit to compare to.
+
+        Raises:
+            ValueError if either self or other is TimeDeltaUnit.ORDERED.
+        """
+        if self == TimeDeltaUnit.ORDERED or other == TimeDeltaUnit.ORDERED:
+            raise ValueError('Cannot compare time granularity on TimeDeltaUnit.ORDERED')
+
+        other = TimeDeltaUnit.from_string(other)
+
+        units = TimeDeltaUnit._member_names_
+        return units.index(self.name) < units.index(other.name)
+
     @classmethod
     def from_string(cls, s: str) -> 'TimeDeltaUnit':
         # String match the members (e.g. 'YEAR')
