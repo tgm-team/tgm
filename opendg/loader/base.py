@@ -61,6 +61,7 @@ class DGBaseLoader(ABC):
             conversion_ratio = self._dg.time_delta.convert(self._batch_unit)
             self._batch_size = int(self._batch_size * conversion_ratio)
 
+        # TODO: Check for time gap?
         self._iterate_by_events = not dg_is_ordered and batch_unit_is_ordered
 
         self._idx = 0
@@ -102,8 +103,13 @@ class DGBaseLoader(ABC):
         if not len(self._dg):
             return True
 
+        if self._drop_last:
+            check_idx = self._idx + self._batch_size - 1
+        else:
+            check_idx = self._idx
+
         if self._iterate_by_events:
-            return self._idx + self._batch_size >= len(self._events) and self._drop_last
+            return check_idx >= len(self._events)
         else:
             assert self._dg.end_time is not None
-            return self._idx > self._dg.end_time
+            return check_idx >= self._dg.end_time + 1
