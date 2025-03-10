@@ -1,36 +1,54 @@
 import pytest
 
-from opendg.timedelta import TimeDeltaDG
+from opendg.timedelta import TimeDeltaDG, TimeDeltaUnit
 
 
 @pytest.fixture(params=['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
-def temporal_unit(request):
+def time_granularity(request):
     return request.param
 
 
-def test_init_default_value(temporal_unit):
-    td = TimeDeltaDG(temporal_unit)
-    assert td.unit == temporal_unit
+def test_init_default_value(time_granularity):
+    td = TimeDeltaDG(time_granularity)
+    assert td.unit == time_granularity
     assert td.value == 1
-    assert str(td) == f"TimeDeltaDG(unit='{temporal_unit}', value=1)"
+    assert str(td) == f"TimeDeltaDG(unit='{time_granularity}', value=1)"
     assert not td.is_ordered
 
 
-def test_init_non_default_value(temporal_unit):
+def test_init_non_default_value(time_granularity):
     value = 5
-    td = TimeDeltaDG(temporal_unit, value)
-    assert td.unit == temporal_unit
+    td = TimeDeltaDG(time_granularity, value)
+    assert td.unit == time_granularity
     assert td.value == value
-    assert str(td) == f"TimeDeltaDG(unit='{temporal_unit}', value={value})"
+    assert str(td) == f"TimeDeltaDG(unit='{time_granularity}', value={value})"
     assert not td.is_ordered
 
 
 def test_init_ordered():
-    temporal_unit = 'r'
-    td = TimeDeltaDG(temporal_unit)
-    assert td.unit == temporal_unit
+    time_granularity = 'r'
+    td = TimeDeltaDG(time_granularity)
+    assert td.unit == time_granularity
     assert td.value == 1
-    assert str(td) == f"TimeDeltaDG(unit='{temporal_unit}')"
+    assert str(td) == f"TimeDeltaDG(unit='{time_granularity}')"
+    assert td.is_ordered
+
+
+def test_init_with_time_delta_unit(time_granularity):
+    time_granularity = TimeDeltaUnit(time_granularity)
+    td = TimeDeltaDG(time_granularity)
+    assert td.unit == time_granularity
+    assert td.value == 1
+    assert str(td) == f"TimeDeltaDG(unit='{time_granularity}', value=1)"
+    assert not td.is_ordered
+
+
+def test_init_ordered_with_time_delta_unit():
+    time_granularity = TimeDeltaUnit.ORDERED
+    td = TimeDeltaDG(time_granularity)
+    assert td.unit == time_granularity
+    assert td.value == 1
+    assert str(td) == f"TimeDeltaDG(unit='{time_granularity}')"
     assert td.is_ordered
 
 
@@ -41,27 +59,27 @@ def test_init_bad_unit(bad_unit):
 
 
 @pytest.mark.parametrize('bad_value', [-1, 0])
-def test_init_bad_value(temporal_unit, bad_value):
+def test_init_bad_value(time_granularity, bad_value):
     with pytest.raises(ValueError):
-        _ = TimeDeltaDG(temporal_unit, bad_value)
+        _ = TimeDeltaDG(time_granularity, bad_value)
 
 
 @pytest.mark.parametrize('bad_value', [-1, 0, 2])
 def test_init_ordered_bad_value(bad_value):
     # Note: Only '1' accepted as the value for an ordered type
-    temporal_unit = 'r'
+    time_granularity = 'r'
     with pytest.raises(ValueError):
-        _ = TimeDeltaDG(temporal_unit, bad_value)
+        _ = TimeDeltaDG(time_granularity, bad_value)
 
 
-def test_convert_between_same_units(temporal_unit):
-    td1 = TimeDeltaDG(temporal_unit, 2)
-    td2 = TimeDeltaDG(temporal_unit, 3)
+def test_convert_between_same_units(time_granularity):
+    td1 = TimeDeltaDG(time_granularity, 2)
+    td2 = TimeDeltaDG(time_granularity, 3)
     assert td1.convert(td2) == 2 / 3
     assert td2.convert(td1) == 3 / 2
 
-    td1 = TimeDeltaDG(temporal_unit, 1)
-    td2 = TimeDeltaDG(temporal_unit, 1)
+    td1 = TimeDeltaDG(time_granularity, 1)
+    td2 = TimeDeltaDG(time_granularity, 1)
     assert td1.convert(td2) == 1
     assert td2.convert(td1) == 1
 
