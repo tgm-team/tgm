@@ -100,12 +100,21 @@ class DGraph:
             time_col (str): Column in the dataframe corresponding to the timestamp.
             edge_feature_col (Optional[List[str]]): Column list in the csv corresponding to the edge features.
         """
-        events = self._storage.to_events(
+        events = self.to_events()
+        write_csv(events, file_path, src_col, dst_col, time_col, edge_feature_col)
+
+    def to_events(self) -> List[Event]:
+        r"""Materialize the events in the DGraph.
+
+        Returns:
+            List of events in the current DGraph. Events are ordered by time, but event ordering
+            within a single timestamp is not deterministic.
+        """
+        return self._storage.to_events(
             start_time=self._cache.get('start_time'),
             end_time=self._cache.get('end_time'),
             node_slice=self._cache.get('node_slice'),
         )
-        write_csv(events, file_path, src_col, dst_col, time_col, edge_feature_col)
 
     def slice_time(
         self, start_time: Optional[int] = None, end_time: Optional[int] = None
