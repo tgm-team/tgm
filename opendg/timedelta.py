@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Optional, Union
 
 
@@ -14,6 +15,7 @@ class TimeDeltaDG:
             'r':  Ordered granularity (no conversions allowed, TimeDelta value must be 1)
             'Y':  Year
             'M':  Month
+            'W':  Week
             'D':  Day
             'h':  Hour
             'm':  Minute
@@ -24,7 +26,6 @@ class TimeDeltaDG:
     """
 
     def __init__(self, unit: str, value: Optional[int] = 1) -> None:
-        self._ordered_unit = 'r'
         self._unit_nano_ratio = {
             'Y': 1000 * 1000 * 1000 * 60 * 60 * 24 * 365,
             'M': 1000 * 1000 * 1000 * 60 * 60 * 24 * 30,
@@ -38,16 +39,13 @@ class TimeDeltaDG:
             'ns': 1,
         }
 
-        if unit not in self._unit_nano_ratio and unit != self._ordered_unit:
-            raise ValueError(f'Invalid time granularity unit: {unit}')
-
         if not (isinstance(value, int)) or value <= 0:
             raise ValueError(f'Value must be a positive integer, got: {value}')
 
-        if unit == self._ordered_unit and value != 1:
+        if unit == TimeDeltaUnit.ORDERED and value != 1:
             raise ValueError(f"Only value=1 is supported for 'ordered' TimeDelta unit")
 
-        self._unit = unit
+        self._unit = TimeDeltaUnit.from_string(unit)
         self._value = value
 
     @property
@@ -63,7 +61,7 @@ class TimeDeltaDG:
     @property
     def is_ordered(self) -> bool:
         r"""Whether or not the time granularity is 'ordered', in which case conversions are prohibited."""
-        return self.unit == self._ordered_unit
+        return self.unit == TimeDeltaUnit.ORDERED
 
     def convert(self, time_delta: Union[str, 'TimeDeltaDG']) -> float:
         r"""Convert the current granularity to the specified time_delta (either a unit string or a TimeDeltaDG object).
@@ -104,3 +102,35 @@ class TimeDeltaDG:
 
         value_ratio = self.value / other.value
         return value_ratio / unit_ratio if invert_unit else value_ratio * unit_ratio
+
+
+class TimeDeltaUnit(str, Enum):
+    r"""Temporal unit of time granularity."""
+
+    ORDERED = 'r'
+    NANOSECOND = 'ns'
+    MICROSECOND = 'us'
+    MILLISECOND = 'ms'
+    SECOND = 's'
+    MINUTE = 'm'
+    HOUR = 'h'
+    DAY = 'D'
+    WEEK = 'W'
+    MONTH = 'M'
+    YEAR = 'Y'
+
+    def __str__(self) -> str:
+        return self.value
+
+    @classmethod
+    def from_string(cls, s: str) -> 'TimeDeltaUnit':
+        # String match the members (e.g. 'YEAR')
+        if s in cls._member_names_:
+            return cls[s]
+
+        # String match the member values (e.g. 'Y')
+        units = dict([(unit.value, unit) for unit in cls])
+        if s in units:
+            return units[s]
+
+        raise ValueError(f'Bad unit: {s}, possible values are: {cls._member_names_}')

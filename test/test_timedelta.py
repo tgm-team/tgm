@@ -1,6 +1,6 @@
 import pytest
 
-from opendg.timedelta import TimeDeltaDG
+from opendg.timedelta import TimeDeltaDG, TimeDeltaUnit
 
 
 @pytest.fixture(params=['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
@@ -27,6 +27,24 @@ def test_init_non_default_value(temporal_unit):
 
 def test_init_ordered():
     temporal_unit = 'r'
+    td = TimeDeltaDG(temporal_unit)
+    assert td.unit == temporal_unit
+    assert td.value == 1
+    assert str(td) == f"TimeDeltaDG(unit='{temporal_unit}')"
+    assert td.is_ordered
+
+
+def test_init_with_time_delta_unit(temporal_unit):
+    temporal_unit = TimeDeltaUnit(temporal_unit)
+    td = TimeDeltaDG(temporal_unit)
+    assert td.unit == temporal_unit
+    assert td.value == 1
+    assert str(td) == f"TimeDeltaDG(unit='{temporal_unit}', value=1)"
+    assert not td.is_ordered
+
+
+def test_init_ordered_with_time_delta_unit():
+    temporal_unit = TimeDeltaUnit.ORDERED
     td = TimeDeltaDG(temporal_unit)
     assert td.unit == temporal_unit
     assert td.value == 1
