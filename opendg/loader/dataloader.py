@@ -12,6 +12,6 @@ class DGDataLoader(DGBaseLoader):
             batch (DGraph): Incoming batch of data. May not be materialized.
 
         Returns:
-            (DGraph): Downsampled batch of data. Must be naterialized.
+            (DGraph): The input batch of data.
         """
         return batch

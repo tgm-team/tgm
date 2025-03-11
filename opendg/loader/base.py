@@ -13,11 +13,21 @@ class DGBaseLoader(ABC):
         batch_unit (str): The unit corresponding to the batch_size.
         drop_last (bool): Set to True to drop the last incomplete batch.
 
+    Raises:
+        ValueError: If the batch_unit is not a valid TimeDeltaUnit type.
+        ValueError: If the batch_size is not a positive integer.
+        ValueError: If the batch_unit is not TimeDeltaUnit.ORDERED and the graph is TimeDeltaUnit.ORDERED.
+        ValueError: If both the batch_unit and the graph are not TimeDeltaUnit.ORDERED, but the batch iteration
+                    is more granular than the graph TimeDelta. In this case, there is ambiguity in how to yield
+                    events due to loss of information.
+
     Note:
         Ordered batch_unit ('TimeDeltaUnit.ORDERED) iterates using normal batch size semantics
-            e.g. batch_size=5, batch_unit=TimeDeltaUnit.ORDERED -> yield 5 _events at time
+        in which case each yielded batch has a constant number of events (except the last batch if drop_last=False).
+            e.g. batch_size=5, batch_unit=TimeDeltaUnit.ORDERED -> yield 5 events at time
 
-        Unordered batch_unit iterates uses the appropriate temporal unit
+        Unordered batch_unit iterates uses the appropriate temporal unit in which case each yielded
+        batch may have different number of events but has the same temporal length (except the last batch if drop_last=False).
             e.g. batch_size=5, batch_unit=TimeDeltaUnit.SECONDS -> yield 5 seconds of data at a time
 
         When using the ordered batch_unit, the order of yielded _events within the same timestamp
