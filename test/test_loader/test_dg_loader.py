@@ -151,6 +151,14 @@ def test_iteration_non_ordered_dg_non_ordered_batch_with_conversion(drop_last):
     # assert batch_num == 3
 
 
+@pytest.mark.skip('Iterating DG that has time delta values > 1 not implemented')
+@pytest.mark.parametrize('drop_last', [True, False])
+def test_iteration_non_ordered_dg_non_ordered_batch_with_conversion_and_time_delta_values_greater_than_1(
+    drop_last,
+):
+    pass
+
+
 @pytest.mark.parametrize('drop_last', [True, False])
 def test_iteration_non_ordered_dg_non_ordered_batch_with_conversion_units_mismatch(
     drop_last,
