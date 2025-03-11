@@ -186,6 +186,46 @@ def test_bad_convert_to_ordered():
         _ = td1.convert(td2)
 
 
+def test_time_delta_is_more_granular_than():
+    td1 = TimeDeltaDG('s', value=30)
+    td2 = TimeDeltaDG('m')
+
+    assert td1.is_more_granular_than(td2)
+    assert td1.is_more_granular_than('m')
+
+
+def test_time_delta_is_more_granular_than_due_to_value():
+    # Testing that granularity is not just based on the unit.
+    # In this case, 1 minute should be more granular than 80 seconds
+    # even though TimeDeltaUnit.SECOND is more granular than TimeDeltaUnit.MINUTE
+    td1 = TimeDeltaDG('s', value=80)
+    td2 = TimeDeltaDG('m')
+
+    assert td2.is_more_granular_than(td1)
+
+
+def test_time_delta_is_not_more_granular_than():
+    td1 = TimeDeltaDG('s')
+
+    assert not td1.is_more_granular_than(td1)  # Strict granularity
+    assert not td1.is_more_granular_than('s')
+
+    td2 = TimeDeltaDG('ms', value=300)
+
+    assert not td1.is_more_granular_than(td2)
+    assert not td1.is_more_granular_than('ms')
+
+
+def test_time_delta_is_more_granular_try_compare_ordered():
+    td1 = TimeDeltaDG('r')
+    td2 = TimeDeltaDG('r')
+    with pytest.raises(ValueError):
+        td1.is_more_granular_than(td2)
+
+    with pytest.raises(ValueError):
+        td1.is_more_granular_than('r')
+
+
 def test_time_unit_ordering():
     # This ensures consistent ordering behaviour between units.
     # The convention we use is that we order from more granular (smaller unit) to less granular (larger unit).

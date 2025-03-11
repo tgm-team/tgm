@@ -63,6 +63,23 @@ class TimeDeltaDG:
         r"""Whether or not the time granularity is 'ordered', in which case conversions are prohibited."""
         return self.unit == TimeDeltaUnit.ORDERED
 
+    def is_more_granular_than(self, other: Union[str, 'TimeDeltaDG']) -> bool:
+        r"""Return True iff self is strictly more granular than other.
+
+        Args:
+            other (Union[str, 'TimeDeltaDG']): The other time delta to compare to.
+
+        Raises:
+            ValueError if either self or other is TimeDeltaUnit.ORDERED.
+        """
+        if isinstance(other, str):
+            other = TimeDeltaDG(other)
+
+        if self.unit == TimeDeltaUnit.ORDERED or other.unit == TimeDeltaUnit.ORDERED:
+            raise ValueError('Cannot compare time granularity on TimeDeltaUnit.ORDERED')
+
+        return self.convert(other) < 1
+
     def convert(self, time_delta: Union[str, 'TimeDeltaDG']) -> float:
         r"""Convert the current granularity to the specified time_delta (either a unit string or a TimeDeltaDG object).
 
