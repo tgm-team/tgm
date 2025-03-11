@@ -26,7 +26,7 @@ class EdgeBankPredictor:
 
         if (time_window_ratio <= 0.0) or (time_window_ratio > 1.0):
             raise ValueError(
-                f'Invalide time window ratio for EdgeBank, must be in (0,1]'
+                f'Invalid time window ratio for EdgeBank, must be in (0,1]'
             )
 
         self.memory_mode = memory_mode
