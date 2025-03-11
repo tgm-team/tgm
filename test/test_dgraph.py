@@ -78,6 +78,55 @@ def test_init_bad_constructor_args(events):
         DGraph(events=events, _storage=dg_tmp._storage)
 
 
+def test_to_events():
+    events = [
+        EdgeEvent(time=1, edge=(2, 2)),
+        EdgeEvent(time=5, edge=(2, 4)),
+        EdgeEvent(time=20, edge=(1, 8)),
+    ]
+    dg = DGraph(events=events)
+    _assert_events_equal(dg.to_events(), events)
+
+
+@pytest.mark.skip('Node feature IO not implemented')
+def test_to_events_with_node_events():
+    events = [
+        NodeEvent(time=1, node_id=2),
+        EdgeEvent(time=1, edge=(2, 2)),
+        NodeEvent(time=5, node_id=4),
+        EdgeEvent(time=5, edge=(2, 4)),
+        NodeEvent(time=10, node_id=6),
+        EdgeEvent(time=20, edge=(1, 8)),
+    ]
+    dg = DGraph(events=events)
+    _assert_events_equal(dg.to_events(), events)
+
+
+def test_to_events_with_cache():
+    events = [
+        EdgeEvent(time=1, edge=(2, 2)),
+        EdgeEvent(time=5, edge=(2, 4)),
+        EdgeEvent(time=20, edge=(1, 8)),
+    ]
+    dg = DGraph(events=events)
+    dg._cache['start_time'] = 5
+    _assert_events_equal(dg.to_events(), events[1:])
+
+    dg._cache.clear()
+    dg._cache['node_slice'] = set([2])
+    _assert_events_equal(dg.to_events(), events[:2])
+
+
+def test_to_events_with_features():
+    events = [
+        EdgeEvent(time=1, edge=(2, 2), features=torch.rand(2)),
+        EdgeEvent(time=5, edge=(2, 4), features=torch.rand(2)),
+        EdgeEvent(time=20, edge=(1, 8), features=torch.rand(2)),
+    ]
+    dg = DGraph(events=events)
+    _assert_events_equal(dg.to_events(), events)
+
+
 def test_to_csv():
     events = [
         EdgeEvent(time=1, edge=(2, 2)),
