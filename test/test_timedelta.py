@@ -186,48 +186,46 @@ def test_bad_convert_to_ordered():
         _ = td1.convert(td2)
 
 
-def test_time_delta_is_more_granular_than():
+def test_time_delta_is_coarser_than():
     td1 = TimeDeltaDG('s', value=30)
     td2 = TimeDeltaDG('m')
+    assert td2.is_coarser_than(td1)
+    assert not td1.is_coarser_than('m')
 
-    assert td1.is_more_granular_than(td2)
-    assert td1.is_more_granular_than('m')
+    # Check that comparison is strict
+    td1 = TimeDeltaDG('s')
+    assert not td1.is_coarser_than(td1)
+    assert not td1.is_coarser_than('s')
+
+    # Check that the 'value' is taken into account (not just unit)
+    td1 = TimeDeltaDG('s', value=60 * 5)
+    td2 = TimeDeltaDG('m', value=3)
+    assert td1.is_coarser_than(td2)
+    assert not td2.is_coarser_than(td1)
 
 
-def test_time_delta_is_more_granular_than_due_to_value():
+def test_time_delta_is_coarser_than_due_to_value():
     # Testing that granularity is not just based on the unit.
     # In this case, 1 minute should be more granular than 80 seconds
     # even though TimeDeltaUnit.SECOND is more granular than TimeDeltaUnit.MINUTE
     td1 = TimeDeltaDG('s', value=80)
     td2 = TimeDeltaDG('m')
-
-    assert td2.is_more_granular_than(td1)
-
-
-def test_time_delta_is_not_more_granular_than():
-    td1 = TimeDeltaDG('s')
-
-    assert not td1.is_more_granular_than(td1)  # Strict granularity
-    assert not td1.is_more_granular_than('s')
-
-    td2 = TimeDeltaDG('ms', value=300)
-
-    assert not td1.is_more_granular_than(td2)
-    assert not td1.is_more_granular_than('ms')
+    assert not td2.is_coarser_than(td1)
+    assert td1.is_coarser_than(td2)
 
 
-def test_time_delta_is_more_granular_try_compare_ordered():
+def test_time_delta_is_coarser_try_compare_ordered():
     td1 = TimeDeltaDG('r')
     td2 = TimeDeltaDG('s')
 
     with pytest.raises(ValueError):
-        td1.is_more_granular_than(td2)
+        td1.is_coarser_than(td2)
 
     with pytest.raises(ValueError):
-        td2.is_more_granular_than(td1)
+        td2.is_coarser_than(td1)
 
     with pytest.raises(ValueError):
-        td1.is_more_granular_than('r')
+        td1.is_coarser_than('r')
 
 
 def test_time_unit_ordering():
@@ -249,7 +247,7 @@ def test_time_unit_ordering():
     ]
 
 
-def test_time_unit_is_more_granular_than():
+def test_time_unit_is_coarser_than():
     # Start i at index 1 since ORDERED enum value is not comparable (see test cases below)
     for i in range(1, len(TimeDeltaUnit._member_names_)):
         for j in range(i, len(TimeDeltaUnit._member_names_)):
@@ -257,14 +255,14 @@ def test_time_unit_is_more_granular_than():
             unit_j = TimeDeltaUnit.from_string(TimeDeltaUnit._member_names_[j])
 
             if i == j:
-                assert not unit_i.is_more_granular_than(unit_j)
-                assert not unit_j.is_more_granular_than(unit_i)
+                assert not unit_i.is_coarser_than(unit_j)
+                assert not unit_j.is_coarser_than(unit_i)
             else:
-                assert unit_i.is_more_granular_than(unit_j)
-                assert not unit_j.is_more_granular_than(unit_i)
+                assert not unit_i.is_coarser_than(unit_j)
+                assert unit_j.is_coarser_than(unit_i)
 
 
-def test_time_unit_is_more_granular_than_with_string():
+def test_time_unit_is_coarser_than_with_string():
     # Start i at index 1 since ORDERED enum value is not comparable (see test cases below)
     for i in range(1, len(TimeDeltaUnit._member_names_)):
         for j in range(i, len(TimeDeltaUnit._member_names_)):
@@ -272,27 +270,27 @@ def test_time_unit_is_more_granular_than_with_string():
             unit_j = TimeDeltaUnit.from_string(TimeDeltaUnit._member_names_[j])
 
             if i == j:
-                assert not unit_i.is_more_granular_than(TimeDeltaUnit._member_names_[j])
-                assert not unit_j.is_more_granular_than(TimeDeltaUnit._member_names_[i])
+                assert not unit_i.is_coarser_than(TimeDeltaUnit._member_names_[j])
+                assert not unit_j.is_coarser_than(TimeDeltaUnit._member_names_[i])
             else:
-                assert unit_i.is_more_granular_than(TimeDeltaUnit._member_names_[j])
-                assert not unit_j.is_more_granular_than(TimeDeltaUnit._member_names_[i])
+                assert not unit_i.is_coarser_than(TimeDeltaUnit._member_names_[j])
+                assert unit_j.is_coarser_than(TimeDeltaUnit._member_names_[i])
 
 
-def test_time_unit_is_more_granular_than_with_ordered(time_granularity):
+def test_time_unit_is_coarser_than_with_ordered(time_granularity):
     unit = TimeDeltaUnit.from_string(time_granularity)
     with pytest.raises(ValueError):
-        unit.is_more_granular_than(TimeDeltaUnit.ORDERED)
+        unit.is_coarser_than(TimeDeltaUnit.ORDERED)
 
     unit = TimeDeltaUnit.from_string(time_granularity)
     with pytest.raises(ValueError):
-        TimeDeltaUnit.ORDERED.is_more_granular_than(unit)
+        TimeDeltaUnit.ORDERED.is_coarser_than(unit)
 
 
-def test_time_unit_is_more_granular_than_with_ordered_string(time_granularity):
+def test_time_unit_is_coarser_than_with_ordered_string(time_granularity):
     unit = TimeDeltaUnit.from_string(time_granularity)
     with pytest.raises(ValueError):
-        unit.is_more_granular_than('r')
+        unit.is_coarser_than('r')
 
     with pytest.raises(ValueError):
-        TimeDeltaUnit.ORDERED.is_more_granular_than(time_granularity)
+        TimeDeltaUnit.ORDERED.is_coarser_than(time_granularity)

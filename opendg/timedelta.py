@@ -63,8 +63,8 @@ class TimeDeltaDG:
         r"""Whether or not the time granularity is 'ordered', in which case conversions are prohibited."""
         return self.unit == TimeDeltaUnit.ORDERED
 
-    def is_more_granular_than(self, other: Union[str, 'TimeDeltaDG']) -> bool:
-        r"""Return True iff self is strictly more granular than other.
+    def is_coarser_than(self, other: Union[str, 'TimeDeltaDG']) -> bool:
+        r"""Return True iff self is strictly coarser than other.
 
         Args:
             other (Union[str, 'TimeDeltaDG']): The other time delta to compare to.
@@ -78,7 +78,7 @@ class TimeDeltaDG:
         if self.unit == TimeDeltaUnit.ORDERED or other.unit == TimeDeltaUnit.ORDERED:
             raise ValueError('Cannot compare time granularity on TimeDeltaUnit.ORDERED')
 
-        return self.convert(other) < 1
+        return self.convert(other) > 1
 
     def convert(self, time_delta: Union[str, 'TimeDeltaDG']) -> float:
         r"""Convert the current granularity to the specified time_delta (either a unit string or a TimeDeltaDG object).
@@ -139,8 +139,8 @@ class TimeDeltaUnit(str, Enum):
     def __str__(self) -> str:
         return self.value
 
-    def is_more_granular_than(self, other: Union[str, 'TimeDeltaUnit']) -> bool:
-        r"""Return True iff self is strictly more granular than other.
+    def is_coarser_than(self, other: Union[str, 'TimeDeltaUnit']) -> bool:
+        r"""Return True iff self is strictly coarser than other.
 
         Args:
             other (Union[str, 'TimeDeltaUnit']): The other unit to compare to.
@@ -154,7 +154,7 @@ class TimeDeltaUnit(str, Enum):
         other = TimeDeltaUnit.from_string(other)
 
         units = TimeDeltaUnit._member_names_
-        return units.index(self.name) < units.index(other.name)
+        return units.index(self.name) > units.index(other.name)
 
     @classmethod
     def from_string(cls, s: str) -> 'TimeDeltaUnit':
