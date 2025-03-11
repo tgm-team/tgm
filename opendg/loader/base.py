@@ -17,8 +17,8 @@ class DGBaseLoader(ABC):
         ValueError: If the batch_unit is not a valid TimeDeltaUnit type.
         ValueError: If the batch_size is not a positive integer.
         ValueError: If the batch_unit is not TimeDeltaUnit.ORDERED and the graph is TimeDeltaUnit.ORDERED.
-        ValueError: If both the batch_unit and the graph are not TimeDeltaUnit.ORDERED, but the batch iteration
-                    is more granular than the graph TimeDelta. In this case, there is ambiguity in how to yield
+        ValueError: If both the batch_unit and the graph are not TimeDeltaUnit.ORDERED, but the graph TimeDelta
+                    is coarser than the batch TimeDelta. In this case, there is ambiguity in how to yield
                     events due to loss of information.
 
     Note:
@@ -61,10 +61,10 @@ class DGBaseLoader(ABC):
             # Check to ensure the graph time unit is smaller (more granular) than batch time unit.
             # If this is not the case, temporal iteration losses information, so we throw an Exception.
             batch_time_delta = TimeDeltaDG(self._batch_unit, value=self._batch_size)
-            if batch_time_delta.is_more_granular_than(self._dg.time_delta):
+            if self._dg.time_delta.is_coarser_than(batch_time_delta):
                 raise ValueError(
-                    f'Tried to construct a data loader with batch_unit: {batch_unit}, batch_size: {batch_size} '
-                    f'which is strictly more granular than the DGraph time delta: {self._dg.time_delta}. '
+                    f'Tried to construct a data loader on a DGraph with time delta: {self._dg.time_delta} '
+                    f'which is strictly coarser than the batch_unit: {batch_unit}, batch_size: {batch_size}. '
                     'Cannot iterate a non-ordered DGraph with a more granular batch_unit due to loss of informmation. '
                     'Either choose a larger batch size, larger batch unit or consider iterate using ordered batching.'
                 )
