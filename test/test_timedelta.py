@@ -218,9 +218,13 @@ def test_time_delta_is_not_more_granular_than():
 
 def test_time_delta_is_more_granular_try_compare_ordered():
     td1 = TimeDeltaDG('r')
-    td2 = TimeDeltaDG('r')
+    td2 = TimeDeltaDG('s')
+
     with pytest.raises(ValueError):
         td1.is_more_granular_than(td2)
+
+    with pytest.raises(ValueError):
+        td2.is_more_granular_than(td1)
 
     with pytest.raises(ValueError):
         td1.is_more_granular_than('r')
