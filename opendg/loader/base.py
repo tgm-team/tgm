@@ -50,20 +50,16 @@ class DGBaseLoader(ABC):
         if not dg_is_ordered and not batch_unit_is_ordered:
             # Check to ensure the graph time unit is smaller (more granular) than batch time unit.
             # If this is not the case, temporal iteration losses information, so we throw an Exception.
-            # We explicitly re-construct TimeDeltaUnit.from_string() to avoid alphabetic comparison in unit strings.
-            if self._batch_unit.is_more_granular_than(self._dg.time_delta.unit):
+            batch_time_delta = TimeDeltaDG(self._batch_unit, value=self._batch_size)
+            if batch_time_delta.is_more_granular_than(self._dg.time_delta):
                 raise ValueError(
-                    f'Tried to construct a data loader with batch_unit: {batch_unit} '
-                    f'which is strictly more granular than the DGraph time unit: {self._dg.time_delta.unit}. '
+                    f'Tried to construct a data loader with batch_unit: {batch_unit}, batch_size: {batch_size} '
+                    f'which is strictly more granular than the DGraph time delta: {self._dg.time_delta}. '
                     'Cannot iterate a non-ordered DGraph with a more granular batch_unit due to loss of informmation. '
-                    'Either choose a larger batch time unit or iterate using ordered batching.'
+                    'Either choose a larger batch size, larger batch unit or consider iterate using ordered batching.'
                 )
 
-            # This could probably logic that sits in DGraph.temporal_modify
-            conversion_ratio = TimeDeltaDG(self._batch_unit).convert(
-                self._dg.time_delta
-            )
-            self._batch_size = int(self._batch_size * conversion_ratio)
+            self._batch_size = int(batch_time_delta.convert(self._dg.time_delta))
 
         # TODO: Check for time gap?
         self._iterate_by_events = not dg_is_ordered and batch_unit_is_ordered
