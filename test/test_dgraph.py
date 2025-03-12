@@ -1010,10 +1010,39 @@ def test_temporal_coarsening_causes_time_gap():
     pass
 
 
-def test_get_nbrs(events):
+def test_get_nbrs_bad_num_nbrs_arg(events):
     dg = DGraph(events=events)
-    nbrs = dg.get_nbrs(seed_nodes=[1], num_nbrs=[5])
-    print(nbrs)
+    with pytest.raises(ValueError):
+        dg.get_nbrs(seed_nodes=[1], num_nbrs=[])
+
+    with pytest.raises(ValueError):
+        dg.get_nbrs(seed_nodes=[1], num_nbrs=[-1, 1])  # -1 not permissible
+
+    with pytest.raises(ValueError):
+        dg.get_nbrs(seed_nodes=[1], num_nbrs=[0, 1])  # 0 not permissible
+
+    with pytest.raises(ValueError):
+        dg.get_nbrs(seed_nodes=[1], num_nbrs=['foo', 1])  # 'foo' not permissible
+
+
+@pytest.mark.skip('TODO')
+def test_get_nbrs(events):
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_slice_time_then_get_nbrs(events):
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_slice_nodes_then_get_nbrs(events):
+    pass
+
+
+@pytest.mark.skip('Multi-hop not implemented')
+def test_get_nbrs_multi_hop(events):
+    pass
 
 
 def _assert_events_equal(expected_events, actual_events):

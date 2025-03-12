@@ -1,5 +1,4 @@
 import random
-from collections import defaultdict
 from typing import Dict, List, Optional, Set, Union
 
 import torch
@@ -139,30 +138,35 @@ class DGStorageArrayBackend(DGStorageBase):
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
-    ) -> List[Dict[int, List[int]]]:
+    ) -> Dict[int, List[List[int]]]:
         if len(num_nbrs) > 1:
             raise NotImplementedError(
                 f'Multi-hop not impemented for {self.__class__.__name__}'
             )
 
-        # TODO: Support multi-hop
-        nbrs: Dict[int, List[int]] = defaultdict(list)
-        for hop in range(1):
-            for event in self._events:
-                if isinstance(event, EdgeEvent) and self._valid_slice(
-                    event, start_time, end_time, node_slice
-                ):
-                    src, dst = event.edge
-                    if src in seed_nodes:
-                        nbrs[src].append(dst)
-                    elif dst in seed_nodes:
-                        nbrs[dst].append(src)
+        seed_nodes_set = set(seed_nodes)
 
-            # TODO: Take in a sample_func to enable more than uniform sampling
-            for nbr in nbrs:
-                if len(nbrs[nbr]) > num_nbrs[hop]:
-                    nbrs[nbr] = random.sample(nbrs[nbr], k=num_nbrs[hop])
-        return [dict(nbrs)]
+        # TODO: Multi-hop
+        hop = 0
+        nbrs: Dict[int, List[Set[int]]] = {node: [set()] for node in seed_nodes}
+        for event in self._events:
+            if isinstance(event, EdgeEvent) and self._valid_slice(
+                event, start_time, end_time, node_slice
+            ):
+                src, dst = event.edge
+                if src in seed_nodes_set:
+                    nbrs[src][hop].add(dst)
+                if dst in seed_nodes_set:
+                    nbrs[dst][hop].add(src)
+
+        # TODO: Take in a sample_func to enable more than uniform sampling
+        sampled_nbrs: Dict[int, List[List[int]]] = {}
+        for node, nbrs_list in nbrs.items():
+            node_nbrs = list(nbrs_list[hop])
+            if len(node_nbrs) > num_nbrs[hop]:
+                node_nbrs = random.sample(node_nbrs, k=num_nbrs[hop])
+            sampled_nbrs[node] = [node_nbrs]
+        return sampled_nbrs
 
     def get_node_feats(
         self,

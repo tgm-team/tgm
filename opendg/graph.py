@@ -242,7 +242,7 @@ class DGraph:
 
     def get_nbrs(
         self, seed_nodes: List[int], num_nbrs: List[int]
-    ) -> List[Dict[int, List[int]]]:
+    ) -> Dict[int, List[List[int]]]:
         r"""Get neighbourhood information for a set of seed nodes.
 
         Args:
@@ -250,17 +250,14 @@ class DGraph:
             num_nbrs (List[int]): The number of hops to sample, and the number of neighbours to sample at each hop.
 
         Returns:
-            List of dictionaries, where each index i corresponds to the i'th neighbourhood information.
-            The dictionary at each index contains the seed nodes as keys and the sampled neighbourhood as a list of nodes.
+            Dictionary with each seed node as a key, and each value corresponding to a list of lists, where
+            the ith list corresponds to the list of neighbours at the ith hop.
         """
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
 
         if not all([isinstance(x, int) and x > 0 for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
-
-        if len(num_nbrs) > 1:
-            raise NotImplementedError('Multi-hop not implemented')
 
         return self._storage.get_nbrs(
             seed_nodes,

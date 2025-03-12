@@ -769,6 +769,136 @@ def test_temporal_coarsening_empty_graph(DGStorageImpl):
     pass
 
 
+def test_get_nbrs_single_hop(DGStorageImpl):
+    events = [
+        NodeEvent(time=1, node_id=2),
+        EdgeEvent(time=1, edge=(2, 2)),
+        NodeEvent(time=5, node_id=4),
+        EdgeEvent(time=5, edge=(2, 4)),
+        NodeEvent(time=10, node_id=6),
+        EdgeEvent(time=20, edge=(1, 8)),
+    ]
+    storage = DGStorageImpl(events)
+
+    nbrs = storage.get_nbrs(seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[10])
+    exp_nbrs = {
+        1: [[8]],
+        2: [[2, 4]],
+        3: [[]],
+        4: [[2]],
+        5: [[]],
+        6: [[]],
+        7: [[]],
+        8: [[1]],
+    }
+    assert nbrs == exp_nbrs
+
+    nbrs = storage.get_nbrs(
+        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[10], start_time=5
+    )
+    exp_nbrs = {
+        1: [[8]],
+        2: [[4]],
+        3: [[]],
+        4: [[2]],
+        5: [[]],
+        6: [[]],
+        7: [[]],
+        8: [[1]],
+    }
+    assert nbrs == exp_nbrs
+
+    nbrs = storage.get_nbrs(
+        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[10], start_time=5, end_time=10
+    )
+    exp_nbrs = {
+        1: [[]],
+        2: [[4]],
+        3: [[]],
+        4: [[2]],
+        5: [[]],
+        6: [[]],
+        7: [[]],
+        8: [[]],
+    }
+    assert nbrs == exp_nbrs
+
+    nbrs = storage.get_nbrs(
+        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[10], node_slice={1, 2, 3}
+    )
+    exp_nbrs = {
+        1: [[8]],
+        2: [[2, 4]],
+        3: [[]],
+        4: [[2]],
+        5: [[]],
+        6: [[]],
+        7: [[]],
+        8: [[1]],
+    }
+    assert nbrs == exp_nbrs
+
+    nbrs = storage.get_nbrs(
+        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[10], node_slice={2, 3}
+    )
+    exp_nbrs = {
+        1: [[]],
+        2: [[2, 4]],
+        3: [[]],
+        4: [[2]],
+        5: [[]],
+        6: [[]],
+        7: [[]],
+        8: [[]],
+    }
+    assert nbrs == exp_nbrs
+
+    nbrs = storage.get_nbrs(
+        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
+        num_nbrs=[10],
+        node_slice={2, 3},
+        end_time=5,
+    )
+    exp_nbrs = {
+        1: [[]],
+        2: [[2]],
+        3: [[]],
+        4: [[]],
+        5: [[]],
+        6: [[]],
+        7: [[]],
+        8: [[]],
+    }
+    assert nbrs == exp_nbrs
+
+
+@pytest.mark.skip('TODO')
+def test_get_nbrs_single_hop_sampling_required(DGStorageImpl):
+    pass
+
+
+def test_get_nbrs_single_hop_empty_graph(DGStorageImpl, empty_events_list):
+    storage = DGStorageImpl(empty_events_list)
+
+    assert storage.get_nbrs(seed_nodes=[], num_nbrs=[1]) == {}
+    assert storage.get_nbrs(seed_nodes=[0, 1], num_nbrs=[1]) == {0: [[]], 1: [[]]}
+    assert storage.get_nbrs(seed_nodes=[0], num_nbrs=[1], start_time=5) == {0: [[]]}
+    assert storage.get_nbrs(
+        seed_nodes=[0], num_nbrs=[1], start_time=5, end_time=10
+    ) == {0: [[]]}
+    assert storage.get_nbrs(seed_nodes=[0], num_nbrs=[1], node_slice={1, 2, 3}) == {
+        0: [[]]
+    }
+    assert storage.get_nbrs(
+        seed_nodes=[0], num_nbrs=[1], start_time=5, end_time=10, node_slice={1, 2, 3}
+    ) == {0: [[]]}
+
+
+@pytest.mark.skip(reason='Multi-hop get_nbrs not implemented')
+def test_get_nbrs_multiple_hops(DGStorageImpl):
+    pass
+
+
 def test_get_dg_storage_backend():
     assert get_dg_storage_backend() == DGStorageArrayBackend
 

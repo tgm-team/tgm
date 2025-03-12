@@ -77,7 +77,7 @@ class DGStorageBase(ABC):
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
-    ) -> List[Dict[int, List[int]]]:
+    ) -> Dict[int, List[List[int]]]:
         pass
 
     @abstractmethod
