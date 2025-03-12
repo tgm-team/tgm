@@ -1,3 +1,4 @@
+import random
 from collections import defaultdict
 from typing import Dict, List, Optional, Set, Union
 
@@ -144,18 +145,23 @@ class DGStorageArrayBackend(DGStorageBase):
                 f'Multi-hop not impemented for {self.__class__.__name__}'
             )
 
-        # This is 1-hop
+        # TODO: Support multi-hop
         nbrs: Dict[int, List[int]] = defaultdict(list)
-        for event in self._events:
-            if isinstance(event, EdgeEvent) and self._valid_slice(
-                event, start_time, end_time, node_slice
-            ):
-                src, dst = event.edge
-                if src in seed_nodes:
-                    nbrs[src].append(dst)
-                elif dst in seed_nodes:
-                    nbrs[dst].append(src)
+        for hop in range(1):
+            for event in self._events:
+                if isinstance(event, EdgeEvent) and self._valid_slice(
+                    event, start_time, end_time, node_slice
+                ):
+                    src, dst = event.edge
+                    if src in seed_nodes:
+                        nbrs[src].append(dst)
+                    elif dst in seed_nodes:
+                        nbrs[dst].append(src)
 
+            # TODO: Take in a sample_func to enable more than uniform sampling
+            for nbr in nbrs:
+                if len(nbrs[nbr]) > num_nbrs[hop]:
+                    nbrs[nbr] = random.sample(nbrs[nbr], k=num_nbrs[hop])
         return [dict(nbrs)]
 
     def get_node_feats(
