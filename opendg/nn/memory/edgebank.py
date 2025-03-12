@@ -33,9 +33,12 @@ class EdgeBankPredictor:
                 f'Invalid time window ratio for EdgeBank, must be in (0,1]'
             )
 
+        self._check_input_data(src, dst, ts)
+
         self.memory_mode = memory_mode
 
         self.cur_t = ts.max()
+        self._time_window_ratio = time_window_ratio
 
         if self.memory_mode == 'fixed_time_window':
             # determine the time window size based on ratio from the given src, dst, and ts for initialization
@@ -60,13 +63,7 @@ class EdgeBankPredictor:
             dst(np.ndarray): destination node id of the edges.
             ts(np.ndarray): timestamp of the edges.
         """
-        if not (len(src) == len(dst) == len(ts)):
-            raise ValueError(
-                f'src, dst, and ts must have the same length, got {len(src)}, {len(dst)}, {len(ts)}'
-            )
-
-        if len(src) == 0:
-            raise ValueError('src, dst, and ts must have at least one element')
+        self._check_input_data(src, dst, ts)
 
         if self.memory_mode == 'unlimited':
             self._update_unlimited_memory(src, dst)  # ignores time
@@ -92,6 +89,30 @@ class EdgeBankPredictor:
             int: end of time window.
         """
         return self.cur_t
+
+    @property
+    def time_window_ratio(self) -> float:
+        r"""The ratio of the time window length to the total time length.
+
+        Returns:
+            float: the ratio of the time window length to the total time length.
+        """
+        return self._time_window_ratio
+
+    def _check_input_data(
+        self, src: np.ndarray, dst: np.ndarray, ts: np.ndarray
+    ) -> None:
+        if not (type(src) == type(dst) == type(ts) == np.ndarray):
+            raise TypeError(
+                f'src, dst, and ts must be numpy, got {type(src)}, {type(dst)}, {type(ts)}'
+            )
+
+        if not (len(src) == len(dst) == len(ts)):
+            raise ValueError(
+                f'src, dst, and ts must have the same length, got {len(src)}, {len(dst)}, {len(ts)}'
+            )
+        if len(src) == 0:
+            raise ValueError('src, dst, and ts must have at least one element')
 
     def _update_unlimited_memory(
         self, update_src: np.ndarray, update_dst: np.ndarray
