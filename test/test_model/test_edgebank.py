@@ -19,14 +19,12 @@ def test_no_loader_unlimited_memory():
     ts = np.asarray(edge_index[:, 2])
 
     MEMORY_MODE = 'unlimited'
-    TIME_WINDOW_RATIO = 0.15
 
     edgebank = EdgeBankPredictor(
         srcs,
         dsts,
         ts,
         memory_mode=MEMORY_MODE,
-        time_window_ratio=TIME_WINDOW_RATIO,
     )
 
     pred = edgebank.predict_link(np.asarray([1]), np.asarray([1]))

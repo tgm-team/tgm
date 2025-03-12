@@ -1,3 +1,5 @@
+from typing import Literal
+
 import numpy as np
 
 
@@ -7,7 +9,9 @@ class EdgeBankPredictor:
         src: np.ndarray,
         dst: np.ndarray,
         ts: np.ndarray,
-        memory_mode: str = 'unlimited',  # could be `unlimited` or `fixed_time_window`
+        memory_mode: Literal[
+            'unlimited', 'fixed_time_window'
+        ] = 'unlimited',  # could be `unlimited` or `fixed_time_window`
         time_window_ratio: float = 0.15,
         pos_prob: float = 1.0,
     ) -> None:
@@ -56,6 +60,14 @@ class EdgeBankPredictor:
             dst(np.ndarray): destination node id of the edges.
             ts(np.ndarray): timestamp of the edges.
         """
+        if not (len(src) == len(dst) == len(ts)):
+            raise ValueError(
+                f'src, dst, and ts must have the same length, got {len(src)}, {len(dst)}, {len(ts)}'
+            )
+
+        if len(src) == 0:
+            raise ValueError('src, dst, and ts must have at least one element')
+
         if self.memory_mode == 'unlimited':
             self._update_unlimited_memory(src, dst)  # ignores time
         elif self.memory_mode == 'fixed_time_window':
