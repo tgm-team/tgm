@@ -240,6 +240,17 @@ class DGraph:
         """
         raise NotImplementedError
 
+    def get_nbrs(self, seed_nodes: List[int]) -> Dict[int, List[int]]:
+        r"""Get the 1-hop neighbourhood information on the graph.
+
+        Args:
+            seed_nodes (List[int]): The nodes to get neighbourhood information for.
+
+        Returns:
+            Dictionary with key corresponding to a seed node, and value corresponding to its list of neighbours.
+        """
+        raise NotImplementedError
+
     def __len__(self) -> int:
         r"""Returns the number of temporal length of the dynamic graph."""
         return self.num_timestamps
