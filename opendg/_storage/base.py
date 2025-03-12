@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Set, Union
+from typing import Dict, List, Optional, Set, Union
 
 import torch
 from torch import Tensor
@@ -67,6 +67,17 @@ class DGStorageBase(ABC):
     def temporal_coarsening(
         self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
+        pass
+
+    @abstractmethod
+    def get_nbrs(
+        self,
+        seed_nodes: List[int],
+        num_nbrs: List[int],
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        node_slice: Optional[Set[int]] = None,
+    ) -> List[Dict[int, List[int]]]:
         pass
 
     @abstractmethod

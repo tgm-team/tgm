@@ -1,4 +1,5 @@
-from typing import List, Optional, Set, Union
+from collections import defaultdict
+from typing import Dict, List, Optional, Set, Union
 
 import torch
 from torch import Tensor
@@ -129,6 +130,33 @@ class DGStorageArrayBackend(DGStorageBase):
         self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
         raise NotImplementedError('Temporal Coarsening is not implemented')
+
+    def get_nbrs(
+        self,
+        seed_nodes: List[int],
+        num_nbrs: List[int],
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        node_slice: Optional[Set[int]] = None,
+    ) -> List[Dict[int, List[int]]]:
+        if len(num_nbrs) > 1:
+            raise NotImplementedError(
+                f'Multi-hop not impemented for {self.__class__.__name__}'
+            )
+
+        # This is 1-hop
+        nbrs: Dict[int, List[int]] = defaultdict(list)
+        for event in self._events:
+            if isinstance(event, EdgeEvent) and self._valid_slice(
+                event, start_time, end_time, node_slice
+            ):
+                src, dst = event.edge
+                if src in seed_nodes:
+                    nbrs[src].append(dst)
+                elif dst in seed_nodes:
+                    nbrs[dst].append(src)
+
+        return [dict(nbrs)]
 
     def get_node_feats(
         self,

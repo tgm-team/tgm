@@ -1010,6 +1010,12 @@ def test_temporal_coarsening_causes_time_gap():
     pass
 
 
+def test_get_nbrs(events):
+    dg = DGraph(events=events)
+    nbrs = dg.get_nbrs(seed_nodes=[1], num_nbrs=[5])
+    print(nbrs)
+
+
 def _assert_events_equal(expected_events, actual_events):
     assert len(expected_events) == len(actual_events)
     for i in range(len(expected_events)):
