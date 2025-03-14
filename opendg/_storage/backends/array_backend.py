@@ -163,7 +163,7 @@ class DGStorageArrayBackend(DGStorageBase):
         sampled_nbrs: Dict[int, List[List[int]]] = {}
         for node, nbrs_list in nbrs.items():
             node_nbrs = list(nbrs_list[hop])
-            if len(node_nbrs) > num_nbrs[hop]:
+            if num_nbrs[hop] != -1 and len(node_nbrs) > num_nbrs[hop]:
                 node_nbrs = random.sample(node_nbrs, k=num_nbrs[hop])
             sampled_nbrs[node] = [node_nbrs]
         return sampled_nbrs
