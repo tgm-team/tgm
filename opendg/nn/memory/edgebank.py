@@ -26,7 +26,7 @@ class EdgeBankPredictor:
             pos_prob(float): the probability of the link existence for the edges in memory.
         """
         if memory_mode not in ['unlimited', 'fixed_time_window']:
-            raise ValueError(f'Invalid memory mode for EdgeBank, expected one of {...}')
+            raise ValueError(f'Invalid memory mode for EdgeBank, expected one of ["unlimited", "fixed"]')
 
         if (time_window_ratio <= 0.0) or (time_window_ratio > 1.0):
             raise ValueError(
