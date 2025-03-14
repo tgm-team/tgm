@@ -1,4 +1,3 @@
-import copy
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
@@ -135,8 +134,8 @@ class DGraph:
         new_start_time, new_end_time = self._check_slice_time_args(start_time, end_time)
         new_end_time -= 1  # Because slicing is end range exclusive
 
-        dg = copy.copy(self)
-        dg._cache = copy.deepcopy(self._cache)  # Deep copy cache to avoid dict alias
+        dg = DGraph(time_delta=self.time_delta, _storage=self._storage)
+        dg._cache = dict(self._cache)  # Deep copy cache to avoid dict alias
 
         if self.start_time is not None and self.start_time > new_start_time:
             new_start_time = self.start_time
@@ -168,9 +167,7 @@ class DGraph:
         Returns:
             DGraph copy of events related to the input nodes.
         """
-        dg = copy.copy(self)
-        dg._cache = copy.deepcopy(self._cache)  # Deep copy cache to avoid dict alias
-        dg._cache.clear()
+        dg = DGraph(time_delta=self.time_delta, _storage=self._storage)
 
         if self._cache.get('node_slice') is None:
             self._cache['node_slice'] = set(range(self.num_nodes))
