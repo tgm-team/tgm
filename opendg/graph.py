@@ -240,33 +240,6 @@ class DGraph:
         """
         raise NotImplementedError
 
-    def get_nbrs(
-        self, seed_nodes: List[int], num_nbrs: List[int]
-    ) -> Dict[int, List[List[int]]]:
-        r"""Get neighbourhood information for a set of seed nodes.
-
-        Args:
-            seed_nodes (List[int]): The nodes to get neighbourhood information for.
-            num_nbrs (List[int]): The number of hops to sample, and the number of neighbours to sample at each hop.
-
-        Returns:
-            Dictionary with each seed node as a key, and each value corresponding to a list of lists, where
-            the ith list corresponds to the list of neighbours at the ith hop.
-        """
-        if not len(num_nbrs):
-            raise ValueError('num_nbrs must be non-empty')
-
-        if not all([isinstance(x, int) and x > 0 for x in num_nbrs]):
-            raise ValueError('Each value in num_nbrs must be a positive integer')
-
-        return self._storage.get_nbrs(
-            seed_nodes,
-            num_nbrs,
-            self._cache.get('start_time'),
-            self._cache.get('end_time'),
-            self._cache.get('node_slice'),
-        )
-
     def __len__(self) -> int:
         r"""Returns the number of temporal length of the dynamic graph."""
         return self.num_timestamps
