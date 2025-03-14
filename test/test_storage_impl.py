@@ -786,76 +786,91 @@ def test_get_nbrs_single_hop(DGStorageImpl):
 
     nbrs = storage.get_nbrs(seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[-1])
     exp_nbrs = {
-        1: [[8]],
-        2: [[2, 4]],
+        1: [[(8, 20)]],
+        2: [[(2, 1), (4, 5)]],
         3: [[]],
-        4: [[2]],
+        4: [[(2, 5)]],
         5: [[]],
         6: [[]],
         7: [[]],
-        8: [[1]],
+        8: [[(1, 20)]],
     }
-    assert nbrs == exp_nbrs
+    assert nbrs.keys() == exp_nbrs.keys()
+    for k, v in nbrs.items():
+        for hop_num, nbrs in enumerate(v):
+            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
     nbrs = storage.get_nbrs(
         seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[-1], start_time=5
     )
     exp_nbrs = {
-        1: [[8]],
-        2: [[4]],
+        1: [[(8, 20)]],
+        2: [[(4, 5)]],
         3: [[]],
-        4: [[2]],
+        4: [[(2, 5)]],
         5: [[]],
         6: [[]],
         7: [[]],
-        8: [[1]],
+        8: [[(1, 20)]],
     }
-    assert nbrs == exp_nbrs
+    assert nbrs.keys() == exp_nbrs.keys()
+    for k, v in nbrs.items():
+        for hop_num, nbrs in enumerate(v):
+            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
     nbrs = storage.get_nbrs(
         seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[-1], start_time=5, end_time=10
     )
     exp_nbrs = {
         1: [[]],
-        2: [[4]],
+        2: [[(4, 5)]],
         3: [[]],
-        4: [[2]],
+        4: [[(2, 5)]],
         5: [[]],
         6: [[]],
         7: [[]],
         8: [[]],
     }
-    assert nbrs == exp_nbrs
+    assert nbrs.keys() == exp_nbrs.keys()
+    for k, v in nbrs.items():
+        for hop_num, nbrs in enumerate(v):
+            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
     nbrs = storage.get_nbrs(
         seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[-1], node_slice={1, 2, 3}
     )
     exp_nbrs = {
-        1: [[8]],
-        2: [[2, 4]],
+        1: [[(8, 20)]],
+        2: [[(2, 1), (4, 5)]],
         3: [[]],
-        4: [[2]],
+        4: [[(2, 5)]],
         5: [[]],
         6: [[]],
         7: [[]],
-        8: [[1]],
+        8: [[(1, 20)]],
     }
-    assert nbrs == exp_nbrs
+    assert nbrs.keys() == exp_nbrs.keys()
+    for k, v in nbrs.items():
+        for hop_num, nbrs in enumerate(v):
+            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
     nbrs = storage.get_nbrs(
         seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[-1], node_slice={2, 3}
     )
     exp_nbrs = {
         1: [[]],
-        2: [[2, 4]],
+        2: [[(2, 1), (4, 5)]],
         3: [[]],
-        4: [[2]],
+        4: [[(2, 5)]],
         5: [[]],
         6: [[]],
         7: [[]],
         8: [[]],
     }
-    assert nbrs == exp_nbrs
+    assert nbrs.keys() == exp_nbrs.keys()
+    for k, v in nbrs.items():
+        for hop_num, nbrs in enumerate(v):
+            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
     nbrs = storage.get_nbrs(
         seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
@@ -865,7 +880,7 @@ def test_get_nbrs_single_hop(DGStorageImpl):
     )
     exp_nbrs = {
         1: [[]],
-        2: [[2]],
+        2: [[(2, 1)]],
         3: [[]],
         4: [[]],
         5: [[]],
@@ -873,7 +888,10 @@ def test_get_nbrs_single_hop(DGStorageImpl):
         7: [[]],
         8: [[]],
     }
-    assert nbrs == exp_nbrs
+    assert nbrs.keys() == exp_nbrs.keys()
+    for k, v in nbrs.items():
+        for hop_num, nbrs in enumerate(v):
+            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
 
 def test_get_nbrs_single_hop_sampling_required(DGStorageImpl):
@@ -886,15 +904,23 @@ def test_get_nbrs_single_hop_sampling_required(DGStorageImpl):
 
     nbrs = storage.get_nbrs(seed_nodes=[2], num_nbrs=[1])
     exp_nbrs = {
-        2: [[4]],
+        2: [[(2, 1)]],
     }
-    assert nbrs == exp_nbrs
+    # TODO: Either return a set or make this easier to check
+    assert nbrs.keys() == exp_nbrs.keys()
+    for k, v in nbrs.items():
+        for hop_num, nbrs in enumerate(v):
+            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
     nbrs = storage.get_nbrs(seed_nodes=[2], num_nbrs=[1], end_time=5)
     exp_nbrs = {
-        2: [[2]],
+        2: [[(2, 1)]],
     }
-    assert nbrs == exp_nbrs
+    # TODO: Either return a set or make this easier to check
+    assert nbrs.keys() == exp_nbrs.keys()
+    for k, v in nbrs.items():
+        for hop_num, nbrs in enumerate(v):
+            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
 
 def test_get_nbrs_single_hop_duplicate_edges_at_different_time(DGStorageImpl):
@@ -910,15 +936,19 @@ def test_get_nbrs_single_hop_duplicate_edges_at_different_time(DGStorageImpl):
 
     nbrs = storage.get_nbrs(seed_nodes=[2], num_nbrs=[-1])
     exp_nbrs = {
-        2: [[2, 4]],
+        2: [[(2, 1), (4, 5), (2, 100), (4, 500)]],
     }
-    assert nbrs == exp_nbrs
+    # TODO: Either return a set or make this easier to check
+    assert nbrs.keys() == exp_nbrs.keys()
+    for k, v in nbrs.items():
+        for hop_num, nbrs in enumerate(v):
+            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
 
 def test_get_nbrs_single_hop_empty_graph(DGStorageImpl, empty_events_list):
     storage = DGStorageImpl(empty_events_list)
 
-    assert storage.get_nbrs(seed_nodes=[], num_nbrs=[1]) == {}
+    assert storage.get_nbrs(seed_nodes=[], num_nbrs=[-1]) == {}
     assert storage.get_nbrs(seed_nodes=[0, 1], num_nbrs=[1]) == {0: [[]], 1: [[]]}
     assert storage.get_nbrs(seed_nodes=[0], num_nbrs=[1], start_time=5) == {0: [[]]}
     assert storage.get_nbrs(

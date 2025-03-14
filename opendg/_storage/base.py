@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -77,7 +77,7 @@ class DGStorageBase(ABC):
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
-    ) -> Dict[int, List[List[int]]]:
+    ) -> Dict[int, List[List[Tuple[int, int]]]]:
         pass
 
     @abstractmethod
