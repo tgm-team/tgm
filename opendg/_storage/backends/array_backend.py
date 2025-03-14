@@ -1,4 +1,5 @@
-from typing import List, Optional, Set, Union
+import random
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -129,6 +130,45 @@ class DGStorageArrayBackend(DGStorageBase):
         self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
     ) -> 'DGStorageBase':
         raise NotImplementedError('Temporal Coarsening is not implemented')
+
+    def get_nbrs(
+        self,
+        seed_nodes: List[int],
+        num_nbrs: List[int],
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        node_slice: Optional[Set[int]] = None,
+    ) -> Dict[int, List[List[Tuple[int, int]]]]:
+        if len(num_nbrs) > 1:
+            raise NotImplementedError(
+                f'Multi-hop not impemented for {self.__class__.__name__}'
+            )
+
+        seed_nodes_set = set(seed_nodes)
+
+        # TODO: Multi-hop
+        hop = 0
+        nbrs: Dict[int, List[Set[Tuple[int, int]]]] = {
+            node: [set()] for node in seed_nodes
+        }
+        for event in self._events:
+            if isinstance(event, EdgeEvent) and self._valid_slice(
+                event, start_time, end_time, node_slice
+            ):
+                src, dst, t = *event.edge, event.time
+                if src in seed_nodes_set:
+                    nbrs[src][hop].add((dst, t))
+                if dst in seed_nodes_set:
+                    nbrs[dst][hop].add((src, t))
+
+        # TODO: Take in a sample_func to enable more than uniform sampling
+        sampled_nbrs: Dict[int, List[List[Tuple[int, int]]]] = {}
+        for node, nbrs_list in nbrs.items():
+            node_nbrs = list(nbrs_list[hop])
+            if num_nbrs[hop] != -1 and len(node_nbrs) > num_nbrs[hop]:
+                node_nbrs = random.sample(node_nbrs, k=num_nbrs[hop])
+            sampled_nbrs[node] = [node_nbrs]
+        return sampled_nbrs
 
     def get_node_feats(
         self,
