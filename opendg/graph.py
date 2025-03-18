@@ -6,7 +6,7 @@ from torch import Tensor
 from opendg._io import read_csv, read_pandas, write_csv
 from opendg._storage import DGStorage, DGStorageBase
 from opendg.events import Event
-from opendg.timedelta import TimeDeltaDG, TimeDeltaUnit
+from opendg.timedelta import TimeDeltaDG
 
 
 class DGraph:
@@ -374,7 +374,7 @@ class DGraph:
         self, time_delta: Optional[TimeDeltaDG]
     ) -> 'TimeDeltaDG':
         if time_delta is None:
-            return TimeDeltaDG(TimeDeltaUnit.ORDERED)  # Default to ordered granularity
+            return TimeDeltaDG(unit='r')  # Default to ordered granularity
         if not isinstance(time_delta, TimeDeltaDG):
             raise ValueError(
                 f'Expected time_delta to be of type TimeDeltaDG, but got: {type(time_delta)}'
