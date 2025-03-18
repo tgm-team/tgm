@@ -1,5 +1,3 @@
-import tempfile
-
 import pytest
 import torch
 
@@ -21,10 +19,10 @@ def events():
 
 
 @pytest.mark.parametrize(
-    'time_delta', [TimeDeltaDG('Y'), TimeDeltaDG('s'), TimeDeltaDG('r'), None]
+    'time_delta', [TimeDeltaDG('Y'), TimeDeltaDG('s'), TimeDeltaDG('r')]
 )
 def test_init_empty(time_delta):
-    dg = DGraph(time_delta=time_delta)
+    dg = DGraph(data=[], time_delta=time_delta)
     if time_delta is None:
         assert dg.time_delta.is_ordered
     else:
@@ -41,7 +39,7 @@ def test_init_empty(time_delta):
 
 
 def test_init_from_events(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     assert dg.time_delta.is_ordered
 
@@ -66,16 +64,9 @@ def test_init_from_events(events):
 
 
 def test_init_from_storage(events):
-    dg_tmp = DGraph(events=events)
-    dg = DGraph(_storage=dg_tmp._storage)
+    dg_tmp = DGraph(events)
+    dg = DGraph(dg_tmp._storage)
     assert id(dg_tmp._storage) == id(dg._storage)
-
-
-def test_init_bad_constructor_args(events):
-    dg_tmp = DGraph(events=events)
-
-    with pytest.raises(ValueError):
-        DGraph(events=events, _storage=dg_tmp._storage)
 
 
 def test_to_events():
@@ -84,7 +75,7 @@ def test_to_events():
         EdgeEvent(t=5, src=2, dst=4),
         EdgeEvent(t=20, src=1, dst=8),
     ]
-    dg = DGraph(events=events)
+    dg = DGraph(events)
     assert dg.to_events() == events
 
 
@@ -98,7 +89,7 @@ def test_to_events_with_node_events():
         NodeEvent(t=10, src=6),
         EdgeEvent(t=20, src=1, dst=8),
     ]
-    dg = DGraph(events=events)
+    dg = DGraph(events)
     assert dg.to_events() == events
 
 
@@ -108,7 +99,7 @@ def test_to_events_with_cache():
         EdgeEvent(t=5, src=2, dst=4),
         EdgeEvent(t=20, src=1, dst=8),
     ]
-    dg = DGraph(events=events)
+    dg = DGraph(events)
     dg._cache['start_time'] = 5
     assert dg.to_events() == events[1:]
 
@@ -123,110 +114,12 @@ def test_to_events_with_features():
         EdgeEvent(t=5, src=2, dst=2, msg=torch.rand(2)),
         EdgeEvent(t=20, src=1, dst=8, msg=torch.rand(2)),
     ]
-    dg = DGraph(events=events)
+    dg = DGraph(events)
     _assert_events_equal(dg.to_events(), events)
 
 
-def test_to_csv():
-    events = [
-        EdgeEvent(t=1, src=2, dst=2),
-        EdgeEvent(t=5, src=2, dst=4),
-        EdgeEvent(t=20, src=1, dst=8),
-    ]
-    dg = DGraph(events=events)
-
-    col_names = {'src_col': 'src_id', 'dst_col': 'dst_id', 'time_col': 'time'}
-    with tempfile.NamedTemporaryFile() as f:
-        dg.to_csv(f.name, **col_names)
-        dg_recovered = dg.from_csv(f.name, **col_names)
-    assert dg.to_events() == dg_recovered.to_events()
-
-
-@pytest.mark.skip('Node feature IO not implemented')
-def test_to_csv_with_node_events():
-    events = [
-        NodeEvent(t=1, src=2),
-        EdgeEvent(t=1, src=2, dst=2),
-        NodeEvent(t=5, src=4),
-        EdgeEvent(t=5, src=2, dst=4),
-        NodeEvent(t=10, src=6),
-        EdgeEvent(t=20, src=1, dst=8),
-    ]
-    dg = DGraph(events=events)
-
-    col_names = {'src_col': 'src_id', 'dst_col': 'dst_id', 'time_col': 'time'}
-    with tempfile.NamedTemporaryFile() as f:
-        dg.to_csv(f.name, **col_names)
-        dg_recovered = dg.from_csv(f.name, **col_names)
-    assert dg.to_events() == dg_recovered.to_events()
-
-
-def test_to_csv_with_cache():
-    events = [
-        EdgeEvent(t=1, src=2, dst=2),
-        EdgeEvent(t=5, src=2, dst=4),
-        EdgeEvent(t=20, src=1, dst=8),
-    ]
-    dg = DGraph(events=events)
-    dg._cache['start_time'] = 5
-
-    col_names = {'src_col': 'src_id', 'dst_col': 'dst_id', 'time_col': 'time'}
-    with tempfile.NamedTemporaryFile() as f:
-        dg.to_csv(f.name, **col_names)
-        dg_recovered = dg.from_csv(f.name, **col_names)
-    assert dg_recovered.to_events() == events[1:]
-
-    dg._cache.clear()
-    dg._cache['node_slice'] = set([2])
-
-    col_names = {'src_col': 'src_id', 'dst_col': 'dst_id', 'time_col': 'time'}
-    with tempfile.NamedTemporaryFile() as f:
-        dg.to_csv(f.name, **col_names)
-        dg_recovered = dg.from_csv(f.name, **col_names)
-    assert dg_recovered.to_events() == events[:2]
-
-
-def test_to_csv_with_features():
-    events = [
-        EdgeEvent(t=1, src=2, dst=2, msg=torch.rand(2)),
-        EdgeEvent(t=5, src=2, dst=4, msg=torch.rand(2)),
-        EdgeEvent(t=20, src=1, dst=8, msg=torch.rand(2)),
-    ]
-    dg = DGraph(events=events)
-    col_names = {
-        'src_col': 'src_id',
-        'dst_col': 'dst_id',
-        'time_col': 'time',
-        'edge_feature_col': ['foo', 'bar'],
-    }
-
-    with tempfile.NamedTemporaryFile() as f:
-        dg.to_csv(f.name, **col_names)
-        dg_recovered = dg.from_csv(f.name, **col_names)
-    _assert_events_equal(dg_recovered.to_events(), events)
-
-
-def test_to_csv_with_multi_dim_features():
-    events = [
-        EdgeEvent(t=1, src=2, dst=2, msg=torch.rand(2, 5)),
-        EdgeEvent(t=5, src=2, dst=4, msg=torch.rand(2, 5)),
-        EdgeEvent(t=20, src=1, dst=8, msg=torch.rand(2, 5)),
-    ]
-    dg = DGraph(events=events)
-    col_names = {
-        'src_col': 'src_id',
-        'dst_col': 'dst_id',
-        'time_col': 'time',
-        'edge_feature_col': ['foo', 'bar'],
-    }
-
-    with tempfile.NamedTemporaryFile() as f:
-        with pytest.raises(ValueError):
-            dg.to_csv(f.name, **col_names)
-
-
 def test_slice_time_full_graph(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     dg1 = dg.slice_time(1, 21)
     assert id(dg1._storage) == id(dg._storage)
@@ -252,7 +145,7 @@ def test_slice_time_full_graph(events):
 
 
 def test_slice_time_no_time_bounds(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     dg1 = dg.slice_time()
     assert id(dg1._storage) == id(dg._storage)
@@ -278,7 +171,7 @@ def test_slice_time_no_time_bounds(events):
 
 
 def test_slice_time_no_upper_bound(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     dg1 = dg.slice_time(5)
     assert id(dg1._storage) == id(dg._storage)
@@ -302,7 +195,7 @@ def test_slice_time_no_upper_bound(events):
 
 
 def test_slice_time_no_lower_bound(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     dg1 = dg.slice_time(end_time=5)
     assert id(dg1._storage) == id(dg._storage)
@@ -324,7 +217,7 @@ def test_slice_time_no_lower_bound(events):
 
 
 def test_slice_time_no_cache_refresh(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     dg1 = dg.slice_time(0, 100)
     assert id(dg1._storage) == id(dg._storage)
@@ -350,7 +243,7 @@ def test_slice_time_no_cache_refresh(events):
 
 
 def test_slice_time_at_end_time(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     dg1 = dg.slice_time(1, 20)
     assert id(dg1._storage) == id(dg._storage)
@@ -395,7 +288,7 @@ def test_slice_time_at_end_time(events):
 
 
 def test_slice_time_to_empty(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
     original_node_feats[1, 2] = events[0].msg
@@ -521,13 +414,13 @@ def test_slice_time_to_empty(events):
 
 
 def test_slice_time_bad_args():
-    dg = DGraph()
+    dg = DGraph(data=[])
     with pytest.raises(ValueError):
         dg.slice_time(2, 1)
 
 
 def test_slice_nodes_full_graph(events):
-    dg1 = DGraph(events=events)
+    dg1 = DGraph(events)
 
     dg = dg1.slice_nodes({1, 2, 3, 4, 6, 8})  # Extra node (3) should just be ignored
     assert id(dg._storage) == id(dg1._storage)
@@ -553,7 +446,7 @@ def test_slice_nodes_full_graph(events):
 
 
 def test_slice_nodes_to_empty(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
     original_node_feats[1, 2] = events[0].msg
@@ -683,7 +576,7 @@ def test_slice_nodes_to_empty(events):
 
 
 def test_interleave_slice_time_slice_nodes(events):
-    dg = DGraph(events=events)
+    dg = DGraph(events)
 
     original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
     original_node_feats[1, 2] = events[0].msg

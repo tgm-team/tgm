@@ -1,106 +1,35 @@
+import pathlib
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 from torch import Tensor
 
-from opendg._io import read_csv, read_pandas, write_csv
-from opendg._storage import DGStorage, DGStorageBase
+from opendg._io import read_events
+from opendg._storage import DGStorage
 from opendg.events import Event
 from opendg.timedelta import TimeDeltaDG
 
 
 class DGraph:
-    r"""The Dynamic Graph Object. Provides a 'view' over an internal DGStorage backend.
-
-    Args:
-        events (List[event]): The list of temporal events (node/edge events) that define the dynamic graph.
-        time_delta (Optional[TimeDeltaDG]): Describes the time granularity associated with the event stream.
-            If None, then the events are assumed 'ordered', with no specific time unit.
-    """
+    r"""Dynamic Graph Object provides a 'view' over a DGStorage backend."""
 
     def __init__(
         self,
-        events: Optional[List[Event]] = None,
-        time_delta: Optional[TimeDeltaDG] = None,
-        _storage: Optional[DGStorageBase] = None,
+        data: DGStorage | List[Event] | str | pathlib.Path | pd.DataFrame,
+        time_delta: TimeDeltaDG = TimeDeltaDG(unit='r'),
+        **kwargs: Any,
     ) -> None:
-        self._storage = self._check_storage_args(events, _storage)
-        self._time_delta = self._check_time_delta_args(time_delta)
+        if isinstance(data, DGStorage):
+            self._storage = data
+        else:
+            events = data if isinstance(data, list) else read_events(data, **kwargs)
+            self._storage = DGStorage(events)
+
+        if not isinstance(time_delta, TimeDeltaDG):
+            raise ValueError(f'bad time_delta type: {type(time_delta)}')
+        self.time_delta = time_delta
+
         self._cache: Dict[str, Any] = {}
-
-    @classmethod
-    def from_csv(
-        cls,
-        file_path: str,
-        src_col: str,
-        dst_col: str,
-        time_col: str,
-        edge_feature_col: Optional[List[str]] = None,
-        time_delta: Optional[TimeDeltaDG] = None,
-    ) -> 'DGraph':
-        r"""Load a Dynamic Graph from a csv_file.
-
-        Args:
-            file_path (str): The os.pathlike object to read from.
-            src_col (str): Column in the csv corresponding to the source edge id.
-            dst_col (str): Column in the csv corresponding to the destination edge id.
-            time_col (str): Column in the csv corresponding to the timestamp.
-            edge_feature_col (Optional[List[str]]): Column list in the csv corresponding to the edge features.
-            time_delta (Optional[TimeDeltaDG]): Describes the time granularity associated with the event stream.
-                If None, then the events are assumed 'ordered', with no specific time unit.
-
-        Returns:
-           DGraph: The newly constructed dynamic graph.
-        """
-        events = read_csv(file_path, src_col, dst_col, time_col, edge_feature_col)
-        return cls(events, time_delta)
-
-    @classmethod
-    def from_pandas(
-        cls,
-        df: pd.DataFrame,
-        src_col: str,
-        dst_col: str,
-        time_col: str,
-        edge_feature_col: Optional[str] = None,
-        time_delta: Optional[TimeDeltaDG] = None,
-    ) -> 'DGraph':
-        r"""Load a Dynamic Graph from a Pandas DataFrame.
-
-        Args:
-            df (pd.DataFrame): The dataframe to read from.
-            src_col (str): Column in the dataframe corresponding to the source edge id.
-            dst_col (str): Column in the dataframe corresponding to the destination edge id.
-            time_col (str): Column in the dataframe corresponding to the timestamp.
-            edge_feature_col (Optional[str]): Optional column in the dataframe corresponding to the edge features.
-            time_delta (Optional[TimeDeltaDG]): Describes the time granularity associated with the event stream.
-                If None, then the events are assumed 'ordered', with no specific time unit.
-
-        Returns:
-           DGraph: The newly constructed dynamic graph.
-        """
-        events = read_pandas(df, src_col, dst_col, time_col, edge_feature_col)
-        return cls(events, time_delta)
-
-    def to_csv(
-        self,
-        file_path: str,
-        src_col: str,
-        dst_col: str,
-        time_col: str,
-        edge_feature_col: Optional[List[str]] = None,
-    ) -> None:
-        r"""Write a Dynamic Graph to a csv_file.
-
-        Args:
-            file_path (str): The os.pathlike object to write to.
-            src_col (str): Column in the dataframe corresponding to the source edge id.
-            dst_col (str): Column in the dataframe corresponding to the destination edge id.
-            time_col (str): Column in the dataframe corresponding to the timestamp.
-            edge_feature_col (Optional[List[str]]): Column list in the csv corresponding to the edge features.
-        """
-        events = self.to_events()
-        write_csv(events, file_path, src_col, dst_col, time_col, edge_feature_col)
 
     def to_events(self) -> List[Event]:
         r"""Materialize the events in the DGraph.
@@ -134,7 +63,7 @@ class DGraph:
         new_start_time, new_end_time = self._check_slice_time_args(start_time, end_time)
         new_end_time -= 1  # Because slicing is end range exclusive
 
-        dg = DGraph(time_delta=self.time_delta, _storage=self._storage)
+        dg = DGraph(data=self._storage, time_delta=self.time_delta)
         dg._cache = dict(self._cache)  # Deep copy cache to avoid dict alias
 
         if self.start_time is not None and self.start_time > new_start_time:
@@ -167,7 +96,7 @@ class DGraph:
         Returns:
             DGraph copy of events related to the input nodes.
         """
-        dg = DGraph(time_delta=self.time_delta, _storage=self._storage)
+        dg = DGraph(data=self._storage, time_delta=self.time_delta)
 
         if self._cache.get('node_slice') is None:
             self._cache['node_slice'] = set(range(self.num_nodes))
@@ -242,11 +171,6 @@ class DGraph:
             # actual end time in our DG.
             return self._cache['end_time'] - 1
         return self._cache['end_time']
-
-    @property
-    def time_delta(self) -> TimeDeltaDG:
-        r"""The time granularity of the dynamic graph."""
-        return self._time_delta
 
     @property
     def num_nodes(self) -> int:
@@ -324,32 +248,6 @@ class DGraph:
                 self._cache.get('node_slice'),
             )
         return self._cache['edge_feats']
-
-    def _check_storage_args(
-        self,
-        events: Optional[List[Event]] = None,
-        _storage: Optional[DGStorageBase] = None,
-    ) -> 'DGStorageBase':
-        if _storage is not None:
-            if events is not None:
-                raise ValueError(
-                    'Cannot simultaneously initialize a DGraph with _storage and events/time_delta.'
-                )
-            return _storage
-        else:
-            events_list = [] if events is None else events
-            return DGStorage(events_list)
-
-    def _check_time_delta_args(
-        self, time_delta: Optional[TimeDeltaDG]
-    ) -> 'TimeDeltaDG':
-        if time_delta is None:
-            return TimeDeltaDG(unit='r')  # Default to ordered granularity
-        if not isinstance(time_delta, TimeDeltaDG):
-            raise ValueError(
-                f'Expected time_delta to be of type TimeDeltaDG, but got: {type(time_delta)}'
-            )
-        return time_delta
 
     def _check_slice_time_args(
         self, start_time: Optional[int], end_time: Optional[int]
