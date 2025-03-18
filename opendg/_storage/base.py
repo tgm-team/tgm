@@ -104,12 +104,12 @@ class DGStorageBase(ABC):
         node_feats_shape = expected_shape
 
         for event in events:
-            if isinstance(event, NodeEvent) and event.features is not None:
+            if isinstance(event, NodeEvent) and event.msg is not None:
                 if node_feats_shape is None:
-                    node_feats_shape = event.features.shape
-                elif node_feats_shape != event.features.shape:
+                    node_feats_shape = event.msg.shape
+                elif node_feats_shape != event.msg.shape:
                     raise ValueError(
-                        f'Incompatible node features shapes: {node_feats_shape} != {event.features.shape}'
+                        f'Incompatible node features shapes: {node_feats_shape} != {event.msg.shape}'
                     )
         return node_feats_shape
 
@@ -119,11 +119,11 @@ class DGStorageBase(ABC):
         edge_feats_shape = expected_shape
 
         for event in events:
-            if isinstance(event, EdgeEvent) and event.features is not None:
+            if isinstance(event, EdgeEvent) and event.msg is not None:
                 if edge_feats_shape is None:
-                    edge_feats_shape = event.features.shape
-                elif edge_feats_shape != event.features.shape:
+                    edge_feats_shape = event.msg.shape
+                elif edge_feats_shape != event.msg.shape:
                     raise ValueError(
-                        f'Incompatible edge features shapes: {edge_feats_shape} != {event.features.shape}'
+                        f'Incompatible edge features shapes: {edge_feats_shape} != {event.msg.shape}'
                     )
         return edge_feats_shape

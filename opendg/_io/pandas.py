@@ -20,22 +20,22 @@ def read_pandas(
     # Pre-allocating buffer of events with the right size, and adding an index column
     # into the dataframe, so that the df.apply() call below is thread safe, and can
     # be run without the GIL. This index ensures that everything is processed in order.
-    _mock_event = EdgeEvent(time=-1, edge=(-1, -1))
+    _mock_event = EdgeEvent(t=-1, src=-1, dst=-1)
     events: List[Event] = [_mock_event] * len(df)
     df['index'] = np.arange(len(df))
 
     def _construct_event_from_row(row: pd.Series) -> None:
-        src_id = int(row[src_col])
-        dst_id = int(row[dst_col])
-        time = int(row[time_col])
+        src = int(row[src_col])
+        dst = int(row[dst_col])
+        t = int(row[time_col])
         idx = int(row['index'])
 
         if edge_feature_col is not None:
-            edge_features = torch.tensor(row[edge_feature_col])
+            msg = torch.tensor(row[edge_feature_col])
         else:
-            edge_features = None
+            msg = None
 
-        events[idx] = EdgeEvent(time, (src_id, dst_id), edge_features)
+        events[idx] = EdgeEvent(t=t, src=src, dst=dst, msg=msg)
 
     df.apply(_construct_event_from_row, axis=1)
     df.drop('index', axis=1)  # Clean up temporary index column

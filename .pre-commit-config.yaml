@@ -71,9 +71,11 @@ repos:
       - id: sphinx-lint
         name: Check Sphinx
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
+  - repo: local
     hooks:
       - id: mypy
         name: mypy
-        exclude: "test"
+        entry: uv run mypy opendg
+        language: system
+        always_run: true
+        pass_filenames: false

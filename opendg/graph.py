@@ -396,7 +396,7 @@ class DGraph:
         if not isinstance(events, List):
             events = [events]
 
-        min_new_event_time = min([event.time for event in events])
+        min_new_event_time = min([event.t for event in events])
         if self.end_time is not None and min_new_event_time < self.end_time:
             raise ValueError(
                 'Appending is only supported at the end of a DGraph. '
