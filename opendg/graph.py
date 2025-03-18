@@ -207,36 +207,6 @@ class DGraph:
 
         return dg
 
-    def append(self, events: Union[Event, List[Event]]) -> None:
-        r"""Append events to the temporal end of the dynamic graph.
-
-        Args:
-            events (Union[Event, List[Event]]): The event of list of events to add to the temporal graph.
-
-        """
-        if isinstance(events, List) and not len(events):
-            return
-        self._check_append_args(events)
-
-        # TODO: Materialize / copy on write
-        if any([cached_value is not None for cached_value in self._cache.values()]):
-            # Need to decide how to handle this, e.g. throw a userwarning that
-            # they modified the backed DGStorage of a view, and could lead to undefined behaviour
-            raise NotImplementedError('Append to view not implemented')
-
-        self._storage.append(events)
-
-    def temporal_coarsening(
-        self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
-    ) -> None:
-        r"""Re-index the temporal axis of the dynamic graph.
-
-        Args:
-            time_delta (TimeDeltaDG): The time granularity to use.
-            agg_func (Union[str, Callable]): The aggregation / reduction function to apply.
-        """
-        raise NotImplementedError
-
     def __len__(self) -> int:
         r"""Returns the number of temporal length of the dynamic graph."""
         return self.num_timestamps
@@ -391,15 +361,3 @@ class DGraph:
                 f'Bad slice: start_time must be <= end_time but received: start_time ({new_start_time}) > end_time ({new_end_time})'
             )
         return new_start_time, new_end_time
-
-    def _check_append_args(self, events: Union[Event, List[Event]]) -> None:
-        if not isinstance(events, List):
-            events = [events]
-
-        min_new_event_time = min([event.t for event in events])
-        if self.end_time is not None and min_new_event_time < self.end_time:
-            raise ValueError(
-                'Appending is only supported at the end of a DGraph. '
-                f'Tried to append a new event with time: {min_new_event_time} which is strictly less '
-                f'than the current end time: {self.end_time}'
-            )

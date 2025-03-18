@@ -1,11 +1,10 @@
 import random
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
-from opendg.timedelta import TimeDeltaDG
 
 from ..base import DGStorageBase
 
@@ -99,37 +98,6 @@ class DGStorageArrayBackend(DGStorageBase):
             ):
                 timestamps.add(event.t)
         return len(timestamps)
-
-    def append(self, events: Union[Event, List[Event]]) -> None:
-        if not isinstance(events, list):
-            events = [events]
-
-        # Check that the new events have matching feature dimension
-        if len(self._events):
-            # Node/edge feature shape must match our current feature shape
-            exp_node_feats_shape = self._node_feats_shape
-            exp_edge_feats_shape = self._edge_feats_shape
-        else:
-            # Except if our storage is empty, in which case the new event feature
-            # shapes need not match previous events. This could happen if we had a
-            # non-empty storage which was sliced to empty, and then appended to.
-            exp_node_feats_shape = None
-            exp_edge_feats_shape = None
-
-        # We update our node/edge feature shapes in case they were previously None
-        self._node_feats_shape = self._check_node_feature_shapes(
-            events, expected_shape=exp_node_feats_shape
-        )
-        self._edge_feats_shape = self._check_edge_feature_shapes(
-            events, expected_shape=exp_edge_feats_shape
-        )
-
-        self._events += events
-
-    def temporal_coarsening(
-        self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
-    ) -> 'DGStorageBase':
-        raise NotImplementedError('Temporal Coarsening is not implemented')
 
     def get_nbrs(
         self,

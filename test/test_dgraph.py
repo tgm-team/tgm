@@ -85,7 +85,7 @@ def test_to_events():
         EdgeEvent(t=20, src=1, dst=8),
     ]
     dg = DGraph(events=events)
-    _assert_events_equal(dg.to_events(), events)
+    assert dg.to_events() == events
 
 
 @pytest.mark.skip('Node feature IO not implemented')
@@ -99,7 +99,7 @@ def test_to_events_with_node_events():
         EdgeEvent(t=20, src=1, dst=8),
     ]
     dg = DGraph(events=events)
-    _assert_events_equal(dg.to_events(), events)
+    assert dg.to_events() == events
 
 
 def test_to_events_with_cache():
@@ -110,11 +110,11 @@ def test_to_events_with_cache():
     ]
     dg = DGraph(events=events)
     dg._cache['start_time'] = 5
-    _assert_events_equal(dg.to_events(), events[1:])
+    assert dg.to_events() == events[1:]
 
     dg._cache.clear()
     dg._cache['node_slice'] = set([2])
-    _assert_events_equal(dg.to_events(), events[:2])
+    assert dg.to_events() == events[:2]
 
 
 def test_to_events_with_features():
@@ -139,8 +139,7 @@ def test_to_csv():
     with tempfile.NamedTemporaryFile() as f:
         dg.to_csv(f.name, **col_names)
         dg_recovered = dg.from_csv(f.name, **col_names)
-
-    _assert_events_equal(dg_recovered._storage.to_events(), dg._storage.to_events())
+    assert dg.to_events() == dg_recovered.to_events()
 
 
 @pytest.mark.skip('Node feature IO not implemented')
@@ -159,8 +158,7 @@ def test_to_csv_with_node_events():
     with tempfile.NamedTemporaryFile() as f:
         dg.to_csv(f.name, **col_names)
         dg_recovered = dg.from_csv(f.name, **col_names)
-
-    _assert_events_equal(dg_recovered._storage.to_events(), events)
+    assert dg.to_events() == dg_recovered.to_events()
 
 
 def test_to_csv_with_cache():
@@ -176,8 +174,7 @@ def test_to_csv_with_cache():
     with tempfile.NamedTemporaryFile() as f:
         dg.to_csv(f.name, **col_names)
         dg_recovered = dg.from_csv(f.name, **col_names)
-
-    _assert_events_equal(dg_recovered._storage.to_events(), events[1:])
+    assert dg_recovered.to_events() == events[1:]
 
     dg._cache.clear()
     dg._cache['node_slice'] = set([2])
@@ -186,8 +183,7 @@ def test_to_csv_with_cache():
     with tempfile.NamedTemporaryFile() as f:
         dg.to_csv(f.name, **col_names)
         dg_recovered = dg.from_csv(f.name, **col_names)
-
-    _assert_events_equal(dg_recovered._storage.to_events(), events[:2])
+    assert dg_recovered.to_events() == events[:2]
 
 
 def test_to_csv_with_features():
@@ -207,8 +203,7 @@ def test_to_csv_with_features():
     with tempfile.NamedTemporaryFile() as f:
         dg.to_csv(f.name, **col_names)
         dg_recovered = dg.from_csv(f.name, **col_names)
-
-    _assert_events_equal(dg_recovered._storage.to_events(), events)
+    _assert_events_equal(dg_recovered.to_events(), events)
 
 
 def test_to_csv_with_multi_dim_features():
@@ -871,143 +866,6 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg.num_timestamps == 4
     assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
-
-
-def test_append_single_event():
-    dg = DGraph()
-
-    event = NodeEvent(t=1, src=2, msg=torch.rand(5))
-
-    dg.append(event)
-
-    assert len(dg) == 1
-    assert dg.start_time == 1
-    assert dg.end_time == 1
-    assert dg.num_nodes == 3
-    assert dg.num_edges == 0
-    assert dg.num_timestamps == 1
-
-    exp_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
-    exp_node_feats[1, 2] = event.msg
-    assert torch.equal(dg.node_feats.to_dense(), exp_node_feats)
-
-    assert dg.edge_feats is None
-
-
-def test_append_multiple_events(events):
-    dg = DGraph()
-    dg.append(events)
-
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-
-    exp_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
-    assert torch.equal(dg.node_feats.to_dense(), exp_node_feats)
-
-    exp_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
-    assert torch.equal(dg.edge_feats.to_dense(), exp_edge_feats)
-
-
-@pytest.mark.skip('Append on view not implemented')
-def test_slice_then_append():
-    pass
-
-
-@pytest.mark.skip('Append on view not implemented')
-def test_append_then_slice():
-    pass
-
-
-@pytest.mark.skip('Append on view not implemented')
-def test_slice_then_append_twice_then_slice():
-    pass
-
-
-def test_append_bad_args(events):
-    dg = DGraph(events=events)
-
-    new_event = EdgeEvent(t=15, src=1, dst=1)  # Time 15 < 20
-    with pytest.raises(ValueError):
-        dg.append(new_event)
-
-    # First event is still invalid despite the second one being valid
-    new_events = [new_event, EdgeEvent(t=25, src=1, dst=1)]
-    with pytest.raises(ValueError):
-        dg.append(new_events)
-
-
-def test_append_empty():
-    dg = DGraph()
-    dg.append([])
-
-    assert len(dg) == 0
-    assert dg.start_time is None
-    assert dg.end_time is None
-    assert dg.num_nodes == 0
-    assert dg.num_edges == 0
-    assert dg.num_timestamps == 0
-    assert dg.node_feats is None
-    assert dg.edge_feats is None
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_with_cache_sum_no_features():
-    pass
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_sum_with_features():
-    pass
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_with_cache_sum_with_features():
-    pass
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_with_cache_concat_no_features():
-    pass
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_concat_with_features():
-    pass
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_concat_with_cache_sum_with_features():
-    pass
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_empty_graph():
-    pass
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_bad_time_delta():
-    pass
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_bad_agg_func():
-    pass
-
-
-@pytest.mark.skip('Temporal Coarsening not implemented')
-def test_temporal_coarsening_causes_time_gap():
-    pass
 
 
 def _assert_events_equal(expected_events, actual_events):
