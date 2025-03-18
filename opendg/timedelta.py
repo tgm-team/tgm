@@ -1,113 +1,67 @@
-from enum import Enum
-from typing import Optional, Union
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import ClassVar, Dict
 
 
+@dataclass(frozen=True, slots=True)
 class TimeDeltaDG:
-    r"""TimeGranularity class to represent time granularity in dynamic graph.
+    r"""Time granularity for temporal index in a dynamic graph."""
 
-    Args:
-        unit (str): The temporal unit of time granularity.
-        value (Optional[int]): The value of the specified time granularity. Defaults to 1.
+    unit: str
+    value: int = 1
 
-    Note:
-        Possible Values for the temporal unit are:
+    _ORDERED: ClassVar[str] = 'r'
+    _UNIT_TO_NANOS: ClassVar[Dict[str, int]] = {
+        'Y': 1000 * 1000 * 1000 * 60 * 60 * 24 * 365,
+        'M': 1000 * 1000 * 1000 * 60 * 60 * 24 * 30,
+        'W': 1000 * 1000 * 1000 * 60 * 60 * 24 * 7,
+        'D': 1000 * 1000 * 1000 * 60 * 60 * 24,
+        'h': 1000 * 1000 * 1000 * 60 * 60,
+        'm': 1000 * 1000 * 1000 * 60,
+        's': 1000 * 1000 * 1000,
+        'ms': 1000 * 1000,
+        'us': 1000,
+        'ns': 1,
+    }
 
-            'r':  Ordered granularity (no conversions allowed, TimeDelta value must be 1)
-            'Y':  Year
-            'M':  Month
-            'W':  Week
-            'D':  Day
-            'h':  Hour
-            'm':  Minute
-            's':  Second
-            'ms': Millisecond
-            'us': Microsecond
-            'ns': Nanosecond
-    """
-
-    def __init__(self, unit: str, value: Optional[int] = 1) -> None:
-        self._unit_nano_ratio = {
-            'Y': 1000 * 1000 * 1000 * 60 * 60 * 24 * 365,
-            'M': 1000 * 1000 * 1000 * 60 * 60 * 24 * 30,
-            'W': 1000 * 1000 * 1000 * 60 * 60 * 24 * 7,
-            'D': 1000 * 1000 * 1000 * 60 * 60 * 24,
-            'h': 1000 * 1000 * 1000 * 60 * 60,
-            'm': 1000 * 1000 * 1000 * 60,
-            's': 1000 * 1000 * 1000,
-            'ms': 1000 * 1000,
-            'us': 1000,
-            'ns': 1,
-        }
-
-        if not (isinstance(value, int)) or value <= 0:
-            raise ValueError(f'Value must be a positive integer, got: {value}')
-
-        if unit == TimeDeltaUnit.ORDERED and value != 1:
-            raise ValueError(f"Only value=1 is supported for 'ordered' TimeDelta unit")
-
-        self._unit = TimeDeltaUnit.from_string(unit)
-        self._value = value
-
-    @property
-    def unit(self) -> str:
-        r"""The time granularity unit."""
-        return self._unit
-
-    @property
-    def value(self) -> int:
-        r"""The time granularity value."""
-        return self._value
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, int) or self.value <= 0:
+            raise ValueError(f'Value must be a positive integer, got: {self.value}')
+        if self.is_ordered and self.value != 1:
+            raise ValueError(f'Only value=1 is supported for ordered TimeDeltaDG')
+        if not self.is_ordered and self.unit not in TimeDeltaDG._UNIT_TO_NANOS:
+            raise ValueError(
+                f'Unknown unit: {self.unit}, expected one of {[TimeDeltaDG._ORDERED] + list(TimeDeltaDG._UNIT_TO_NANOS.keys())}'
+            )
 
     @property
     def is_ordered(self) -> bool:
-        r"""Whether or not the time granularity is 'ordered', in which case conversions are prohibited."""
-        return self.unit == TimeDeltaUnit.ORDERED
+        return self.unit == TimeDeltaDG._ORDERED
 
-    def is_coarser_than(self, other: Union[str, 'TimeDeltaDG']) -> bool:
+    def is_coarser_than(self, other: str | TimeDeltaDG) -> bool:
         r"""Return True iff self is strictly coarser than other.
 
-        Args:
-            other (Union[str, 'TimeDeltaDG']): The other time delta to compare to.
-
         Raises:
-            ValueError if either self or other is TimeDeltaUnit.ORDERED.
+            ValueError if either self or other is ordered.
         """
-        if isinstance(other, str):
-            other = TimeDeltaDG(other)
-
-        if self.unit == TimeDeltaUnit.ORDERED or other.unit == TimeDeltaUnit.ORDERED:
-            raise ValueError('Cannot compare time granularity on TimeDeltaUnit.ORDERED')
-
         return self.convert(other) > 1
 
-    def convert(self, time_delta: Union[str, 'TimeDeltaDG']) -> float:
-        r"""Convert the current granularity to the specified time_delta (either a unit string or a TimeDeltaDG object).
+    def convert(self, time_delta: str | TimeDeltaDG) -> float:
+        r"""Convert the current granularity to the specified time_delta.
 
-        Args:
-            time_delta (str or TimeDeltaDG): unit of time granularity.
-
-        Returns:
-            float: conversion rate
+        Raises:
+            ValueError if either self or other is ordered.
         """
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
+        if self.is_ordered or time_delta.is_ordered:
+            raise ValueError('Cannot compare granularity for ordered TimeDeltaDG')
+        return self._convert(time_delta)
 
-        if time_delta.is_ordered or self.is_ordered:
-            raise ValueError(
-                f"Conversion {self}->{time_delta} for 'ordered' unit not allowed"
-            )
-
-        return self._convert_from_delta(time_delta)
-
-    def __str__(self) -> str:
-        if self.is_ordered:
-            return f"TimeDeltaDG(unit='{self.unit}')"
-        else:
-            return f"TimeDeltaDG(unit='{self.unit}', value={self.value})"
-
-    def _convert_from_delta(self, other: 'TimeDeltaDG') -> float:
-        self_nanos = self._unit_nano_ratio[self.unit]
-        other_nanos = self._unit_nano_ratio[other.unit]
+    def _convert(self, other: TimeDeltaDG) -> float:
+        self_nanos = TimeDeltaDG._UNIT_TO_NANOS[self.unit]
+        other_nanos = TimeDeltaDG._UNIT_TO_NANOS[other.unit]
 
         invert_unit = False
         if self_nanos > other_nanos:
@@ -119,52 +73,3 @@ class TimeDeltaDG:
 
         value_ratio = self.value / other.value
         return value_ratio / unit_ratio if invert_unit else value_ratio * unit_ratio
-
-
-class TimeDeltaUnit(str, Enum):
-    r"""Temporal unit of time granularity."""
-
-    ORDERED = 'r'
-    NANOSECOND = 'ns'
-    MICROSECOND = 'us'
-    MILLISECOND = 'ms'
-    SECOND = 's'
-    MINUTE = 'm'
-    HOUR = 'h'
-    DAY = 'D'
-    WEEK = 'W'
-    MONTH = 'M'
-    YEAR = 'Y'
-
-    def __str__(self) -> str:
-        return self.value
-
-    def is_coarser_than(self, other: Union[str, 'TimeDeltaUnit']) -> bool:
-        r"""Return True iff self is strictly coarser than other.
-
-        Args:
-            other (Union[str, 'TimeDeltaUnit']): The other unit to compare to.
-
-        Raises:
-            ValueError if either self or other is TimeDeltaUnit.ORDERED.
-        """
-        if self == TimeDeltaUnit.ORDERED or other == TimeDeltaUnit.ORDERED:
-            raise ValueError('Cannot compare time granularity on TimeDeltaUnit.ORDERED')
-
-        other = TimeDeltaUnit.from_string(other)
-
-        units = TimeDeltaUnit._member_names_
-        return units.index(self.name) > units.index(other.name)
-
-    @classmethod
-    def from_string(cls, s: str) -> 'TimeDeltaUnit':
-        # String match the members (e.g. 'YEAR')
-        if s in cls._member_names_:
-            return cls[s]
-
-        # String match the member values (e.g. 'Y')
-        units = dict([(unit.value, unit) for unit in cls])
-        if s in units:
-            return units[s]
-
-        raise ValueError(f'Bad unit: {s}, possible values are: {cls._member_names_}')
