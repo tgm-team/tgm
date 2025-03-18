@@ -1,6 +1,5 @@
 from typing import List
 
-from opendg.events import EdgeEvent, NodeEvent
 from opendg.graph import DGraph
 from opendg.loader.base import DGBaseLoader
 from opendg.timedelta import TimeDeltaUnit
@@ -77,14 +76,7 @@ class DGNeighborLoader(DGBaseLoader):
             (DGraph): The input batch of data.
         """
         # TODO: Need a way to easily get nodes in the graph
-        batch_events = batch.to_events()
-        batch_nodes = set()
-        for event in batch_events:
-            if isinstance(event, NodeEvent):
-                batch_nodes.add(event.node_id)
-            elif isinstance(event, EdgeEvent):
-                batch_nodes.add(event.edge[0])
-                batch_nodes.add(event.edge[1])
+        batch_nodes = self._dg._storage.get_nodes(batch.start_time, batch.end_time)
 
         # Dict[int, List[List[Tuple[int, int]]]]
         nbrs = self._dg._storage.get_nbrs(
