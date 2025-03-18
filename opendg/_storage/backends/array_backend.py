@@ -62,8 +62,8 @@ class DGStorageArrayBackend(DGStorageBase):
                 if isinstance(event, NodeEvent):
                     nodes.add(event.src)
                 elif isinstance(event, EdgeEvent):
-                    nodes.add(event.edge[0])
-                    nodes.add(event.edge[1])
+                    nodes.add(event.src)
+                    nodes.add(event.dst)
         return nodes
 
     def get_num_edges(
@@ -155,7 +155,7 @@ class DGStorageArrayBackend(DGStorageBase):
             if isinstance(event, EdgeEvent) and self._valid_slice(
                 event, start_time, end_time, node_slice
             ):
-                src, dst, t = *event.edge, event.t
+                src, dst, t = event.src, event.dst, event.t
                 if src in seed_nodes_set:
                     nbrs[src][hop].add((dst, t))
                 if dst in seed_nodes_set:
@@ -194,7 +194,7 @@ class DGStorageArrayBackend(DGStorageBase):
 
                 elif isinstance(event, EdgeEvent):
                     max_time = max(max_time, event.t)
-                    max_node_id = max(max_node_id, event.edge[0], event.edge[1])
+                    max_node_id = max(max_node_id, event.src, event.dst)
 
         if not len(values):
             return None
@@ -236,10 +236,10 @@ class DGStorageArrayBackend(DGStorageBase):
                     max_node_id = max(max_node_id, event.src)
                 elif isinstance(event, EdgeEvent):
                     max_time = max(max_time, event.t)
-                    max_node_id = max(max_node_id, event.edge[0], event.edge[1])
+                    max_node_id = max(max_node_id, event.src, event.dst)
 
                     if event.msg is not None:
-                        indices.append([event.t, event.edge[0], event.edge[1]])
+                        indices.append([event.t, event.src, event.dst])
                         values.append(event.msg)
 
         if not len(values):
