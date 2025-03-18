@@ -2,11 +2,20 @@ import pytest
 
 from opendg.events import EdgeEvent
 from opendg.graph import DGraph
-from opendg.sampler import NbrSampler
+from opendg.loader import DGNeighborLoader
 
 
-@pytest.mark.skip('TODO')
-def test_foo():
+def test_init_bad_num_nbrs():
+    events = [EdgeEvent(time=1, edge=(2, 3))]
+    dg = DGraph(events)
+    with pytest.raises(ValueError):
+        _ = DGNeighborLoader(dg, num_nbrs=[])
+
+    with pytest.raises(ValueError):
+        _ = DGNeighborLoader(dg, num_nbrs=[-2, 2])
+
+
+def test_iteration_with_sampling():
     events = [
         EdgeEvent(time=0, edge=(1, 2)),
         EdgeEvent(time=1, edge=(2, 3)),
@@ -20,6 +29,7 @@ def test_foo():
         EdgeEvent(time=9, edge=(10, 11)),
     ]
     dg = DGraph(events)
-    sampler = NbrSampler(dg, num_nbrs=[2, 3])
-    print(sampler.num_nbrs, sampler.num_hops)
-    print(sampler([1]))
+
+    loader = DGNeighborLoader(dg, num_nbrs=[1])
+    for batch in loader:
+        continue
