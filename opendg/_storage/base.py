@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
-from opendg.timedelta import TimeDeltaDG
 
 
 class DGStorageBase(ABC):
@@ -57,16 +56,6 @@ class DGStorageBase(ABC):
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
     ) -> int:
-        pass
-
-    @abstractmethod
-    def append(self, events: Union[Event, List[Event]]) -> None:
-        pass
-
-    @abstractmethod
-    def temporal_coarsening(
-        self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
-    ) -> 'DGStorageBase':
         pass
 
     @abstractmethod
