@@ -7,7 +7,7 @@ name = "opendg"
 version = "0.1.0"
 description = "An Open Library for Temporal Graph Learning"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name="Shenyang Huang", email="shenyang.huang@mail.mcgill.ca"},
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
