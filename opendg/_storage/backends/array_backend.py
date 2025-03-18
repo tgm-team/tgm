@@ -36,16 +36,16 @@ class DGStorageArrayBackend(DGStorageBase):
         start_time = None
         for event in self._events:
             if self._valid_slice(event, node_slice=node_slice):
-                if start_time is None or event.time < start_time:
-                    start_time = event.time
+                if start_time is None or event.t < start_time:
+                    start_time = event.t
         return start_time
 
     def get_end_time(self, node_slice: Optional[Set[int]] = None) -> Optional[int]:
         end_time = None
         for event in self._events:
             if self._valid_slice(event, node_slice=node_slice):
-                if end_time is None or event.time > end_time:
-                    end_time = event.time
+                if end_time is None or event.t > end_time:
+                    end_time = event.t
         return end_time
 
     def get_nodes(
@@ -60,7 +60,7 @@ class DGStorageArrayBackend(DGStorageBase):
                 event, start_time=start_time, end_time=end_time, node_slice=node_slice
             ):
                 if isinstance(event, NodeEvent):
-                    nodes.add(event.node_id)
+                    nodes.add(event.src)
                 elif isinstance(event, EdgeEvent):
                     nodes.add(event.edge[0])
                     nodes.add(event.edge[1])
@@ -80,7 +80,7 @@ class DGStorageArrayBackend(DGStorageBase):
                 end_time=end_time,
                 node_slice=node_slice,
             ):
-                edges.add((event.time, event.edge))
+                edges.add((event.t, event.edge))
         return len(edges)
 
     def get_num_timestamps(
@@ -97,7 +97,7 @@ class DGStorageArrayBackend(DGStorageBase):
                 end_time=end_time,
                 node_slice=node_slice,
             ):
-                timestamps.add(event.time)
+                timestamps.add(event.t)
         return len(timestamps)
 
     def append(self, events: Union[Event, List[Event]]) -> None:
@@ -155,7 +155,7 @@ class DGStorageArrayBackend(DGStorageBase):
             if isinstance(event, EdgeEvent) and self._valid_slice(
                 event, start_time, end_time, node_slice
             ):
-                src, dst, t = *event.edge, event.time
+                src, dst, t = *event.edge, event.t
                 if src in seed_nodes_set:
                     nbrs[src][hop].add((dst, t))
                 if dst in seed_nodes_set:
@@ -185,15 +185,15 @@ class DGStorageArrayBackend(DGStorageBase):
                 event, start_time=start_time, end_time=end_time, node_slice=node_slice
             ):
                 if isinstance(event, NodeEvent):
-                    max_time = max(max_time, event.time)
-                    max_node_id = max(max_node_id, event.node_id)
+                    max_time = max(max_time, event.t)
+                    max_node_id = max(max_node_id, event.src)
 
-                    if event.features is not None:
-                        indices.append([event.time, event.node_id])
-                        values.append(event.features)
+                    if event.msg is not None:
+                        indices.append([event.t, event.src])
+                        values.append(event.msg)
 
                 elif isinstance(event, EdgeEvent):
-                    max_time = max(max_time, event.time)
+                    max_time = max(max_time, event.t)
                     max_node_id = max(max_node_id, event.edge[0], event.edge[1])
 
         if not len(values):
@@ -232,15 +232,15 @@ class DGStorageArrayBackend(DGStorageBase):
                 event, start_time=start_time, end_time=end_time, node_slice=node_slice
             ):
                 if isinstance(event, NodeEvent):
-                    max_time = max(max_time, event.time)
-                    max_node_id = max(max_node_id, event.node_id)
+                    max_time = max(max_time, event.t)
+                    max_node_id = max(max_node_id, event.src)
                 elif isinstance(event, EdgeEvent):
-                    max_time = max(max_time, event.time)
+                    max_time = max(max_time, event.t)
                     max_node_id = max(max_node_id, event.edge[0], event.edge[1])
 
-                    if event.features is not None:
-                        indices.append([event.time, event.edge[0], event.edge[1]])
-                        values.append(event.features)
+                    if event.msg is not None:
+                        indices.append([event.t, event.edge[0], event.edge[1]])
+                        values.append(event.msg)
 
         if not len(values):
             return None
@@ -279,10 +279,10 @@ class DGStorageArrayBackend(DGStorageBase):
         lb_time = float('-inf') if start_time is None else start_time
         ub_time = float('inf') if end_time is None else end_time
 
-        time_valid = lb_time <= event.time < ub_time
+        time_valid = lb_time <= event.t < ub_time
         node_valid = (
             node_slice is None
-            or (isinstance(event, NodeEvent) and event.node_id in node_slice)
+            or (isinstance(event, NodeEvent) and event.src in node_slice)
             or (
                 isinstance(event, EdgeEvent)
                 and len(set(event.edge).intersection(node_slice)) > 0
