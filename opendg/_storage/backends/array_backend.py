@@ -45,22 +45,19 @@ class DGStorageArrayBackend(DGStorageBase):
         return events
 
     def get_start_time(self, node_slice: Optional[Set[int]] = None) -> Optional[int]:
-        start_time = None
         for event in self._events:
             event_nodes = (event.src,) if isinstance(event, NodeEvent) else event.edge
             if node_slice is None or any(e in node_slice for e in event_nodes):
-                if start_time is None or event.t < start_time:
-                    start_time = event.t
-        return start_time
+                return event.t
+        return None
 
     def get_end_time(self, node_slice: Optional[Set[int]] = None) -> Optional[int]:
-        end_time = None
-        for event in self._events:
+        for i in range(len(self._events) - 1, -1, -1):
+            event = self._events[i]
             event_nodes = (event.src,) if isinstance(event, NodeEvent) else event.edge
             if node_slice is None or any(e in node_slice for e in event_nodes):
-                if end_time is None or event.t > end_time:
-                    end_time = event.t
-        return end_time
+                return event.t
+        return None
 
     def get_nodes(
         self,
