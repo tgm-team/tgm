@@ -3,7 +3,7 @@ from __future__ import annotations
 import pathlib
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, List, Optional, Set
+from typing import Any, List, Optional, Set, Tuple
 
 import pandas as pd
 from torch import Tensor
@@ -38,9 +38,7 @@ class DGraph:
     def to_events(self) -> List[Event]:
         r"""Materialize the events in the DGraph."""
         return self._storage.to_events(
-            start_time=self._slice.start_time,
-            end_time=self._slice.end_time,
-            node_slice=self._slice.node_slice,
+            self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
 
     def slice_time(
@@ -54,51 +52,37 @@ class DGraph:
 
         dg = DGraph(data=self._storage, time_delta=self.time_delta)
 
-        new_start_time = start_time if start_time is not None else float('-inf')
-        new_end_time = end_time if end_time is not None else float('inf')
-        if self.start_time is not None and self.start_time > new_start_time:
-            new_start_time = self.start_time
-        if self.end_time is not None and self.end_time < new_end_time:
-            new_end_time = self.end_time
+        # Update start time
+        dg._slice.start_time = self._maybe_max((start_time, self.start_time))
+        force_refresh_node_slice = dg._slice.start_time == self.start_time
 
-        # Force cache refresh on the new copy if we actually sliced the graph
-        if new_start_time != self.start_time or new_end_time != self.end_time:
+        # Update end time
+        dg._slice.end_time = self._maybe_min((end_time, self.end_time))
+        force_refresh_node_slice &= dg._slice.end_time == self.end_time
+
+        if not force_refresh_node_slice:
             dg._slice.node_slice = self._slice.node_slice
-        dg._slice.start_time = new_start_time
-        dg._slice.end_time = new_end_time
         return dg
 
     def slice_nodes(self, nodes: List[int]) -> DGraph:
         r"""Create and return a new view by slicing nodes to include."""
         dg = DGraph(data=self._storage, time_delta=self.time_delta)
 
+        # Take intersection of nodes
         if self._slice.node_slice is None:
             self._slice.node_slice = set(range(self.num_nodes))
-
-        # Take intersection of nodes
         dg._slice.node_slice = self._slice.node_slice & set(nodes)
 
         # Update start time
-        start_time_with_node_slice = self._storage.get_start_time(dg._slice.node_slice)
-        if self.start_time is None:
-            dg._slice.start_time = start_time_with_node_slice
-        else:
-            dg._slice.start_time = (
-                max(start_time_with_node_slice, self._slice.start_time)
-                if start_time_with_node_slice is not None
-                else self.start_time
-            )
+        dg._slice.start_time = self._maybe_max(
+            (self._storage.get_start_time(dg._slice.node_slice), self.start_time)
+        )
 
         # Update end time
-        end_time_with_node_slice = self._storage.get_end_time(dg._slice.node_slice)
-        if self.end_time is None:
-            dg._slice.end_time = end_time_with_node_slice
-        else:
-            dg._slice.end_time = (
-                min(end_time_with_node_slice, self._slice.end_time)
-                if end_time_with_node_slice is not None
-                else self._slice.end_time
-            )
+        dg._slice.end_time = self._maybe_min(
+            (self._storage.get_end_time(dg._slice.node_slice), self.end_time)
+        )
+
         return dg
 
     def __len__(self) -> int:
@@ -128,9 +112,7 @@ class DGraph:
     def num_nodes(self) -> int:
         r"""The total number of unique nodes encountered over the dynamic graph."""
         self._slice.node_slice = self._storage.get_nodes(
-            self._slice.start_time,
-            self._slice.end_time,
-            self._slice.node_slice,
+            self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
         return max(self._slice.node_slice) + 1 if len(self._slice.node_slice) else 0
 
@@ -138,45 +120,43 @@ class DGraph:
     def num_edges(self) -> int:
         r"""The total number of unique edges encountered over the dynamic graph."""
         return self._storage.get_num_edges(
-            self._slice.start_time,
-            self._slice.end_time,
-            self._slice.node_slice,
+            self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
 
     @cached_property
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the dynamic graph."""
         return self._storage.get_num_timestamps(
-            self._slice.start_time,
-            self._slice.end_time,
-            self._slice.node_slice,
+            self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
 
     @cached_property
     def node_feats(self) -> Optional[Tensor]:
         r"""The aggregated node features over the dynamic graph.
 
-        Returns a Tensor.sparse_coo_tensor of size T x V x d_node or None if
-        there are no node features on the dynamic graph.
+        If node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_edge).
         """
         return self._storage.get_node_feats(
-            self._slice.start_time,
-            self._slice.end_time,
-            self._slice.node_slice,
+            self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
 
     @cached_property
     def edge_feats(self) -> Optional[Tensor]:
         r"""The aggregated edge features over the dynamic graph.
 
-        Returns a Tensor.sparse_coo_tensor of size T x V x V x d_edge or None if
-        there are no edge features on the dynamic graph.
+        If edge features exist, returns a Tensor.sparse_coo_tensor(T x V x V x d_edge).
         """
         return self._storage.get_edge_feats(
-            self._slice.start_time,
-            self._slice.end_time,
-            self._slice.node_slice,
+            self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
+
+    @staticmethod
+    def _maybe_max(seq: Tuple[Any, Any]) -> Optional[int]:
+        return max(filter(lambda x: x is not None, seq), default=None)
+
+    @staticmethod
+    def _maybe_min(seq: Tuple[Any, Any]) -> Optional[int]:
+        return min(filter(lambda x: x is not None, seq), default=None)
 
 
 @dataclass(slots=True)
