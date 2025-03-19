@@ -100,11 +100,11 @@ def test_to_events_with_cache():
         EdgeEvent(t=20, src=1, dst=8),
     ]
     dg = DGraph(events)
-    dg._cache['start_time'] = 5
+    dg._cache.start_time = 5
     assert dg.to_events() == events[1:]
 
-    dg._cache.clear()
-    dg._cache['node_slice'] = set([2])
+    dg._cache.start_time = None  # reset
+    dg._cache.node_slice = set([2])
     assert dg.to_events() == events[:2]
 
 
