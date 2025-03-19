@@ -170,10 +170,7 @@ class DGStorageArrayBackend(DGStorageBase):
         # If the end_time is given, then it determines the dimension of the temporal axis
         # This is true even if there are no events at the end time, which could occur after
         # calling slice_time on a graph.
-        if end_time is not None:
-            max_time = end_time
-        else:
-            max_time = max_time + 1
+        max_time = end_time if end_time is not None else max_time
 
         values_tensor = torch.stack(values)
         indices_tensor = torch.tensor(
@@ -181,7 +178,7 @@ class DGStorageArrayBackend(DGStorageBase):
         ).t()  # https://pytorch.org/docs/stable/sparse.html#construction
 
         assert self._node_feats_shape is not None
-        shape = (max_time, max_node_id + 1, *self._node_feats_shape)
+        shape = (max_time + 1, max_node_id + 1, *self._node_feats_shape)
 
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
@@ -223,13 +220,10 @@ class DGStorageArrayBackend(DGStorageBase):
         # If the end_time is given, then it determines the dimension of the temporal axis
         # This is true even if there are no events at the end time, which could occur after
         # calling slice_time on a graph.
-        if end_time is not None:
-            max_time = end_time
-        else:
-            max_time = max_time + 1
+        max_time = end_time if end_time is not None else max_time
 
         shape = (
-            max_time,
+            max_time + 1,
             max_node_id + 1,
             max_node_id + 1,
             *self._edge_feats_shape,
@@ -247,7 +241,7 @@ class DGStorageArrayBackend(DGStorageBase):
         lb_time = float('-inf') if start_time is None else start_time
         ub_time = float('inf') if end_time is None else end_time
 
-        time_valid = lb_time <= event.t < ub_time
+        time_valid = lb_time <= event.t <= ub_time
         node_valid = (
             node_slice is None
             or (isinstance(event, NodeEvent) and event.src in node_slice)

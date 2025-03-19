@@ -104,7 +104,7 @@ class DGBaseLoader(ABC):
             events = self._events[self._idx : self._idx + self._batch_size]
             batch = DGraph(events, time_delta=self._dg.time_delta)
         else:
-            batch = self._dg.slice_time(self._idx, self._idx + self._batch_size)
+            batch = self._dg.slice_time(self._idx, self._idx + self._batch_size - 1)
 
         self._idx += self._batch_size
         return self.sample(batch)
