@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -87,32 +88,35 @@ class DGStorageBase(ABC):
     ) -> Optional[Tensor]:
         pass
 
-    def _check_node_feature_shapes(
-        self, events: List[Event], expected_shape: Optional[torch.Size] = None
-    ) -> Optional[torch.Size]:
-        node_feats_shape = expected_shape
+    def _sort_events_list_if_needed(self, events: List[Event]) -> List[Event]:
+        if not all(isinstance(event, Event) for event in events):
+            raise ValueError('bad type when initializing DGStorage from events list')
+        if all(events[i].t <= events[i + 1].t for i in range(len(events) - 1)):
+            return events
+        warnings.warn('received a non-chronological list of events, sorting by time')
+        events.sort(key=lambda x: x.t)
+        return events
 
+    def _check_node_feature_shapes(self, events: List[Event]) -> Optional[torch.Size]:
+        shape = None
         for event in events:
             if isinstance(event, NodeEvent) and event.msg is not None:
-                if node_feats_shape is None:
-                    node_feats_shape = event.msg.shape
-                elif node_feats_shape != event.msg.shape:
+                if shape is None:
+                    shape = event.msg.shape
+                elif shape != event.msg.shape:
                     raise ValueError(
-                        f'Incompatible node features shapes: {node_feats_shape} != {event.msg.shape}'
+                        f'Node feature shapes non-homogenous: {shape} != {event.msg.shape}'
                     )
-        return node_feats_shape
+        return shape
 
-    def _check_edge_feature_shapes(
-        self, events: List[Event], expected_shape: Optional[torch.Size] = None
-    ) -> Optional[torch.Size]:
-        edge_feats_shape = expected_shape
-
+    def _check_edge_feature_shapes(self, events: List[Event]) -> Optional[torch.Size]:
+        shape = None
         for event in events:
             if isinstance(event, EdgeEvent) and event.msg is not None:
-                if edge_feats_shape is None:
-                    edge_feats_shape = event.msg.shape
-                elif edge_feats_shape != event.msg.shape:
+                if shape is None:
+                    shape = event.msg.shape
+                elif shape != event.msg.shape:
                     raise ValueError(
-                        f'Incompatible edge features shapes: {edge_feats_shape} != {event.msg.shape}'
+                        f'Edge feature shapes non-homogenous: {shape} != {event.msg.shape}'
                     )
-        return edge_feats_shape
+        return shape

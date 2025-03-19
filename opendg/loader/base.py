@@ -70,13 +70,10 @@ class DGBaseLoader(ABC):
         return self
 
     def __next__(self) -> DGraph:
-        if self._done_iteration():
+        check_idx = self._idx + self._batch_size - 1 if self._drop_last else self._idx
+        if check_idx > self._stop_idx:
             raise StopIteration
 
         batch = self._dg.slice_time(self._idx, self._idx + self._batch_size - 1)
         self._idx += self._batch_size
         return self.sample(batch)
-
-    def _done_iteration(self) -> bool:
-        check_idx = self._idx + self._batch_size - 1 if self._drop_last else self._idx
-        return check_idx > self._stop_idx
