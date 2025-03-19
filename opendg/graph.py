@@ -3,7 +3,7 @@ from __future__ import annotations
 import pathlib
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, List, Optional, Set, Tuple
+from typing import Any, List, Optional, Set
 
 import pandas as pd
 from torch import Tensor
@@ -53,11 +53,11 @@ class DGraph:
         dg = DGraph(data=self._storage, time_delta=self.time_delta)
 
         # Update start time
-        dg._slice.start_time = self._maybe_max((start_time, self.start_time))
+        dg._slice.start_time = self._maybe_max(start_time, self.start_time)
         force_refresh_node_slice = dg._slice.start_time == self.start_time
 
         # Update end time
-        dg._slice.end_time = self._maybe_min((end_time, self.end_time))
+        dg._slice.end_time = self._maybe_min(end_time, self.end_time)
         force_refresh_node_slice &= dg._slice.end_time == self.end_time
 
         if not force_refresh_node_slice:
@@ -75,12 +75,12 @@ class DGraph:
 
         # Update start time
         dg._slice.start_time = self._maybe_max(
-            (self._storage.get_start_time(dg._slice.node_slice), self.start_time)
+            self._storage.get_start_time(dg._slice.node_slice), self.start_time
         )
 
         # Update end time
         dg._slice.end_time = self._maybe_min(
-            (self._storage.get_end_time(dg._slice.node_slice), self.end_time)
+            self._storage.get_end_time(dg._slice.node_slice), self.end_time
         )
 
         return dg
@@ -151,12 +151,16 @@ class DGraph:
         )
 
     @staticmethod
-    def _maybe_max(seq: Tuple[Any, Any]) -> Optional[int]:
-        return max(filter(lambda x: x is not None, seq), default=None)
+    def _maybe_max(a: Any, b: Any) -> Optional[int]:
+        if a is not None and b is not None:
+            return max(a, b)
+        return a if b is None else b if a is None else None
 
     @staticmethod
-    def _maybe_min(seq: Tuple[Any, Any]) -> Optional[int]:
-        return min(filter(lambda x: x is not None, seq), default=None)
+    def _maybe_min(a: Any, b: Any) -> Optional[int]:
+        if a is not None and b is not None:
+            return min(a, b)
+        return a if b is None else b if a is None else None
 
 
 @dataclass(slots=True)
