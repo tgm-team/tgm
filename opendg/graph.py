@@ -51,7 +51,6 @@ class DGraph:
             raise ValueError(
                 f'start_time ({start_time}) must be <= end_time ({end_time})'
             )
-        new_end_time -= 1  # Because slicing is end range exclusive
 
         dg = DGraph(data=self._storage, time_delta=self.time_delta)
         dg._cache = dict(self._cache)  # Deep copy cache to avoid dict alias
@@ -67,8 +66,7 @@ class DGraph:
             dg._cache['node_slice'] = self._cache.get('node_slice')
 
         dg._cache['start_time'] = new_start_time
-        dg._cache['end_time'] = new_end_time + 1  # End-range exclusive value in cache
-
+        dg._cache['end_time'] = new_end_time
         return dg
 
     def slice_nodes(self, nodes: List[int]) -> DGraph:
@@ -106,11 +104,6 @@ class DGraph:
                 if end_time_with_node_slice is not None
                 else self._cache['end_time']
             )
-
-        # Cache end-exclusive result
-        if dg._cache['end_time'] is not None:
-            dg._cache['end_time'] += 1
-
         return dg
 
     def __len__(self) -> int:
@@ -136,16 +129,8 @@ class DGraph:
             self._cache['end_time'] = self._storage.get_end_time(
                 self._cache.get('node_slice')
             )
-            # We cache the end_time + 1 so that all our time constrained queries
-            # use the half-open interval: [start_time, end_time + 1) = [start_time, end_time].
-            # If we considered everything end-time inclusive, this would not be needed.
-            if self._cache['end_time'] is not None:
-                self._cache['end_time'] += 1
-
         if self._cache['end_time'] is not None:
-            # Since our cache stores end_time + 1, we subtract back one to yield the
-            # actual end time in our DG.
-            return self._cache['end_time'] - 1
+            return self._cache['end_time']
         return self._cache['end_time']
 
     @property
