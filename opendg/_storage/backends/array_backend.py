@@ -123,31 +123,26 @@ class DGStorageArrayBackend(DGStorageBase):
     ) -> Dict[int, List[List[Tuple[int, int]]]]:
         # TODO: Take in a sample_func to enable more than uniform sampling
         if len(num_nbrs) > 1:
-            raise NotImplementedError(
-                f'Multi-hop not impemented for {self.__class__.__name__}'
-            )
+            raise NotImplementedError(f'Multi-hop not implemented')
 
         seed_nodes_set = set(seed_nodes)
 
-        nbrs: Dict[int, List[Set[Tuple[int, int]]]] = {
-            node: [set()] for node in seed_nodes
-        }
-        sampled_nbrs: Dict[int, List[List[Tuple[int, int]]]] = {
-            node: [[]] for node in seed_nodes_set
-        }
+        T = Tuple[int, int]
+        nbrs: Dict[int, List[Set[T]]] = {node: [set()] for node in seed_nodes_set}
+        sampled_nbrs: Dict[int, List[List[T]]] = {node: [[]] for node in seed_nodes_set}
         if not len(self._events):
             return sampled_nbrs
 
         hop = 0
         for i in range(self._lb_time_idx(start_time), self._ub_time_idx(end_time)):
             event = self._events[i]
-            if isinstance(event, EdgeEvent):
-                if node_slice is None or any(e in node_slice for e in event.edge):
-                    src, dst, t = event.src, event.dst, event.t
-                    if src in seed_nodes_set:
-                        nbrs[src][hop].add((dst, t))
-                    if dst in seed_nodes_set:
-                        nbrs[dst][hop].add((src, t))
+            if isinstance(event, EdgeEvent) and (
+                node_slice is None or any(e in node_slice for e in event.edge)
+            ):
+                if event.src in seed_nodes_set:
+                    nbrs[event.src][hop].add((event.dst, event.t))
+                if event.dst in seed_nodes_set:
+                    nbrs[event.dst][hop].add((event.src, event.t))
 
         for node, nbrs_list in nbrs.items():
             node_nbrs = list(nbrs_list[hop])
@@ -167,7 +162,6 @@ class DGStorageArrayBackend(DGStorageBase):
 
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
-
         indices, values = [], []
         for i in range(self._lb_time_idx(start_time), self._ub_time_idx(end_time)):
             event = self._events[i]
@@ -185,13 +179,12 @@ class DGStorageArrayBackend(DGStorageBase):
         # If the end_time is given, then it determines the dimension of the temporal axis
         # even if there are no events at the end time (could be the case after calling slice_time)
         max_time = end_time if end_time is not None else max_time
+        assert self._node_feats_shape is not None
 
         # https://pytorch.org/docs/stable/sparse.html#construction
         values_tensor = torch.stack(values)
         indices_tensor = torch.tensor(indices).t()
-        assert self._node_feats_shape is not None
         shape = (max_time + 1, max_node_id + 1, *self._node_feats_shape)
-
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     def get_edge_feats(
@@ -205,7 +198,6 @@ class DGStorageArrayBackend(DGStorageBase):
 
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
-
         indices, values = [], []
         for i in range(self._lb_time_idx(start_time), self._ub_time_idx(end_time)):
             event = self._events[i]
@@ -223,18 +215,17 @@ class DGStorageArrayBackend(DGStorageBase):
         # If the end_time is given, then it determines the dimension of the temporal axis
         # even if there are no events at the end time (could be the case after calling slice_time)
         max_time = end_time if end_time is not None else max_time
+        assert self._edge_feats_shape is not None
 
         # https://pytorch.org/docs/stable/sparse.html#construction
         values_tensor = torch.stack(values)
         indices_tensor = torch.tensor(indices).t()
-        assert self._edge_feats_shape is not None
         shape = (
             max_time + 1,
             max_node_id + 1,
             max_node_id + 1,
             *self._edge_feats_shape,
         )
-
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     def _lb_time_idx(self, t: Optional[int]) -> int:
