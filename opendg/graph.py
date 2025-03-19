@@ -104,7 +104,17 @@ class DGraph:
             self._cache['end_time'] = self._storage.get_end_time(
                 self._cache.get('node_slice')
             )
-        return self._cache.get('end_time')
+            # We cache the end_time + 1 so that all our time constrained queries
+            # use the half-open interval: [start_time, end_time + 1) = [start_time, end_time].
+            # If we considered everything end-time inclusive, this would not be needed.
+            if self._cache['end_time'] is not None:
+                self._cache['end_time'] += 1
+
+        if self._cache['end_time'] is not None:
+            # Since our cache stores end_time + 1, we subtract back one to yield the
+            # actual end time in our DG.
+            return self._cache['end_time'] - 1
+        return self._cache['end_time']
 
     @property
     def num_nodes(self) -> int:

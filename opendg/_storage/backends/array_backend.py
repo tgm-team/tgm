@@ -247,7 +247,7 @@ class DGStorageArrayBackend(DGStorageBase):
         lb_time = float('-inf') if start_time is None else start_time
         ub_time = float('inf') if end_time is None else end_time
 
-        time_valid = lb_time <= event.t <= ub_time
+        time_valid = lb_time <= event.t < ub_time
         node_valid = (
             node_slice is None
             or (isinstance(event, NodeEvent) and event.src in node_slice)
