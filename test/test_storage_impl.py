@@ -87,6 +87,18 @@ def events_list_with_features_multi_events_per_timestamp():
     ]
 
 
+@pytest.fixture
+def events_list_out_of_time_order():
+    return [
+        EdgeEvent(t=5, src=2, dst=4),
+        NodeEvent(t=10, src=6),
+        NodeEvent(t=1, src=2),
+        NodeEvent(t=5, src=4),
+        EdgeEvent(t=20, src=1, dst=8),
+        EdgeEvent(t=1, src=2, dst=2),
+    ]
+
+
 def test_empty_events_list_to_events(DGStorageImpl, empty_events_list):
     storage = DGStorageImpl(empty_events_list)
     assert storage.to_events() == empty_events_list
@@ -168,6 +180,20 @@ def test_init_incompatible_edge_feature_dimension(DGStorageImpl):
         NodeEvent(t=6, src=7, msg=torch.rand(3, 6)),
     ]
 
+    with pytest.raises(ValueError):
+        _ = DGStorageImpl(events)
+
+
+def test_init_out_of_order_events_list(DGStorageImpl, events_list_out_of_time_order):
+    with pytest.warns(UserWarning):
+        _ = DGStorageImpl(events_list_out_of_time_order)
+
+
+def test_init_non_event_type(DGStorageImpl):
+    events = [
+        EdgeEvent(t=1, src=2, dst=3),
+        'foo',  # Should raise
+    ]
     with pytest.raises(ValueError):
         _ = DGStorageImpl(events)
 
