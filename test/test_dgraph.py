@@ -121,7 +121,7 @@ def test_to_events_with_features():
 def test_slice_time_full_graph(events):
     dg = DGraph(events)
 
-    dg1 = dg.slice_time(1, 21)
+    dg1 = dg.slice(1, 21)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 4
@@ -147,7 +147,7 @@ def test_slice_time_full_graph(events):
 def test_slice_time_no_time_bounds(events):
     dg = DGraph(events)
 
-    dg1 = dg.slice_time()
+    dg1 = dg.slice()
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 4
@@ -173,7 +173,7 @@ def test_slice_time_no_time_bounds(events):
 def test_slice_time_no_upper_bound(events):
     dg = DGraph(events)
 
-    dg1 = dg.slice_time(5)
+    dg1 = dg.slice(5)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
@@ -197,7 +197,7 @@ def test_slice_time_no_upper_bound(events):
 def test_slice_time_no_lower_bound(events):
     dg = DGraph(events)
 
-    dg1 = dg.slice_time(end_time=5)
+    dg1 = dg.slice(end_time=5)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 1
@@ -219,7 +219,7 @@ def test_slice_time_no_lower_bound(events):
 def test_slice_time_no_cache_refresh(events):
     dg = DGraph(events)
 
-    dg1 = dg.slice_time(0, 100)
+    dg1 = dg.slice(0, 100)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 4
@@ -245,7 +245,7 @@ def test_slice_time_no_cache_refresh(events):
 def test_slice_time_at_end_time(events):
     dg = DGraph(events)
 
-    dg1 = dg.slice_time(1, 20)
+    dg1 = dg.slice(1, 20)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
@@ -301,7 +301,7 @@ def test_slice_time_to_empty(events):
     original_edge_feats[20, 1, 8] = events[-1].msg
 
     # Slice Number 1
-    dg1 = dg.slice_time(1, 15)
+    dg1 = dg.slice(1, 15)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
@@ -333,7 +333,7 @@ def test_slice_time_to_empty(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 2
-    dg2 = dg1.slice_time(5, 15)
+    dg2 = dg1.slice(5, 15)
     assert id(dg2._storage) == id(dg._storage)
 
     assert len(dg2) == 2
@@ -363,7 +363,7 @@ def test_slice_time_to_empty(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice number 3
-    dg3 = dg2.slice_time(7, 11)
+    dg3 = dg2.slice(7, 11)
     assert id(dg3._storage) == id(dg._storage)
 
     assert len(dg3) == 1
@@ -390,7 +390,7 @@ def test_slice_time_to_empty(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice number 4 (to empty)
-    dg4 = dg3.slice_time(0, 8)
+    dg4 = dg3.slice(0, 8)
     assert id(dg4._storage) == id(dg._storage)
 
     assert len(dg4) == 0
@@ -416,13 +416,13 @@ def test_slice_time_to_empty(events):
 def test_slice_time_bad_args():
     dg = DGraph(data=[])
     with pytest.raises(ValueError):
-        dg.slice_time(2, 1)
+        dg.slice(2, 1)
 
 
 def test_slice_nodes_full_graph(events):
     dg1 = DGraph(events)
 
-    dg = dg1.slice_nodes({1, 2, 3, 4, 6, 8})  # Extra node (3) should just be ignored
+    dg = dg1.slice(nodes={1, 2, 3, 4, 6, 8})  # Extra node (3) should just be ignored
     assert id(dg._storage) == id(dg1._storage)
 
     assert len(dg) == 4
@@ -459,7 +459,7 @@ def test_slice_nodes_to_empty(events):
     original_edge_feats[20, 1, 8] = events[-1].msg
 
     # Slice Number 1
-    dg1 = dg.slice_nodes({1, 2, 4, 8})
+    dg1 = dg.slice(nodes={1, 2, 4, 8})
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
@@ -491,7 +491,7 @@ def test_slice_nodes_to_empty(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 2
-    dg2 = dg1.slice_nodes({1, 2, 4, 6})  # 6 should be gone since we sliced it away
+    dg2 = dg1.slice(nodes={1, 2, 4, 6})  # 6 should be gone since we sliced it away
 
     assert id(dg2._storage) == id(dg._storage)
 
@@ -524,7 +524,7 @@ def test_slice_nodes_to_empty(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 3: Edge 4 -> 2 should cause node 2 to come back
-    dg3 = dg2.slice_nodes({4})
+    dg3 = dg2.slice(nodes={4})
     assert id(dg3._storage) == id(dg._storage)
 
     assert len(dg3) == 1
@@ -553,7 +553,7 @@ def test_slice_nodes_to_empty(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice number 4 (to empty)
-    dg4 = dg3.slice_nodes({5})  # Should be empty since 2 was previously sliced
+    dg4 = dg3.slice(nodes={5})  # Should be empty since 2 was previously sliced
 
     assert len(dg4) == 0
     assert dg4.start_time == 5
@@ -589,7 +589,7 @@ def test_interleave_slice_time_slice_nodes(events):
     original_edge_feats[20, 1, 8] = events[-1].msg
 
     # Slice Number 1
-    dg1 = dg.slice_nodes({1, 2, 4, 8})
+    dg1 = dg.slice(nodes={1, 2, 4, 8})
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
@@ -621,7 +621,7 @@ def test_interleave_slice_time_slice_nodes(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 2
-    dg2 = dg1.slice_time(1, 15)
+    dg2 = dg1.slice(1, 15)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg2) == 2
@@ -652,7 +652,7 @@ def test_interleave_slice_time_slice_nodes(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 3
-    dg3 = dg2.slice_nodes({1, 4})  # Node 1 at time 20 was previously sliced off
+    dg3 = dg2.slice(nodes={1, 4})  # Node 1 at time 20 was previously sliced off
     assert id(dg3._storage) == id(dg._storage)
     assert len(dg3) == 1
     assert dg3.start_time == 5
@@ -680,7 +680,7 @@ def test_interleave_slice_time_slice_nodes(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 4
-    dg4 = dg3.slice_time(0, 20)  # Ensure previous slice not changed
+    dg4 = dg3.slice(0, 20)  # Ensure previous slice not changed
     assert id(dg4._storage) == id(dg._storage)
 
     assert len(dg4) == 1
@@ -709,7 +709,7 @@ def test_interleave_slice_time_slice_nodes(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 5
-    dg5 = dg4.slice_nodes({2})
+    dg5 = dg4.slice(nodes={2})
     assert id(dg5._storage) == id(dg._storage)
 
     assert len(dg5) == 1  # Broken: this should only add back the node 2
@@ -738,7 +738,7 @@ def test_interleave_slice_time_slice_nodes(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice 6 (to empty)
-    dg6 = dg5.slice_time(1, 5)
+    dg6 = dg5.slice(1, 5)
     assert id(dg6._storage) == id(dg._storage)
 
     assert len(dg6) == 0
