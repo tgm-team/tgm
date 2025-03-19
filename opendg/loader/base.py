@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 
 from opendg.graph import DGraph
@@ -32,50 +34,42 @@ class DGBaseLoader(ABC):
         if not len(dg):
             raise ValueError('Cannot iterate an empty DGraph')
 
-        self._dg = dg
-        self._batch_size = batch_size
-        self._batch_unit = batch_unit
-        self._drop_last = drop_last
-        dg_is_ordered = self._dg.time_delta.is_ordered
-        batch_unit_is_ordered = self._batch_unit == 'r'
+        dg_is_ordered = dg.time_delta.is_ordered
+        batch_unit_is_ordered = batch_unit == 'r'
 
         if dg_is_ordered and not batch_unit_is_ordered:
             raise ValueError('Cannot iterate ordered dg using non-ordered batch_unit')
         if not dg_is_ordered and batch_unit_is_ordered:
             raise ValueError('Cannot iterate non-ordered dg using ordered batch_unit')
-
         if not dg_is_ordered and not batch_unit_is_ordered:
-            # Check to ensure the graph time unit is smaller (more granular) than batch time unit.
-            # If this is not the case, temporal iteration losses information, so we throw an Exception.
-            batch_time_delta = TimeDeltaDG(self._batch_unit, value=self._batch_size)
-            if self._dg.time_delta.is_coarser_than(batch_time_delta):
+            # Ensure the graph time unit is more granular than batch time unit.
+            batch_time_delta = TimeDeltaDG(batch_unit, value=batch_size)
+            if dg.time_delta.is_coarser_than(batch_time_delta):
                 raise ValueError(
-                    f'Tried to construct a data loader on a DGraph with time delta: {self._dg.time_delta} '
+                    f'Tried to construct a data loader on a DGraph with time delta: {dg.time_delta} '
                     f'which is strictly coarser than the batch_unit: {batch_unit}, batch_size: {batch_size}. '
-                    'Cannot iterate a non-ordered DGraph with a more granular batch_unit due to loss of informmation. '
-                    'Either choose a larger batch size, larger batch unit or consider iterate using ordered batching.'
+                    'Either choose a larger batch size, batch unit or consider iterate using ordered batching.'
                 )
+            batch_size = int(batch_time_delta.convert(dg.time_delta))
 
-            self._batch_size = int(batch_time_delta.convert(self._dg.time_delta))
+        # Warning: Cache miss
+        assert dg.start_time is not None
+        assert dg.end_time is not None
 
-        assert self._dg.start_time is not None
-        self._idx = self._dg.start_time
+        self._dg = dg
+        self._batch_size = batch_size
+        self._drop_last = drop_last
+        self._idx = dg.start_time
+        self._stop_idx = dg.end_time
 
     @abstractmethod
-    def sample(self, batch: 'DGraph') -> 'DGraph':
-        r"""Downsample a given temporal batch, using neighborhood information, for instance.
+    def sample(self, batch: DGraph) -> DGraph:
+        r"""Perform any post-processing (e.g. neighborhood sampling) on the batch before yielding."""
 
-        Args:
-            batch (DGraph): Incoming batch of data. May not be materialized.
-
-        Returns:
-            (DGraph): Downsampled batch of data. Must be naterialized.
-        """
-
-    def __iter__(self) -> 'DGBaseLoader':
+    def __iter__(self) -> DGBaseLoader:
         return self
 
-    def __next__(self) -> 'DGraph':
+    def __next__(self) -> DGraph:
         if self._done_iteration():
             raise StopIteration
 
@@ -84,13 +78,5 @@ class DGBaseLoader(ABC):
         return self.sample(batch)
 
     def _done_iteration(self) -> bool:
-        if not len(self._dg):
-            return True
-
-        if self._drop_last:
-            check_idx = self._idx + self._batch_size - 1
-        else:
-            check_idx = self._idx
-
-        assert self._dg.end_time is not None
-        return check_idx >= self._dg.end_time + 1
+        check_idx = self._idx + self._batch_size - 1 if self._drop_last else self._idx
+        return check_idx > self._stop_idx
