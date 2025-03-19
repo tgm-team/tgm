@@ -11,7 +11,6 @@ def test_init_ordered_dg_ordered_batch():
     dg = DGraph(events)
     loader = DGDataLoader(dg)
     assert loader._batch_size == 1
-    assert loader._batch_unit == 'r'
 
 
 @pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
@@ -20,6 +19,14 @@ def test_init_ordered_dg_non_ordered_batch(batch_unit):
     dg = DGraph(events)
     with pytest.raises(ValueError):
         _ = DGDataLoader(dg, batch_unit=batch_unit)
+
+
+@pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
+def test_init_non_ordered_dg_ordered_batch(batch_unit):
+    events = [EdgeEvent(t=1, src=2, dst=3)]
+    dg = DGraph(events, time_delta=TimeDeltaDG(batch_unit))
+    with pytest.raises(ValueError):
+        _ = DGDataLoader(dg)
 
 
 @pytest.mark.parametrize(
@@ -200,56 +207,3 @@ def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
     with pytest.raises(ValueError):
         # Seconds are too granular of an iteration unit for DG with 'every 30 seconds' time granularity
         _ = DGDataLoader(dg, batch_unit='s')
-
-
-@pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
-@pytest.mark.parametrize('drop_last', [True, False])
-def test_iteration_non_ordered_dg_ordered_batch(batch_unit, drop_last):
-    events = [
-        EdgeEvent(t=0, src=1, dst=2),
-        EdgeEvent(t=0, src=2, dst=3),
-        EdgeEvent(t=0, src=3, dst=4),
-        EdgeEvent(t=1, src=4, dst=5),
-        EdgeEvent(t=1, src=5, dst=6),
-        EdgeEvent(t=2, src=6, dst=7),
-        EdgeEvent(t=2, src=7, dst=8),
-        EdgeEvent(t=3, src=8, dst=9),
-        EdgeEvent(t=4, src=9, dst=10),
-    ]
-    dg = DGraph(events, time_delta=TimeDeltaDG(batch_unit))
-    loader = DGDataLoader(dg, batch_size=3, drop_last=drop_last)
-
-    batch_num = 0
-    for batch in loader:
-        assert isinstance(batch, DGraph)
-        assert batch.to_events() == events[3 * batch_num : 3 * (batch_num + 1)]
-        batch_num += 1
-
-    assert batch_num == 3
-
-
-@pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
-@pytest.mark.parametrize('drop_last', [True, False])
-def test_iteration_non_ordered_dg_ordered_batch_size_1(batch_unit, drop_last):
-    events = [
-        EdgeEvent(t=0, src=1, dst=2),
-        EdgeEvent(t=0, src=2, dst=3),
-        EdgeEvent(t=0, src=3, dst=4),
-        EdgeEvent(t=1, src=4, dst=5),
-        EdgeEvent(t=1, src=5, dst=6),
-        EdgeEvent(t=2, src=6, dst=7),
-        EdgeEvent(t=2, src=7, dst=8),
-        EdgeEvent(t=3, src=8, dst=9),
-        EdgeEvent(t=4, src=9, dst=10),
-    ]
-    dg = DGraph(events, time_delta=TimeDeltaDG(batch_unit))
-    loader = DGDataLoader(dg, batch_size=1, drop_last=drop_last)
-
-    batch_num = 0
-    for batch in loader:
-        assert isinstance(batch, DGraph)
-        assert len(batch) == 1
-        assert batch.to_events() == [events[batch_num]]
-        batch_num += 1
-
-    assert batch_num == len(events)
