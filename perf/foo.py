@@ -4,7 +4,7 @@ from opendg.events import EdgeEvent
 from opendg.graph import DGraph
 from opendg.loader import DGDataLoader
 from opendg.nn.memory import EdgeBankPredictor
-from opendg.perf import Profiling, Usage, compare_usage
+from opendg.util.perf import Profiling, Usage, compare_usage
 
 
 def edge_bank(n=100):
