@@ -95,7 +95,6 @@ class DGStorageArrayBackend(DGStorageBase):
                     src.append(event.src)
                     dst.append(event.dst)
                     t.append(event.t)
-
         return (
             torch.tensor(src, dtype=torch.int64),
             torch.tensor(dst, dtype=torch.int64),
