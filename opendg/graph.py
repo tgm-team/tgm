@@ -41,10 +41,8 @@ class DGraph:
         )
 
     @cached_property
-    def materialize(
-        self,
-    ) -> Tuple[Tensor, Tensor, Tensor, Dict[str, Optional[Tensor]]]:
-        r"""Materialize a dense tensors: src, dst, time, and {'node': node_features, 'edge': edge_features}."""
+    def materialize(self) -> DGBatch:
+        r"""Materialize dense tensors: src, dst, time, and {'node': node_features, 'edge': edge_features}."""
         features = {
             'node': self.node_feats.to_dense() if self.node_feats is not None else None,
             'edge': self.edge_feats.to_dense() if self.edge_feats is not None else None,
@@ -178,6 +176,10 @@ class DGraph:
         if a is not None and b is not None:
             return min(a, b)
         return a if b is None else b if a is None else None
+
+
+# src, dst, time, features = {'node': node_features, 'edge': dge_features}
+DGBatch = Tuple[Tensor, Tensor, Tensor, Dict[str, Optional[Tensor]]]
 
 
 @dataclass(slots=True)
