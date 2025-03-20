@@ -22,8 +22,8 @@ def test_csv_conversion_no_features():
 
 def test_csv_conversion_with_features():
     events = [
-        EdgeEvent(t=1, src=2, dst=3, msg=torch.rand(5)),
-        EdgeEvent(t=5, src=10, dst=20, msg=torch.rand(5)),
+        EdgeEvent(t=1, src=2, dst=3, features=torch.rand(5)),
+        EdgeEvent(t=5, src=10, dst=20, features=torch.rand(5)),
     ]
 
     edge_feature_col = [f'dim_{i}' for i in range(5)]
@@ -40,7 +40,7 @@ def test_csv_conversion_with_features():
         assert isinstance(recovered_events[i], EdgeEvent)
         assert events[i].t == recovered_events[i].t
         assert events[i].edge == recovered_events[i].edge
-        torch.testing.assert_close(events[i].msg, recovered_events[i].msg)
+        torch.testing.assert_close(events[i].features, recovered_events[i].features)
 
 
 def _write_csv(events, fp, src_col, dst_col, time_col, edge_feature_col=None):
@@ -54,22 +54,22 @@ def _write_csv(events, fp, src_col, dst_col, time_col, edge_feature_col=None):
         for event in events:
             assert isinstance(event, EdgeEvent)
             row = {src_col: event.src, dst_col: event.dst, time_col: event.t}
-            if event.msg is not None:
+            if event.features is not None:
                 if edge_feature_col is None:
                     raise ValueError(
                         'No feature column provided but events had features'
                     )
 
-                if len(event.msg.shape) > 1:
+                if len(event.features.shape) > 1:
                     raise ValueError('Multi-dimensional features not supported')
 
-                if len(event.msg) != len(edge_feature_col):
+                if len(event.features) != len(edge_feature_col):
                     raise ValueError(
-                        f'Got {len(event.msg)}-dimensional feature tensor but only '
+                        f'Got {len(event.features)}-dimensional feature tensor but only '
                         f'specified {len(edge_feature_col)} feature column names.'
                     )
 
-                features_list = event.msg.tolist()
+                features_list = event.features.tolist()
                 for feature_col, feature_val in zip(edge_feature_col, features_list):
                     row[feature_col] = feature_val
 

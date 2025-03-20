@@ -100,23 +100,23 @@ class DGStorageBase(ABC):
     def _check_node_feature_shapes(self, events: List[Event]) -> Optional[torch.Size]:
         shape = None
         for event in events:
-            if isinstance(event, NodeEvent) and event.msg is not None:
+            if isinstance(event, NodeEvent) and event.features is not None:
                 if shape is None:
-                    shape = event.msg.shape
-                elif shape != event.msg.shape:
+                    shape = event.features.shape
+                elif shape != event.features.shape:
                     raise ValueError(
-                        f'Node feature shapes non-homogenous: {shape} != {event.msg.shape}'
+                        f'Node feature shapes non-homogenous: {shape} != {event.features.shape}'
                     )
         return shape
 
     def _check_edge_feature_shapes(self, events: List[Event]) -> Optional[torch.Size]:
         shape = None
         for event in events:
-            if isinstance(event, EdgeEvent) and event.msg is not None:
+            if isinstance(event, EdgeEvent) and event.features is not None:
                 if shape is None:
-                    shape = event.msg.shape
-                elif shape != event.msg.shape:
+                    shape = event.features.shape
+                elif shape != event.features.shape:
                     raise ValueError(
-                        f'Edge feature shapes non-homogenous: {shape} != {event.msg.shape}'
+                        f'Edge feature shapes non-homogenous: {shape} != {event.features.shape}'
                     )
         return shape

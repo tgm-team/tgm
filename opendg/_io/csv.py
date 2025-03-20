@@ -25,11 +25,11 @@ def read_csv(
             t = int(row[time_col])
 
             if edge_feature_col is None:
-                msg = None
+                features = None
             else:
                 msg_list = [float(row[feature_col]) for feature_col in edge_feature_col]
-                msg = torch.tensor(msg_list)
+                features = torch.tensor(msg_list)
 
-            event = EdgeEvent(t=t, src=src, dst=dst, msg=msg)
+            event = EdgeEvent(t=t, src=src, dst=dst, features=features)
             events.append(event)
     return events
