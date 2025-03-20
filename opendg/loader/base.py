@@ -16,8 +16,6 @@ class DGBaseLoader(ABC):
         drop_last (bool): Set to True to drop the last incomplete batch.
 
     Raises:
-        ValueError: If the batch_unit is not a valid TimeDeltaDG unit.
-        ValueError: If the batch_size is not a positive integer.
         ValueError: If the batch_unit and dg time unit are not both ordered or both not ordered.
         ValueError: If the batch_unit and dg time unit are both ordered but the graph is coarser than the batch.
     """
@@ -58,22 +56,21 @@ class DGBaseLoader(ABC):
 
         self._dg = dg
         self._batch_size = batch_size
-        self._drop_last = drop_last
         self._idx = dg.start_time
-        self._stop_idx = dg.end_time
+        self._stop_idx = dg.end_time if drop_last else dg.end_time + (batch_size - 1)
 
     @abstractmethod
-    def sample(self, batch: DGraph) -> DGraph:
-        r"""Perform any post-processing (e.g. neighborhood sampling) on the batch before yielding."""
+    def pre_yield(self, batch: DGraph) -> DGraph:
+        r"""Perform arbitary processing (e.g. neighborhood sampling) on the batch before yielding."""
 
     def __iter__(self) -> DGBaseLoader:
         return self
 
     def __next__(self) -> DGraph:
-        check_idx = self._idx + self._batch_size - 1 if self._drop_last else self._idx
-        if check_idx > self._stop_idx:
+        slice_end = self._idx + self._batch_size - 1
+        if slice_end > self._stop_idx:
             raise StopIteration
 
-        batch = self._dg.slice_time(self._idx, self._idx + self._batch_size - 1)
+        batch = self._dg.slice_time(self._idx, slice_end)
         self._idx += self._batch_size
-        return self.sample(batch)
+        return self.pre_yield(batch)
