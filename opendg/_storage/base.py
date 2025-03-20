@@ -47,7 +47,7 @@ class DGStorageBase(ABC):
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
-    ) -> Optional[Tuple[Tensor, Tensor, Tensor]]:
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         pass
 
     @abstractmethod
