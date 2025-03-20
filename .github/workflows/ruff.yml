@@ -30,3 +30,4 @@ jobs:
         with:
           args: "format --check"
           changed-files: "true"
+          version-file: "pyproject.toml"
