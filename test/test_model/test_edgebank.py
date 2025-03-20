@@ -8,8 +8,8 @@ from opendg.nn import EdgeBankPredictor
 
 def test_no_loader_unlimited_memory():
     events = [
-        EdgeEvent(t=1, src=2, dst=3, msg=torch.rand(2, 5)),
-        EdgeEvent(t=5, src=10, dst=20, msg=torch.rand(2, 5)),
+        EdgeEvent(t=1, src=2, dst=3, features=torch.rand(2, 5)),
+        EdgeEvent(t=5, src=10, dst=20, features=torch.rand(2, 5)),
     ]
     edges = []
     for event in events:
@@ -38,12 +38,12 @@ def test_no_loader_unlimited_memory():
 
 def test_no_loader_fixed_time_window():
     events = [
-        EdgeEvent(t=1, src=1, dst=2, msg=torch.rand(2, 5)),
-        EdgeEvent(t=2, src=2, dst=3, msg=torch.rand(2, 5)),
-        EdgeEvent(t=3, src=3, dst=4, msg=torch.rand(2, 5)),
-        EdgeEvent(t=4, src=4, dst=5, msg=torch.rand(2, 5)),
-        EdgeEvent(t=5, src=5, dst=6, msg=torch.rand(2, 5)),
-        EdgeEvent(t=6, src=6, dst=7, msg=torch.rand(2, 5)),
+        EdgeEvent(t=1, src=1, dst=2, features=torch.rand(2, 5)),
+        EdgeEvent(t=2, src=2, dst=3, features=torch.rand(2, 5)),
+        EdgeEvent(t=3, src=3, dst=4, features=torch.rand(2, 5)),
+        EdgeEvent(t=4, src=4, dst=5, features=torch.rand(2, 5)),
+        EdgeEvent(t=5, src=5, dst=6, features=torch.rand(2, 5)),
+        EdgeEvent(t=6, src=6, dst=7, features=torch.rand(2, 5)),
     ]
     edges = []
     for event in events:
@@ -85,12 +85,12 @@ def test_no_loader_fixed_time_window():
 
 def test_edgebank_arguments():
     events = [
-        EdgeEvent(t=1, src=1, dst=2, msg=torch.rand(2, 5)),
-        EdgeEvent(t=2, src=2, dst=3, msg=torch.rand(2, 5)),
-        EdgeEvent(t=3, src=3, dst=4, msg=torch.rand(2, 5)),
-        EdgeEvent(t=4, src=4, dst=5, msg=torch.rand(2, 5)),
-        EdgeEvent(t=5, src=5, dst=6, msg=torch.rand(2, 5)),
-        EdgeEvent(t=6, src=6, dst=7, msg=torch.rand(2, 5)),
+        EdgeEvent(t=1, src=1, dst=2, features=torch.rand(2, 5)),
+        EdgeEvent(t=2, src=2, dst=3, features=torch.rand(2, 5)),
+        EdgeEvent(t=3, src=3, dst=4, features=torch.rand(2, 5)),
+        EdgeEvent(t=4, src=4, dst=5, features=torch.rand(2, 5)),
+        EdgeEvent(t=5, src=5, dst=6, features=torch.rand(2, 5)),
+        EdgeEvent(t=6, src=6, dst=7, features=torch.rand(2, 5)),
     ]
     edges = []
     for event in events:

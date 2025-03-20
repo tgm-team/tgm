@@ -166,9 +166,9 @@ class DGStorageArrayBackend(DGStorageBase):
             if node_slice is None or any(e in node_slice for e in event_nodes):
                 max_time = max(max_time, event.t)
                 max_node_id = max(max_node_id, *event_nodes)
-                if isinstance(event, NodeEvent) and event.msg is not None:
+                if isinstance(event, NodeEvent) and event.features is not None:
                     indices.append([event.t, event.src])
-                    values.append(event.msg)
+                    values.append(event.features)
 
         if not len(values):
             return None
@@ -202,9 +202,9 @@ class DGStorageArrayBackend(DGStorageBase):
             if node_slice is None or any(e in node_slice for e in event_nodes):
                 max_time = max(max_time, event.t)
                 max_node_id = max(max_node_id, *event_nodes)
-                if isinstance(event, EdgeEvent) and event.msg is not None:
+                if isinstance(event, EdgeEvent) and event.features is not None:
                     indices.append([event.t, event.src, event.dst])
-                    values.append(event.msg)
+                    values.append(event.features)
 
         if not len(values):
             return None

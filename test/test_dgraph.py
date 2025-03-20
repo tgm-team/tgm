@@ -9,12 +9,12 @@ from opendg.timedelta import TimeDeltaDG
 @pytest.fixture
 def events():
     return [
-        NodeEvent(t=1, src=2, msg=torch.rand(5)),
-        EdgeEvent(t=1, src=2, dst=2, msg=torch.rand(5)),
-        NodeEvent(t=5, src=4, msg=torch.rand(5)),
-        EdgeEvent(t=5, src=2, dst=4, msg=torch.rand(5)),
-        NodeEvent(t=10, src=6, msg=torch.rand(5)),
-        EdgeEvent(t=20, src=1, dst=8, msg=torch.rand(5)),
+        NodeEvent(t=1, src=2, features=torch.rand(5)),
+        EdgeEvent(t=1, src=2, dst=2, features=torch.rand(5)),
+        NodeEvent(t=5, src=4, features=torch.rand(5)),
+        EdgeEvent(t=5, src=2, dst=4, features=torch.rand(5)),
+        NodeEvent(t=10, src=6, features=torch.rand(5)),
+        EdgeEvent(t=20, src=1, dst=8, features=torch.rand(5)),
     ]
 
 
@@ -51,15 +51,15 @@ def test_init_from_events(events):
     assert dg.num_timestamps == 4
 
     exp_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg.edge_feats.to_dense(), exp_edge_feats)
 
 
@@ -110,9 +110,9 @@ def test_to_events_with_cache():
 
 def test_to_events_with_features():
     events = [
-        EdgeEvent(t=1, src=2, dst=2, msg=torch.rand(2)),
-        EdgeEvent(t=5, src=2, dst=2, msg=torch.rand(2)),
-        EdgeEvent(t=20, src=1, dst=8, msg=torch.rand(2)),
+        EdgeEvent(t=1, src=2, dst=2, features=torch.rand(2)),
+        EdgeEvent(t=5, src=2, dst=2, features=torch.rand(2)),
+        EdgeEvent(t=20, src=1, dst=8, features=torch.rand(2)),
     ]
     dg = DGraph(events)
     _assert_events_equal(dg.to_events(), events)
@@ -132,15 +132,15 @@ def test_slice_time_full_graph(events):
     assert dg1.num_timestamps == 4
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
@@ -158,15 +158,15 @@ def test_slice_time_no_time_bounds(events):
     assert dg1.num_timestamps == 4
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
@@ -184,13 +184,13 @@ def test_slice_time_no_upper_bound(events):
     assert dg1.num_timestamps == 3
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
@@ -208,11 +208,11 @@ def test_slice_time_no_lower_bound(events):
     assert dg1.num_timestamps == 1
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
+    exp_node_feats[1, 2] = events[0].features
     assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
@@ -230,15 +230,15 @@ def test_slice_time_no_cache_refresh(events):
     assert dg1.num_timestamps == 4
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
@@ -256,14 +256,14 @@ def test_slice_time_at_end_time(events):
     assert dg1.num_timestamps == 3
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -275,15 +275,15 @@ def test_slice_time_at_end_time(events):
     assert dg.num_timestamps == 4
 
     exp_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg.edge_feats.to_dense(), exp_edge_feats)
 
 
@@ -291,14 +291,14 @@ def test_slice_time_to_empty(events):
     dg = DGraph(events)
 
     original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
-    original_node_feats[1, 2] = events[0].msg
-    original_node_feats[5, 4] = events[2].msg
-    original_node_feats[10, 6] = events[4].msg
+    original_node_feats[1, 2] = events[0].features
+    original_node_feats[5, 4] = events[2].features
+    original_node_feats[10, 6] = events[4].features
 
     original_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
-    original_edge_feats[1, 2, 2] = events[1].msg
-    original_edge_feats[5, 2, 4] = events[3].msg
-    original_edge_feats[20, 1, 8] = events[-1].msg
+    original_edge_feats[1, 2, 2] = events[1].features
+    original_edge_feats[5, 2, 4] = events[3].features
+    original_edge_feats[20, 1, 8] = events[-1].features
 
     # Slice Number 1
     dg1 = dg.slice_time(1, 14)
@@ -312,14 +312,14 @@ def test_slice_time_to_empty(events):
     assert dg1.num_timestamps == 3
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -344,12 +344,12 @@ def test_slice_time_to_empty(events):
     assert dg2.num_timestamps == 2
 
     exp_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 5)
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg2.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, dg2.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = events[3].msg
+    exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -374,7 +374,7 @@ def test_slice_time_to_empty(events):
     assert dg3.num_timestamps == 1
 
     exp_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 5)
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg3.node_feats.to_dense(), exp_node_feats)
 
     assert dg3.edge_feats is None
@@ -433,15 +433,15 @@ def test_slice_nodes_full_graph(events):
     assert dg.num_timestamps == 4
 
     exp_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
-    exp_node_feats[10, 6] = events[4].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
+    exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg.edge_feats.to_dense(), exp_edge_feats)
 
 
@@ -449,14 +449,14 @@ def test_slice_nodes_to_empty(events):
     dg = DGraph(events)
 
     original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
-    original_node_feats[1, 2] = events[0].msg
-    original_node_feats[5, 4] = events[2].msg
-    original_node_feats[10, 6] = events[4].msg
+    original_node_feats[1, 2] = events[0].features
+    original_node_feats[5, 4] = events[2].features
+    original_node_feats[10, 6] = events[4].features
 
     original_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
-    original_edge_feats[1, 2, 2] = events[1].msg
-    original_edge_feats[5, 2, 4] = events[3].msg
-    original_edge_feats[20, 1, 8] = events[-1].msg
+    original_edge_feats[1, 2, 2] = events[1].features
+    original_edge_feats[5, 2, 4] = events[3].features
+    original_edge_feats[20, 1, 8] = events[-1].features
 
     # Slice Number 1
     dg1 = dg.slice_nodes({1, 2, 4, 8})
@@ -470,14 +470,14 @@ def test_slice_nodes_to_empty(events):
     assert dg1.num_timestamps == 3
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
     assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -503,14 +503,14 @@ def test_slice_nodes_to_empty(events):
     assert dg2.num_timestamps == 3
 
     exp_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
     assert torch.equal(dg2.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, dg2.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -535,11 +535,11 @@ def test_slice_nodes_to_empty(events):
     assert dg3.num_timestamps == 1
 
     exp_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 5)
-    exp_node_feats[5, 4] = events[2].msg
+    exp_node_feats[5, 4] = events[2].features
     assert torch.equal(dg3.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, dg3.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = events[3].msg
+    exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg3.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -579,14 +579,14 @@ def test_interleave_slice_time_slice_nodes(events):
     dg = DGraph(events)
 
     original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
-    original_node_feats[1, 2] = events[0].msg
-    original_node_feats[5, 4] = events[2].msg
-    original_node_feats[10, 6] = events[4].msg
+    original_node_feats[1, 2] = events[0].features
+    original_node_feats[5, 4] = events[2].features
+    original_node_feats[10, 6] = events[4].features
 
     original_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
-    original_edge_feats[1, 2, 2] = events[1].msg
-    original_edge_feats[5, 2, 4] = events[3].msg
-    original_edge_feats[20, 1, 8] = events[-1].msg
+    original_edge_feats[1, 2, 2] = events[1].features
+    original_edge_feats[5, 2, 4] = events[3].features
+    original_edge_feats[20, 1, 8] = events[-1].features
 
     # Slice Number 1
     dg1 = dg.slice_nodes({1, 2, 4, 8})
@@ -600,14 +600,14 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg1.num_timestamps == 3
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
     assert torch.equal(dg1.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
-    exp_edge_feats[20, 1, 8] = events[-1].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
+    exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -632,13 +632,13 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg2.num_timestamps == 2
 
     exp_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 5)
-    exp_node_feats[1, 2] = events[0].msg
-    exp_node_feats[5, 4] = events[2].msg
+    exp_node_feats[1, 2] = events[0].features
+    exp_node_feats[5, 4] = events[2].features
     assert torch.equal(dg2.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, dg2.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = events[1].msg
-    exp_edge_feats[5, 2, 4] = events[3].msg
+    exp_edge_feats[1, 2, 2] = events[1].features
+    exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -662,11 +662,11 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg3.num_timestamps == 1
 
     exp_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 5)
-    exp_node_feats[5, 4] = events[2].msg
+    exp_node_feats[5, 4] = events[2].features
     assert torch.equal(dg3.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, dg3.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = events[3].msg
+    exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg3.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -691,11 +691,11 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg4.num_timestamps == 1
 
     exp_node_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, 5)
-    exp_node_feats[5, 4] = events[2].msg
+    exp_node_feats[5, 4] = events[2].features
     assert torch.equal(dg4.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, dg4.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = events[3].msg
+    exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg4.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -720,11 +720,11 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg4.num_timestamps == 1
 
     exp_node_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, 5)
-    exp_node_feats[5, 4] = events[2].msg
+    exp_node_feats[5, 4] = events[2].features
     assert torch.equal(dg4.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, dg4.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = events[3].msg
+    exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg4.edge_feats.to_dense(), exp_edge_feats)
 
     # Check original graph cache is not updated
@@ -772,4 +772,4 @@ def _assert_events_equal(expected_events, actual_events):
 
         assert expected_event.t == actual_event.t
         assert expected_event.edge == actual_event.edge
-        torch.testing.assert_close(expected_event.msg, actual_event.msg)
+        torch.testing.assert_close(expected_event.features, actual_event.features)

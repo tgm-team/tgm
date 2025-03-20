@@ -12,7 +12,7 @@ class NodeEvent:
 
     t: int
     src: int
-    msg: Optional[Tensor] = None
+    features: Optional[Tensor] = None
 
 
 @dataclass(slots=True)
@@ -22,7 +22,7 @@ class EdgeEvent:
     t: int
     src: int
     dst: int
-    msg: Optional[Tensor] = None
+    features: Optional[Tensor] = None
 
     @property
     def edge(self) -> Tuple[int, int]:

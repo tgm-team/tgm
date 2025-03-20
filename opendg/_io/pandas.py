@@ -31,11 +31,11 @@ def read_pandas(
         idx = int(row['index'])
 
         if edge_feature_col is not None:
-            msg = torch.tensor(row[edge_feature_col])
+            features = torch.tensor(row[edge_feature_col])
         else:
-            msg = None
+            features = None
 
-        events[idx] = EdgeEvent(t=t, src=src, dst=dst, msg=msg)
+        events[idx] = EdgeEvent(t=t, src=src, dst=dst, features=features)
 
     df.apply(_construct_event_from_row, axis=1)
     df.drop('index', axis=1)  # Clean up temporary index column
