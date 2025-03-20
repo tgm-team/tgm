@@ -3,7 +3,7 @@ from __future__ import annotations
 import pathlib
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
 from torch import Tensor
@@ -36,10 +36,20 @@ class DGraph:
         self._slice = DGSliceTracker()
 
     def to_events(self) -> List[Event]:
-        r"""Materialize the events in the DGraph."""
         return self._storage.to_events(
             self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
+
+    @cached_property
+    def materialize(
+        self,
+    ) -> Tuple[Tensor, Tensor, Tensor, Dict[str, Optional[Tensor]]]:
+        r"""Materialize a dense tensors: src, dst, time, and {'node': node_features, 'edge': edge_features}."""
+        features = {
+            'node': self.node_feats.to_dense() if self.node_feats is not None else None,
+            'edge': self.edge_feats.to_dense() if self.edge_feats is not None else None,
+        }
+        return *self.edges, features
 
     def slice_time(
         self, start_time: Optional[int] = None, end_time: Optional[int] = None
@@ -127,6 +137,13 @@ class DGraph:
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the dynamic graph."""
         return self._storage.get_num_timestamps(
+            self._slice.start_time, self._slice.end_time, self._slice.node_slice
+        )
+
+    @cached_property
+    def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
+        r"""The src, dst, time tensors over the dynamic graph."""
+        return self._storage.get_edges(
             self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
 
