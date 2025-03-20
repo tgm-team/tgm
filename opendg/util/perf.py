@@ -2,9 +2,8 @@ import contextlib
 import cProfile
 import pstats
 import time
-from typing import Optional, Tuple, Dict, Any
+from typing import Any, Dict, Optional, Tuple
 
-import numpy as np
 import torch
 
 
