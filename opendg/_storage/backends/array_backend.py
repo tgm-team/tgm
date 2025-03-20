@@ -81,13 +81,9 @@ class DGStorageArrayBackend(DGStorageBase):
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
-    ) -> Tuple[Tensor, Tensor, Tensor]:
+    ) -> Optional[Tuple[Tensor, Tensor, Tensor]]:
         if not len(self._events):
-            return (
-                torch.empty(dtype=torch.int64),
-                torch.empty(dtype=torch.int64),
-                torch.empty(dtype=torch.int64),
-            )
+            return None
 
         src, dst, t = [], [], []
         for i in range(self._lb_time_idx(start_time), self._ub_time_idx(end_time)):

@@ -43,8 +43,10 @@ class DGraph:
     @cached_property
     def materialize(
         self,
-    ) -> Tuple[Tensor, Tensor, Tensor, Dict[str, Optional[Tensor]]]:
+    ) -> Optional[Tuple[Tensor, Tensor, Tensor, Dict[str, Optional[Tensor]]]]:
         r"""Materialize a dense tensors: src, dst, time, and {'node': node_features, 'edge': edge_features}."""
+        if self.edges is None:
+            return None
         features = {
             'node': self.node_feats.to_dense() if self.node_feats is not None else None,
             'edge': self.edge_feats.to_dense() if self.edge_feats is not None else None,
@@ -141,7 +143,7 @@ class DGraph:
         )
 
     @cached_property
-    def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
+    def edges(self) -> Optional[Tuple[Tensor, Tensor, Tensor]]:
         r"""The src, dst, time tensors over the dynamic graph."""
         return self._storage.get_edges(
             self._slice.start_time, self._slice.end_time, self._slice.node_slice
