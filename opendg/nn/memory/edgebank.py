@@ -20,7 +20,7 @@ class EdgeBankPredictor:
             dst(np.ndarray): destination node id of the edges for initialization
             ts(np.ndarray): timestamp of the edges for initialization
             memory_mode(str): 'unlimited' or 'fixed'
-            window_ratio(float): the ratio of the time window length to the total time length
+            window_ratio(float): the ratio of the time window length to the total time length (if using fixed memory_mode)
             pos_prob(float): the probability of the link existence for the edges in memory.
         """
         if memory_mode not in ['unlimited', 'fixed']:
@@ -56,14 +56,14 @@ class EdgeBankPredictor:
             self.memory[(src_, dst_)] = ts_
 
     def predict_link(self, query_src: np.ndarray, query_dst: np.ndarray) -> np.ndarray:
-        r"""Predict the probability from query src,dst pair given the current memory.
+        r"""Predict the link probability for each src,dst edge given the current memory.
 
         Args:
             query_src(np.ndarray): source node id of the query edges.
             query_dst(np.ndarray): destination node id of the query edges.
 
         Returns:
-            np.ndarray: Predictions array where edges in memory return self.pos_prob, otherise 0.0
+            np.ndarray: Predictions array where edges in memory return self.pos_prob, otherwise 0.0
         """
         pred = np.zeros(len(query_src))
         for i, edge in enumerate(zip(query_src, query_dst)):
