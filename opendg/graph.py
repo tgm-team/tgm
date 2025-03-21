@@ -31,6 +31,8 @@ class DGraph:
             self._storage = data
         else:
             events = data if isinstance(data, list) else read_events(data, **kwargs)
+            if not len(events):
+                raise ValueError('Tried to initialize a DGraph with empty events list')
             self._storage = DGStorage(events)
 
         self._slice = DGSliceTracker()
