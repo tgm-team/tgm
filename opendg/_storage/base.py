@@ -51,15 +51,6 @@ class DGStorageBase(ABC):
         pass
 
     @abstractmethod
-    def get_num_edges(
-        self,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        node_slice: Optional[Set[int]] = None,
-    ) -> int:
-        pass
-
-    @abstractmethod
     def get_num_timestamps(
         self,
         start_time: Optional[int] = None,

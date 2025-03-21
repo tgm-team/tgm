@@ -340,16 +340,6 @@ def test_get_nodes_events_list_with_multi_events_per_timestamp(
     assert storage.get_nodes(start_time=5, end_time=9) == set([2, 4])
 
 
-def test_get_num_edges_empty_events(DGStorageImpl, empty_events_list):
-    storage = DGStorageImpl(empty_events_list)
-    assert storage.get_num_edges() == 0
-    assert storage.get_num_edges(start_time=5) == 0
-    assert storage.get_num_edges(end_time=4) == 0
-    assert storage.get_num_edges(start_time=5, end_time=9) == 0
-    assert storage.get_num_edges(node_slice={1, 2, 3}) == 0
-    assert storage.get_num_edges(start_time=5, end_time=9, node_slice={1, 2, 3}) == 0
-
-
 def test_get_edges_empty_events(DGStorageImpl, empty_events_list):
     storage = DGStorageImpl(empty_events_list)
     expected = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
@@ -361,20 +351,6 @@ def test_get_edges_empty_events(DGStorageImpl, empty_events_list):
     _assert_edge_eq(
         storage.get_edges(start_time=5, end_time=9, node_slice={1, 2, 3}), expected
     )
-
-
-@pytest.mark.parametrize(
-    'events', ['node_only_events_list', 'node_only_events_list_with_features']
-)
-def test_get_num_edges_node_only_events_list(DGStorageImpl, events, request):
-    events = request.getfixturevalue(events)
-    storage = DGStorageImpl(events)
-    assert storage.get_num_edges() == 0
-    assert storage.get_num_edges(start_time=5) == 0
-    assert storage.get_num_edges(end_time=4) == 0
-    assert storage.get_num_edges(start_time=5, end_time=9) == 0
-    assert storage.get_num_edges(node_slice={1, 2, 3}) == 0
-    assert storage.get_num_edges(start_time=5, end_time=9, node_slice={1, 2, 3}) == 0
 
 
 @pytest.mark.parametrize(
@@ -392,20 +368,6 @@ def test_get_edges_node_only_events_list(DGStorageImpl, events, request):
     _assert_edge_eq(
         storage.get_edges(start_time=5, end_time=9, node_slice={1, 2, 3}), expected
     )
-
-
-@pytest.mark.parametrize(
-    'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
-)
-def test_get_num_edges_edge_events_list(DGStorageImpl, events, request):
-    events = request.getfixturevalue(events)
-    storage = DGStorageImpl(events)
-    assert storage.get_num_edges() == 3
-    assert storage.get_num_edges(start_time=5) == 2
-    assert storage.get_num_edges(end_time=4) == 1
-    assert storage.get_num_edges(start_time=5, end_time=9) == 1
-    assert storage.get_num_edges(node_slice={1, 2, 3}) == 2
-    assert storage.get_num_edges(start_time=5, end_time=9, node_slice={1, 2, 3}) == 1
 
 
 @pytest.mark.parametrize(
@@ -458,26 +420,6 @@ def test_get_edges_edge_events_list(DGStorageImpl, events, request):
     _assert_edge_eq(
         storage.get_edges(start_time=5, end_time=9, node_slice={1, 2, 3}), expected
     )
-
-
-@pytest.mark.parametrize(
-    'events',
-    [
-        'events_list_with_multi_events_per_timestamp',
-        'events_list_with_features_multi_events_per_timestamp',
-    ],
-)
-def test_get_num_edges_events_list_with_multi_events_per_timestamp(
-    DGStorageImpl, events, request
-):
-    events = request.getfixturevalue(events)
-    storage = DGStorageImpl(events)
-    assert storage.get_num_edges() == 3
-    assert storage.get_num_edges(start_time=5) == 2
-    assert storage.get_num_edges(end_time=4) == 1
-    assert storage.get_num_edges(start_time=5, end_time=9) == 1
-    assert storage.get_num_edges(node_slice={2, 3}) == 2
-    assert storage.get_num_edges(start_time=5, end_time=9, node_slice={1, 2, 3}) == 1
 
 
 def test_get_edges_events_list_with_multi_events_per_timestamp(DGStorageImpl):
