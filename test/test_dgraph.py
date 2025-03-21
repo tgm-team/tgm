@@ -21,25 +21,9 @@ def events():
 @pytest.mark.parametrize(
     'time_delta', [TimeDeltaDG('Y'), TimeDeltaDG('s'), TimeDeltaDG('r')]
 )
-def test_init_empty(time_delta):
-    dg = DGraph(data=[], time_delta=time_delta)
-    if time_delta is None:
-        assert dg.time_delta.is_ordered
-    else:
-        assert dg.time_delta == time_delta
-
-    assert len(dg) == 0
-    assert dg.start_time is None
-    assert dg.end_time is None
-    assert dg.num_nodes == 0
-    assert dg.num_edges == 0
-    assert dg.num_timestamps == 0
-    assert dg.nodes == set()
-    assert dg.node_feats is None
-    assert dg.edge_feats is None
-
-    expected_edges = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
-    _assert_edge_eq(dg.edges, expected_edges)
+def test_attempt_init_empty(time_delta):
+    with pytest.raises(ValueError):
+        DGraph(data=[], time_delta=time_delta)
 
 
 def test_init_from_events(events):
@@ -535,8 +519,8 @@ def test_slice_time_to_empty(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
 
-def test_slice_time_bad_args():
-    dg = DGraph(data=[])
+def test_slice_time_bad_args(events):
+    dg = DGraph(data=events)
     with pytest.raises(ValueError):
         dg.slice_time(2, 1)
 

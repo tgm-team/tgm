@@ -14,6 +14,8 @@ class DGStorageArrayBackend(DGStorageBase):
     r"""Array backed implementation of temporal graph storage engine."""
 
     def __init__(self, events: List[Event]) -> None:
+        if not len(events):
+            raise ValueError(f'Tried to init {self.__class__.__name__} with empty data')
         self._node_feats_shape = self._check_node_feature_shapes(events)
         self._edge_feats_shape = self._check_edge_feature_shapes(events)
         self._events = self._sort_events_list_if_needed(events[:])  # Make a copy

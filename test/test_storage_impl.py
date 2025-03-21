@@ -23,11 +23,6 @@ def DGStorageImpl(request):
 
 
 @pytest.fixture
-def empty_events_list():
-    return []
-
-
-@pytest.fixture
 def node_only_events_list():
     return [
         NodeEvent(t=1, src=2),
@@ -99,17 +94,9 @@ def events_list_out_of_time_order():
     ]
 
 
-def test_empty_events_list_to_events(DGStorageImpl, empty_events_list):
-    storage = DGStorageImpl(empty_events_list)
-    assert storage.to_events() == empty_events_list
-
-    assert storage.to_events(start_time=5) == empty_events_list
-    assert storage.to_events(start_time=5, end_time=9) == empty_events_list
-    assert storage.to_events(node_slice={1, 2, 3}) == empty_events_list
-    assert (
-        storage.to_events(start_time=5, end_time=9, node_slice={1, 2, 3})
-        == empty_events_list
-    )
+def test_attempt_init_empty(DGStorageImpl):
+    with pytest.raises(ValueError):
+        DGStorageImpl([])
 
 
 @pytest.mark.parametrize(
@@ -198,13 +185,6 @@ def test_init_non_event_type(DGStorageImpl):
         _ = DGStorageImpl(events)
 
 
-def test_get_start_time_empty_events(DGStorageImpl, empty_events_list):
-    storage = DGStorageImpl(empty_events_list)
-    assert storage.get_start_time() == None
-    assert storage.get_start_time(node_slice={4, 5}) == None
-    assert storage.get_start_time(node_slice={100}) == None
-
-
 @pytest.mark.parametrize(
     'events', ['node_only_events_list', 'node_only_events_list_with_features']
 )
@@ -244,13 +224,6 @@ def test_get_start_time_events_list_with_multi_events_per_timestamp(
     assert storage.get_start_time(node_slice={100}) == None
 
 
-def test_get_end_time_empty_events(DGStorageImpl, empty_events_list):
-    storage = DGStorageImpl(empty_events_list)
-    assert storage.get_end_time() == None
-    assert storage.get_end_time(node_slice={2, 3}) == None
-    assert storage.get_end_time(node_slice={100}) == None
-
-
 @pytest.mark.parametrize(
     'events', ['node_only_events_list', 'node_only_events_list_with_features']
 )
@@ -288,14 +261,6 @@ def test_get_end_time_events_list_with_multi_events_per_timestamp(
     assert storage.get_end_time() == events[-1].t
     assert storage.get_end_time(node_slice={2, 3}) == 5
     assert storage.get_end_time(node_slice={100}) == None
-
-
-def test_get_nodes_empty_events(DGStorageImpl, empty_events_list):
-    storage = DGStorageImpl(empty_events_list)
-    assert storage.get_nodes() == set()
-    assert storage.get_nodes(start_time=5) == set()
-    assert storage.get_nodes(end_time=4) == set()
-    assert storage.get_nodes(start_time=5, end_time=9) == set()
 
 
 @pytest.mark.parametrize(
@@ -338,19 +303,6 @@ def test_get_nodes_events_list_with_multi_events_per_timestamp(
     assert storage.get_nodes(start_time=5) == set([1, 2, 4, 6, 8])
     assert storage.get_nodes(end_time=4) == set([2])
     assert storage.get_nodes(start_time=5, end_time=9) == set([2, 4])
-
-
-def test_get_edges_empty_events(DGStorageImpl, empty_events_list):
-    storage = DGStorageImpl(empty_events_list)
-    expected = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
-    _assert_edge_eq(storage.get_edges(), expected)
-    _assert_edge_eq(storage.get_edges(start_time=5), expected)
-    _assert_edge_eq(storage.get_edges(end_time=4), expected)
-    _assert_edge_eq(storage.get_edges(start_time=5, end_time=9), expected)
-    _assert_edge_eq(storage.get_edges(node_slice={1, 2, 3}), expected)
-    _assert_edge_eq(
-        storage.get_edges(start_time=5, end_time=9, node_slice={1, 2, 3}), expected
-    )
 
 
 @pytest.mark.parametrize(
@@ -478,18 +430,6 @@ def test_get_edges_events_list_with_multi_events_per_timestamp(DGStorageImpl):
     )
 
 
-def test_get_num_timestamps_empty_events(DGStorageImpl, empty_events_list):
-    storage = DGStorageImpl(empty_events_list)
-    assert storage.get_num_timestamps() == 0
-    assert storage.get_num_timestamps(start_time=5) == 0
-    assert storage.get_num_timestamps(end_time=4) == 0
-    assert storage.get_num_timestamps(start_time=5, end_time=9) == 0
-    assert storage.get_num_timestamps(node_slice={2, 3}) == 0
-    assert (
-        storage.get_num_timestamps(start_time=5, end_time=9, node_slice={1, 2, 3}) == 0
-    )
-
-
 @pytest.mark.parametrize(
     'events', ['node_only_events_list', 'node_only_events_list_with_features']
 )
@@ -547,7 +487,6 @@ def test_get_num_timetamps_events_list_with_multi_events_per_timestamp(
 @pytest.mark.parametrize(
     'events',
     [
-        'empty_events_list',
         'node_only_events_list',
         'node_only_events_list_with_features',
         'edge_only_events_list',
@@ -670,7 +609,6 @@ def test_get_edge_feats_with_multi_events_per_timestamp(
 @pytest.mark.parametrize(
     'events',
     [
-        'empty_events_list',
         'edge_only_events_list',
         'edge_only_events_list_with_features',
         'node_only_events_list',
@@ -937,23 +875,6 @@ def test_get_nbrs_single_hop_duplicate_edges_at_different_time(DGStorageImpl):
     for k, v in nbrs.items():
         for hop_num, nbrs in enumerate(v):
             assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-
-def test_get_nbrs_single_hop_empty_graph(DGStorageImpl, empty_events_list):
-    storage = DGStorageImpl(empty_events_list)
-
-    assert storage.get_nbrs(seed_nodes=[], num_nbrs=[-1]) == {}
-    assert storage.get_nbrs(seed_nodes=[0, 1], num_nbrs=[1]) == {0: [[]], 1: [[]]}
-    assert storage.get_nbrs(seed_nodes=[0], num_nbrs=[1], start_time=5) == {0: [[]]}
-    assert storage.get_nbrs(seed_nodes=[0], num_nbrs=[1], start_time=5, end_time=9) == {
-        0: [[]]
-    }
-    assert storage.get_nbrs(seed_nodes=[0], num_nbrs=[1], node_slice={1, 2, 3}) == {
-        0: [[]]
-    }
-    assert storage.get_nbrs(
-        seed_nodes=[0], num_nbrs=[1], start_time=5, end_time=9, node_slice={1, 2, 3}
-    ) == {0: [[]]}
 
 
 @pytest.mark.skip(reason='Multi-hop get_nbrs not implemented')
