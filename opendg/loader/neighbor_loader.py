@@ -55,4 +55,7 @@ class DGNeighborLoader(DGBaseLoader):
         for seed_nbrhood in nbrs.values():
             for node, _ in seed_nbrhood[-1]:  # Only care about final hop
                 temporal_nbrhood.add(node)  # Don't care about time info either
-        return self._dg.slice_nodes(list(temporal_nbrhood))
+
+        batch = self._dg.slice_time(end_time=batch.end_time)
+        batch = batch.slice_nodes(list(temporal_nbrhood))
+        return batch
