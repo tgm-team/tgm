@@ -44,7 +44,7 @@ def test_read_pandas_with_features():
         assert events[i].t == events_df.t.iloc[i]
         assert events[i].edge == (events_df.src.iloc[i], events_df.dst.iloc[i])
         torch.testing.assert_close(
-            events[i].msg.tolist(), events_df.edge_features.iloc[i]
+            events[i].features.tolist(), events_df.edge_features.iloc[i]
         )
 
 
