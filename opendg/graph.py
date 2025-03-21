@@ -127,9 +127,8 @@ class DGraph:
     @cached_property
     def num_edges(self) -> int:
         r"""The total number of unique edges encountered over the dynamic graph."""
-        return self._storage.get_num_edges(
-            self._slice.start_time, self._slice.end_time, self._slice.node_slice
-        )
+        src, *_ = self.edges
+        return len(src)
 
     @cached_property
     def num_timestamps(self) -> int:
