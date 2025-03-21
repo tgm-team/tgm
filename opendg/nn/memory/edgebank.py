@@ -29,16 +29,14 @@ class EdgeBankPredictor:
             raise ValueError(f'Window ratio must be in (0, 1]')
         self._check_input_data(src, dst, ts)
 
-        self.memory_mode = memory_mode
         self.pos_prob = pos_prob
         self._window_ratio = window_ratio
         self._fixed_memory = memory_mode == 'fixed'
 
-        self._window_start = ts.min()
+        self._window_start, self._window_end = ts.min(), ts.max()
         if self._fixed_memory:
-            self._window_start = ts.min() + (ts.max() - ts.min()) * (1.0 - window_ratio)
-        self._window_end = ts.max()
-        self._duration = self._window_end - self._window_start
+            self._window_start = ts.max() - window_ratio * (ts.max() - ts.min())
+        self._window_size = self._window_end - self._window_start
 
         self.memory: Dict[Tuple[int, int], int] = {}
         self.update_memory(src, dst, ts)
@@ -53,20 +51,19 @@ class EdgeBankPredictor:
         """
         self._check_input_data(src, dst, ts)
         self._window_end = max(self._window_end, ts.max())
-        self._window_start = self._window_end - self._duration
+        self._window_start = self._window_end - self._window_size
         for src_, dst_, ts_ in zip(src, dst, ts):
             self.memory[(src_, dst_)] = ts_
 
     def predict_link(self, query_src: np.ndarray, query_dst: np.ndarray) -> np.ndarray:
-        r"""Predict the probability from query src,dst pair given the current memory,
-        all edges not in memory will return 0.0 while all observed edges in memory will return self.pos_prob.
+        r"""Predict the probability from query src,dst pair given the current memory.
 
         Args:
             query_src(np.ndarray): source node id of the query edges.
             query_dst(np.ndarray): destination node id of the query edges.
 
         Returns:
-            pred(np.ndarray): the prediction for all query edges.
+            np.ndarray: Predictions array where edges in memory return self.pos_prob, otherise 0.0
         """
         pred = np.zeros(len(query_src))
         for i, edge in enumerate(zip(query_src, query_dst)):

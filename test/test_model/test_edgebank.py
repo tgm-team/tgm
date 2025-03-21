@@ -5,26 +5,20 @@ from opendg.events import EdgeEvent
 from opendg.nn import EdgeBankPredictor
 
 
-def test_no_loader_unlimited_memory():
+@pytest.mark.parametrize('pos_prob', [0.7, 1.0])
+def test_unlimited_memory(pos_prob):
     events = [EdgeEvent(t=1, src=2, dst=3), EdgeEvent(t=5, src=10, dst=20)]
-    edges = []
-    for event in events:
-        edges.append([event.src, event.dst, event.t])
-    edge_index = np.array(edges)
-    srcs = np.asarray(edge_index[:, 0])
-    dsts = np.asarray(edge_index[:, 1])
-    ts = np.asarray(edge_index[:, 2])
+    src, dst, ts = _events_to_edge_arrays(events)
 
-    MEMORY_MODE = 'unlimited'
+    bank = EdgeBankPredictor(src, dst, ts, memory_mode='unlimited', pos_prob=pos_prob)
+    assert bank.predict_link(np.asarray([1]), np.asarray([1])) == np.array([0])
 
-    edgebank = EdgeBankPredictor(srcs, dsts, ts, memory_mode=MEMORY_MODE)
-    assert edgebank.predict_link(np.asarray([1]), np.asarray([1])) == np.array([0])
-
-    edgebank.update_memory(np.asarray([1]), np.asarray([1]), np.asarray([7]))
-    assert edgebank.predict_link(np.asarray([1]), np.asarray([1])) == np.array([1])
+    bank.update_memory(np.asarray([1]), np.asarray([1]), np.asarray([7]))
+    assert bank.predict_link(np.asarray([1]), np.asarray([1])) == np.array([pos_prob])
 
 
-def test_no_loader_fixed_time_window():
+@pytest.mark.parametrize('pos_prob', [0.7, 1.0])
+def test_fixed_time_window(pos_prob):
     events = [
         EdgeEvent(t=1, src=1, dst=2),
         EdgeEvent(t=2, src=2, dst=3),
@@ -33,39 +27,55 @@ def test_no_loader_fixed_time_window():
         EdgeEvent(t=5, src=5, dst=6),
         EdgeEvent(t=6, src=6, dst=7),
     ]
-    edges = []
-    for event in events:
-        edges.append([event.src, event.dst, event.t])
-    edge_index = np.array(edges)
-    srcs = edge_index[:, 0]
-    dsts = edge_index[:, 1]
-    ts = edge_index[:, 2]
+    src, dst, ts = _events_to_edge_arrays(events)
 
     MEMORY_MODE = 'fixed'
     TIME_WINDOW_RATIO = 0.5
 
-    edgebank = EdgeBankPredictor(
-        np.asarray(srcs),
-        np.asarray(dsts),
+    bank = EdgeBankPredictor(
+        np.asarray(src),
+        np.asarray(dst),
         np.asarray(ts),
         memory_mode=MEMORY_MODE,
         window_ratio=TIME_WINDOW_RATIO,
+        pos_prob=pos_prob,
     )
 
-    assert edgebank.predict_link(np.array([4]), np.array([5])) == np.array([1])
-    assert edgebank.predict_link(np.array([3]), np.array([4])) == np.array([0])
+    assert bank.predict_link(np.array([4]), np.array([5])) == np.array([pos_prob])
+    assert bank.predict_link(np.array([3]), np.array([4])) == np.array([0])
 
     # update but time window doesn't move forward
-    edgebank.update_memory(np.array([3]), np.array([4]), np.array([5]))
-    assert edgebank.predict_link(np.array([3]), np.array([4])) == np.array([1])
+    bank.update_memory(np.array([3]), np.array([4]), np.array([5]))
+    assert bank.predict_link(np.array([3]), np.array([4])) == np.array([pos_prob])
 
     # update and time window moves forward
-    edgebank.update_memory(np.array([7]), np.array([8]), np.array([7]))
-    assert edgebank.predict_link(np.array([7]), np.array([8])) == np.array([1])
-    assert edgebank.predict_link(np.array([4]), np.array([5])) == np.array([0])
+    bank.update_memory(np.array([7]), np.array([8]), np.array([7]))
+    assert bank.predict_link(np.array([7]), np.array([8])) == np.array([pos_prob])
+    assert bank.predict_link(np.array([4]), np.array([5])) == np.array([0])
 
 
-def test_edgebank_arguments():
+def test_bad_init_args():
+    with pytest.raises(ValueError):
+        EdgeBankPredictor(np.array([]), np.array([]), np.array([]))
+
+    with pytest.raises(TypeError):
+        EdgeBankPredictor(1, 2, 3)
+
+
+def test_bad_update_args():
+    events = [EdgeEvent(t=1, src=2, dst=3), EdgeEvent(t=5, src=10, dst=20)]
+    src, dst, ts = _events_to_edge_arrays(events)
+    bank = EdgeBankPredictor(src, dst, ts, memory_mode='unlimited')
+
+    with pytest.raises(ValueError):
+        bank.update_memory(np.array([]), np.array([]), np.array([1]))
+
+    with pytest.raises(ValueError):
+        bank.update_memory(np.array([]), np.array([]), np.array([]))
+
+
+@pytest.mark.parametrize('pos_prob', [0.7, 1.0])
+def test_edgebank_arguments(pos_prob):
     events = [
         EdgeEvent(t=1, src=1, dst=2),
         EdgeEvent(t=2, src=2, dst=3),
@@ -74,46 +84,27 @@ def test_edgebank_arguments():
         EdgeEvent(t=5, src=5, dst=6),
         EdgeEvent(t=6, src=6, dst=7),
     ]
-    edges = []
-    for event in events:
-        edges.append([event.src, event.dst, event.t])
-    edge_index = np.array(edges)
-    srcs = edge_index[:, 0]
-    dsts = edge_index[:, 1]
-    ts = edge_index[:, 2]
+    src, dst, ts = _events_to_edge_arrays(events)
 
-    MEMORY_MODE = 'fixed'
-    pos_prob = 0.01
-    window_ratio = 0.15
+    WINDOW_RATIO = 0.15
 
-    edgebank = EdgeBankPredictor(
-        srcs,
-        dsts,
+    bank = EdgeBankPredictor(
+        src,
+        dst,
         ts,
-        memory_mode=MEMORY_MODE,
-        window_ratio=window_ratio,
+        memory_mode='fixed',
+        window_ratio=WINDOW_RATIO,
         pos_prob=pos_prob,
     )
+    assert bank.window_start == 5.25
+    assert bank.window_end == 6
+    assert bank.window_ratio == WINDOW_RATIO
+    assert bank.predict_link(np.array([6]), np.array([7])) == np.array([pos_prob])
 
-    assert edgebank.window_ratio == 0.15
-    assert edgebank.window_start == 5.25
-    assert edgebank.window_end == 6
 
-    assert edgebank.predict_link(np.array([6]), np.array([7])) == np.array([pos_prob])
-
-    edgebank = EdgeBankPredictor(srcs, dsts, ts)
-    assert edgebank.window_start == 1
-    assert edgebank.window_end == 6
-    assert edgebank.predict_link(np.array([1]), np.array([2])) == np.array([1])
-
-    with pytest.raises(ValueError):
-        edgebank.update_memory(np.array([]), np.array([]), np.array([1]))
-
-    with pytest.raises(ValueError):
-        edgebank.update_memory(np.array([]), np.array([]), np.array([]))
-
-    with pytest.raises(ValueError):
-        edgebank = EdgeBankPredictor(np.array([]), np.array([]), np.array([]))
-
-    with pytest.raises(TypeError):
-        edgebank = EdgeBankPredictor(1, 2, 3)
+def _events_to_edge_arrays(events):
+    edge_list = []
+    for event in events:
+        edge_list.append([event.src, event.dst, event.t])
+    edges = np.array(edge_list)
+    return np.asarray(edges[:, 0]), np.asarray(edges[:, 1]), np.asarray(edges[:, 2])
