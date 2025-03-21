@@ -1,11 +1,11 @@
+import warnings
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
-from opendg.timedelta import TimeDeltaDG
 
 
 class DGStorageBase(ABC):
@@ -42,6 +42,15 @@ class DGStorageBase(ABC):
         pass
 
     @abstractmethod
+    def get_edges(
+        self,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        node_slice: Optional[Set[int]] = None,
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        pass
+
+    @abstractmethod
     def get_num_edges(
         self,
         start_time: Optional[int] = None,
@@ -57,16 +66,6 @@ class DGStorageBase(ABC):
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
     ) -> int:
-        pass
-
-    @abstractmethod
-    def append(self, events: Union[Event, List[Event]]) -> None:
-        pass
-
-    @abstractmethod
-    def temporal_coarsening(
-        self, time_delta: TimeDeltaDG, agg_func: str = 'sum'
-    ) -> 'DGStorageBase':
         pass
 
     @abstractmethod
@@ -98,32 +97,35 @@ class DGStorageBase(ABC):
     ) -> Optional[Tensor]:
         pass
 
-    def _check_node_feature_shapes(
-        self, events: List[Event], expected_shape: Optional[torch.Size] = None
-    ) -> Optional[torch.Size]:
-        node_feats_shape = expected_shape
+    def _sort_events_list_if_needed(self, events: List[Event]) -> List[Event]:
+        if not all(isinstance(event, Event) for event in events):
+            raise ValueError('bad type when initializing DGStorage from events list')
+        if all(events[i].t <= events[i + 1].t for i in range(len(events) - 1)):
+            return events
+        warnings.warn('received a non-chronological list of events, sorting by time')
+        events.sort(key=lambda x: x.t)
+        return events
 
+    def _check_node_feature_shapes(self, events: List[Event]) -> Optional[torch.Size]:
+        shape = None
         for event in events:
             if isinstance(event, NodeEvent) and event.features is not None:
-                if node_feats_shape is None:
-                    node_feats_shape = event.features.shape
-                elif node_feats_shape != event.features.shape:
+                if shape is None:
+                    shape = event.features.shape
+                elif shape != event.features.shape:
                     raise ValueError(
-                        f'Incompatible node features shapes: {node_feats_shape} != {event.features.shape}'
+                        f'Node feature shapes non-homogenous: {shape} != {event.features.shape}'
                     )
-        return node_feats_shape
+        return shape
 
-    def _check_edge_feature_shapes(
-        self, events: List[Event], expected_shape: Optional[torch.Size] = None
-    ) -> Optional[torch.Size]:
-        edge_feats_shape = expected_shape
-
+    def _check_edge_feature_shapes(self, events: List[Event]) -> Optional[torch.Size]:
+        shape = None
         for event in events:
             if isinstance(event, EdgeEvent) and event.features is not None:
-                if edge_feats_shape is None:
-                    edge_feats_shape = event.features.shape
-                elif edge_feats_shape != event.features.shape:
+                if shape is None:
+                    shape = event.features.shape
+                elif shape != event.features.shape:
                     raise ValueError(
-                        f'Incompatible edge features shapes: {edge_feats_shape} != {event.features.shape}'
+                        f'Edge feature shapes non-homogenous: {shape} != {event.features.shape}'
                     )
-        return edge_feats_shape
+        return shape

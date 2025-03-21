@@ -26,7 +26,7 @@ jobs:
           changed-files: "true"
 
       - name: "Run Ruff Formatter"
-        uses: astral-sh/ruff-action@v1
+        uses: astral-sh/ruff-action@v3
         with:
           args: "format --check"
-          changed-files: "true"
+          version-file: "pyproject.toml"
