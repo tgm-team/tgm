@@ -48,11 +48,11 @@ class DGNeighborLoader(DGBaseLoader):
         return self._num_nbrs
 
     def pre_yield(self, batch: DGraph) -> DGraph:
-        # Dict[int, List[List[Tuple[int, int]]]]
         nbrs = self._dg._storage.get_nbrs(
-            seed_nodes=batch.nodes,
-            num_nbrs=self.num_nbrs,
-            end_time=batch.end_time,
+            seed_nodes=batch.nodes, num_nbrs=self.num_nbrs, end_time=batch.end_time
         )
-        # TODO: Extract subgraph with nbrs
-        return batch
+        temporal_nbrhood = batch.nodes
+        for seed_nbrhood in nbrs.values():
+            for node, _ in seed_nbrhood[-1]:  # Only care about final hop
+                temporal_nbrhood.add(node)  # Don't care about time info either
+        return self._dg.slice_nodes(list(temporal_nbrhood))
