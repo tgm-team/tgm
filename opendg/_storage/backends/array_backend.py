@@ -120,7 +120,7 @@ class DGStorageArrayBackend(DGStorageBase):
 
     def get_nbrs(
         self,
-        seed_nodes: List[int],
+        seed_nodes: Set[int],
         num_nbrs: List[int],
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
@@ -130,11 +130,9 @@ class DGStorageArrayBackend(DGStorageBase):
         if len(num_nbrs) > 1:
             raise NotImplementedError(f'Multi-hop not implemented')
 
-        seed_nodes_set = set(seed_nodes)
-
         T = Tuple[int, int]
-        nbrs: Dict[int, List[Set[T]]] = {node: [set()] for node in seed_nodes_set}
-        sampled_nbrs: Dict[int, List[List[T]]] = {node: [[]] for node in seed_nodes_set}
+        nbrs: Dict[int, List[Set[T]]] = {node: [set()] for node in seed_nodes}
+        sampled_nbrs: Dict[int, List[List[T]]] = {node: [[]] for node in seed_nodes}
         if not len(self._events):
             return sampled_nbrs
 
@@ -144,9 +142,9 @@ class DGStorageArrayBackend(DGStorageBase):
             if isinstance(event, EdgeEvent) and (
                 node_slice is None or any(e in node_slice for e in event.edge)
             ):
-                if event.src in seed_nodes_set:
+                if event.src in seed_nodes:
                     nbrs[event.src][hop].add((event.dst, event.t))
-                if event.dst in seed_nodes_set:
+                if event.dst in seed_nodes:
                     nbrs[event.dst][hop].add((event.src, event.t))
 
         for node, nbrs_list in nbrs.items():

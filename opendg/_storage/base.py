@@ -62,7 +62,7 @@ class DGStorageBase(ABC):
     @abstractmethod
     def get_nbrs(
         self,
-        seed_nodes: List[int],
+        seed_nodes: Set[int],
         num_nbrs: List[int],
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
