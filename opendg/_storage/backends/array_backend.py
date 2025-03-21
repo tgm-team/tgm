@@ -31,9 +31,6 @@ class DGStorageArrayBackend(DGStorageBase):
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
     ) -> List[Event]:
-        if not len(self._events):
-            return []
-
         lb_idx, ub_idx = self._lb_time_idx(start_time), self._ub_time_idx(end_time)
         if node_slice is None:
             return self._events[lb_idx:ub_idx]
@@ -67,9 +64,6 @@ class DGStorageArrayBackend(DGStorageBase):
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
     ) -> Set[int]:
-        if not len(self._events):
-            return set()
-
         nodes: Set[int] = set()
         for i in range(self._lb_time_idx(start_time), self._ub_time_idx(end_time)):
             event = self._events[i]
@@ -87,9 +81,6 @@ class DGStorageArrayBackend(DGStorageBase):
         src: List[int] = []
         dst: List[int] = []
         t: List[int] = []
-        if not len(self._events):
-            return torch.Tensor(src), torch.Tensor(dst), torch.Tensor(t)
-
         for i in range(self._lb_time_idx(start_time), self._ub_time_idx(end_time)):
             event = self._events[i]
             if isinstance(event, EdgeEvent):
@@ -109,9 +100,6 @@ class DGStorageArrayBackend(DGStorageBase):
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
     ) -> int:
-        if not len(self._events):
-            return 0
-
         timestamps = set()
         for i in range(self._lb_time_idx(start_time), self._ub_time_idx(end_time)):
             event = self._events[i]
@@ -164,9 +152,6 @@ class DGStorageArrayBackend(DGStorageBase):
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
     ) -> Optional[Tensor]:
-        if not len(self._events):
-            return None
-
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
         indices, values = [], []
@@ -200,9 +185,6 @@ class DGStorageArrayBackend(DGStorageBase):
         end_time: Optional[int] = None,
         node_slice: Optional[Set[int]] = None,
     ) -> Optional[Tensor]:
-        if not len(self._events):
-            return None
-
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
         indices, values = [], []
