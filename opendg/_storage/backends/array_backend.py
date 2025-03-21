@@ -76,6 +76,31 @@ class DGStorageArrayBackend(DGStorageBase):
                 nodes.update(event_nodes)
         return nodes
 
+    def get_edges(
+        self,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        node_slice: Optional[Set[int]] = None,
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        src: List[int] = []
+        dst: List[int] = []
+        t: List[int] = []
+        if not len(self._events):
+            return torch.Tensor(src), torch.Tensor(dst), torch.Tensor(t)
+
+        for i in range(self._lb_time_idx(start_time), self._ub_time_idx(end_time)):
+            event = self._events[i]
+            if isinstance(event, EdgeEvent):
+                if node_slice is None or any(e in node_slice for e in event.edge):
+                    src.append(event.src)
+                    dst.append(event.dst)
+                    t.append(event.t)
+        return (
+            torch.tensor(src, dtype=torch.int64),
+            torch.tensor(dst, dtype=torch.int64),
+            torch.tensor(t, dtype=torch.int64),
+        )
+
     def get_num_edges(
         self,
         start_time: Optional[int] = None,

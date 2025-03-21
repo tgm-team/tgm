@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from opendg.graph import DGraph
+from opendg.graph import DGBatch, DGraph
 from opendg.timedelta import TimeDeltaDG
 
 
@@ -14,6 +14,7 @@ class DGBaseLoader(ABC):
         batch_size (int): The batch size to yield at each iteration.
         batch_unit (str): The unit corresponding to the batch_size.
         drop_last (bool): Set to True to drop the last incomplete batch.
+        materialize (bool): If True (default), auto-materialize the DGraph before yielding a batch.
 
     Raises:
         ValueError: If the batch_unit and dg time unit are not both ordered or both not ordered.
@@ -26,6 +27,7 @@ class DGBaseLoader(ABC):
         batch_size: int = 1,
         batch_unit: str = 'r',
         drop_last: bool = False,
+        materialize: bool = True,
     ) -> None:
         if batch_size <= 0:
             raise ValueError(f'batch_size must be > 0 but got {batch_size}')
@@ -55,6 +57,7 @@ class DGBaseLoader(ABC):
         assert dg.end_time is not None
 
         self._dg = dg
+        self._materialize = materialize
         self._batch_size = batch_size
         self._idx = dg.start_time
         self._stop_idx = dg.end_time if drop_last else dg.end_time + (batch_size - 1)
@@ -66,11 +69,12 @@ class DGBaseLoader(ABC):
     def __iter__(self) -> DGBaseLoader:
         return self
 
-    def __next__(self) -> DGraph:
+    def __next__(self) -> DGraph | DGBatch:
         slice_end = self._idx + self._batch_size - 1
         if slice_end > self._stop_idx:
             raise StopIteration
 
         batch = self._dg.slice_time(self._idx, slice_end)
         self._idx += self._batch_size
-        return self.pre_yield(batch)
+        batch = self.pre_yield(batch)
+        return batch.materialize if self._materialize else batch

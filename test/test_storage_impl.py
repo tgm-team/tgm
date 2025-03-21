@@ -350,6 +350,19 @@ def test_get_num_edges_empty_events(DGStorageImpl, empty_events_list):
     assert storage.get_num_edges(start_time=5, end_time=9, node_slice={1, 2, 3}) == 0
 
 
+def test_get_edges_empty_events(DGStorageImpl, empty_events_list):
+    storage = DGStorageImpl(empty_events_list)
+    expected = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
+    _assert_edge_eq(storage.get_edges(), expected)
+    _assert_edge_eq(storage.get_edges(start_time=5), expected)
+    _assert_edge_eq(storage.get_edges(end_time=4), expected)
+    _assert_edge_eq(storage.get_edges(start_time=5, end_time=9), expected)
+    _assert_edge_eq(storage.get_edges(node_slice={1, 2, 3}), expected)
+    _assert_edge_eq(
+        storage.get_edges(start_time=5, end_time=9, node_slice={1, 2, 3}), expected
+    )
+
+
 @pytest.mark.parametrize(
     'events', ['node_only_events_list', 'node_only_events_list_with_features']
 )
@@ -365,6 +378,23 @@ def test_get_num_edges_node_only_events_list(DGStorageImpl, events, request):
 
 
 @pytest.mark.parametrize(
+    'events', ['node_only_events_list', 'node_only_events_list_with_features']
+)
+def test_get_edges_node_only_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    expected = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
+    _assert_edge_eq(storage.get_edges(), expected)
+    _assert_edge_eq(storage.get_edges(start_time=5), expected)
+    _assert_edge_eq(storage.get_edges(end_time=4), expected)
+    _assert_edge_eq(storage.get_edges(start_time=5, end_time=9), expected)
+    _assert_edge_eq(storage.get_edges(node_slice={1, 2, 3}), expected)
+    _assert_edge_eq(
+        storage.get_edges(start_time=5, end_time=9, node_slice={1, 2, 3}), expected
+    )
+
+
+@pytest.mark.parametrize(
     'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
 )
 def test_get_num_edges_edge_events_list(DGStorageImpl, events, request):
@@ -376,6 +406,58 @@ def test_get_num_edges_edge_events_list(DGStorageImpl, events, request):
     assert storage.get_num_edges(start_time=5, end_time=9) == 1
     assert storage.get_num_edges(node_slice={1, 2, 3}) == 2
     assert storage.get_num_edges(start_time=5, end_time=9, node_slice={1, 2, 3}) == 1
+
+
+@pytest.mark.parametrize(
+    'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
+)
+def test_get_edges_edge_events_list(DGStorageImpl, events, request):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+
+    expected = (
+        torch.tensor([2, 2, 6], dtype=torch.int64),
+        torch.tensor([2, 4, 8], dtype=torch.int64),
+        torch.tensor([1, 5, 10], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(), expected)
+
+    expected = (
+        torch.tensor([2, 6], dtype=torch.int64),
+        torch.tensor([4, 8], dtype=torch.int64),
+        torch.tensor([5, 10], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(start_time=5), expected)
+
+    expected = (
+        torch.tensor([2], dtype=torch.int64),
+        torch.tensor([2], dtype=torch.int64),
+        torch.tensor([1], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(end_time=4), expected)
+
+    expected = (
+        torch.tensor([2], dtype=torch.int64),
+        torch.tensor([4], dtype=torch.int64),
+        torch.tensor([5], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(start_time=5, end_time=9), expected)
+
+    expected = (
+        torch.tensor([2, 2], dtype=torch.int64),
+        torch.tensor([2, 4], dtype=torch.int64),
+        torch.tensor([1, 5], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(node_slice={1, 2, 3}), expected)
+
+    expected = (
+        torch.tensor([2], dtype=torch.int64),
+        torch.tensor([4], dtype=torch.int64),
+        torch.tensor([5], dtype=torch.int64),
+    )
+    _assert_edge_eq(
+        storage.get_edges(start_time=5, end_time=9, node_slice={1, 2, 3}), expected
+    )
 
 
 @pytest.mark.parametrize(
@@ -396,6 +478,62 @@ def test_get_num_edges_events_list_with_multi_events_per_timestamp(
     assert storage.get_num_edges(start_time=5, end_time=9) == 1
     assert storage.get_num_edges(node_slice={2, 3}) == 2
     assert storage.get_num_edges(start_time=5, end_time=9, node_slice={1, 2, 3}) == 1
+
+
+def test_get_edges_events_list_with_multi_events_per_timestamp(DGStorageImpl):
+    events = [
+        EdgeEvent(t=1, src=2, dst=3),
+        EdgeEvent(t=1, src=2, dst=2),
+        EdgeEvent(t=5, src=4, dst=9),
+        EdgeEvent(t=5, src=2, dst=4),
+        EdgeEvent(t=10, src=6, dst=10),
+        EdgeEvent(t=20, src=1, dst=8),
+    ]
+    storage = DGStorageImpl(events)
+
+    expected = (
+        torch.tensor([2, 2, 4, 2, 6, 1], dtype=torch.int64),
+        torch.tensor([3, 2, 9, 4, 10, 8], dtype=torch.int64),
+        torch.tensor([1, 1, 5, 5, 10, 20], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(), expected)
+
+    expected = (
+        torch.tensor([4, 2, 6, 1], dtype=torch.int64),
+        torch.tensor([9, 4, 10, 8], dtype=torch.int64),
+        torch.tensor([5, 5, 10, 20], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(start_time=5), expected)
+
+    expected = (
+        torch.tensor([2, 2], dtype=torch.int64),
+        torch.tensor([3, 2], dtype=torch.int64),
+        torch.tensor([1, 1], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(end_time=4), expected)
+
+    expected = (
+        torch.tensor([4, 2], dtype=torch.int64),
+        torch.tensor([9, 4], dtype=torch.int64),
+        torch.tensor([5, 5], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(start_time=5, end_time=9), expected)
+
+    expected = (
+        torch.tensor([2, 2, 2], dtype=torch.int64),
+        torch.tensor([3, 2, 4], dtype=torch.int64),
+        torch.tensor([1, 1, 5], dtype=torch.int64),
+    )
+    _assert_edge_eq(storage.get_edges(node_slice={2, 3}), expected)
+
+    expected = (
+        torch.tensor([2], dtype=torch.int64),
+        torch.tensor([4], dtype=torch.int64),
+        torch.tensor([5], dtype=torch.int64),
+    )
+    _assert_edge_eq(
+        storage.get_edges(start_time=5, end_time=9, node_slice={1, 2, 3}), expected
+    )
 
 
 def test_get_num_timestamps_empty_events(DGStorageImpl, empty_events_list):
@@ -898,3 +1036,16 @@ def test_set_dg_storage_backend_with_str():
 def test_set_dg_storage_backend_with_bad_str():
     with pytest.raises(ValueError):
         set_dg_storage_backend('foo')
+
+
+def _assert_edge_eq(actual, expected):
+    src_actual, dst_actual, t_actual = actual
+    src_exp, dst_exp, t_exp = expected
+
+    def _eq_check(actual_tensor, exp_tensor):
+        assert isinstance(actual_tensor, torch.Tensor)
+        assert actual_tensor.tolist() == exp_tensor.tolist()
+
+    _eq_check(src_actual, src_exp)
+    _eq_check(dst_actual, dst_exp)
+    _eq_check(t_actual, t_exp)
