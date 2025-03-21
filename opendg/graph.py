@@ -139,6 +139,13 @@ class DGraph:
         )
 
     @cached_property
+    def nodes(self) -> Set[int]:
+        r"""The set of node ids over the dynamic graph."""
+        return self._storage.get_nodes(
+            self._slice.start_time, self._slice.end_time, self._slice.node_slice
+        )
+
+    @cached_property
     def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
         r"""The src, dst, time tensors over the dynamic graph."""
         return self._storage.get_edges(
