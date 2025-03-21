@@ -48,12 +48,9 @@ class DGNeighborLoader(DGBaseLoader):
         return self._num_nbrs
 
     def pre_yield(self, batch: DGraph) -> DGraph:
-        # TODO: Need a way to easily get nodes in the graph
-        batch_nodes = self._dg._storage.get_nodes(batch.start_time, batch.end_time)
-
         # Dict[int, List[List[Tuple[int, int]]]]
         nbrs = self._dg._storage.get_nbrs(
-            seed_nodes=list(batch_nodes),
+            seed_nodes=list(batch.nodes),
             num_nbrs=self.num_nbrs,
             end_time=batch.end_time,
         )
