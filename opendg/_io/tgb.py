@@ -15,25 +15,25 @@ def read_tgb(
     events: List[Event] = []
     dataset = LinkPropPredDataset(name=name, root="datasets", preprocess=True)
     data = dataset.full_data
-    type(data['sources'])
-    type(data['destinations'])
-    type(data['timestamps'])
-    type(data['edge_feat'])
-    # with open(file_path, newline='') as f:
-    #     reader = csv.DictReader(f)
-    #     for row in reader:
-    #         src = int(row[src_col])
-    #         dst = int(row[dst_col])
-    #         t = int(row[time_col])
+    sources = data['sources']
+    destinations = data['destinations']
+    timestamps = data['timestamps']
+    edge_feats = data['edge_feat']
 
-    #         if edge_feature_col is None:
-    #             features = None
-    #         else:
-    #             msg_list = [float(row[feature_col]) for feature_col in edge_feature_col]
-    #             features = torch.tensor(msg_list)
+    num_events = len(sources)
 
-    #         event = EdgeEvent(t=t, src=src, dst=dst, features=features)
-    #         events.append(event)
+    for i in range(num_events):
+        src = int(sources[i])
+        dst = int(destinations[i])
+        t = int(timestamps[i])
+
+        if edge_feats is None:
+            features = None
+        else:
+            features = torch.tensor(edge_feats[i,:], dtype=torch.float)
+
+        event = EdgeEvent(t=t, src=src, dst=dst, features=features)
+        events.append(event)
     return events
 
 
