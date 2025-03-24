@@ -1,45 +1,53 @@
-from typing import List, Optional
+from typing import Any, List
 
-import numpy as np
 import torch
 from tgb.linkproppred.dataset import LinkPropPredDataset
-
+from tgb.nodeproppred.dataset import NodePropPredDataset
 
 from opendg.events import EdgeEvent, Event
 
 
 def read_tgb(
     name: str,
+    split: str = 'all',  # Options: 'train', 'valid', 'test', 'all'
+    **kwargs: Any,
 ) -> List[Event]:
     # TODO: Node Events not supported
-    events: List[Event] = []
-    dataset = LinkPropPredDataset(name=name, root="datasets", preprocess=True)
+    if name.startswith('tgbl-'):
+        dataset = LinkPropPredDataset(name=name, **kwargs)
+    elif name.startswith('tgbn-'):
+        dataset = NodePropPredDataset(name=name, **kwargs)
+    else:
+        raise ValueError(f'Unknown dataset: {name}')
     data = dataset.full_data
-    sources = data['sources']
-    destinations = data['destinations']
-    timestamps = data['timestamps']
-    edge_feats = data['edge_feat']
 
-    num_events = len(sources)
+    split_masks = {
+        'train': dataset.train_mask,
+        'valid': dataset.val_mask,
+        'test': dataset.test_mask,
+    }
 
-    for i in range(num_events):
-        src = int(sources[i])
-        dst = int(destinations[i])
-        t = int(timestamps[i])
+    if split == 'all':
+        mask = slice(None)  # selects everything
+    elif split in split_masks:
+        mask = split_masks[split]
+    else:
+        raise ValueError(f'Unknown split: {split}')
 
-        if edge_feats is None:
-            features = None
-        else:
-            features = torch.tensor(edge_feats[i,:], dtype=torch.float)
+    sources = data['sources'][mask]
+    destinations = data['destinations'][mask]
+    timestamps = data['timestamps'][mask]
+    edge_feats = data['edge_feat'][mask] if data['edge_feat'] is not None else None
 
-        event = EdgeEvent(t=t, src=src, dst=dst, features=features)
+    events: List[Event] = []
+    for src, dst, t, feat in zip(
+        sources,
+        destinations,
+        timestamps,
+        edge_feats if edge_feats is not None else [None] * len(sources),
+    ):
+        features = torch.tensor(feat, dtype=torch.float) if feat is not None else None
+        event = EdgeEvent(t=int(t), src=int(src), dst=int(dst), features=features)
         events.append(event)
+
     return events
-
-
-def main():
-    name = "tgbl-wiki"
-    read_tgb(name=name)
-
-if __name__ == "__main__":
-    main()

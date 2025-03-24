@@ -1,7 +1,3 @@
-import csv
-import tempfile
-
-import torch
 from tgb.linkproppred.dataset import LinkPropPredDataset
 
 from opendg._io.tgb import read_tgb
@@ -9,14 +5,12 @@ from opendg.events import EdgeEvent
 
 
 def test_tgb_conversion():
-    
-    name = "tgbl-wiki"
-    dataset = LinkPropPredDataset(name=name, root="datasets", preprocess=True)
+    name = 'tgbl-wiki'
+    dataset = LinkPropPredDataset(name=name, root='datasets', preprocess=True)
     data = dataset.full_data
     sources = data['sources']
     destinations = data['destinations']
     timestamps = data['timestamps']
-    
 
     events = read_tgb(name=name)
     assert len(events) == dataset.num_edges
@@ -24,12 +18,3 @@ def test_tgb_conversion():
         assert isinstance(events[i], EdgeEvent)
         assert events[i].t == int(timestamps[i])
         assert events[i].edge == (int(sources[i]), int(destinations[i]))
-
-
-
-def main():
-    
-    test_tgb_conversion()
-
-if __name__ == "__main__":
-    main()
