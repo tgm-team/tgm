@@ -12,7 +12,7 @@ def test_tgb_conversion():
     destinations = data['destinations']
     timestamps = data['timestamps']
 
-    events = read_tgb(name=name)
+    events = read_tgb(name=name, split='all')
     assert len(events) == dataset.num_edges
     for i in range(len(events)):
         assert isinstance(events[i], EdgeEvent)
