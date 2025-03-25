@@ -2,7 +2,16 @@ import torch
 
 
 class TemporalAttention(torch.nn.Module):
-    r"""Multi-head Temporal Attention Module."""
+    r"""Multi-head Temporal Attention Module.
+
+    Args:
+        n_heads (int): The number of heads in the attention module.
+        node_dim (int): Feature dimension of node features.
+        edge_dim (int): Feature dimension of edge features.
+        time_dim (int): Feature dimension of time features.
+        out_dim (int): The output latent dimension (must be multiple of n_heads).
+        dropout (float): Optional dropout to apply to output linear layer (default=0.1).
+    """
 
     def __init__(
         self,
