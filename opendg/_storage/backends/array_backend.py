@@ -140,7 +140,7 @@ class DGStorageArrayBackend(DGStorageBase):
         for i in range(self._lb_time_idx(start_time), self._ub_time_idx(end_time)):
             event = self._events[i]
             if isinstance(event, EdgeEvent) and (
-                node_slice is None or any(e in node_slice for e in event.edge)
+                node_slice is None or all(e in node_slice for e in event.edge)
             ):
                 if event.src in seed_nodes:
                     nbrs[event.src][hop].add((event.dst, event.t))

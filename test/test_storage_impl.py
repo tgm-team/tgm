@@ -834,14 +834,14 @@ def test_get_nbrs_single_hop(DGStorageImpl):
         seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[-1], node_slice={1, 2, 3}
     )
     exp_nbrs = {
-        1: [[(8, 20)]],
-        2: [[(2, 1), (4, 5)]],
+        1: [[]],
+        2: [[(2, 1)]],
         3: [[]],
-        4: [[(2, 5)]],
+        4: [[]],
         5: [[]],
         6: [[]],
         7: [[]],
-        8: [[(1, 20)]],
+        8: [[]],
     }
     assert nbrs.keys() == exp_nbrs.keys()
     for k, v in nbrs.items():
@@ -853,9 +853,9 @@ def test_get_nbrs_single_hop(DGStorageImpl):
     )
     exp_nbrs = {
         1: [[]],
-        2: [[(2, 1), (4, 5)]],
+        2: [[(2, 1)]],
         3: [[]],
-        4: [[(2, 5)]],
+        4: [[]],
         5: [[]],
         6: [[]],
         7: [[]],
