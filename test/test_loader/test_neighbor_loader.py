@@ -53,7 +53,7 @@ def test_iteration_with_sampling(drop_last):
         if batch_num == 0:
             expected_events = events[:5]
         elif batch_num == 1:
-            expected_events = events[4:7]
+            expected_events = events[3:7]
         elif batch_num == 2:
             expected_events = events[6:]
         else:
