@@ -2,7 +2,6 @@ from typing import Any, List
 
 import torch
 from tgb.linkproppred.dataset import LinkPropPredDataset
-from tgb.nodeproppred.dataset import NodePropPredDataset
 
 from opendg.events import EdgeEvent, Event
 
@@ -16,7 +15,7 @@ def read_tgb(
     if name.startswith('tgbl-'):
         dataset = LinkPropPredDataset(name=name, **kwargs)
     elif name.startswith('tgbn-'):
-        dataset = NodePropPredDataset(name=name, **kwargs)
+        raise ValueError(f'Not Implemented dataset: {name}')
     else:
         raise ValueError(f'Unknown dataset: {name}')
     data = dataset.full_data
