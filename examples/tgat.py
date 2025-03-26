@@ -90,19 +90,19 @@ class TGAT(nn.Module):
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         src, pos_dst, neg_dst, time, features = batch
-        #head = batch.block(self.ctx)
-        #for i in range(self.num_layers):
+        # head = batch.block(self.ctx)
+        # for i in range(self.num_layers):
         #    tail = head if i == 0 else tail.next_block(include_dst=True)
         #    tail = tg.op.dedup(tail) if self.dedup else tail
         #    tail = tg.op.cache(self.ctx, tail.layer, tail)
         #    tail = self.sampler.sample(tail)
 
-        #tg.op.preload(head, use_pin=True)
-        #if tail.num_dst() > 0:
+        # tg.op.preload(head, use_pin=True)
+        # if tail.num_dst() > 0:
         #    tail.dstdata['h'] = tail.dstfeat()
         #    tail.srcdata['h'] = tail.srcfeat()
-        #embeds = tg.op.aggregate(head, list(reversed(self.attn)), key='h')
-        #src, dst, neg = batch.split_data(embeds)
+        # embeds = tg.op.aggregate(head, list(reversed(self.attn)), key='h')
+        # src, dst, neg = batch.split_data(embeds)
 
         pos_prob = self.edge_predictor(src, pos_dst)
         neg_prob = self.edge_predictor(src, neg_dst)
@@ -149,7 +149,7 @@ class LinkPredTrainer:
             for batch in train_loader:
                 self.optimizer.zero_grad()
                 pred_pos, pred_neg = self.model(batch)
-                loss = self.criterion(pred_pos, torch.ones_like(pred_pos)) +
+                loss = self.criterion(pred_pos, torch.ones_like(pred_pos))
                 loss += self.criterion(pred_neg, torch.zeros_like(pred_neg))
                 loss.backward()
                 self.optimizer.step()
