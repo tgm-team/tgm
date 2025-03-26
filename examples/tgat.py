@@ -147,14 +147,14 @@ def run(args: argparse.Namespace) -> None:
     val_dg = DGraph(args.dataset, split='valid')
 
     # TODO: Would be convenient to have a dispatcher based on sampling_type
-    nbr_loader_args = {'num_nbrs': [args.n_nbrs], 'batch_size': args.batch_size}
+    nbr_loader_args = {'num_nbrs': [args.n_nbrs], 'batch_size': args.bsize}
     train_loader = DGNeighborLoader(train_dg, **nbr_loader_args)
     val_loader = DGNeighborLoader(val_dg, **nbr_loader_args)
 
     device = torch.device(f'cuda:{args.gpu}' if args.gpu >= 0 else 'cpu')
     model = TGAT(
-        node_dim=-1,  # TODO: Get node/edge feature dim from the DGraph
-        edge_dim=-1,
+        node_dim=8,  # TODO: Get node/edge feature dim from the DGraph
+        edge_dim=8,
         time_dim=args.time_dim,
         embed_dim=args.embed_dim,
         num_layers=args.n_layers,
