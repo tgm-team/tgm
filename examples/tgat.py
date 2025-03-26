@@ -1,12 +1,11 @@
 import argparse
-from typing import Callable, Tuple
+from typing import Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import average_precision_score, roc_auc_score
 
-from opendg.graph import DGraph
+from opendg.graph import DGBatch, DGraph
 from opendg.loader.neighbor_loader import DGBaseLoader, DGNeighborLoader
 from opendg.nn import TemporalAttention
 from opendg.util.seed import seed_everything
@@ -42,13 +41,13 @@ parser.add_argument(
     '--n-nbrs', type=int, default=20, help='number of neighbors to sample (default: 20)'
 )
 parser.add_argument(
-    '--dim-time',
+    '--time-dim',
     type=int,
     default=100,
     help='dimension of time features (default: 100)',
 )
 parser.add_argument(
-    '--dim-embed', type=int, default=100, help='dimension of embeddings (default: 100)'
+    '--embed-dim', type=int, default=100, help='dimension of embeddings (default: 100)'
 )
 parser.add_argument(
     '--sampling',
@@ -65,7 +64,7 @@ class TGAT(nn.Module):
         node_dim: int,
         edge_dim: int,
         time_dim: int,
-        dim_embed: int,
+        embed_dim: int,
         sampler: tg.TSampler,
         num_layers=2,
         n_heads=2,
@@ -73,42 +72,41 @@ class TGAT(nn.Module):
     ):
         super().__init__()
         self.num_layers = num_layers
+        self.sampler = sampler
+        self.edge_predictor = EdgePredictor(dim=embed_dim)
         self.attn = nn.ModuleList(
             [
                 TemporalAttention(
                     n_heads=n_heads,
-                    node_dim=node_dim if i == 0 else dim_embed,
+                    node_dim=node_dim if i == 0 else embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
-                    out_dim=dim_embed,
+                    out_dim=embed_dim,
                     dropout=dropout,
                 )
                 for i in range(num_layers)
             ]
         )
-        self.sampler = sampler
-        self.edge_predictor = EdgePredictor(dim=dim_embed)
 
-    def forward(self, batch: tg.TBatch) -> torch.Tensor:
-        head = batch.block(self.ctx)
-        for i in range(self.num_layers):
-            tail = head if i == 0 else tail.next_block(include_dst=True)
-            tail = tg.op.dedup(tail) if self.dedup else tail
-            tail = tg.op.cache(self.ctx, tail.layer, tail)
-            tail = self.sampler.sample(tail)
+    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+        src, pos_dst, neg_dst, time, features = batch
+        #head = batch.block(self.ctx)
+        #for i in range(self.num_layers):
+        #    tail = head if i == 0 else tail.next_block(include_dst=True)
+        #    tail = tg.op.dedup(tail) if self.dedup else tail
+        #    tail = tg.op.cache(self.ctx, tail.layer, tail)
+        #    tail = self.sampler.sample(tail)
 
-        tg.op.preload(head, use_pin=True)
-        if tail.num_dst() > 0:
-            tail.dstdata['h'] = tail.dstfeat()
-            tail.srcdata['h'] = tail.srcfeat()
-        embeds = tg.op.aggregate(head, list(reversed(self.attn)), key='h')
-        del head, tail
+        #tg.op.preload(head, use_pin=True)
+        #if tail.num_dst() > 0:
+        #    tail.dstdata['h'] = tail.dstfeat()
+        #    tail.srcdata['h'] = tail.srcfeat()
+        #embeds = tg.op.aggregate(head, list(reversed(self.attn)), key='h')
+        #src, dst, neg = batch.split_data(embeds)
 
-        src, dst, neg = batch.split_data(embeds)
-        scores = self.edge_predictor(src, dst)
-        if batch.neg_nodes is not None:
-            scores = (scores, self.edge_predictor(src, neg))
-        return scores
+        pos_prob = self.edge_predictor(src, pos_dst)
+        neg_prob = self.edge_predictor(src, neg_dst)
+        return pos_prob, neg_prob
 
 
 class EdgePredictor(nn.Module):
@@ -133,64 +131,49 @@ class LinkPredTrainer:
         model: nn.Module,
         criterion: nn.Module,
         optimizer: torch.optim.Optimizer,
-        neg_sampler: Callable,
         epochs: int,
         model_path: str,
     ):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
-        self.neg_sampler = neg_sampler
         self.epochs = epochs
         self.model_path = model_path
 
     def train(self, train_loader: DGBaseLoader, val_loader: DGBaseLoader) -> None:
-        best_epoch = 0
-        best_ap = 0
+        best_mrr = 0
         for e in range(self.epochs):
             print(f'epoch {e}:')
-            torch.cuda.synchronize()
-
             self.model.train()
             epoch_loss = 0.0
             for batch in train_loader:
-                batch.neg_nodes = self.neg_sampler(len(batch))
                 self.optimizer.zero_grad()
                 pred_pos, pred_neg = self.model(batch)
-                loss = self.criterion(pred_pos, torch.ones_like(pred_pos))
+                loss = self.criterion(pred_pos, torch.ones_like(pred_pos)) +
                 loss += self.criterion(pred_neg, torch.zeros_like(pred_neg))
-                epoch_loss += float(loss)
                 loss.backward()
                 self.optimizer.step()
+                epoch_loss += float(loss)
 
-            ap, auc = self.eval(val_loader)
-
-            torch.cuda.synchronize()
-            if e == 0 or ap > best_ap:
-                best_epoch, best_ap = e, ap
+            if mrr := self.eval(val_loader) > best_mrr:
+                best_mrr = mrr
                 torch.save(self.model.state_dict(), self.model_path)
-            print(f'  loss:{epoch_loss:.4f} val ap:{ap:.4f} val auc:{auc:.4f}')
-        print(f'best model at epoch {best_epoch}')
+            print(f'  loss:{epoch_loss:.4f} MRR:{mrr:.4f}')
 
     @torch.no_grad()
-    def eval(self, loader: DGBaseLoader) -> Tuple[float, float]:
+    def eval(self, loader: DGBaseLoader) -> float:
         self.model.eval()
-        val_aps, val_auc = [], []
+        perf_list = []
         for batch in loader:
-            size = len(batch)
-            batch.neg_nodes = self.neg_sampler(size)
             prob_pos, prob_neg = self.model(batch)
-            prob_pos, prob_neg = prob_pos.cpu(), prob_neg.cpu()
-            pred_score = torch.cat([prob_pos, prob_neg], dim=0).sigmoid()
-            true_label = torch.cat([torch.ones(size), torch.zeros(size)])
-            val_aps.append(average_precision_score(true_label, pred_score))
-            val_auc.append(roc_auc_score(true_label, pred_score))
-        return np.mean(val_aps), np.mean(val_auc)
+            perf_list.append(prob_pos - prob_neg)  # TODO: MRR eval
+        return np.mean(perf_list)
 
     def test(self, loader: DGBaseLoader) -> None:
+        print('Testing...')
         self.model.load_state_dict(torch.load(self.model_path))
-        ap, auc = self.eval(loader)
-        print(f' AP: {ap:.4f}, AUC: {auc:.4f}')
+        mrr = self.eval(loader)
+        print(f' MRR: {mrr:.4f}')
 
 
 def run_tgat(args: argparse.Namespace) -> None:
@@ -200,7 +183,7 @@ def run_tgat(args: argparse.Namespace) -> None:
     val_dg = DGraph(args.dataset, split='valid')
     test_dg = DGraph(args.dataset, split='test')
 
-    edge_dim, node_dim = None, None  # TODO: Get these properties from DGraph
+    edge_dim, node_dim = 2, 3  # TODO: Get these properties from DGraph
 
     if args.sampling != 'uniform':
         raise NotImplementedError(f'Unsupported sampling: {args.sampling}')
@@ -212,8 +195,8 @@ def run_tgat(args: argparse.Namespace) -> None:
     model = TGAT(
         node_dim=node_dim,
         edge_dim=edge_dim,
-        time_dim=args.time_embed,
-        dim_embed=args.dim_embed,
+        time_dim=args.time_dim,
+        embed_dim=args.embed_dim,
         sampler=sampler,
         num_layers=args.n_layers,
         n_heads=args.n_heads,
@@ -224,15 +207,11 @@ def run_tgat(args: argparse.Namespace) -> None:
     model = model.to(device)
     criterion = torch.nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=float(args.lr))
-
-    neg_sampler = lambda size: np.random.randint(0, dg.num_nodes, size)
-
     trainer = LinkPredTrainer(
         model,
         criterion,
         optimizer,
-        neg_sampler,
-        args.epochs,
+        epochs=args.epochs,
         model_path='',
     )
     trainer.train(train_loader, val_loader)
