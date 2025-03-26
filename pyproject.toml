@@ -13,7 +13,7 @@ authors = [
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
 ]
 dependencies = [
-    "numpy>=2.0.2",
+    "numpy==1.26.4",
     "torch>=2.5.1",
 ]
 
@@ -27,7 +27,8 @@ dev = [
     "ruff==0.11.1",
     "sphinx>=7.4.7",
     "sphinx-rtd-theme>=3.0.2",
-    "pandas>=2.2.3",
+    "py-tgb>=2.0.0",
+    "pandas>=1.5.3",
 ]
 
 [tool.mypy]
