@@ -1,5 +1,5 @@
 import argparse
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -40,8 +40,8 @@ parser.add_argument(
 class TGAT(nn.Module):
     def __init__(
         self,
-        node_dim: int,
-        edge_dim: int,
+        node_dim: Optional[int],
+        edge_dim: Optional[int],
         time_dim: int,
         embed_dim: int,
         num_layers: int = 2,
@@ -153,8 +153,8 @@ def run(args: argparse.Namespace) -> None:
 
     device = torch.device(f'cuda:{args.gpu}' if args.gpu >= 0 else 'cpu')
     model = TGAT(
-        node_dim=8,  # TODO: Get node/edge feature dim from the DGraph
-        edge_dim=8,
+        node_dim=train_dg.node_feats_dim,
+        edge_dim=train_dg.edge_feats_dim,
         time_dim=args.time_dim,
         embed_dim=args.embed_dim,
         num_layers=args.n_layers,
