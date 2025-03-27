@@ -5,6 +5,7 @@ import numpy as np
 from opendg.graph import DGraph
 from opendg.loader import DGBaseLoader, DGDataLoader
 from opendg.nn import EdgeBankPredictor
+from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -32,10 +33,11 @@ def eval(loader: DGBaseLoader, model: EdgeBankPredictor) -> float:
     perf_list = []
     for batch in loader:
         # where is the negative batch list?
-        src, pos_dst, neg_dst, time, _ = batch
-        prob_pos = model(src, pos_dst)
-        prob_neg = model(src, neg_dst)
-        perf_list.append(prob_pos - prob_neg)  # TODO: MRR eval
+        src, pos_dst, time, _ = batch
+        neg_dst = pos_dst
+        model(src, pos_dst)
+        model(src, neg_dst)
+        perf_list.append(0)  # TODO: MRR eval
         model.update(src, pos_dst, time)
     return np.mean(perf_list)
 
@@ -59,8 +61,8 @@ def run(args: argparse.Namespace) -> None:
         window_ratio=args.window_ratio,
         pos_prob=args.pos_prob,
     )
-    mrr = eval(val_loader, model)
-    print(f'Val MRR: {mrr:.4f}')
+    with Usage(prefix='Edgebank Validation'):
+        eval(val_loader, model)
 
 
 if __name__ == '__main__':
