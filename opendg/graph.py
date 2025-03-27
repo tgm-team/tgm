@@ -3,7 +3,7 @@ from __future__ import annotations
 import pathlib
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, List, Optional, Set, Tuple
 
 import pandas as pd
 from torch import Tensor
@@ -35,7 +35,7 @@ class DGraph:
                 raise ValueError('Tried to initialize a DGraph with empty events list')
             self._storage = DGStorage(events)
 
-        self._slice = DGSliceTracker()
+        self._slice = self._DGSliceTracker()
 
     def to_events(self) -> List[Event]:
         return self._storage.to_events(
@@ -44,12 +44,12 @@ class DGraph:
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""
-        features: Dict[str, Optional[Tensor]] = {'node': None, 'edge': None}
+        batch = DGBatch(*self.edges)
         if materialize_features and self.node_feats is not None:
-            features['node'] = self.node_feats._values()
+            batch.node_feats = self.node_feats._values()
         if materialize_features and self.edge_feats is not None:
-            features['edge'] = self.edge_feats._values()
-        return *self.edges, features
+            batch.edge_feats = self.edge_feats._values()
+        return batch
 
     def slice_time(
         self, start_time: Optional[int] = None, end_time: Optional[int] = None
@@ -195,13 +195,17 @@ class DGraph:
             return min(a, b)
         return a if b is None else b if a is None else None
 
-
-# src, dst, time, features = {'node': node_features, 'edge': dge_features}
-DGBatch = Tuple[Tensor, Tensor, Tensor, Dict[str, Optional[Tensor]]]
+    @dataclass(slots=True)
+    class _DGSliceTracker:
+        start_time: Optional[int] = None
+        end_time: Optional[int] = None
+        node_slice: Optional[Set[int]] = None
 
 
 @dataclass(slots=True)
-class DGSliceTracker:
-    start_time: Optional[int] = None
-    end_time: Optional[int] = None
-    node_slice: Optional[Set[int]] = None
+class DGBatch:
+    src: Tensor
+    dst: Tensor
+    time: Tensor
+    node_feats: Optional[Tensor] = None
+    edge_feats: Optional[Tensor] = None
