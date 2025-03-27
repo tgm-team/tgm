@@ -4,6 +4,7 @@ from typing import Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from opendg.graph import DGBatch, DGraph
 from opendg.loader import DGBaseLoader, DGNeighborLoader
@@ -21,14 +22,10 @@ parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
-parser.add_argument(
-    '--n-nbrs', type=int, default=[20], help='num sampled nbrs'
-)  # TODO: multi-hop
+parser.add_argument('--n-nbrs', type=int, default=[20], help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
-parser.add_argument(
-    '--dataset', type=str, required=True, default='tgbl-wiki', help='Dataset name'
-)
+parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument(
     '--sampling',
     type=str,
@@ -65,40 +62,34 @@ class TGAT(nn.Module):
                 for i in range(num_layers)
             ]
         )
+        # TODO: Temporary
+        self.src_embed = torch.rand(embed_dim)
+        self.dst_embed = torch.rand(embed_dim)
+        self.neg_embed = torch.rand(embed_dim)
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        src, pos_dst, neg_dst, time, features = batch
-        # head = batch.block(self.ctx)
-        # for i in range(self.num_layers):
-        #    tail = head if i == 0 else tail.next_block(include_dst=True)
-        #    tail = tg.op.dedup(tail) if self.dedup else tail
-        #    tail = tg.op.cache(self.ctx, tail.layer, tail)
-        #    tail = self.sampler.sample(tail)
-        # tg.op.preload(head, use_pin=True)
-        # if tail.num_dst() > 0:
-        #    tail.dstdata['h'] = tail.dstfeat()
-        #    tail.srcdata['h'] = tail.srcfeat()
-        # embeds = tg.op.aggregate(head, list(reversed(self.attn)), key='h')
-        # src, dst, neg = batch.split_data(embeds)
+        src, dst, time = batch.src, batch.dst, batch.time
+        node_feats, edge_feats = batch.node_feats, batch.edge_feats
 
-        pos_prob = self.edge_predictor(src, pos_dst)
-        neg_prob = self.edge_predictor(src, neg_dst)
+        # TODO: TGAT Multi-hop forward pass
+        # out = self.attn(node_feats, time_feat, edge_feat, nbr_node_feat, nbr_time_feat, nbr_mask)
+        pos_prob = self.edge_predictor(self.src_embed, self.dst_embed)
+        neg_prob = self.edge_predictor(self.src_embed, self.neg_embed)
         return pos_prob, neg_prob
 
 
 class EdgePredictor(nn.Module):
-    def __init__(self, dim: int):
+    def __init__(self, dim: int) -> None:
         super().__init__()
         self.dim = dim
         self.src_fc = nn.Linear(dim, dim)
         self.dst_fc = nn.Linear(dim, dim)
         self.out_fc = nn.Linear(dim, 1)
-        self.act = nn.ReLU()
 
     def forward(self, src: torch.Tensor, dst: torch.Tensor) -> torch.Tensor:
         h_src = self.src_fc(src)
         h_dst = self.dst_fc(dst)
-        h_out = self.act(h_src + h_dst)
+        h_out = F.relu(h_src + h_dst)
         return self.out_fc(h_out)
 
 
@@ -147,11 +138,6 @@ def run(args: argparse.Namespace) -> None:
     train_dg = DGraph(args.dataset, split='train')
     val_dg = DGraph(args.dataset, split='valid')
 
-    # TODO: Would be convenient to have a dispatcher based on sampling_type
-    nbr_loader_args = {'num_nbrs': args.n_nbrs, 'batch_size': args.bsize}
-    train_loader = DGNeighborLoader(train_dg, **nbr_loader_args)
-    val_loader = DGNeighborLoader(val_dg, **nbr_loader_args)
-
     device = torch.device(f'cuda:{args.gpu}' if args.gpu >= 0 else 'cpu')
     model = TGAT(
         node_dim=train_dg.node_feats_dim or args.embed_dim,  # TODO: verify
@@ -165,6 +151,8 @@ def run(args: argparse.Namespace) -> None:
     criterion = torch.nn.BCEWithLogitsLoss()
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
+    train_loader = DGNeighborLoader(train_dg, args.n_nbrs, args.bsize)
+    val_loader = DGNeighborLoader(val_dg, args.n_nbrs, args.bsize)
     train(train_loader, val_loader, model, criterion, opt, args.epochs)
 
 
