@@ -1,7 +1,7 @@
 from typing import Union, Type
 import inspect
 
-from .base import DGStorageBase
+from .base import DGStorageBase, DGSliceTracker
 from .backends import DGStorageBackends, DGStorage
 
 
@@ -25,6 +25,7 @@ def set_dg_storage_backend(backend: Union[str, DGStorageBase]) -> None:
 __all__ = [
     'DGStorage',
     'DGStorageBackends',
+    'DGSliceTracker',
     'get_dg_storage_backend',
     'set_dg_storage_backend',
 ]

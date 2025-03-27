@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import List
 
+from opendg._storage import DGSliceTracker
 from opendg.graph import DGraph
 from opendg.loader.base import DGBaseLoader
 
@@ -48,8 +49,9 @@ class DGNeighborLoader(DGBaseLoader):
         return self._num_nbrs
 
     def pre_yield(self, batch: DGraph) -> DGraph:
+        slice = DGSliceTracker(end_time=batch.start_time)
         nbrs = self._dg._storage.get_nbrs(
-            seed_nodes=batch.nodes, num_nbrs=self.num_nbrs, end_time=batch.start_time
+            seed_nodes=batch.nodes, num_nbrs=self.num_nbrs, slice=slice
         )
         temporal_nbrhood = batch.nodes
         for seed_nbrhood in nbrs.values():
