@@ -21,12 +21,11 @@ class DGStorageArrayBackend(DGStorageBase):
         self._ts = np.array([event.t for event in self._events])
 
         # TODO: try to bypass functools lru cache restrictions on ndarrays
-        self._lb_idx_cache: Dict[Optional[int], int] = {}
-        self._ub_idx_cache: Dict[Optional[int], int] = {}
+        self._lb_cache: Dict[Optional[int], int] = {}
+        self._ub_cache: Dict[Optional[int], int] = {}
 
     def to_events(self, slice: DGSliceTracker) -> List[Event]:
-        lb_idx = self._lb_time_idx(slice.start_time)
-        ub_idx = self._ub_time_idx(slice.end_time)
+        lb_idx, ub_idx = self._binary_search(slice)
         if slice.node_slice is None:
             return self._events[lb_idx:ub_idx]
 
@@ -55,9 +54,7 @@ class DGStorageArrayBackend(DGStorageBase):
 
     def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         all_nodes: Set[int] = set()
-        for i in range(
-            self._lb_time_idx(slice.start_time), self._ub_time_idx(slice.end_time)
-        ):
+        for i in range(*self._binary_search(slice)):
             event = self._events[i]
             nodes = (event.src,) if isinstance(event, NodeEvent) else event.edge
             if slice.node_slice is None or any(e in slice.node_slice for e in nodes):
@@ -68,9 +65,7 @@ class DGStorageArrayBackend(DGStorageBase):
         src: List[int] = []
         dst: List[int] = []
         t: List[int] = []
-        for i in range(
-            self._lb_time_idx(slice.start_time), self._ub_time_idx(slice.end_time)
-        ):
+        for i in range(*self._binary_search(slice)):
             event = self._events[i]
             if isinstance(event, EdgeEvent):
                 if slice.node_slice is None or any(
@@ -87,9 +82,7 @@ class DGStorageArrayBackend(DGStorageBase):
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         timestamps = set()
-        for i in range(
-            self._lb_time_idx(slice.start_time), self._ub_time_idx(slice.end_time)
-        ):
+        for i in range(*self._binary_search(slice)):
             event = self._events[i]
             nodes = (event.src,) if isinstance(event, NodeEvent) else event.edge
             if slice.node_slice is None or any(e in slice.node_slice for e in nodes):
@@ -113,9 +106,7 @@ class DGStorageArrayBackend(DGStorageBase):
             return sampled_nbrs
 
         hop = 0
-        for i in range(
-            self._lb_time_idx(slice.start_time), self._ub_time_idx(slice.end_time)
-        ):
+        for i in range(*self._binary_search(slice)):
             event = self._events[i]
             if isinstance(event, EdgeEvent) and (
                 slice.node_slice is None
@@ -137,9 +128,7 @@ class DGStorageArrayBackend(DGStorageBase):
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
         indices, values = [], []
-        for i in range(
-            self._lb_time_idx(slice.start_time), self._ub_time_idx(slice.end_time)
-        ):
+        for i in range(*self._binary_search(slice)):
             event = self._events[i]
             nodes = (event.src,) if isinstance(event, NodeEvent) else event.edge
             if slice.node_slice is None or any(e in slice.node_slice for e in nodes):
@@ -167,9 +156,7 @@ class DGStorageArrayBackend(DGStorageBase):
         # Assuming these are both non-negative
         max_time, max_node_id = -1, -1
         indices, values = [], []
-        for i in range(
-            self._lb_time_idx(slice.start_time), self._ub_time_idx(slice.end_time)
-        ):
+        for i in range(*self._binary_search(slice)):
             event = self._events[i]
             nodes = (event.src,) if isinstance(event, NodeEvent) else event.edge
             if slice.node_slice is None or any(e in slice.node_slice for e in nodes):
@@ -204,14 +191,13 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_edge_feats_dim(self) -> Optional[int]:
         return self._edge_feats_dim
 
-    def _lb_time_idx(self, t: Optional[int]) -> int:
-        if t not in self._lb_idx_cache:
-            tt = self._ts[0] if t is None else t
-            self._lb_idx_cache[t] = int(np.searchsorted(self._ts, tt))
-        return self._lb_idx_cache[t]
-
-    def _ub_time_idx(self, t: Optional[int]) -> int:
-        if t not in self._ub_idx_cache:
-            tt = self._ts[-1] if t is None else t
-            self._ub_idx_cache[t] = int(np.searchsorted(self._ts, tt, side='right'))
-        return self._ub_idx_cache[t]
+    def _binary_search(self, slice: DGSliceTracker) -> Tuple[int, int]:
+        if slice.start_time not in self._lb_cache:
+            t = self._ts[0] if slice.start_time is None else slice.start_time
+            self._lb_cache[slice.start_time] = int(np.searchsorted(self._ts, t))
+        if slice.end_time not in self._ub_cache:
+            t = self._ts[-1] if slice.end_time is None else slice.end_time
+            self._ub_cache[slice.end_time] = int(
+                np.searchsorted(self._ts, t, side='right')
+            )
+        return self._lb_cache[slice.start_time], self._ub_cache[slice.end_time]
