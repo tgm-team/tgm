@@ -80,30 +80,22 @@ class DGStorageBase(ABC):
         events.sort(key=lambda x: x.t)
         return events
 
-    def _check_node_feature_dim(self, events: List[Event]) -> Optional[int]:
-        shape = None
+    def _check_feature_dims(
+        self, events: List[Event]
+    ) -> Tuple[Optional[int], Optional[int]]:
+        node_shape, edge_shape = None, None
         for event in events:
-            if isinstance(event, NodeEvent) and event.features is not None:
-                if shape is None:
-                    shape = event.features.shape
-                elif shape != event.features.shape:
-                    raise ValueError(
-                        f'Node feature shapes non-homogenous: {shape} != {event.features.shape}'
-                    )
-        if shape is not None and len(shape) > 1:
-            raise ValueError(f'Only 1-d node features supported but got: ({shape})')
-        return shape[0] if shape is not None else shape
-
-    def _check_edge_feature_dim(self, events: List[Event]) -> Optional[int]:
-        shape = None
-        for event in events:
-            if isinstance(event, EdgeEvent) and event.features is not None:
-                if shape is None:
-                    shape = event.features.shape
-                elif shape != event.features.shape:
-                    raise ValueError(
-                        f'Edge feature shapes non-homogenous: {shape} != {event.features.shape}'
-                    )
-        if shape is not None and len(shape) > 1:
-            raise ValueError(f'Only 1-d node features supported but got: ({shape})')
-        return shape[0] if shape is not None else shape
+            feats = event.features
+            if isinstance(event, NodeEvent) and feats is not None:
+                if (node_shape := node_shape or feats.shape) != feats.shape:
+                    raise ValueError(f'Node feat mismatch: {node_shape}!={feats.shape}')
+            if isinstance(event, EdgeEvent) and feats is not None:
+                if (edge_shape := edge_shape or feats.shape) != feats.shape:
+                    raise ValueError(f'Edge feat mismatch: {edge_shape}!={feats.shape}')
+        if node_shape is not None and len(node_shape) > 1:
+            raise ValueError(f'Only 1-d node features supported, got: ({node_shape})')
+        if edge_shape is not None and len(edge_shape) > 1:
+            raise ValueError(f'Only 1-d edge features supported, got: ({edge_shape})')
+        node_dim = node_shape[0] if node_shape is not None else node_shape
+        edge_dim = edge_shape[0] if edge_shape is not None else edge_shape
+        return node_dim, edge_dim

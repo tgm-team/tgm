@@ -16,9 +16,8 @@ class DGStorageArrayBackend(DGStorageBase):
     def __init__(self, events: List[Event]) -> None:
         if not len(events):
             raise ValueError(f'Tried to init {self.__class__.__name__} with empty data')
-        self._node_feats_dim = self._check_node_feature_dim(events)
-        self._edge_feats_dim = self._check_edge_feature_dim(events)
         self._events = self._sort_events_list_if_needed(events[:])  # Make a copy
+        self._node_feats_dim, self._edge_feats_dim = self._check_feature_dims(events)
         self._ts = np.array([event.t for event in self._events])
 
         # TODO: try to bypass functools lru cache restrictions on ndarrays
