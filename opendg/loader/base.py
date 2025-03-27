@@ -77,4 +77,4 @@ class DGBaseLoader(ABC):
         batch = self._dg.slice_time(self._idx, slice_end)
         self._idx += self._batch_size
         batch = self.pre_yield(batch)
-        return batch.materialize if self._materialize else batch
+        return batch.materialize() if self._materialize else batch
