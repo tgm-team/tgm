@@ -42,13 +42,13 @@ class DGraph:
             self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
 
-    @cached_property
-    def materialize(self) -> DGBatch:
-        r"""Materialize dense tensors: src, dst, time, and {'node': node_features, 'edge': edge_features}."""
-        features = {
-            'node': self.node_feats.to_dense() if self.node_feats is not None else None,
-            'edge': self.edge_feats.to_dense() if self.edge_feats is not None else None,
-        }
+    def materialize(self, materialize_features: bool = True) -> DGBatch:
+        r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""
+        features: Dict[str, Optional[Tensor]] = {'node': None, 'edge': None}
+        if materialize_features and self.node_feats is not None:
+            features['node'] = self.node_feats.to_dense()
+        if materialize_features and self.edge_feats is not None:
+            features['edge'] = self.edge_feats.to_dense()
         return *self.edges, features
 
     def slice_time(

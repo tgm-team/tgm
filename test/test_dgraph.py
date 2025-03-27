@@ -90,7 +90,7 @@ def test_materialize():
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
     exp_features = {'node': dg.node_feats, 'edge': dg.edge_feats}
     exp = (exp_src, exp_dst, exp_t, exp_features)
-    _assert_batch_eq(exp, dg.materialize)
+    _assert_batch_eq(exp, dg.materialize())
 
 
 def test_materialize_with_features(events):
@@ -100,7 +100,17 @@ def test_materialize_with_features(events):
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
     exp_features = {'node': dg.node_feats.to_dense(), 'edge': dg.edge_feats.to_dense()}
     exp = (exp_src, exp_dst, exp_t, exp_features)
-    _assert_batch_eq(exp, dg.materialize)
+    _assert_batch_eq(exp, dg.materialize())
+
+
+def test_materialize_skip_feature_materialization(events):
+    dg = DGraph(events)
+    exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
+    exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
+    exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
+    exp_features = {'node': None, 'edge': None}
+    exp = (exp_src, exp_dst, exp_t, exp_features)
+    _assert_batch_eq(exp, dg.materialize(materialize_features=False))
 
 
 @pytest.mark.skip('Node feature IO not implemented')
