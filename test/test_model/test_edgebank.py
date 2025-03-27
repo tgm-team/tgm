@@ -1,5 +1,5 @@
-import numpy as np
 import pytest
+import torch
 
 from opendg.events import EdgeEvent
 from opendg.nn import EdgeBankPredictor
@@ -11,10 +11,10 @@ def test_unlimited_memory(pos_prob):
     src, dst, ts = _events_to_edge_arrays(events)
 
     bank = EdgeBankPredictor(src, dst, ts, memory_mode='unlimited', pos_prob=pos_prob)
-    assert bank(np.asarray([1]), np.asarray([1])) == np.array([0])
+    assert bank(torch.Tensor([1]), torch.Tensor([1])) == torch.Tensor([0])
 
-    bank.update(np.asarray([1]), np.asarray([1]), np.asarray([7]))
-    assert bank(np.asarray([1]), np.asarray([1])) == np.array([pos_prob])
+    bank.update(torch.Tensor([1]), torch.Tensor([1]), torch.Tensor([7]))
+    assert bank(torch.Tensor([1]), torch.Tensor([1])) == torch.Tensor([pos_prob])
 
 
 @pytest.mark.parametrize('pos_prob', [0.7, 1.0])
@@ -33,30 +33,30 @@ def test_fixed_time_window(pos_prob):
     TIME_WINDOW_RATIO = 0.5
 
     bank = EdgeBankPredictor(
-        np.asarray(src),
-        np.asarray(dst),
-        np.asarray(ts),
+        torch.Tensor(src),
+        torch.Tensor(dst),
+        torch.Tensor(ts),
         memory_mode=MEMORY_MODE,
         window_ratio=TIME_WINDOW_RATIO,
         pos_prob=pos_prob,
     )
 
-    assert bank(np.array([4]), np.array([5])) == np.array([pos_prob])
-    assert bank(np.array([3]), np.array([4])) == np.array([0])
+    assert bank(torch.Tensor([4]), torch.Tensor([5])) == torch.Tensor([pos_prob])
+    assert bank(torch.Tensor([3]), torch.Tensor([4])) == torch.Tensor([0])
 
     # update but time window doesn't move forward
-    bank.update(np.array([3]), np.array([4]), np.array([5]))
-    assert bank(np.array([3]), np.array([4])) == np.array([pos_prob])
+    bank.update(torch.Tensor([3]), torch.Tensor([4]), torch.Tensor([5]))
+    assert bank(torch.Tensor([3]), torch.Tensor([4])) == torch.Tensor([pos_prob])
 
     # update and time window moves forward
-    bank.update(np.array([7]), np.array([8]), np.array([7]))
-    assert bank(np.array([7]), np.array([8])) == np.array([pos_prob])
-    assert bank(np.array([4]), np.array([5])) == np.array([0])
+    bank.update(torch.Tensor([7]), torch.Tensor([8]), torch.Tensor([7]))
+    assert bank(torch.Tensor([7]), torch.Tensor([8])) == torch.Tensor([pos_prob])
+    assert bank(torch.Tensor([4]), torch.Tensor([5])) == torch.Tensor([0])
 
 
 def test_bad_init_args():
     with pytest.raises(ValueError):
-        EdgeBankPredictor(np.array([]), np.array([]), np.array([]))
+        EdgeBankPredictor(torch.Tensor([]), torch.Tensor([]), torch.Tensor([]))
 
     with pytest.raises(TypeError):
         EdgeBankPredictor(1, 2, 3)
@@ -68,10 +68,10 @@ def test_bad_update_args():
     bank = EdgeBankPredictor(src, dst, ts, memory_mode='unlimited')
 
     with pytest.raises(ValueError):
-        bank.update(np.array([]), np.array([]), np.array([1]))
+        bank.update(torch.Tensor([]), torch.Tensor([]), torch.Tensor([1]))
 
     with pytest.raises(ValueError):
-        bank.update(np.array([]), np.array([]), np.array([]))
+        bank.update(torch.Tensor([]), torch.Tensor([]), torch.Tensor([]))
 
 
 @pytest.mark.parametrize('pos_prob', [0.7, 1.0])
@@ -99,12 +99,16 @@ def test_edgebank_arguments(pos_prob):
     assert bank.window_start == 5.25
     assert bank.window_end == 6
     assert bank.window_ratio == WINDOW_RATIO
-    assert bank(np.array([6]), np.array([7])) == np.array([pos_prob])
+    assert bank(torch.Tensor([6]), torch.Tensor([7])) == torch.Tensor([pos_prob])
 
 
 def _events_to_edge_arrays(events):
     edge_list = []
     for event in events:
         edge_list.append([event.src, event.dst, event.t])
-    edges = np.array(edge_list)
-    return np.asarray(edges[:, 0]), np.asarray(edges[:, 1]), np.asarray(edges[:, 2])
+    edges = torch.Tensor(edge_list)
+    return (
+        torch.Tensor(edges[:, 0]),
+        torch.Tensor(edges[:, 1]),
+        torch.Tensor(edges[:, 2]),
+    )

@@ -1,14 +1,14 @@
 from typing import Dict, Literal, Tuple
 
-import numpy as np
+import torch
 
 
 class EdgeBankPredictor:
     def __init__(
         self,
-        src: np.ndarray,
-        dst: np.ndarray,
-        ts: np.ndarray,
+        src: torch.Tensor,
+        dst: torch.Tensor,
+        ts: torch.Tensor,
         memory_mode: Literal['unlimited', 'fixed'] = 'unlimited',
         window_ratio: float = 0.15,
         pos_prob: float = 1.0,
@@ -16,9 +16,9 @@ class EdgeBankPredictor:
         r"""Edgebank link predictor with fixed or unlimited memory. Reference: https://arxiv.org/abs/2207.10128.
 
         Args:
-            src(np.ndarray): source node id of the edges for initialization
-            dst(np.ndarray): destination node id of the edges for initialization
-            ts(np.ndarray): timestamp of the edges for initialization
+            src(torch.Tensor): source node id of the edges for initialization
+            dst(torch.Tensor): destination node id of the edges for initialization
+            ts(torch.Tensor): timestamp of the edges for initialization
             memory_mode(str): 'unlimited' or 'fixed'
             window_ratio(float): the ratio of the time window length to the total time length (if using fixed memory_mode)
             pos_prob(float): the probability of the link existence for the edges in memory.
@@ -41,32 +41,36 @@ class EdgeBankPredictor:
         self.memory: Dict[Tuple[int, int], int] = {}
         self.update(src, dst, ts)
 
-    def update(self, src: np.ndarray, dst: np.ndarray, ts: np.ndarray) -> None:
+    def update(self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor) -> None:
         r"""Update Edgebank memory with a batch of edges.
 
         Args:
-            src(np.ndarray): source node id of the edges.
-            dst(np.ndarray): destination node id of the edges.
-            ts(np.ndarray): timestamp of the edges.
+            src(torch.Tensor): source node id of the edges.
+            dst(torch.Tensor): destination node id of the edges.
+            ts(torch.Tensor): timestamp of the edges.
         """
         self._check_input_data(src, dst, ts)
-        self._window_end = max(self._window_end, ts.max())
+        self._window_end = torch.max(self._window_end, ts.max())
         self._window_start = self._window_end - self._window_size
         for src_, dst_, ts_ in zip(src, dst, ts):
+            src_, dst_, ts_ = src_.item(), dst_.item(), ts_.item()
             self.memory[(src_, dst_)] = ts_
 
-    def __call__(self, query_src: np.ndarray, query_dst: np.ndarray) -> np.ndarray:
+    def __call__(
+        self, query_src: torch.Tensor, query_dst: torch.Tensor
+    ) -> torch.Tensor:
         r"""Predict the link probability for each src,dst edge given the current memory.
 
         Args:
-            query_src(np.ndarray): source node id of the query edges.
-            query_dst(np.ndarray): destination node id of the query edges.
+            query_src(torch.Tensor): source node id of the query edges.
+            query_dst(torch.Tensor): destination node id of the query edges.
 
         Returns:
-            np.ndarray: Predictions array where edges in memory return self.pos_prob, otherwise 0.0
+            torch.Tensor: Predictions array where edges in memory return self.pos_prob, otherwise 0.0
         """
-        pred = np.zeros(len(query_src))
+        pred = torch.zeros_like(query_src)
         for i, edge in enumerate(zip(query_src, query_dst)):
+            edge = (edge[0].item(), edge[1].item())
             if edge in self.memory:
                 hit = not self._fixed_memory
                 hit |= self._fixed_memory and self.memory[edge] >= self.window_start
@@ -75,22 +79,22 @@ class EdgeBankPredictor:
         return pred
 
     @property
-    def window_start(self) -> int:
-        return self._window_start
+    def window_start(self) -> int | float:
+        return self._window_start.item()
 
     @property
-    def window_end(self) -> int:
-        return self._window_end
+    def window_end(self) -> int | float:
+        return self._window_end.item()
 
     @property
     def window_ratio(self) -> float:
         return self._window_ratio
 
     def _check_input_data(
-        self, src: np.ndarray, dst: np.ndarray, ts: np.ndarray
+        self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor
     ) -> None:
-        if not (type(src) == type(dst) == type(ts) == np.ndarray):
-            raise TypeError('src, dst, ts must all be np.ndarray')
+        if not (type(src) == type(dst) == type(ts) == torch.Tensor):
+            raise TypeError('src, dst, ts must all be torch.Tensor')
         if not (len(src) == len(dst) == len(ts)):
             raise ValueError(f'mismatch src:{len(src)}, dst: {len(dst)}, ts: {len(ts)}')
         if len(src) == 0:
