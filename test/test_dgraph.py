@@ -1,8 +1,10 @@
+from dataclasses import asdict
+
 import pytest
 import torch
 
 from opendg.events import EdgeEvent, NodeEvent
-from opendg.graph import DGraph
+from opendg.graph import DGBatch, DGraph
 from opendg.timedelta import TimeDeltaDG
 
 
@@ -46,19 +48,19 @@ def test_init_from_events(events):
         torch.tensor([2, 4, 8], dtype=torch.int64),
         torch.tensor([1, 5, 20], dtype=torch.int64),
     )
-    _assert_edge_eq(dg.edges, expected_edges)
+    torch.testing.assert_close(dg.edges, expected_edges)
 
     exp_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
     exp_node_feats[5, 4] = events[2].features
     exp_node_feats[10, 6] = events[4].features
-    assert torch.equal(dg.node_feats.to_dense(), exp_node_feats)
+    torch.testing.assert_close(dg.node_feats.to_dense(), exp_node_feats)
 
     exp_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
     exp_edge_feats[1, 2, 2] = events[1].features
     exp_edge_feats[5, 2, 4] = events[3].features
     exp_edge_feats[20, 1, 8] = events[-1].features
-    assert torch.equal(dg.edge_feats.to_dense(), exp_edge_feats)
+    torch.testing.assert_close(dg.edge_feats.to_dense(), exp_edge_feats)
 
 
 def test_init_from_storage(events):
@@ -88,9 +90,8 @@ def test_materialize():
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
-    exp_features = {'node': dg.node_feats, 'edge': dg.edge_feats}
-    exp = (exp_src, exp_dst, exp_t, exp_features)
-    _assert_batch_eq(exp, dg.materialize())
+    exp = DGBatch(exp_src, exp_dst, exp_t, dg.node_feats, dg.edge_feats)
+    torch.testing.assert_close(asdict(dg.materialize()), asdict(exp))
 
 
 def test_materialize_with_features(events):
@@ -98,9 +99,10 @@ def test_materialize_with_features(events):
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
-    exp_features = {'node': dg.node_feats._values(), 'edge': dg.edge_feats._values()}
-    exp = (exp_src, exp_dst, exp_t, exp_features)
-    _assert_batch_eq(exp, dg.materialize())
+    exp = DGBatch(
+        exp_src, exp_dst, exp_t, dg.node_feats._values(), dg.edge_feats._values()
+    )
+    torch.testing.assert_close(asdict(dg.materialize()), asdict(exp))
 
 
 def test_materialize_skip_feature_materialization(events):
@@ -108,9 +110,10 @@ def test_materialize_skip_feature_materialization(events):
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
-    exp_features = {'node': None, 'edge': None}
-    exp = (exp_src, exp_dst, exp_t, exp_features)
-    _assert_batch_eq(exp, dg.materialize(materialize_features=False))
+    exp = DGBatch(exp_src, exp_dst, exp_t, None, None)
+    torch.testing.assert_close(
+        asdict(dg.materialize(materialize_features=False)), asdict(exp)
+    )
 
 
 @pytest.mark.skip('Node feature IO not implemented')
@@ -1003,18 +1006,3 @@ def _assert_edge_eq(actual, expected_edges):
     _eq_check(src_actual, src_exp)
     _eq_check(dst_actual, dst_exp)
     _eq_check(t_actual, t_exp)
-
-
-def _assert_batch_eq(actual, expected_edges):
-    *actual_edge, actual_features = actual
-    *exp_edge, exp_features = expected_edges
-    _assert_edge_eq(actual_edge, exp_edge)
-    assert isinstance(exp_features, dict)
-    if exp_features['node'] is None:
-        assert actual_features['node'] is None
-    else:
-        assert torch.equal(exp_features['node'], actual_features['node'])
-    if exp_features['edge'] is None:
-        assert actual_features['node'] is None
-    else:
-        assert torch.equal(exp_features['edge'], actual_features['edge'])
