@@ -1,14 +1,14 @@
 import argparse
-from typing import Tuple
+from typing import List, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from opendg.graph import DGBatch, DGraph
-from opendg.loader import DGBaseLoader, DGNeighborLoader
+from opendg.loader import DGNeighborLoader
 from opendg.nn import TemporalAttention
+from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -16,16 +16,16 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--gpu', type=int, default=-1, help='gpu to use (or -1 for cpu)')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--gpu', type=int, default=-1, help='gpu to use (or -1 for cpu)')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
 parser.add_argument('--n-nbrs', type=int, default=[20], help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
-parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument(
     '--sampling',
     type=str,
@@ -71,6 +71,8 @@ class TGAT(nn.Module):
         src, dst, time = batch.src, batch.dst, batch.time
         node_feats, edge_feats = batch.node_feats, batch.edge_feats
 
+        # TODO: Get the negative edges
+
         # TODO: TGAT Multi-hop forward pass
         # out = self.attn(node_feats, time_feat, edge_feat, nbr_node_feat, nbr_time_feat, nbr_mask)
         pos_prob = self.edge_predictor(self.src_embed, self.dst_embed)
@@ -94,19 +96,22 @@ class EdgePredictor(nn.Module):
 
 
 def train(
-    train_loader: DGBaseLoader,
-    val_loader: DGBaseLoader,
+    train_dg: DGraph,
+    val_dg: DGraph,
     model: nn.Module,
-    criterion: nn.Module,
-    opt: torch.optim.Optimizer,
     epochs: int,
+    n_nbrs: List[int],
+    bsize: int,
+    lr: float,
 ) -> None:
+    opt = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = torch.nn.BCEWithLogitsLoss()
     best_mrr = 0
     for e in range(epochs):
         print(f'epoch {e}:')
         model.train()
         e_loss = 0.0
-        for batch in train_loader:
+        for batch in DGNeighborLoader(train_dg, n_nbrs, bsize):
             opt.zero_grad()
             pred_pos, pred_neg = model(batch)
             loss = criterion(pred_pos, torch.ones_like(pred_pos)) + criterion(
@@ -116,20 +121,20 @@ def train(
             opt.step()
             e_loss += float(loss)
 
-        if mrr := eval(val_loader, model) > best_mrr:
+        if (mrr := eval(val_dg, model, n_nbrs, bsize)) < best_mrr:
             best_mrr = mrr
         print(f'  loss:{e_loss:.4f} MRR:{mrr:.4f}')
     print(f'Best MRR: {best_mrr:.4f}')
 
 
 @torch.no_grad()
-def eval(loader: DGBaseLoader, model: nn.Module) -> float:
+def eval(dg: DGraph, model: nn.Module, n_nbrs: List[int], bsize: int) -> float:
     model.eval()
     perf_list = []
-    for batch in loader:
+    for batch in DGNeighborLoader(dg, n_nbrs, bsize):
         prob_pos, prob_neg = model(batch)
-        perf_list.append(prob_pos - prob_neg)  # TODO: MRR eval
-    return np.mean(perf_list)
+        perf_list.append(0)  # TODO: MRR eval
+    return sum(perf_list) / len(perf_list)
 
 
 def run(args: argparse.Namespace) -> None:
@@ -148,12 +153,17 @@ def run(args: argparse.Namespace) -> None:
         n_heads=args.n_heads,
         dropout=float(args.dropout),
     ).to(device)
-    criterion = torch.nn.BCEWithLogitsLoss()
-    opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
-    train_loader = DGNeighborLoader(train_dg, args.n_nbrs, args.bsize)
-    val_loader = DGNeighborLoader(val_dg, args.n_nbrs, args.bsize)
-    train(train_loader, val_loader, model, criterion, opt, args.epochs)
+    with Usage(prefix='TGAT Training'):
+        train(
+            train_dg,
+            val_dg,
+            model,
+            args.epochs,
+            args.n_nbrs,
+            args.bsize,
+            float(args.lr),
+        )
 
 
 if __name__ == '__main__':
