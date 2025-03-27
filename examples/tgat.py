@@ -20,9 +20,8 @@ parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
-parser.add_argument('--n-layers', type=int, default=2, help='number of layers')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
-parser.add_argument('--n-nbrs', type=int, default=20, help='number sampled neighbors')
+parser.add_argument('--n-nbrs', type=int, default=[20, 20], help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
 parser.add_argument(
@@ -44,7 +43,7 @@ class TGAT(nn.Module):
         edge_dim: Optional[int],
         time_dim: int,
         embed_dim: int,
-        num_layers: int = 2,
+        num_layers: int,
         n_heads: int = 2,
         dropout: float = 0.1,
     ) -> None:
@@ -147,7 +146,7 @@ def run(args: argparse.Namespace) -> None:
     val_dg = DGraph(args.dataset, split='valid')
 
     # TODO: Would be convenient to have a dispatcher based on sampling_type
-    nbr_loader_args = {'num_nbrs': [args.n_nbrs], 'batch_size': args.bsize}
+    nbr_loader_args = {'num_nbrs': args.n_nbrs, 'batch_size': args.bsize}
     train_loader = DGNeighborLoader(train_dg, **nbr_loader_args)
     val_loader = DGNeighborLoader(val_dg, **nbr_loader_args)
 
@@ -157,7 +156,7 @@ def run(args: argparse.Namespace) -> None:
         edge_dim=train_dg.edge_feats_dim,
         time_dim=args.time_dim,
         embed_dim=args.embed_dim,
-        num_layers=args.n_layers,
+        num_layers=len(args.n_nbrs),
         n_heads=args.n_heads,
         dropout=float(args.dropout),
     ).to(device)
