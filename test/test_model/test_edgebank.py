@@ -11,10 +11,10 @@ def test_unlimited_memory(pos_prob):
     src, dst, ts = _events_to_edge_arrays(events)
 
     bank = EdgeBankPredictor(src, dst, ts, memory_mode='unlimited', pos_prob=pos_prob)
-    assert bank.predict_link(np.asarray([1]), np.asarray([1])) == np.array([0])
+    assert bank(np.asarray([1]), np.asarray([1])) == np.array([0])
 
-    bank.update_memory(np.asarray([1]), np.asarray([1]), np.asarray([7]))
-    assert bank.predict_link(np.asarray([1]), np.asarray([1])) == np.array([pos_prob])
+    bank.update(np.asarray([1]), np.asarray([1]), np.asarray([7]))
+    assert bank(np.asarray([1]), np.asarray([1])) == np.array([pos_prob])
 
 
 @pytest.mark.parametrize('pos_prob', [0.7, 1.0])
@@ -41,17 +41,17 @@ def test_fixed_time_window(pos_prob):
         pos_prob=pos_prob,
     )
 
-    assert bank.predict_link(np.array([4]), np.array([5])) == np.array([pos_prob])
-    assert bank.predict_link(np.array([3]), np.array([4])) == np.array([0])
+    assert bank(np.array([4]), np.array([5])) == np.array([pos_prob])
+    assert bank(np.array([3]), np.array([4])) == np.array([0])
 
     # update but time window doesn't move forward
-    bank.update_memory(np.array([3]), np.array([4]), np.array([5]))
-    assert bank.predict_link(np.array([3]), np.array([4])) == np.array([pos_prob])
+    bank.update(np.array([3]), np.array([4]), np.array([5]))
+    assert bank(np.array([3]), np.array([4])) == np.array([pos_prob])
 
     # update and time window moves forward
-    bank.update_memory(np.array([7]), np.array([8]), np.array([7]))
-    assert bank.predict_link(np.array([7]), np.array([8])) == np.array([pos_prob])
-    assert bank.predict_link(np.array([4]), np.array([5])) == np.array([0])
+    bank.update(np.array([7]), np.array([8]), np.array([7]))
+    assert bank(np.array([7]), np.array([8])) == np.array([pos_prob])
+    assert bank(np.array([4]), np.array([5])) == np.array([0])
 
 
 def test_bad_init_args():
@@ -68,10 +68,10 @@ def test_bad_update_args():
     bank = EdgeBankPredictor(src, dst, ts, memory_mode='unlimited')
 
     with pytest.raises(ValueError):
-        bank.update_memory(np.array([]), np.array([]), np.array([1]))
+        bank.update(np.array([]), np.array([]), np.array([1]))
 
     with pytest.raises(ValueError):
-        bank.update_memory(np.array([]), np.array([]), np.array([]))
+        bank.update(np.array([]), np.array([]), np.array([]))
 
 
 @pytest.mark.parametrize('pos_prob', [0.7, 1.0])
@@ -99,7 +99,7 @@ def test_edgebank_arguments(pos_prob):
     assert bank.window_start == 5.25
     assert bank.window_end == 6
     assert bank.window_ratio == WINDOW_RATIO
-    assert bank.predict_link(np.array([6]), np.array([7])) == np.array([pos_prob])
+    assert bank(np.array([6]), np.array([7])) == np.array([pos_prob])
 
 
 def _events_to_edge_arrays(events):

@@ -39,9 +39,9 @@ class EdgeBankPredictor:
         self._window_size = self._window_end - self._window_start
 
         self.memory: Dict[Tuple[int, int], int] = {}
-        self.update_memory(src, dst, ts)
+        self.update(src, dst, ts)
 
-    def update_memory(self, src: np.ndarray, dst: np.ndarray, ts: np.ndarray) -> None:
+    def update(self, src: np.ndarray, dst: np.ndarray, ts: np.ndarray) -> None:
         r"""Update Edgebank memory with a batch of edges.
 
         Args:
@@ -55,7 +55,7 @@ class EdgeBankPredictor:
         for src_, dst_, ts_ in zip(src, dst, ts):
             self.memory[(src_, dst_)] = ts_
 
-    def predict_link(self, query_src: np.ndarray, query_dst: np.ndarray) -> np.ndarray:
+    def __call__(self, query_src: np.ndarray, query_dst: np.ndarray) -> np.ndarray:
         r"""Predict the link probability for each src,dst edge given the current memory.
 
         Args:
