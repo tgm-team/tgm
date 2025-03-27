@@ -60,11 +60,18 @@ def test_iteration_equal_unit(batch_unit, drop_last, materialize):
     batch_num = 0
     for batch in loader:
         if materialize:
-            src, dst, t, features = batch
+            src, dst, t, node_feats, edge_feats = (
+                batch.src,
+                batch.dst,
+                batch.time,
+                batch.node_feats,
+                batch.edge_feats,
+            )
             torch.is_tensor(src)
             torch.is_tensor(dst)
             torch.is_tensor(t)
-            assert isinstance(features, dict)
+            assert node_feats is None
+            assert edge_feats is None
         else:
             assert isinstance(batch, DGraph)
             assert batch_num < 4
@@ -104,11 +111,18 @@ def test_iteration_equal_unit_batch_1(batch_unit, drop_last, materialize):
     batch_num = 0
     for batch in loader:
         if materialize:
-            src, dst, t, features = batch
+            src, dst, t, node_feats, edge_feats = (
+                batch.src,
+                batch.dst,
+                batch.time,
+                batch.node_feats,
+                batch.edge_feats,
+            )
             torch.is_tensor(src)
             torch.is_tensor(dst)
             torch.is_tensor(t)
-            assert isinstance(features, dict)
+            assert node_feats is None
+            assert edge_feats is None
         else:
             assert isinstance(batch, DGraph)
             assert batch_num < 5
@@ -148,11 +162,18 @@ def test_iteration_equal_unit_batch_larger_than_dg(batch_unit, drop_last, materi
     for batch in loader:
         assert not drop_last
         if materialize:
-            src, dst, t, features = batch
+            src, dst, t, node_feats, edge_feats = (
+                batch.src,
+                batch.dst,
+                batch.time,
+                batch.node_feats,
+                batch.edge_feats,
+            )
             torch.is_tensor(src)
             torch.is_tensor(dst)
             torch.is_tensor(t)
-            assert isinstance(features, dict)
+            assert node_feats is None
+            assert edge_feats is None
         else:
             assert isinstance(batch, DGraph)
             assert batch_num < 1
@@ -187,11 +208,18 @@ def test_iteration_non_ordered_dg_non_ordered_batch_with_conversion(
     batch_num = 0
     for batch in loader:
         if materialize:
-            src, dst, t, features = batch
+            src, dst, t, node_feats, edge_feats = (
+                batch.src,
+                batch.dst,
+                batch.time,
+                batch.node_feats,
+                batch.edge_feats,
+            )
             torch.is_tensor(src)
             torch.is_tensor(dst)
             torch.is_tensor(t)
-            assert isinstance(features, dict)
+            assert node_feats is None
+            assert edge_feats is None
         else:
             assert isinstance(batch, DGraph)
             if batch_num == 0:
@@ -234,11 +262,18 @@ def test_iteration_non_ordered_dg_non_ordered_batch_with_conversion_and_time_del
     batch_num = 0
     for batch in loader:
         if materialize:
-            src, dst, t, features = batch
+            src, dst, t, node_feats, edge_feats = (
+                batch.src,
+                batch.dst,
+                batch.time,
+                batch.node_feats,
+                batch.edge_feats,
+            )
             torch.is_tensor(src)
             torch.is_tensor(dst)
             torch.is_tensor(t)
-            assert isinstance(features, dict)
+            assert node_feats is None
+            assert edge_feats is None
         else:
             assert isinstance(batch, DGraph)
             if batch_num == 0:

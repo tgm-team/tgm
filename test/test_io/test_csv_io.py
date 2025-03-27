@@ -1,5 +1,6 @@
 import csv
 import tempfile
+from dataclasses import asdict
 
 import torch
 
@@ -33,14 +34,9 @@ def test_csv_conversion_with_features():
         recovered_events = read_csv(
             f.name, edge_feature_col=edge_feature_col, **col_names
         )
-
-    assert len(events) == len(recovered_events)
-    for i in range(len(recovered_events)):
-        assert isinstance(events[i], EdgeEvent)
-        assert isinstance(recovered_events[i], EdgeEvent)
-        assert events[i].t == recovered_events[i].t
-        assert events[i].edge == recovered_events[i].edge
-        torch.testing.assert_close(events[i].features, recovered_events[i].features)
+    expected = [asdict(e) for e in events]
+    actual = [asdict(e) for e in recovered_events]
+    torch.testing.assert_close(expected, actual)
 
 
 def _write_csv(events, fp, src_col, dst_col, time_col, edge_feature_col=None):
