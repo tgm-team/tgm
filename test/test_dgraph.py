@@ -98,7 +98,7 @@ def test_materialize_with_features(events):
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
-    exp_features = {'node': dg.node_feats.to_dense(), 'edge': dg.edge_feats.to_dense()}
+    exp_features = {'node': dg.node_feats._values(), 'edge': dg.edge_feats._values()}
     exp = (exp_src, exp_dst, exp_t, exp_features)
     _assert_batch_eq(exp, dg.materialize())
 
