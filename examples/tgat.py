@@ -1,5 +1,5 @@
 import argparse
-from typing import Optional, Tuple
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -21,7 +21,9 @@ parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
-parser.add_argument('--n-nbrs', type=int, default=[20, 20], help='num sampled nbrs')
+parser.add_argument(
+    '--n-nbrs', type=int, default=[20], help='num sampled nbrs'
+)  # TODO: multi-hop
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
 parser.add_argument(
@@ -39,8 +41,8 @@ parser.add_argument(
 class TGAT(nn.Module):
     def __init__(
         self,
-        node_dim: Optional[int],
-        edge_dim: Optional[int],
+        node_dim: int,
+        edge_dim: int,
         time_dim: int,
         embed_dim: int,
         num_layers: int,
@@ -152,8 +154,8 @@ def run(args: argparse.Namespace) -> None:
 
     device = torch.device(f'cuda:{args.gpu}' if args.gpu >= 0 else 'cpu')
     model = TGAT(
-        node_dim=train_dg.node_feats_dim,
-        edge_dim=train_dg.edge_feats_dim,
+        node_dim=train_dg.node_feats_dim or args.embed_dim,  # TODO: verify
+        edge_dim=train_dg.edge_feats_dim or args.embed_dim,
         time_dim=args.time_dim,
         embed_dim=args.embed_dim,
         num_layers=len(args.n_nbrs),
