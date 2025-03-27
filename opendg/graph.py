@@ -173,6 +173,16 @@ class DGraph:
             self._slice.start_time, self._slice.end_time, self._slice.node_slice
         )
 
+    @cached_property
+    def node_feats_dim(self) -> Optional[int]:
+        r"""Node feature dimension or None if not Node features on the Graph."""
+        return self._storage.get_node_feats_dim()
+
+    @cached_property
+    def edge_feats_dim(self) -> Optional[int]:
+        r"""Edge feature dimension or None if not Node features on the Graph."""
+        return self._storage.get_edge_feats_dim()
+
     @staticmethod
     def _maybe_max(a: Any, b: Any) -> Optional[int]:
         if a is not None and b is not None:
