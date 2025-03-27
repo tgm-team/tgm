@@ -38,6 +38,8 @@ def test_init_from_events(events):
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
     assert dg.nodes == {1, 2, 4, 6, 8}
+    assert dg.node_feats_dim == 5
+    assert dg.edge_feats_dim == 5
 
     expected_edges = (
         torch.tensor([2, 2, 1], dtype=torch.int64),
@@ -153,6 +155,8 @@ def test_slice_time_full_graph(events):
     assert dg1.num_edges == 3
     assert dg1.num_timestamps == 4
     assert dg.nodes == {1, 2, 4, 6, 8}
+    assert dg.node_feats_dim == 5
+    assert dg.edge_feats_dim == 5
 
     expected_edges = (
         torch.tensor([2, 2, 1], dtype=torch.int64),
@@ -187,6 +191,8 @@ def test_slice_time_no_time_bounds(events):
     assert dg1.num_edges == 3
     assert dg1.num_timestamps == 4
     assert dg.nodes == {1, 2, 4, 6, 8}
+    assert dg.node_feats_dim == 5
+    assert dg.edge_feats_dim == 5
 
     expected_edges = (
         torch.tensor([2, 2, 1], dtype=torch.int64),
@@ -221,6 +227,8 @@ def test_slice_time_no_upper_bound(events):
     assert dg1.num_edges == 2
     assert dg1.num_timestamps == 3
     assert dg.nodes == {1, 2, 4, 6, 8}
+    assert dg.node_feats_dim == 5
+    assert dg.edge_feats_dim == 5
 
     expected_edges = (
         torch.tensor([2, 1], dtype=torch.int64),
@@ -252,7 +260,9 @@ def test_slice_time_no_lower_bound(events):
     assert dg1.num_nodes == 3
     assert dg1.num_edges == 1
     assert dg1.num_timestamps == 1
-    # assert dg.nodes == {1, 2, 4, 6, 8}
+    assert dg.nodes == {1, 2, 4, 6, 8}
+    assert dg.node_feats_dim == 5
+    assert dg.edge_feats_dim == 5
 
     expected_edges = (
         torch.tensor([2], dtype=torch.int64),
@@ -283,6 +293,8 @@ def test_slice_time_no_cache_refresh(events):
     assert dg1.num_edges == 3
     assert dg1.num_timestamps == 4
     assert dg.nodes == {1, 2, 4, 6, 8}
+    assert dg.node_feats_dim == 5
+    assert dg.edge_feats_dim == 5
 
     expected_edges = (
         torch.tensor([2, 2, 1], dtype=torch.int64),
