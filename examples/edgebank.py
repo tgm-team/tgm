@@ -1,9 +1,9 @@
 import argparse
 
-import numpy as np
+import torch
 
 from opendg.graph import DGraph
-from opendg.loader import DGBaseLoader, DGDataLoader
+from opendg.loader import DGDataLoader
 from opendg.nn import EdgeBankPredictor
 from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
@@ -13,10 +13,10 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
+parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--window_ratio', type=float, default=0.15, help='Window ratio')
 parser.add_argument('--pos_prob', type=float, default=1.0, help='Positive edge prob')
-parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument(
     '--memory_mode',
     type=str,
@@ -26,17 +26,16 @@ parser.add_argument(
 )
 
 
-def eval(loader: DGBaseLoader, model: EdgeBankPredictor) -> float:
+def eval(dg: DGraph, model: EdgeBankPredictor, batch_size: int) -> float:
     perf_list = []
-    for batch in loader:
-        # where is the negative batch list?
+    for batch in DGDataLoader(dg, batch_size):
         src, dst, time = batch.src, batch.dst, batch.time
-        neg_dst = dst
+        neg = torch.randint(high=dg.num_nodes, size=(len(src),))  # not exclusive
         model(src, dst)
-        model(src, neg_dst)
+        model(src, neg)
         perf_list.append(0)  # TODO: MRR eval
         model.update(src, dst, time)
-    return np.mean(perf_list)
+    return sum(perf_list) / len(perf_list)
 
 
 def run(args: argparse.Namespace) -> None:
@@ -55,9 +54,8 @@ def run(args: argparse.Namespace) -> None:
         pos_prob=args.pos_prob,
     )
 
-    val_loader = DGDataLoader(val_dg, batch_size=args.bsize)
     with Usage(prefix='Edgebank Validation'):
-        eval(val_loader, model)
+        eval(val_dg, model, batch_size=args.bsize)
 
 
 if __name__ == '__main__':
