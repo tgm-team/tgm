@@ -171,12 +171,12 @@ def test_slice_time_full_graph(events):
     assert dg.node_feats_dim == 5
     assert dg.edge_feats_dim == 5
 
-    expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64),
-        torch.tensor([2, 4, 8], dtype=torch.int64),
-        torch.tensor([1, 5, 20], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2, 1]),
+        torch.LongTensor([2, 4, 8]),
+        torch.LongTensor([1, 5, 20]),
     )
-    _assert_edge_eq(dg.edges, expected_edges)
+    torch.testing.assert_close(dg.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -207,12 +207,12 @@ def test_slice_time_no_time_bounds(events):
     assert dg.node_feats_dim == 5
     assert dg.edge_feats_dim == 5
 
-    expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64),
-        torch.tensor([2, 4, 8], dtype=torch.int64),
-        torch.tensor([1, 5, 20], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2, 1]),
+        torch.LongTensor([2, 4, 8]),
+        torch.LongTensor([1, 5, 20]),
     )
-    _assert_edge_eq(dg.edges, expected_edges)
+    torch.testing.assert_close(dg.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -243,12 +243,12 @@ def test_slice_time_no_upper_bound(events):
     assert dg.node_feats_dim == 5
     assert dg.edge_feats_dim == 5
 
-    expected_edges = (
-        torch.tensor([2, 1], dtype=torch.int64),
-        torch.tensor([4, 8], dtype=torch.int64),
-        torch.tensor([5, 20], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 1]),
+        torch.LongTensor([4, 8]),
+        torch.LongTensor([5, 20]),
     )
-    _assert_edge_eq(dg1.edges, expected_edges)
+    torch.testing.assert_close(dg1.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_node_feats[5, 4] = events[2].features
@@ -277,12 +277,12 @@ def test_slice_time_no_lower_bound(events):
     assert dg.node_feats_dim == 5
     assert dg.edge_feats_dim == 5
 
-    expected_edges = (
-        torch.tensor([2], dtype=torch.int64),
-        torch.tensor([2], dtype=torch.int64),
-        torch.tensor([1], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2]),
+        torch.LongTensor([2]),
+        torch.LongTensor([1]),
     )
-    _assert_edge_eq(dg1.edges, expected_edges)
+    torch.testing.assert_close(dg1.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -309,12 +309,12 @@ def test_slice_time_no_cache_refresh(events):
     assert dg.node_feats_dim == 5
     assert dg.edge_feats_dim == 5
 
-    expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64),
-        torch.tensor([2, 4, 8], dtype=torch.int64),
-        torch.tensor([1, 5, 20], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2, 1]),
+        torch.LongTensor([2, 4, 8]),
+        torch.LongTensor([1, 5, 20]),
     )
-    _assert_edge_eq(dg1.edges, expected_edges)
+    torch.testing.assert_close(dg1.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -343,12 +343,12 @@ def test_slice_time_at_end_time(events):
     assert dg1.num_timestamps == 3
     assert dg1.nodes == {2, 4, 6}
 
-    expected_edges = (
-        torch.tensor([2, 2], dtype=torch.int64),
-        torch.tensor([2, 4], dtype=torch.int64),
-        torch.tensor([1, 5], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2]),
+        torch.LongTensor([2, 4]),
+        torch.LongTensor([1, 5]),
     )
-    _assert_edge_eq(dg1.edges, expected_edges)
+    torch.testing.assert_close(dg1.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -370,12 +370,12 @@ def test_slice_time_at_end_time(events):
     assert dg.num_timestamps == 4
     assert dg.nodes == {1, 2, 4, 6, 8}
 
-    expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64),
-        torch.tensor([2, 4, 8], dtype=torch.int64),
-        torch.tensor([1, 5, 20], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2, 1]),
+        torch.LongTensor([2, 4, 8]),
+        torch.LongTensor([1, 5, 20]),
     )
-    _assert_edge_eq(dg.edges, expected_edges)
+    torch.testing.assert_close(dg.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -415,12 +415,12 @@ def test_slice_time_to_empty(events):
     assert dg1.num_timestamps == 3
     assert dg1.nodes == {2, 4, 6}
 
-    expected_edges = (
-        torch.tensor([2, 2], dtype=torch.int64),
-        torch.tensor([2, 4], dtype=torch.int64),
-        torch.tensor([1, 5], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2]),
+        torch.LongTensor([2, 4]),
+        torch.LongTensor([1, 5]),
     )
-    _assert_edge_eq(dg1.edges, expected_edges)
+    torch.testing.assert_close(dg1.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -432,17 +432,6 @@ def test_slice_time_to_empty(events):
     exp_edge_feats[1, 2, 2] = events[1].features
     exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 2
     dg2 = dg1.slice_time(5, 14)
@@ -456,12 +445,12 @@ def test_slice_time_to_empty(events):
     assert dg2.num_timestamps == 2
     assert dg2.nodes == {2, 4, 6}
 
-    expected_edges = (
-        torch.tensor([2], dtype=torch.int64),
-        torch.tensor([4], dtype=torch.int64),
-        torch.tensor([5], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2]),
+        torch.LongTensor([4]),
+        torch.LongTensor([5]),
     )
-    _assert_edge_eq(dg2.edges, expected_edges)
+    torch.testing.assert_close(dg2.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 5)
     exp_node_feats[5, 4] = events[2].features
@@ -471,17 +460,6 @@ def test_slice_time_to_empty(events):
     exp_edge_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, dg2.num_nodes, 5)
     exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice number 3
     dg3 = dg2.slice_time(7, 10)
@@ -495,25 +473,14 @@ def test_slice_time_to_empty(events):
     assert dg3.num_timestamps == 1
     assert dg3.nodes == {6}
 
-    expected_edges = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
-    _assert_edge_eq(dg3.edges, expected_edges)
+    exp_edges = (torch.LongTensor([]), torch.LongTensor([]), torch.LongTensor([]))
+    torch.testing.assert_close(dg3.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 5)
     exp_node_feats[10, 6] = events[4].features
     assert torch.equal(dg3.node_feats.to_dense(), exp_node_feats)
 
     assert dg3.edge_feats is None
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice number 4 (to empty)
     dg4 = dg3.slice_time(0, 7)
@@ -529,8 +496,8 @@ def test_slice_time_to_empty(events):
     assert dg4.node_feats is None
     assert dg4.edge_feats is None
 
-    expected_edges = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
-    _assert_edge_eq(dg4.edges, expected_edges)
+    exp_edges = (torch.LongTensor([]), torch.LongTensor([]), torch.LongTensor([]))
+    torch.testing.assert_close(dg4.edges, exp_edges)
 
     # Check original graph cache is not updated
     assert len(dg) == 4
@@ -564,12 +531,12 @@ def test_slice_nodes_full_graph(events):
     assert dg.num_timestamps == 4
     assert dg.nodes == {1, 2, 4, 6, 8}
 
-    expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64),
-        torch.tensor([2, 4, 8], dtype=torch.int64),
-        torch.tensor([1, 5, 20], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2, 1]),
+        torch.LongTensor([2, 4, 8]),
+        torch.LongTensor([1, 5, 20]),
     )
-    _assert_edge_eq(dg.edges, expected_edges)
+    torch.testing.assert_close(dg.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -609,12 +576,12 @@ def test_slice_nodes_to_empty(events):
     assert dg1.num_timestamps == 3
     assert dg.nodes == {1, 2, 4, 6, 8}
 
-    expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64),
-        torch.tensor([2, 4, 8], dtype=torch.int64),
-        torch.tensor([1, 5, 20], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2, 1]),
+        torch.LongTensor([2, 4, 8]),
+        torch.LongTensor([1, 5, 20]),
     )
-    _assert_edge_eq(dg1.edges, expected_edges)
+    torch.testing.assert_close(dg1.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -626,17 +593,6 @@ def test_slice_nodes_to_empty(events):
     exp_edge_feats[5, 2, 4] = events[3].features
     exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 2
     dg2 = dg1.slice_nodes({1, 2, 4, 6})  # 6 should be gone since we sliced it away
@@ -651,12 +607,12 @@ def test_slice_nodes_to_empty(events):
     assert dg2.num_timestamps == 3
     assert dg2.nodes == {1, 2, 4, 8}
 
-    expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64),
-        torch.tensor([2, 4, 8], dtype=torch.int64),
-        torch.tensor([1, 5, 20], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2, 1]),
+        torch.LongTensor([2, 4, 8]),
+        torch.LongTensor([1, 5, 20]),
     )
-    _assert_edge_eq(dg2.edges, expected_edges)
+    torch.testing.assert_close(dg2.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -668,17 +624,6 @@ def test_slice_nodes_to_empty(events):
     exp_edge_feats[5, 2, 4] = events[3].features
     exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 3: Edge 4 -> 2 should cause node 2 to come back
     dg3 = dg2.slice_nodes({4})
@@ -692,12 +637,12 @@ def test_slice_nodes_to_empty(events):
     assert dg3.num_timestamps == 1
     assert dg3.nodes == {2, 4}
 
-    expected_edges = (
-        torch.tensor([2], dtype=torch.int64),
-        torch.tensor([4], dtype=torch.int64),
-        torch.tensor([5], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2]),
+        torch.LongTensor([4]),
+        torch.LongTensor([5]),
     )
-    _assert_edge_eq(dg3.edges, expected_edges)
+    torch.testing.assert_close(dg3.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 5)
     exp_node_feats[5, 4] = events[2].features
@@ -706,17 +651,6 @@ def test_slice_nodes_to_empty(events):
     exp_edge_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, dg3.num_nodes, 5)
     exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg3.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice number 4 (to empty)
     dg4 = dg3.slice_nodes({5})  # Should be empty since 2 was previously sliced
@@ -731,8 +665,8 @@ def test_slice_nodes_to_empty(events):
     assert dg4.node_feats is None
     assert dg4.edge_feats is None
 
-    expected_edges = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
-    _assert_edge_eq(dg4.edges, expected_edges)
+    exp_edges = (torch.LongTensor([]), torch.LongTensor([]), torch.LongTensor([]))
+    torch.testing.assert_close(dg4.edges, exp_edges)
 
     # Check original graph cache is not updated
     assert len(dg) == 4
@@ -771,12 +705,12 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg1.num_timestamps == 3
     assert dg1.nodes == {1, 2, 4, 8}
 
-    expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64),
-        torch.tensor([2, 4, 8], dtype=torch.int64),
-        torch.tensor([1, 5, 20], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2, 1]),
+        torch.LongTensor([2, 4, 8]),
+        torch.LongTensor([1, 5, 20]),
     )
-    _assert_edge_eq(dg1.edges, expected_edges)
+    torch.testing.assert_close(dg1.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -788,17 +722,6 @@ def test_interleave_slice_time_slice_nodes(events):
     exp_edge_feats[5, 2, 4] = events[3].features
     exp_edge_feats[20, 1, 8] = events[-1].features
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 2
     dg2 = dg1.slice_time(1, 14)
@@ -812,12 +735,12 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg2.num_timestamps == 2
     assert dg2.nodes == {2, 4}
 
-    expected_edges = (
-        torch.tensor([2, 2], dtype=torch.int64),
-        torch.tensor([2, 4], dtype=torch.int64),
-        torch.tensor([1, 5], dtype=torch.int64),
+    exp_edges = (
+        torch.LongTensor([2, 2]),
+        torch.LongTensor([2, 4]),
+        torch.LongTensor([1, 5]),
     )
-    _assert_edge_eq(dg2.edges, expected_edges)
+    torch.testing.assert_close(dg2.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 5)
     exp_node_feats[1, 2] = events[0].features
@@ -828,17 +751,6 @@ def test_interleave_slice_time_slice_nodes(events):
     exp_edge_feats[1, 2, 2] = events[1].features
     exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 3
     dg3 = dg2.slice_nodes({1, 4})  # Node 1 at time 20 was previously sliced off
@@ -851,12 +763,8 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg3.num_timestamps == 1
     assert dg3.nodes == {2, 4}
 
-    expected_edges = (
-        torch.tensor([2], dtype=torch.int64),
-        torch.tensor([4], dtype=torch.int64),
-        torch.tensor([5], dtype=torch.int64),
-    )
-    _assert_edge_eq(dg3.edges, expected_edges)
+    exp_edges = (torch.LongTensor([2]), torch.LongTensor([4]), torch.LongTensor([5]))
+    torch.testing.assert_close(dg3.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 5)
     exp_node_feats[5, 4] = events[2].features
@@ -865,17 +773,6 @@ def test_interleave_slice_time_slice_nodes(events):
     exp_edge_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, dg3.num_nodes, 5)
     exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg3.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 4
     dg4 = dg3.slice_time(0, 19)  # Ensure previous slice not changed
@@ -889,12 +786,8 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg4.num_timestamps == 1
     assert dg4.nodes == {2, 4}
 
-    expected_edges = (
-        torch.tensor([2], dtype=torch.int64),
-        torch.tensor([4], dtype=torch.int64),
-        torch.tensor([5], dtype=torch.int64),
-    )
-    _assert_edge_eq(dg3.edges, expected_edges)
+    exp_edges = (torch.LongTensor([2]), torch.LongTensor([4]), torch.LongTensor([5]))
+    torch.testing.assert_close(dg3.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, 5)
     exp_node_feats[5, 4] = events[2].features
@@ -903,17 +796,6 @@ def test_interleave_slice_time_slice_nodes(events):
     exp_edge_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, dg4.num_nodes, 5)
     exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg4.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice Number 5
     dg5 = dg4.slice_nodes({2})
@@ -926,12 +808,8 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg4.num_edges == 1
     assert dg4.num_timestamps == 1
 
-    expected_edges = (
-        torch.tensor([2], dtype=torch.int64),
-        torch.tensor([4], dtype=torch.int64),
-        torch.tensor([5], dtype=torch.int64),
-    )
-    _assert_edge_eq(dg3.edges, expected_edges)
+    exp_edges = (torch.LongTensor([2]), torch.LongTensor([4]), torch.LongTensor([5]))
+    torch.testing.assert_close(dg3.edges, exp_edges)
 
     exp_node_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, 5)
     exp_node_feats[5, 4] = events[2].features
@@ -940,17 +818,6 @@ def test_interleave_slice_time_slice_nodes(events):
     exp_edge_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, dg4.num_nodes, 5)
     exp_edge_feats[5, 2, 4] = events[3].features
     assert torch.equal(dg4.edge_feats.to_dense(), exp_edge_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
-    assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
     # Slice 6 (to empty)
     dg6 = dg5.slice_time(1, 4)
@@ -966,8 +833,8 @@ def test_interleave_slice_time_slice_nodes(events):
     assert dg6.node_feats is None
     assert dg6.edge_feats is None
 
-    expected_edges = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
-    _assert_edge_eq(dg6.edges, expected_edges)
+    exp_edges = (torch.LongTensor([]), torch.LongTensor([]), torch.LongTensor([]))
+    torch.testing.assert_close(dg6.edges, exp_edges)
 
     # Check original graph cache is not updated
     assert len(dg) == 4
@@ -982,27 +849,6 @@ def test_interleave_slice_time_slice_nodes(events):
 
 
 def _assert_events_equal(expected_events, actual_events):
-    assert len(expected_events) == len(actual_events)
-    for i in range(len(expected_events)):
-        expected_event = expected_events[i]
-        actual_event = actual_events[i]
-
-        assert isinstance(expected_event, EdgeEvent)
-        assert isinstance(actual_event, EdgeEvent)
-
-        assert expected_event.t == actual_event.t
-        assert expected_event.edge == actual_event.edge
-        torch.testing.assert_close(expected_event.features, actual_event.features)
-
-
-def _assert_edge_eq(actual, expected_edges):
-    src_actual, dst_actual, t_actual = actual
-    src_exp, dst_exp, t_exp = expected_edges
-
-    def _eq_check(actual_tensor, exp_tensor):
-        assert isinstance(actual_tensor, torch.Tensor)
-        assert actual_tensor.tolist() == exp_tensor.tolist()
-
-    _eq_check(src_actual, src_exp)
-    _eq_check(dst_actual, dst_exp)
-    _eq_check(t_actual, t_exp)
+    expected = [asdict(e) for e in expected_events]
+    actual = [asdict(e) for e in actual_events]
+    torch.testing.assert_close(expected, actual)
