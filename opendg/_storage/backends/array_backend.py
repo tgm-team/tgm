@@ -16,8 +16,8 @@ class DGStorageArrayBackend(DGStorageBase):
     def __init__(self, events: List[Event]) -> None:
         if not len(events):
             raise ValueError(f'Tried to init {self.__class__.__name__} with empty data')
-        self._node_feats_shape = self._check_node_feature_shapes(events)
-        self._edge_feats_shape = self._check_edge_feature_shapes(events)
+        self._node_feats_dim = self._check_node_feature_dim(events)
+        self._edge_feats_dim = self._check_edge_feature_dim(events)
         self._events = self._sort_events_list_if_needed(events[:])  # Make a copy
         self._ts = np.array([event.t for event in self._events])
 
@@ -169,12 +169,12 @@ class DGStorageArrayBackend(DGStorageBase):
         # If the end_time is given, then it determines the dimension of the temporal axis
         # even if there are no events at the end time (could be the case after calling slice_time)
         max_time = end_time if end_time is not None else max_time
-        assert self._node_feats_shape is not None
+        assert self._node_feats_dim is not None
 
         # https://pytorch.org/docs/stable/sparse.html#construction
         values_tensor = torch.stack(values)
         indices_tensor = torch.tensor(indices).t()
-        shape = (max_time + 1, max_node_id + 1, *self._node_feats_shape)
+        shape = (max_time + 1, max_node_id + 1, self._node_feats_dim)
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     def get_edge_feats(
@@ -202,7 +202,7 @@ class DGStorageArrayBackend(DGStorageBase):
         # If the end_time is given, then it determines the dimension of the temporal axis
         # even if there are no events at the end time (could be the case after calling slice_time)
         max_time = end_time if end_time is not None else max_time
-        assert self._edge_feats_shape is not None
+        assert self._edge_feats_dim is not None
 
         # https://pytorch.org/docs/stable/sparse.html#construction
         values_tensor = torch.stack(values)
@@ -211,9 +211,15 @@ class DGStorageArrayBackend(DGStorageBase):
             max_time + 1,
             max_node_id + 1,
             max_node_id + 1,
-            *self._edge_feats_shape,
+            self._edge_feats_dim,
         )
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
+
+    def get_node_feats_dim(self) -> Optional[int]:
+        return self._node_feats_dim
+
+    def get_edge_feats_dim(self) -> Optional[int]:
+        return self._edge_feats_dim
 
     def _lb_time_idx(self, t: Optional[int]) -> int:
         if t not in self._lb_idx_cache:
