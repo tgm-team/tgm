@@ -46,9 +46,9 @@ class DGraph:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""
         features: Dict[str, Optional[Tensor]] = {'node': None, 'edge': None}
         if materialize_features and self.node_feats is not None:
-            features['node'] = self.node_feats.to_dense()
+            features['node'] = self.node_feats._values()
         if materialize_features and self.edge_feats is not None:
-            features['edge'] = self.edge_feats.to_dense()
+            features['edge'] = self.edge_feats._values()
         return *self.edges, features
 
     def slice_time(
