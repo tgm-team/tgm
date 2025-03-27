@@ -1,10 +1,18 @@
 import warnings
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
+
+
+@dataclass(slots=True)
+class DGSliceTracker:
+    start_time: Optional[int] = None
+    end_time: Optional[int] = None
+    node_slice: Optional[Set[int]] = None
 
 
 class DGStorageBase(ABC):
@@ -15,47 +23,27 @@ class DGStorageBase(ABC):
         pass
 
     @abstractmethod
-    def to_events(
-        self,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        node_slice: Optional[Set[int]] = None,
-    ) -> List[Event]:
+    def to_events(self, slice: DGSliceTracker) -> List[Event]:
         pass
 
     @abstractmethod
-    def get_start_time(self, node_slice: Optional[Set[int]] = None) -> Optional[int]:
+    def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
         pass
 
     @abstractmethod
-    def get_end_time(self, node_slice: Optional[Set[int]] = None) -> Optional[int]:
+    def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
         pass
 
     @abstractmethod
-    def get_nodes(
-        self,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        node_slice: Optional[Set[int]] = None,
-    ) -> Set[int]:
+    def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         pass
 
     @abstractmethod
-    def get_edges(
-        self,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        node_slice: Optional[Set[int]] = None,
-    ) -> Tuple[Tensor, Tensor, Tensor]:
+    def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
         pass
 
     @abstractmethod
-    def get_num_timestamps(
-        self,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        node_slice: Optional[Set[int]] = None,
-    ) -> int:
+    def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         pass
 
     @abstractmethod
@@ -63,28 +51,16 @@ class DGStorageBase(ABC):
         self,
         seed_nodes: Set[int],
         num_nbrs: List[int],
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        node_slice: Optional[Set[int]] = None,
+        slice: DGSliceTracker,
     ) -> Dict[int, List[List[Tuple[int, int]]]]:
         pass
 
     @abstractmethod
-    def get_node_feats(
-        self,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        node_slice: Optional[Set[int]] = None,
-    ) -> Optional[Tensor]:
+    def get_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         pass
 
     @abstractmethod
-    def get_edge_feats(
-        self,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        node_slice: Optional[Set[int]] = None,
-    ) -> Optional[Tensor]:
+    def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         pass
 
     @abstractmethod

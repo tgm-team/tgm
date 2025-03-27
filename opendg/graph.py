@@ -9,7 +9,7 @@ import pandas as pd
 from torch import Tensor
 
 from opendg._io import read_events
-from opendg._storage import DGStorage
+from opendg._storage import DGSliceTracker, DGStorage
 from opendg.events import Event
 from opendg.timedelta import TimeDeltaDG
 
@@ -35,12 +35,10 @@ class DGraph:
                 raise ValueError('Tried to initialize a DGraph with empty events list')
             self._storage = DGStorage(events)
 
-        self._slice = self._DGSliceTracker()
+        self._slice = DGSliceTracker()
 
     def to_events(self) -> List[Event]:
-        return self._storage.to_events(
-            self._slice.start_time, self._slice.end_time, self._slice.node_slice
-        )
+        return self._storage.to_events(self._slice)
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""
@@ -85,12 +83,12 @@ class DGraph:
 
         # Update start time
         dg._slice.start_time = self._maybe_max(
-            self._storage.get_start_time(dg._slice.node_slice), self.start_time
+            self._storage.get_start_time(dg._slice), self.start_time
         )
 
         # Update end time
         dg._slice.end_time = self._maybe_min(
-            self._storage.get_end_time(dg._slice.node_slice), self.end_time
+            self._storage.get_end_time(dg._slice), self.end_time
         )
 
         return dg
@@ -106,24 +104,20 @@ class DGraph:
     def start_time(self) -> Optional[int]:
         r"""The start time of the dynamic graph. None if the graph is empty."""
         if self._slice.start_time is None:
-            self._slice.start_time = self._storage.get_start_time(
-                self._slice.node_slice
-            )
+            self._slice.start_time = self._storage.get_start_time(self._slice)
         return self._slice.start_time
 
     @cached_property
     def end_time(self) -> Optional[int]:
         r"""The end time of the dynamic graph. None, if the graph is empty."""
         if self._slice.end_time is None:
-            self._slice.end_time = self._storage.get_end_time(self._slice.node_slice)
+            self._slice.end_time = self._storage.get_end_time(self._slice)
         return self._slice.end_time
 
     @cached_property
     def num_nodes(self) -> int:
         r"""The total number of unique nodes encountered over the dynamic graph."""
-        self._slice.node_slice = self._storage.get_nodes(
-            self._slice.start_time, self._slice.end_time, self._slice.node_slice
-        )
+        self._slice.node_slice = self._storage.get_nodes(self._slice)
         return max(self._slice.node_slice) + 1 if len(self._slice.node_slice) else 0
 
     @cached_property
@@ -135,23 +129,17 @@ class DGraph:
     @cached_property
     def num_timestamps(self) -> int:
         r"""The total number of unique timestamps encountered over the dynamic graph."""
-        return self._storage.get_num_timestamps(
-            self._slice.start_time, self._slice.end_time, self._slice.node_slice
-        )
+        return self._storage.get_num_timestamps(self._slice)
 
     @cached_property
     def nodes(self) -> Set[int]:
         r"""The set of node ids over the dynamic graph."""
-        return self._storage.get_nodes(
-            self._slice.start_time, self._slice.end_time, self._slice.node_slice
-        )
+        return self._storage.get_nodes(self._slice)
 
     @cached_property
     def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
         r"""The src, dst, time tensors over the dynamic graph."""
-        return self._storage.get_edges(
-            self._slice.start_time, self._slice.end_time, self._slice.node_slice
-        )
+        return self._storage.get_edges(self._slice)
 
     @cached_property
     def node_feats(self) -> Optional[Tensor]:
@@ -159,9 +147,7 @@ class DGraph:
 
         If node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_edge).
         """
-        return self._storage.get_node_feats(
-            self._slice.start_time, self._slice.end_time, self._slice.node_slice
-        )
+        return self._storage.get_node_feats(self._slice)
 
     @cached_property
     def edge_feats(self) -> Optional[Tensor]:
@@ -169,9 +155,7 @@ class DGraph:
 
         If edge features exist, returns a Tensor.sparse_coo_tensor(T x V x V x d_edge).
         """
-        return self._storage.get_edge_feats(
-            self._slice.start_time, self._slice.end_time, self._slice.node_slice
-        )
+        return self._storage.get_edge_feats(self._slice)
 
     @cached_property
     def node_feats_dim(self) -> Optional[int]:
@@ -194,12 +178,6 @@ class DGraph:
         if a is not None and b is not None:
             return min(a, b)
         return a if b is None else b if a is None else None
-
-    @dataclass(slots=True)
-    class _DGSliceTracker:
-        start_time: Optional[int] = None
-        end_time: Optional[int] = None
-        node_slice: Optional[Set[int]] = None
 
 
 @dataclass(slots=True)
