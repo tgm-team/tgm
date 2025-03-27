@@ -2,7 +2,6 @@ import warnings
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Set, Tuple
 
-import torch
 from torch import Tensor
 
 from opendg.events import EdgeEvent, Event, NodeEvent
@@ -88,6 +87,14 @@ class DGStorageBase(ABC):
     ) -> Optional[Tensor]:
         pass
 
+    @abstractmethod
+    def get_node_feats_dim(self) -> Optional[int]:
+        pass
+
+    @abstractmethod
+    def get_edge_feats_dim(self) -> Optional[int]:
+        pass
+
     def _sort_events_list_if_needed(self, events: List[Event]) -> List[Event]:
         if not all(isinstance(event, Event) for event in events):
             raise ValueError('bad type when initializing DGStorage from events list')
@@ -97,7 +104,7 @@ class DGStorageBase(ABC):
         events.sort(key=lambda x: x.t)
         return events
 
-    def _check_node_feature_shapes(self, events: List[Event]) -> Optional[torch.Size]:
+    def _check_node_feature_dim(self, events: List[Event]) -> Optional[int]:
         shape = None
         for event in events:
             if isinstance(event, NodeEvent) and event.features is not None:
@@ -107,9 +114,11 @@ class DGStorageBase(ABC):
                     raise ValueError(
                         f'Node feature shapes non-homogenous: {shape} != {event.features.shape}'
                     )
-        return shape
+        if shape is not None and len(shape) > 1:
+            raise ValueError(f'Only 1-d node features supported but got: ({shape})')
+        return shape[0] if shape is not None else shape
 
-    def _check_edge_feature_shapes(self, events: List[Event]) -> Optional[torch.Size]:
+    def _check_edge_feature_dim(self, events: List[Event]) -> Optional[int]:
         shape = None
         for event in events:
             if isinstance(event, EdgeEvent) and event.features is not None:
@@ -119,4 +128,6 @@ class DGStorageBase(ABC):
                     raise ValueError(
                         f'Edge feature shapes non-homogenous: {shape} != {event.features.shape}'
                     )
-        return shape
+        if shape is not None and len(shape) > 1:
+            raise ValueError(f'Only 1-d node features supported but got: ({shape})')
+        return shape[0] if shape is not None else shape
