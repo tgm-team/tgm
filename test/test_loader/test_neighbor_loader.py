@@ -51,9 +51,9 @@ def test_iteration_with_sampling(drop_last):
     for batch in loader:
         assert isinstance(batch, DGraph)
         if batch_num == 0:
-            assert batch.to_events() == events[:5]
+            assert batch.to_events() == events[:2]
         elif batch_num == 1:
-            assert batch.to_events() == events[3:7]
+            assert batch.to_events() == events[3:6]
         elif batch_num == 2:
             assert batch.to_events() == events[6:]
         else:
@@ -89,9 +89,9 @@ def test_iteration_with_full_neighborhood_sampling(drop_last):
     for batch in loader:
         assert isinstance(batch, DGraph)
         if batch_num == 0:
-            assert batch.to_events() == events[:5]
+            assert batch.to_events() == events[:2]
         elif batch_num == 1:
-            assert batch.to_events() == events[3:7]
+            assert batch.to_events() == events[3:6]
         elif batch_num == 2:
             assert batch.to_events() == events[5:]
         else:
