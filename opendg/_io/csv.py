@@ -30,6 +30,6 @@ def read_csv(
                 msg_list = [float(row[feature_col]) for feature_col in edge_feature_col]
                 features = torch.tensor(msg_list)
 
-            event = EdgeEvent(t=t, src=src, dst=dst, global_idx=i, features=features)
+            event = EdgeEvent(t=t, src=src, dst=dst, global_id=i, features=features)
             events.append(event)
     return events

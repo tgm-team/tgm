@@ -65,7 +65,7 @@ def test_tgb_conversion(mock_dataset_cls, split, expected_indices):
 
     for i, idx in enumerate(expected_indices[:5]):  # sample a few for sanity check
         assert isinstance(events[i], EdgeEvent)
-        assert events[i].global_idx == i
+        assert events[i].global_id == i
         assert events[i].t == int(timestamps[idx])
         assert events[i].edge == (int(sources[idx]), int(destinations[idx]))
 

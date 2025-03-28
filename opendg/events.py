@@ -12,7 +12,7 @@ class NodeEvent:
 
     t: int
     src: int
-    global_idx: int = -1
+    global_id: int = -1
     features: Optional[Tensor] = None
 
 
@@ -23,7 +23,7 @@ class EdgeEvent:
     t: int
     src: int
     dst: int
-    global_idx: int = -1
+    global_id: int = -1
     features: Optional[Tensor] = None
 
     @property

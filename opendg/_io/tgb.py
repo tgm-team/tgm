@@ -49,7 +49,7 @@ def read_tgb(
     ):
         features = torch.tensor(feat, dtype=torch.float) if feat is not None else None
         event = EdgeEvent(
-            t=int(t), src=int(src), dst=int(dst), global_idx=i, features=features
+            t=int(t), src=int(src), dst=int(dst), global_id=i, features=features
         )
         events.append(event)
 

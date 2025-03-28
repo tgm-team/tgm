@@ -18,7 +18,7 @@ def test_read_pandas_no_features():
     assert len(events) == len(events_df)
     for i in range(len(events)):
         assert isinstance(events[i], EdgeEvent)
-        assert events[i].global_idx == i
+        assert events[i].global_id == i
         assert events[i].t == events_df.t.iloc[i]
         assert events[i].edge == (events_df.src.iloc[i], events_df.dst.iloc[i])
 
@@ -42,7 +42,7 @@ def test_read_pandas_with_features():
     assert len(events) == len(events_df)
     for i in range(len(events)):
         assert isinstance(events[i], EdgeEvent)
-        assert events[i].global_idx == i
+        assert events[i].global_id == i
         assert events[i].t == events_df.t.iloc[i]
         assert events[i].edge == (events_df.src.iloc[i], events_df.dst.iloc[i])
         torch.testing.assert_close(

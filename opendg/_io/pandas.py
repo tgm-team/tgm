@@ -35,7 +35,7 @@ def read_pandas(
         else:
             features = None
 
-        events[i] = EdgeEvent(t=t, src=src, dst=dst, global_idx=i, features=features)
+        events[i] = EdgeEvent(t=t, src=src, dst=dst, global_id=i, features=features)
 
     df.apply(_construct_event_from_row, axis=1)
     df.drop('index', axis=1)  # Clean up temporary index column
