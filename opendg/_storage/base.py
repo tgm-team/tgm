@@ -49,6 +49,10 @@ class DGStorageBase(ABC):
         pass
 
     @abstractmethod
+    def get_num_events(self, slice: DGSliceTracker) -> int:
+        pass
+
+    @abstractmethod
     def get_nbrs(
         self,
         seed_nodes: Set[int],
