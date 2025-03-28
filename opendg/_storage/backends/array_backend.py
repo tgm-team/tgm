@@ -37,14 +37,16 @@ class DGStorageArrayBackend(DGStorageBase):
         return events
 
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
-        for event in self._events:
+        for i in range(*self._binary_search(slice)):
+            event = self._events[i]
             nodes = self._nodes_in_event(event)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
                 return event.t
         return None
 
     def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
-        for i in range(len(self._events) - 1, -1, -1):
+        lb_idx, ub_idx = self._binary_search(slice)
+        for i in range(ub_idx - 1, lb_idx - 1, -1):
             event = self._events[i]
             nodes = self._nodes_in_event(event)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
@@ -61,6 +63,7 @@ class DGStorageArrayBackend(DGStorageBase):
         return all_nodes
 
     def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
+        # TODO: Be aware of slice idx
         src, dst, time = [], [], []
         for i in range(*self._binary_search(slice)):
             event = self._events[i]
@@ -120,6 +123,7 @@ class DGStorageArrayBackend(DGStorageBase):
         return sampled_nbrs
 
     def get_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
+        # TODO: Be aware of slice idx
         max_time, max_node_id = -1, -1  # Assuming these are both non-negative
         indices, values = [], []
         for i in range(*self._binary_search(slice)):
@@ -147,6 +151,7 @@ class DGStorageArrayBackend(DGStorageBase):
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
+        # TODO: Be aware of slice idx
         max_time, max_node_id = -1, -1  # Assuming these are both non-negative
         indices, values = [], []
         for i in range(*self._binary_search(slice)):
