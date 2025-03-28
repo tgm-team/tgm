@@ -141,6 +141,11 @@ class DGraph:
         return self._storage.get_num_timestamps(self._slice)
 
     @cached_property
+    def num_events(self) -> int:
+        r"""The total number of events encountered over the dynamic graph."""
+        return self._storage.get_num_events(self._slice)
+
+    @cached_property
     def nodes(self) -> Set[int]:
         r"""The set of node ids over the dynamic graph."""
         return self._storage.get_nodes(self._slice)

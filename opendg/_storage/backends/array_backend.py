@@ -87,6 +87,15 @@ class DGStorageArrayBackend(DGStorageBase):
                 timestamps.add(event.t)
         return len(timestamps)
 
+    def get_num_events(self, slice: DGSliceTracker) -> int:
+        num_events = 0
+        for i in range(*self._binary_search(slice)):
+            event = self._events[i]
+            nodes = self._nodes_in_event(event)
+            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
+                num_events += 1
+        return num_events
+
     def get_nbrs(
         self,
         seed_nodes: Set[int],
