@@ -37,14 +37,16 @@ class DGStorageArrayBackend(DGStorageBase):
         return events
 
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
-        for event in self._events:
+        for i in range(*self._binary_search(slice)):
+            event = self._events[i]
             nodes = self._nodes_in_event(event)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
                 return event.t
         return None
 
     def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
-        for i in range(len(self._events) - 1, -1, -1):
+        lb_idx, ub_idx = self._binary_search(slice)
+        for i in range(ub_idx - 1, lb_idx - 1, -1):
             event = self._events[i]
             nodes = self._nodes_in_event(event)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
@@ -192,4 +194,11 @@ class DGStorageArrayBackend(DGStorageBase):
             self._ub_cache[slice.end_time] = int(
                 np.searchsorted(self._ts, t, side='right')
             )
-        return self._lb_cache[slice.start_time], self._ub_cache[slice.end_time]
+        lb = self._lb_cache[slice.start_time]
+        ub = self._ub_cache[slice.end_time]
+
+        # Additional clamping on possible index constraints
+        clamp = lambda x, lo, hi: lo if x < lo else hi if x > hi else x
+        lb = clamp(lb, slice.start_idx or 0, slice.end_idx or len(self._ts))
+        ub = clamp(ub, slice.start_idx or 0, slice.end_idx or len(self._ts))
+        return lb, ub

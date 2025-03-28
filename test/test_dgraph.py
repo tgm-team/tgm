@@ -848,6 +848,11 @@ def test_interleave_slice_time_slice_nodes(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
 
+@pytest.mark.skip(reason='TODO: Add test for dg slice events!')
+def test_slice_events():
+    pass
+
+
 def _assert_events_equal(expected_events, actual_events):
     expected = [asdict(e) for e in expected_events]
     actual = [asdict(e) for e in actual_events]

@@ -49,6 +49,21 @@ class DGraph:
             batch.edge_feats = self.edge_feats._values()
         return batch
 
+    def slice_events(
+        self, start_idx: Optional[int] = None, end_idx: Optional[int] = None
+    ) -> DGraph:
+        r"""Create and return a new view by slicing events (end_idx inclusive)."""
+        if start_idx is not None and end_idx is not None and start_idx > end_idx:
+            raise ValueError(f'start_idx ({start_idx}) must be <= end_idx ({end_idx})')
+
+        dg = DGraph(data=self._storage, time_delta=self.time_delta)
+        dg._slice.start_time = self._slice.start_time
+        dg._slice.end_time = self._slice.end_time
+        dg._slice.start_idx = self._maybe_max(start_idx, self._slice.start_idx)
+        dg._slice.end_idx = self._maybe_min(end_idx, self._slice.end_idx)
+        dg._slice.node_slice = self._slice.node_slice
+        return dg
+
     def slice_time(
         self, start_time: Optional[int] = None, end_time: Optional[int] = None
     ) -> DGraph:
@@ -59,17 +74,11 @@ class DGraph:
             )
 
         dg = DGraph(data=self._storage, time_delta=self.time_delta)
-
-        # Update start time
         dg._slice.start_time = self._maybe_max(start_time, self.start_time)
-        force_refresh_node_slice = dg._slice.start_time == self.start_time
-
-        # Update end time
         dg._slice.end_time = self._maybe_min(end_time, self.end_time)
-        force_refresh_node_slice &= dg._slice.end_time == self.end_time
-
-        if not force_refresh_node_slice:
-            dg._slice.node_slice = self._slice.node_slice
+        dg._slice.start_idx = self._slice.start_idx
+        dg._slice.end_idx = self._slice.end_idx
+        dg._slice.node_slice = self._slice.node_slice
         return dg
 
     def slice_nodes(self, nodes: List[int]) -> DGraph:
@@ -82,15 +91,15 @@ class DGraph:
         dg._slice.node_slice = self._slice.node_slice & set(nodes)
 
         # Update start time
-        dg._slice.start_time = self._maybe_max(
-            self._storage.get_start_time(dg._slice), self.start_time
-        )
+        new_start_time = self._storage.get_start_time(dg._slice)
+        dg._slice.start_time = self._maybe_max(new_start_time, self.start_time)
 
         # Update end time
-        dg._slice.end_time = self._maybe_min(
-            self._storage.get_end_time(dg._slice), self.end_time
-        )
+        new_end_time = self._storage.get_end_time(dg._slice)
+        dg._slice.end_time = self._maybe_min(new_end_time, self.end_time)
 
+        dg._slice.start_idx = self._slice.start_idx
+        dg._slice.end_idx = self._slice.end_idx
         return dg
 
     def __len__(self) -> int:
