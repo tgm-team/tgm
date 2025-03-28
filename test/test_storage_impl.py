@@ -982,6 +982,11 @@ def test_get_nbrs_multiple_hops(DGStorageImpl):
     pass
 
 
+@pytest.mark.skip(reason='TODO: Add test with event idx constraints!')
+def test_dg_storage_with_event_contraints(DGStorageImpl):
+    pass
+
+
 def test_get_dg_storage_backend():
     assert get_dg_storage_backend() == DGStorageArrayBackend
 
