@@ -1,6 +1,6 @@
 ---
 site_name: opendg Docs
-site_url: https://docs.opendg.org/
+site_url: https://opendg.readthedocs.io/en/latest/
 repo_url: https://github.com/shenyangHuang/openDG
 
 nav:
