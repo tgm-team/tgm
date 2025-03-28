@@ -10,10 +10,6 @@
 
 <div align="center">
 
-<a href="">[![Contributors][contributors-shield]][contributors-url]</a>
-<a href="">[![Issues][issues-shield]][issues-url]</a>
-<a href="">[![MIT License][license-shield]][license-url]</a>
-
 </div>
 
 <div align="center">
@@ -35,10 +31,6 @@ _OpenDG_ is a Python library for scalable and efficent temporal graph learning m
 
 ## Installation
 
-## License
-
-Distributed under the MIT License. See `LICENSE.txt` for more information.
-
 ## Citation
 
 ## Contributing
@@ -46,10 +38,3 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 To learn more about making a contribution to _OpenDG_ see our [contribution page](./.github/CONTRIBUTING.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-[contributors-shield]: https://img.shields.io/github/contributors/shenyangHuang/openDG.svg?style=for-the-badge
-[contributors-url]: https://github.com/shenyangHuang/openDG/graphs/contributors
-[issues-shield]: https://img.shields.io/github/issues/shenyangHuang/openDG.svg?style=for-the-badge
-[issues-url]: https://github.com/shenyangHuang/openDG/issues
-[license-shield]: https://img.shields.io/github/license/shenyangHuang/openDG.svg?style=for-the-badge
-[license-url]: https://github.com/shenyangHuang/openDG/blob/master/LICENSE.txt
