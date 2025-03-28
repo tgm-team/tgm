@@ -84,9 +84,7 @@ class DGBaseLoader(ABC):
             raise StopIteration
 
         batch = self._slice_op(self._idx, slice_end)
-        print(batch._slice, self._idx, slice_end, self._stop_idx)
         batch = self.pre_yield(batch)
-        print(batch._slice, self._idx, slice_end, self._stop_idx)
         self._idx = slice_end
         if not self._ord:
             self._idx += 1  # TODO

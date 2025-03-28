@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from opendg.graph import DGBatch, DGraph
 from opendg.loader import DGNeighborLoader
 from opendg.nn import TemporalAttention
-from opendg.util.perf import Profiling
+from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
-parser.add_argument('--epochs', type=int, default=1, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument('--gpu', type=int, default=-1, help='gpu to use (or -1 for cpu)')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
@@ -154,7 +154,7 @@ def run(args: argparse.Namespace) -> None:
         dropout=float(args.dropout),
     ).to(device)
 
-    with Profiling(filename='stat'):
+    with Usage(prefix='TGAT Training'):
         train(
             train_dg,
             val_dg,
