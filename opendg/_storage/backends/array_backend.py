@@ -197,4 +197,11 @@ class DGStorageArrayBackend(DGStorageBase):
             self._ub_cache[slice.end_time] = int(
                 np.searchsorted(self._ts, t, side='right')
             )
-        return self._lb_cache[slice.start_time], self._ub_cache[slice.end_time]
+        lb = self._lb_cache[slice.start_time]
+        ub = self._ub_cache[slice.end_time]
+
+        # Additional clamping on possible index constraints
+        clamp = lambda x, lo, hi: lo if x < lo else hi if x > hi else x
+        lb = clamp(lb, slice.start_idx or 0, slice.end_idx or len(self._ts))
+        ub = clamp(ub, slice.start_idx or 0, slice.end_idx or len(self._ts))
+        return lb, ub
