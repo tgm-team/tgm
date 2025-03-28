@@ -62,7 +62,7 @@ class DGBaseLoader(ABC):
 
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
         self._idx = 0 if batch_ordered else dg.start_time
-        self._stop_idx = 1_000_000 if batch_ordered else dg.end_time  # TODO
+        self._stop_idx = dg.num_events if batch_ordered else dg.end_time  # TODO
         if not drop_last:
             self._stop_idx += batch_size - 1
 
