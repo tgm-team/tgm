@@ -25,10 +25,13 @@ dev = [
     "pytest-cov>=6.0.0",
     "pytest>=8.3.3",
     "ruff==0.11.1",
-    "sphinx>=7.4.7",
-    "sphinx-rtd-theme>=3.0.2",
     "py-tgb>=2.0.0",
     "pandas>=1.5.3",
+]
+docs = [
+    "mkdocs-material>=9.6.9",
+    "mkdocs>=1.6.1",
+    "mkdocstrings[python]>=0.29.0",
 ]
 
 [tool.mypy]
