@@ -534,6 +534,31 @@ def test_get_num_timetamps_events_list_with_multi_events_per_timestamp(
 @pytest.mark.parametrize(
     'events',
     [
+        'events_list_with_multi_events_per_timestamp',
+        'events_list_with_features_multi_events_per_timestamp',
+    ],
+)
+def test_get_num_events_list_with_multi_events_per_timestamp(
+    DGStorageImpl, events, request
+):
+    events = request.getfixturevalue(events)
+    storage = DGStorageImpl(events)
+    assert storage.get_num_events(DGSliceTracker()) == 6
+    assert storage.get_num_events(DGSliceTracker(start_time=5)) == 4
+    assert storage.get_num_events(DGSliceTracker(end_time=4)) == 2
+    assert storage.get_num_events(DGSliceTracker(start_time=5, end_time=9)) == 2
+    assert storage.get_num_events(DGSliceTracker(node_slice={2, 3})) == 3
+    assert (
+        storage.get_num_events(
+            DGSliceTracker(start_time=5, end_time=9, node_slice={1, 2, 3})
+        )
+        == 1
+    )
+
+
+@pytest.mark.parametrize(
+    'events',
+    [
         'node_only_events_list',
         'node_only_events_list_with_features',
         'edge_only_events_list',

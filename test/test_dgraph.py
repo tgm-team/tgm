@@ -39,6 +39,7 @@ def test_init_from_events(events):
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
+    assert dg.num_events == 6
     assert dg.nodes == {1, 2, 4, 6, 8}
     assert dg.node_feats_dim == 5
     assert dg.edge_feats_dim == 5
@@ -368,6 +369,7 @@ def test_slice_time_at_end_time(events):
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
+    assert dg.num_events == 6
     assert dg.nodes == {1, 2, 4, 6, 8}
 
     exp_edges = (
@@ -506,6 +508,7 @@ def test_slice_time_to_empty(events):
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
+    assert dg.num_events == 6
     assert dg.nodes == {1, 2, 4, 6, 8}
     assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
@@ -529,6 +532,7 @@ def test_slice_nodes_full_graph(events):
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
+    assert dg.num_events == 6
     assert dg.nodes == {1, 2, 4, 6, 8}
 
     exp_edges = (
@@ -675,6 +679,7 @@ def test_slice_nodes_to_empty(events):
     assert dg.num_nodes == 9
     assert dg.num_edges == 3
     assert dg.num_timestamps == 4
+    assert dg.num_events == 6
     assert dg.nodes == {1, 2, 4, 6, 8}
     assert torch.equal(dg.node_feats.to_dense(), original_node_feats)
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
