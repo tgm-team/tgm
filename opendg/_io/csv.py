@@ -19,7 +19,7 @@ def read_csv(
     events: List[Event] = []
     with open(file_path, newline='') as f:
         reader = csv.DictReader(f)
-        for row in reader:
+        for i, row in enumerate(reader):
             src = int(row[src_col])
             dst = int(row[dst_col])
             t = int(row[time_col])
@@ -30,6 +30,6 @@ def read_csv(
                 msg_list = [float(row[feature_col]) for feature_col in edge_feature_col]
                 features = torch.tensor(msg_list)
 
-            event = EdgeEvent(t=t, src=src, dst=dst, features=features)
+            event = EdgeEvent(t=t, src=src, dst=dst, global_id=i, features=features)
             events.append(event)
     return events

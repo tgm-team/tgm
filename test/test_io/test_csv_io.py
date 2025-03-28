@@ -10,8 +10,8 @@ from opendg.events import EdgeEvent
 
 def test_csv_conversion_no_features():
     events = [
-        EdgeEvent(t=1, src=2, dst=3),
-        EdgeEvent(t=1, src=10, dst=20),
+        EdgeEvent(t=1, src=2, dst=3, global_id=0),
+        EdgeEvent(t=1, src=10, dst=20, global_id=1),
     ]
 
     col_names = {'src_col': 'src', 'dst_col': 'dst', 'time_col': 't'}
@@ -23,8 +23,8 @@ def test_csv_conversion_no_features():
 
 def test_csv_conversion_with_features():
     events = [
-        EdgeEvent(t=1, src=2, dst=3, features=torch.rand(5)),
-        EdgeEvent(t=5, src=10, dst=20, features=torch.rand(5)),
+        EdgeEvent(t=1, src=2, dst=3, global_id=0, features=torch.rand(5)),
+        EdgeEvent(t=5, src=10, dst=20, global_id=1, features=torch.rand(5)),
     ]
 
     edge_feature_col = [f'dim_{i}' for i in range(5)]

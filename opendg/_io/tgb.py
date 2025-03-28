@@ -39,14 +39,18 @@ def read_tgb(
     edge_feats = data['edge_feat'][mask] if data['edge_feat'] is not None else None
 
     events: List[Event] = []
-    for src, dst, t, feat in zip(
-        sources,
-        destinations,
-        timestamps,
-        edge_feats if edge_feats is not None else [None] * len(sources),
+    for i, (src, dst, t, feat) in enumerate(
+        zip(
+            sources,
+            destinations,
+            timestamps,
+            edge_feats if edge_feats is not None else [None] * len(sources),
+        )
     ):
         features = torch.tensor(feat, dtype=torch.float) if feat is not None else None
-        event = EdgeEvent(t=int(t), src=int(src), dst=int(dst), features=features)
+        event = EdgeEvent(
+            t=int(t), src=int(src), dst=int(dst), global_id=i, features=features
+        )
         events.append(event)
 
     return events
