@@ -60,11 +60,16 @@ class DGBaseLoader(ABC):
         self._materialize = materialize
         self._batch_size = batch_size
 
+        # TODO: Clean up exclusive/inclusive
+        self._ord = batch_ordered
+        if not self._ord:
+            self._batch_size -= 1
+
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
         self._idx = 0 if batch_ordered else dg.start_time
-        self._stop_idx = dg.num_events if batch_ordered else dg.end_time  # TODO
+        self._stop_idx = dg.num_events if batch_ordered else dg.end_time
         if not drop_last:
-            self._stop_idx += batch_size - 1
+            self._stop_idx += batch_size
 
     @abstractmethod
     def pre_yield(self, batch: DGraph) -> DGraph:
@@ -74,11 +79,13 @@ class DGBaseLoader(ABC):
         return self
 
     def __next__(self) -> DGraph | DGBatch:
-        slice_end = self._idx + self._batch_size - 1
+        slice_end = self._idx + self._batch_size
         if slice_end > self._stop_idx:
             raise StopIteration
 
         batch = self._slice_op(self._idx, slice_end)
-        self._idx += self._batch_size
         batch = self.pre_yield(batch)
+        self._idx = slice_end
+        if not self._ord:
+            self._idx += 1  # TODO
         return batch.materialize() if self._materialize else batch
