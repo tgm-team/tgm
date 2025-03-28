@@ -145,17 +145,17 @@ class DGraph:
         r"""The total number of events encountered over the dynamic graph."""
         return self._storage.get_num_events(self._slice)
 
-    @cached_property
+    @property
     def nodes(self) -> Set[int]:
         r"""The set of node ids over the dynamic graph."""
         return self._storage.get_nodes(self._slice)
 
-    @cached_property
+    @property
     def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
         r"""The src, dst, time tensors over the dynamic graph."""
         return self._storage.get_edges(self._slice)
 
-    @cached_property
+    @property
     def node_feats(self) -> Optional[Tensor]:
         r"""The aggregated node features over the dynamic graph.
 
@@ -163,7 +163,7 @@ class DGraph:
         """
         return self._storage.get_node_feats(self._slice)
 
-    @cached_property
+    @property
     def edge_feats(self) -> Optional[Tensor]:
         r"""The aggregated edge features over the dynamic graph.
 

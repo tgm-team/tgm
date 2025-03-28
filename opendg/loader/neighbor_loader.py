@@ -38,6 +38,7 @@ class DGNeighborLoader(DGBaseLoader):
         if not all([isinstance(x, int) and (x == -1 or x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer or -1')
         self._num_nbrs = num_nbrs
+        self._ordered = batch_unit == 'r'
         super().__init__(dg, batch_size, batch_unit, drop_last, materialize)
 
     @property
@@ -49,7 +50,9 @@ class DGNeighborLoader(DGBaseLoader):
         return self._num_nbrs
 
     def pre_yield(self, batch: DGraph) -> DGraph:
-        slice = DGSliceTracker(end_time=batch.start_time)
+        slice = DGSliceTracker(
+            end_time=batch.start_time, end_idx=batch._slice.start_idx
+        )
         nbrs = self._dg._storage.get_nbrs(
             seed_nodes=batch.nodes, num_nbrs=self.num_nbrs, slice=slice
         )
@@ -58,6 +61,9 @@ class DGNeighborLoader(DGBaseLoader):
             for node, _ in seed_nbrhood[-1]:  # Only care about final hop
                 temporal_nbrhood.add(node)  # Don't care about time info either
 
-        batch = self._dg.slice_time(end_time=batch.end_time)
+        if self._ordered:
+            batch = self._dg.slice_events(end_idx=batch._slice.start_idx)
+        else:
+            batch = self._dg.slice_time(end_time=batch.start_time)
         batch = batch.slice_nodes(list(temporal_nbrhood))
         return batch
