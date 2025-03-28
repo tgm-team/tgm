@@ -34,14 +34,14 @@ class DGBaseLoader(ABC):
         if not len(dg):
             raise ValueError('Cannot iterate an empty DGraph')
 
-        dg_is_ordered = dg.time_delta.is_ordered
-        batch_unit_is_ordered = batch_unit == 'r'
+        dg_ordered = dg.time_delta.is_ordered
+        batch_ordered = batch_unit == 'r'
 
-        if dg_is_ordered and not batch_unit_is_ordered:
+        if dg_ordered and not batch_ordered:
             raise ValueError('Cannot iterate ordered dg using non-ordered batch_unit')
-        if not dg_is_ordered and batch_unit_is_ordered:
+        if not dg_ordered and batch_ordered:
             raise ValueError('Cannot iterate non-ordered dg using ordered batch_unit')
-        if not dg_is_ordered and not batch_unit_is_ordered:
+        if not dg_ordered and not batch_ordered:
             # Ensure the graph time unit is more granular than batch time unit.
             batch_time_delta = TimeDeltaDG(batch_unit, value=batch_size)
             if dg.time_delta.is_coarser_than(batch_time_delta):
@@ -59,8 +59,12 @@ class DGBaseLoader(ABC):
         self._dg = dg
         self._materialize = materialize
         self._batch_size = batch_size
-        self._idx = dg.start_time
-        self._stop_idx = dg.end_time if drop_last else dg.end_time + (batch_size - 1)
+
+        self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
+        self._idx = 0 if batch_ordered else dg.start_time
+        self._stop_idx = 1_000_000 if batch_ordered else dg.end_time  # TODO
+        if not drop_last:
+            self._stop_idx += batch_size - 1
 
     @abstractmethod
     def pre_yield(self, batch: DGraph) -> DGraph:
@@ -74,7 +78,7 @@ class DGBaseLoader(ABC):
         if slice_end > self._stop_idx:
             raise StopIteration
 
-        batch = self._dg.slice_time(self._idx, slice_end)
+        batch = self._slice_op(self._idx, slice_end)
         self._idx += self._batch_size
         batch = self.pre_yield(batch)
         return batch.materialize() if self._materialize else batch
