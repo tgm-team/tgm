@@ -49,6 +49,21 @@ class DGraph:
             batch.edge_feats = self.edge_feats._values()
         return batch
 
+    def slice_events(
+        self, start_idx: Optional[int] = None, end_idx: Optional[int] = None
+    ) -> DGraph:
+        r"""Create and return a new view by slicing events (end_idx inclusive)."""
+        if start_idx is not None and end_idx is not None and start_idx > end_idx:
+            raise ValueError(f'start_idx ({start_idx}) must be <= end_idx ({end_idx})')
+
+        dg = DGraph(data=self._storage, time_delta=self.time_delta)
+        dg._slice.start_time = self._slice.start_time
+        dg._slice.end_time = self._slice.end_time
+        dg._slice.start_idx = self._maybe_max(start_idx, self._slice.start_idx)
+        dg._slice.end_idx = self._maybe_min(end_idx, self._slice.end_idx)
+        dg._slice.node_slice = self._slice.node_slice
+        return dg
+
     def slice_time(
         self, start_time: Optional[int] = None, end_time: Optional[int] = None
     ) -> DGraph:
