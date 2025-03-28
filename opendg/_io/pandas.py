@@ -28,18 +28,17 @@ def read_pandas(
         src = int(row[src_col])
         dst = int(row[dst_col])
         t = int(row[time_col])
-        idx = int(row['index'])
+        i = int(row['index'])
 
         if edge_feature_col is not None:
             features = torch.tensor(row[edge_feature_col])
         else:
             features = None
 
-        events[idx] = EdgeEvent(t=t, src=src, dst=dst, features=features)
+        events[i] = EdgeEvent(t=t, src=src, dst=dst, global_idx=i, features=features)
 
     df.apply(_construct_event_from_row, axis=1)
     df.drop('index', axis=1)  # Clean up temporary index column
-
     return events
 
 
