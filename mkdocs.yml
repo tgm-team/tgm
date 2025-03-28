@@ -1,0 +1,74 @@
+---
+site_name: opendg Docs
+site_url: https://opendg.readthedocs.io/en/latest/
+repo_url: https://github.com/shenyangHuang/openDG
+
+nav:
+  - Home:
+      - index.md
+      - Quickstart: quickstart.md
+      - API Reference:
+          - dgraph.md
+          - timedelta.md
+          - events.md
+          - loaders.md
+          - nn (Neural Networks): nn.md
+          - util: util.md
+
+validation:
+  links:
+    anchors: warn
+
+theme:
+  name: material
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    - content.tooltips
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.path
+    - search.highlight
+    - search.suggest
+    - toc.follow
+    - toc.integrate
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      accent: lime
+      primary: black
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          import:
+            - https://docs.python.org/3/objects.inv
+          paths: [opendg]
+          options:
+            docstring_options:
+              ignore_init_summary: true
+            docstring_section_style: list
+            filters: ["!^_"]
+            heading_level: 3
+            inherited_members: false
+            merge_init_into_class: true
+            separate_signature: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            show_source: true
+            signature_crossrefs: true
+            summary: true
