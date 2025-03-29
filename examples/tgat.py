@@ -1,5 +1,5 @@
 import argparse
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from opendg.graph import DGBatch, DGraph
 from opendg.loader import DGNeighborLoader
-from opendg.nn import TemporalAttention
+from opendg.nn import TemporalAttention, Time2Vec
 from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
@@ -48,7 +48,8 @@ class TGAT(nn.Module):
     ) -> None:
         super().__init__()
         self.num_layers = num_layers
-        self.edge_predictor = EdgePredictor(dim=embed_dim)
+        self.link_predictor = LinkPredictor(dim=embed_dim)
+        self.time_encoder = Time2Vec(time_dim=time_dim)
         self.attn = nn.ModuleList(
             [
                 TemporalAttention(
@@ -62,110 +63,94 @@ class TGAT(nn.Module):
                 for i in range(num_layers)
             ]
         )
-        # TODO: Temporary
-        self.src_embed = torch.rand(embed_dim)
-        self.dst_embed = torch.rand(embed_dim)
-        self.neg_embed = torch.rand(embed_dim)
+
+        # Temporary
+        self.embed_dim = embed_dim
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        src, dst, time = batch.src, batch.dst, batch.time
-        node_feats, edge_feats = batch.node_feats, batch.edge_feats
-
-        # TODO: Get the negative edges
-
         # TODO: TGAT Multi-hop forward pass
+        # src, dst, time = batch.src, batch.dst, batch.time
+        # node_feats, edge_feats = batch.node_feats, batch.edge_feats
         # out = self.attn(node_feats, time_feat, edge_feat, nbr_node_feat, nbr_time_feat, nbr_mask)
-        pos_prob = self.edge_predictor(self.src_embed, self.dst_embed)
-        neg_prob = self.edge_predictor(self.src_embed, self.neg_embed)
-        return pos_prob, neg_prob
+        # pos_prob = self.link_predictor(self.src_embed, self.dst_embed)
+        # neg_prob = self.link_predictor(self.src_embed, self.neg_embed)
+
+        z_src = torch.rand(len(batch.src), self.embed_dim)
+        z_dst = torch.rand(len(batch.src), self.embed_dim)
+        z_neg = torch.rand(len(batch.src), self.embed_dim)
+
+        pos_out = self.link_predictor(z_src, z_dst)
+        neg_out = self.link_predictor(z_src, z_neg)
+        return pos_out, neg_out
 
 
-class EdgePredictor(nn.Module):
+class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.dim = dim
-        self.src_fc = nn.Linear(dim, dim)
-        self.dst_fc = nn.Linear(dim, dim)
-        self.out_fc = nn.Linear(dim, 1)
+        self.lin_src = nn.Linear(dim, dim)
+        self.lin_dst = nn.Linear(dim, dim)
+        self.lin_out = nn.Linear(dim, 1)
 
-    def forward(self, src: torch.Tensor, dst: torch.Tensor) -> torch.Tensor:
-        h_src = self.src_fc(src)
-        h_dst = self.dst_fc(dst)
-        h_out = F.relu(h_src + h_dst)
-        return self.out_fc(h_out)
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = h.relu()
+        return self.lin_out(h)
 
 
 def train(
-    train_dg: DGraph,
-    val_dg: DGraph,
-    model: nn.Module,
-    epochs: int,
-    n_nbrs: List[int],
-    bsize: int,
-    lr: float,
-) -> None:
-    opt = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = torch.nn.BCEWithLogitsLoss()
-    best_mrr = 0
-    for e in range(epochs):
-        print(f'epoch {e}:')
-        model.train()
-        e_loss = 0.0
-        for batch in DGNeighborLoader(train_dg, n_nbrs, bsize):
-            opt.zero_grad()
-            pred_pos, pred_neg = model(batch)
-            loss = criterion(pred_pos, torch.ones_like(pred_pos)) + criterion(
-                pred_neg, torch.zeros_like(pred_neg)
-            )
-            loss.backward()
-            opt.step()
-            e_loss += float(loss)
-
-        if (mrr := eval(val_dg, model, n_nbrs, bsize)) < best_mrr:
-            best_mrr = mrr
-        print(f'  loss:{e_loss:.4f} MRR:{mrr:.4f}')
-    print(f'Best MRR: {best_mrr:.4f}')
+    loader: DGNeighborLoader, model: nn.Module, opt: torch.optim.Optimizer
+) -> float:
+    model.train()
+    total_loss = 0
+    for batch in loader:
+        opt.zero_grad()
+        pos_out, neg_out = model(batch)
+        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
+        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
+        loss.backward()
+        opt.step()
+        total_loss += float(loss)
+    return total_loss
 
 
 @torch.no_grad()
-def eval(dg: DGraph, model: nn.Module, n_nbrs: List[int], bsize: int) -> float:
+def eval(loader: DGNeighborLoader, model: nn.Module) -> float:
     model.eval()
-    perf_list = []
-    for batch in DGNeighborLoader(dg, n_nbrs, bsize):
-        prob_pos, prob_neg = model(batch)
-        perf_list.append(0)  # TODO: MRR eval
-    return sum(perf_list) / len(perf_list)
+    mrrs = []
+    for batch in loader:
+        pos_out, neg_out = model(batch)
+        mrrs.append(0)  # TODO: MRR eval
+    return sum(mrrs) / len(mrrs)
 
 
-def run(args: argparse.Namespace) -> None:
-    seed_everything(args.seed)
+args = parser.parse_args()
+seed_everything(args.seed)
 
-    train_dg = DGraph(args.dataset, split='train')
-    val_dg = DGraph(args.dataset, split='valid')
+train_dg = DGraph(args.dataset, split='train')
+val_dg = DGraph(args.dataset, split='valid')
+test_dg = DGraph(args.dataset, split='test')
 
-    device = torch.device(f'cuda:{args.gpu}' if args.gpu >= 0 else 'cpu')
-    model = TGAT(
-        node_dim=train_dg.node_feats_dim or args.embed_dim,  # TODO: verify
-        edge_dim=train_dg.edge_feats_dim or args.embed_dim,
-        time_dim=args.time_dim,
-        embed_dim=args.embed_dim,
-        num_layers=len(args.n_nbrs),
-        n_heads=args.n_heads,
-        dropout=float(args.dropout),
-    ).to(device)
+train_loader = DGNeighborLoader(train_dg, num_nbrs=args.n_nbrs, batch_size=args.bsize)
+val_loader = DGNeighborLoader(val_dg, num_nbrs=args.n_nbrs, batch_size=args.bsize)
+test_loader = DGNeighborLoader(test_dg, num_nbrs=args.n_nbrs, batch_size=args.bsize)
 
-    with Usage(prefix='TGAT Training'):
-        train(
-            train_dg,
-            val_dg,
-            model,
-            args.epochs,
-            args.n_nbrs,
-            args.bsize,
-            float(args.lr),
-        )
+device = torch.device(f'cuda:{args.gpu}' if args.gpu >= 0 else 'cpu')
+model = TGAT(
+    node_dim=train_dg.node_feats_dim or args.embed_dim,  # TODO: verify
+    edge_dim=train_dg.edge_feats_dim or args.embed_dim,
+    time_dim=args.time_dim,
+    embed_dim=args.embed_dim,
+    num_layers=len(args.n_nbrs),
+    n_heads=args.n_heads,
+    dropout=float(args.dropout),
+).to(device)
+opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-
-if __name__ == '__main__':
-    args = parser.parse_args()
-    run(args)
+with Usage(prefix='TGAT Training'):
+    for epoch in range(1, args.epochs + 1):
+        loss = train(train_loader, model, opt)
+        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
+        val_mrr = eval(val_loader, model)
+        test_mrr = eval(test_loader, model)
+        print(f'Val MRR: {val_mrr:.4f}')
+        print(f'Test MRR: {test_mrr:.4f}')
