@@ -1,4 +1,10 @@
 import argparse
+from pprint import pprint
+
+import torch
+from torchmetrics import Metric, MetricCollection
+from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
+from torchmetrics.retrieval import RetrievalHitRate, RetrievalMRR
 
 from opendg.graph import DGraph
 from opendg.hooks import NegativeEdgeSamplerHook
@@ -25,13 +31,17 @@ parser.add_argument(
 )
 
 
-def eval(loader: DGDataLoader, model: EdgeBankPredictor) -> float:
-    mrrs = []
+def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> None:
     for batch in loader:
-        model(batch.src, batch.dst)
-        model(batch.src, batch.neg)
-        mrrs.append(0)
-    return sum(mrrs) / len(mrrs)
+        pos_out = model(batch.src, batch.dst)
+        neg_out = model(batch.src, batch.neg)
+        y_pred = torch.cat([pos_out, neg_out], dim=0)
+        y_true = torch.cat(
+            [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
+        )
+        indexes = torch.zeros(y_pred.size(0))
+        metrics(y_true, y_pred.long(), indexes=indexes.long())
+    pprint(metrics.compute())
 
 
 args = parser.parse_args()
@@ -62,8 +72,12 @@ model = EdgeBankPredictor(
     pos_prob=args.pos_prob,
 )
 
+metrics = [BinaryAveragePrecision(), BinaryAUROC(), RetrievalHitRate(), RetrievalMRR()]
+val_metrics = MetricCollection(metrics, prefix='Validation')
+test_metrics = MetricCollection(metrics, prefix='Test')
+
 with Usage(prefix='Edgebank Validation'):
-    val_mrr = eval(val_loader, model)
-    test_mrr = eval(test_loader, model)
-    print(f'val mrr: {val_mrr:.4f}')
-    print(f'test mrr: {test_mrr:.4f}')
+    eval(val_loader, model, val_metrics)
+    eval(test_loader, model, test_metrics)
+    val_metrics.reset()
+    test_metrics.reset()
