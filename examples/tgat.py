@@ -62,8 +62,6 @@ class TGAT(nn.Module):
                 for i in range(num_layers)
             ]
         )
-        # Helper vector to map global node indices to local ones.
-        # self.assoc = torch.empty(data.num_nodes, dtype=torch.long, device=device)
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         # batch.neg = torch.randint(0, 1337, (batch.dst.size(0),), dtype=torch.long)
@@ -71,23 +69,17 @@ class TGAT(nn.Module):
 
         # nbrs = self.nbrs[batch.n_id]
         # nodes = batch.n_id.view(-1, 1).repeat(1, self.size)
-        # e_id = self.e_id[batch.n_id]
-
-        ## Relabel node indices.
         # n_id = torch.cat([batch.n_id, nbrs]).unique()
-        # self._assoc[n_id] = torch.arange(n_id.size(0))
-        # nbrs, nodes = self._assoc[nbrs], self._assoc[nodes]
         # edge_idx = torch.stack([nbrs, nodes])
+        # global_event_id = self.global_event_id[batch.n_id]
 
-        # batch.assoc[n_id] = torch.arange(n_id.size(0))
+        # batch.joint_time = data.time[global_event_id]
+        # batch.joint_edge_feats = data.time[global_event_id]
+        # batch.edge_index
 
-        # batch.src_mask = batch.assoc[batch.src]
-        # batch.dst_mask = batch.assoc[batch.dst]
-        # batch.neg_mask = batch.assoc[batch.neg]
-
-        # z = gnn(edge_index, data.time[e_id], data.edge_feats[e_id])
+        # z = gnn(edge_index, data.joint_time, data.joint_edge_feats)
         # z = self.attn(
-        #    node_feats, time_feats, edge_feats, nbr_node_feat, nbr_time_feat, nbr_mask
+        #    data.joint_node_feats, data.joint_time, data.joint_edge_feats, nbr_node_feat, nbr_time_feat, nbr_mask
         # )
         pos_out = self.edge_predictor(z[batch.src_mask], z[batch.dst_mask])
         neg_out = self.edge_predictor(z[batch.src_mask], z[batch.neg_mask])

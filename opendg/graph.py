@@ -201,3 +201,8 @@ class DGBatch:
     time: Tensor
     node_feats: Optional[Tensor] = None
     edge_feats: Optional[Tensor] = None
+
+    # Should not be required
+    src_mask: Optional[Tensor] = None
+    dst_mask: Optional[Tensor] = None
+    neg_mask: Optional[Tensor] = None
