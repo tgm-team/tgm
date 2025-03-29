@@ -9,10 +9,20 @@ from opendg.graph import DGBatch, DGraph
 class DGHook(Protocol):
     r"""The behaviours to be executed on a DGraph before materializing."""
 
-    def __call__(self, batch: DGraph) -> DGBatch: ...
+    def __call__(self, dg: DGraph) -> DGBatch: ...
 
 
-class DGNeighborSamplerHook:
+class NegativeEdgeSamplerHook:
+    r"""Sample negative edges for dynamic link prediction."""
+
+    # TODO: Historical vs. random
+    def __call__(self, dg: DGraph) -> DGBatch:
+        batch = dg.materialize()
+        batch.neg = batch.dst  # type: ignore
+        return batch
+
+
+class NeighborSamplerHook:
     r"""Load data from DGraph using a memory based sampling function.
 
     Args:
@@ -32,21 +42,15 @@ class DGNeighborSamplerHook:
         self._num_nbrs = num_nbrs
 
     @property
-    def num_hops(self) -> int:
-        return len(self.num_nbrs)
-
-    @property
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
-    def __call__(self, batch: DGraph) -> DGBatch:
-        slice = DGSliceTracker(
-            end_time=batch.start_time, end_idx=batch._slice.start_idx
+    def __call__(self, dg: DGraph) -> DGBatch:
+        slice = DGSliceTracker(end_time=dg.start_time, end_idx=dg._slice.start_idx)
+        nbrs = dg._storage.get_nbrs(
+            seed_nodes=dg.nodes, num_nbrs=self.num_nbrs, slice=slice
         )
-        nbrs = batch._storage.get_nbrs(
-            seed_nodes=batch.nodes, num_nbrs=self.num_nbrs, slice=slice
-        )
-        temporal_nbrhood = batch.nodes
+        temporal_nbrhood = dg.nodes
         for seed_nbrhood in nbrs.values():
             for node, _ in seed_nbrhood[-1]:  # Only care about final hop
                 temporal_nbrhood.add(node)  # Don't care about time info either
@@ -56,7 +60,7 @@ class DGNeighborSamplerHook:
         # batch = batch.slice_nodes(list(temporal_nbrhood))
         # if self._iterate_by_time: # TODO: We need to store info about whether we are iterating by time or events
         # batch = self._dg.slice_time(end_time=batch.end_time)
-        batch._slice = DGSliceTracker(
-            end_idx=batch._slice.start_idx, node_slice=temporal_nbrhood
+        dg._slice = DGSliceTracker(
+            end_idx=dg._slice.start_idx, node_slice=temporal_nbrhood
         )
-        return batch.materialize()
+        return dg.materialize()
