@@ -1,6 +1,6 @@
 name: Spellcheck Action
 
-on: # yamllint disable-line rule:truthy
+on:  # yamllint disable-line rule:truthy
   push:
     branches:
       - master
@@ -17,7 +17,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Run spellcheck
-      - uses: rojopolis/spellcheck-github-actions@v0
+        uses: rojopolis/spellcheck-github-actions@v0
+        with:
+          config_path: .github/config/.spellcheck.yml
