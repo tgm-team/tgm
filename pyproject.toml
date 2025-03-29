@@ -33,6 +33,9 @@ docs = [
     "mkdocs>=1.6.1",
     "mkdocstrings[python]>=0.29.0",
 ]
+examples = [
+    "torchmetrics>=1.7.0",
+]
 
 [tool.mypy]
 files = ["opendg"]
