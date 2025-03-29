@@ -16,7 +16,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
         dg (DGraph): The dynamic graph to iterate.
         batch_size (int): The batch size to yield at each iteration.
         batch_unit (str): The unit corresponding to the batch_size.
-        hook (DGHook): Arbitrary transform behaviour to execute before materializing a batch.
+        hook (Optional[DGHook]): Arbitrary transform behaviour to execute before materializing a batch.
         **kwargs (Any): Additional arugments to torch.utils.data.DataLoader.
 
     Raises:
@@ -85,7 +85,6 @@ class DGDataLoader(torch.utils.data.DataLoader):
             slice_end -= 1
         batch = self._slice_op(slice_start[0], slice_end)
 
-        if self._hook is not None:
-            batch = self._hook(batch)
-
-        return batch.materialize()
+        if self._hook is None:
+            return batch.materialize()
+        return self._hook(batch)
