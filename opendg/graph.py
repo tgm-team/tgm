@@ -194,7 +194,7 @@ class DGraph:
         return a if b is None else b if a is None else None
 
 
-@dataclass(slots=True)
+@dataclass
 class DGBatch:
     src: Tensor
     dst: Tensor
