@@ -26,38 +26,38 @@ parser.add_argument(
 )
 
 
-def eval(dg: DGraph, model: EdgeBankPredictor, batch_size: int) -> float:
-    perf_list = []
-    for batch in DGDataLoader(dg, batch_size):
-        src, dst, time = batch.src, batch.dst, batch.time
-        neg = torch.randint(high=dg.num_nodes, size=(len(src),))  # not exclusive
-        model(src, dst)
-        model(src, neg)
-        perf_list.append(0)  # TODO: MRR eval
-        model.update(src, dst, time)
-    return sum(perf_list) / len(perf_list)
+def eval(loader: DGDataLoader, model: EdgeBankPredictor) -> float:
+    mrrs = []
+    for batch in loader:
+        neg = torch.randint(high=100, size=(len(batch.src),))  # Move to dataloader
+        model(batch.src, batch.dst)
+        model(batch.src, neg)
+        mrrs.append(0)
+    return sum(mrrs) / len(mrrs)
 
 
-def run(args: argparse.Namespace) -> None:
-    seed_everything(args.seed)
+args = parser.parse_args()
+seed_everything(args.seed)
 
-    train_dg = DGraph(args.dataset, split='train')
-    val_dg = DGraph(args.dataset, split='valid')
+train_dg = DGraph(args.dataset, split='train')
+val_dg = DGraph(args.dataset, split='valid')
+test_dg = DGraph(args.dataset, split='test')
 
-    train_data = train_dg.materialize(materialize_features=False)
-    model = EdgeBankPredictor(
-        train_data.src,
-        train_data.dst,
-        train_data.time,
-        memory_mode=args.memory_mode,
-        window_ratio=args.window_ratio,
-        pos_prob=args.pos_prob,
-    )
+train_data = train_dg.materialize(materialize_features=False)
+val_loader = DGDataLoader(val_dg, batch_size=args.bsize)
+test_loader = DGDataLoader(test_dg, batch_size=args.bsize)
 
-    with Usage(prefix='Edgebank Validation'):
-        eval(val_dg, model, batch_size=args.bsize)
+model = EdgeBankPredictor(
+    train_data.src,
+    train_data.dst,
+    train_data.time,
+    memory_mode=args.memory_mode,
+    window_ratio=args.window_ratio,
+    pos_prob=args.pos_prob,
+)
 
-
-if __name__ == '__main__':
-    args = parser.parse_args()
-    run(args)
+with Usage(prefix='Edgebank Validation'):
+    val_mrr = eval(val_loader, model)
+    test_mrr = eval(test_loader, model)
+    print(f'val mrr: {val_mrr:.4f}')
+    print(f'test mrr: {test_mrr:.4f}')
