@@ -1,9 +1,13 @@
 import argparse
+from pprint import pprint
 from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchmetrics import Metric, MetricCollection
+from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
+from torchmetrics.retrieval import RetrievalHitRate, RetrievalMRR
 
 from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NeighborSamplerHook
@@ -113,13 +117,17 @@ def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) ->
 
 
 @torch.no_grad()
-def eval(loader: DGDataLoader, model: nn.Module) -> float:
+def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
     model.eval()
-    mrrs = []
     for batch in loader:
         pos_out, neg_out = model(batch)
-        mrrs.append(0)  # TODO: MRR eval
-    return sum(mrrs) / len(mrrs)
+        y_pred = torch.cat([pos_out, neg_out], dim=0).sigmoid()
+        y_true = torch.cat(
+            [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
+        )
+        indexes = torch.zeros(y_pred.size(0))
+        metrics(y_true, y_pred.long(), indexes=indexes.long())
+    pprint(metrics.compute())
 
 
 args = parser.parse_args()
@@ -157,11 +165,15 @@ model = TGAT(
 ).to(device)
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
+metrics = [BinaryAveragePrecision(), BinaryAUROC(), RetrievalHitRate(), RetrievalMRR()]
+val_metrics = MetricCollection(metrics, prefix='Validation')
+test_metrics = MetricCollection(metrics, prefix='Test')
+
 with Usage(prefix='TGAT Training'):
     for epoch in range(1, args.epochs + 1):
         loss = train(train_loader, model, opt)
-        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-        val_mrr = eval(val_loader, model)
-        test_mrr = eval(test_loader, model)
-        print(f'Val MRR: {val_mrr:.4f}')
-        print(f'Test MRR: {test_mrr:.4f}')
+        pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
+        eval(val_loader, model, val_metrics)
+        eval(test_loader, model, test_metrics)
+        val_metrics.reset()
+        test_metrics.reset()
