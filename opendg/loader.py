@@ -5,6 +5,7 @@ from typing import Any, List
 import torch
 
 from opendg.graph import DGBatch, DGraph
+from opendg.hooks import DGHook
 from opendg.timedelta import TimeDeltaDG
 
 
@@ -15,6 +16,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
         dg (DGraph): The dynamic graph to iterate.
         batch_size (int): The batch size to yield at each iteration.
         batch_unit (str): The unit corresponding to the batch_size.
+        hook (Optional[DGHook]): Arbitrary transform behaviour to execute before materializing a batch.
         **kwargs (Any): Additional arugments to torch.utils.data.DataLoader.
 
     Raises:
@@ -27,6 +29,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
         dg: DGraph,
         batch_size: int = 1,
         batch_unit: str = 'r',
+        hook: DGHook | None = None,
         **kwargs: Any,
     ) -> None:
         if batch_size <= 0:
@@ -58,6 +61,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
 
         self._dg = dg
         self._batch_size = batch_size
+        self._hook = hook
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
 
         start_idx = 0 if batch_ordered else dg.start_time
@@ -74,16 +78,13 @@ class DGDataLoader(torch.utils.data.DataLoader):
             slice_start = range(start_idx, stop_idx, batch_size)
         super().__init__(slice_start, 1, shuffle=False, collate_fn=self, **kwargs)  # type: ignore
 
-    def pre_yield(self, batch: DGraph) -> DGraph:
-        r"""Perform arbitary processing (e.g. neighborhood sampling) on the batch before yielding."""
-        return batch
-
-    def __call__(self, slice_start: List[int]) -> DGBatch | DGraph:
+    def __call__(self, slice_start: List[int]) -> DGBatch:
         # TODO: Clean up exclusive/inclusive
         slice_end = slice_start[0] + self._batch_size
         if self._iterate_by_time:
             slice_end -= 1
-
         batch = self._slice_op(slice_start[0], slice_end)
-        batch = self.pre_yield(batch)
-        return batch.materialize()
+
+        if self._hook is None:
+            return batch.materialize()
+        return self._hook(batch)

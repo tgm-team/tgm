@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, List
+from typing import List, Protocol
 
 from opendg._storage import DGSliceTracker
-from opendg.graph import DGraph
-from opendg.loader.dataloader import DGDataLoader
+from opendg.graph import DGBatch, DGraph
 
 
-class DGNeighborLoader(DGDataLoader):
+class DGHook(Protocol):
+    r"""The behaviours to be executed on a DGraph before materializing."""
+
+    def __call__(self, batch: DGraph) -> DGBatch: ...
+
+
+class DGNeighborSamplerHook:
     r"""Load data from DGraph using a memory based sampling function.
 
     Args:
@@ -19,18 +24,12 @@ class DGNeighborLoader(DGDataLoader):
         ValueError: If the num_nbrs list is empty.
     """
 
-    def __init__(
-        self,
-        dg: DGraph,
-        num_nbrs: List[int],
-        **kwargs: Any,
-    ) -> None:
+    def __init__(self, num_nbrs: List[int]) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x == -1 or x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer or -1')
         self._num_nbrs = num_nbrs
-        super().__init__(dg, **kwargs)
 
     @property
     def num_hops(self) -> int:
@@ -40,11 +39,11 @@ class DGNeighborLoader(DGDataLoader):
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
-    def pre_yield(self, batch: DGraph) -> DGraph:
+    def __call__(self, batch: DGraph) -> DGBatch:
         slice = DGSliceTracker(
             end_time=batch.start_time, end_idx=batch._slice.start_idx
         )
-        nbrs = self._dg._storage.get_nbrs(
+        nbrs = batch._storage.get_nbrs(
             seed_nodes=batch.nodes, num_nbrs=self.num_nbrs, slice=slice
         )
         temporal_nbrhood = batch.nodes
@@ -52,9 +51,12 @@ class DGNeighborLoader(DGDataLoader):
             for node, _ in seed_nbrhood[-1]:  # Only care about final hop
                 temporal_nbrhood.add(node)  # Don't care about time info either
 
-        if self._iterate_by_time:
-            batch = self._dg.slice_time(end_time=batch.end_time)
-        else:
-            batch = self._dg.slice_events(end_idx=batch._slice.end_idx)
-        batch = batch.slice_nodes(list(temporal_nbrhood))
-        return batch
+        # TODO: Verify we don't need the original graph!!!!
+        # batch = self._dg.slice_events(end_idx=batch._slice.end_idx)
+        # batch = batch.slice_nodes(list(temporal_nbrhood))
+        # if self._iterate_by_time: # TODO: We need to store info about whether we are iterating by time or events
+        # batch = self._dg.slice_time(end_time=batch.end_time)
+        batch._slice = DGSliceTracker(
+            end_idx=batch._slice.start_idx, node_slice=temporal_nbrhood
+        )
+        return batch.materialize()
