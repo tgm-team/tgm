@@ -1,0 +1,3 @@
+## DGHooks
+
+::: opendg.hook.DGHook

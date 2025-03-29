@@ -9,6 +9,7 @@ nav:
       - Quickstart: quickstart.md
       - API Reference:
           - dgraph.md
+          - hooks.md
           - timedelta.md
           - events.md
           - loaders.md

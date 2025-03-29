@@ -21,36 +21,40 @@ class DGStorageBase(ABC):
     r"""Base class for dynamic graph storage engine."""
 
     @abstractmethod
-    def __init__(self, events: List[Event]) -> None:
-        pass
+    def __init__(self, events: List[Event]) -> None: ...
 
     @abstractmethod
-    def to_events(self, slice: DGSliceTracker) -> List[Event]:
-        pass
+    def to_events(self, slice: DGSliceTracker) -> List[Event]: ...
 
     @abstractmethod
-    def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
-        pass
+    def get_start_time(self, slice: DGSliceTracker) -> Optional[int]: ...
 
     @abstractmethod
-    def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
-        pass
+    def get_end_time(self, slice: DGSliceTracker) -> Optional[int]: ...
 
     @abstractmethod
-    def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
-        pass
+    def get_nodes(self, slice: DGSliceTracker) -> Set[int]: ...
 
     @abstractmethod
-    def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
-        pass
+    def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]: ...
 
     @abstractmethod
-    def get_num_timestamps(self, slice: DGSliceTracker) -> int:
-        pass
+    def get_num_timestamps(self, slice: DGSliceTracker) -> int: ...
 
     @abstractmethod
-    def get_num_events(self, slice: DGSliceTracker) -> int:
-        pass
+    def get_num_events(self, slice: DGSliceTracker) -> int: ...
+
+    @abstractmethod
+    def get_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]: ...
+
+    @abstractmethod
+    def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]: ...
+
+    @abstractmethod
+    def get_node_feats_dim(self) -> Optional[int]: ...
+
+    @abstractmethod
+    def get_edge_feats_dim(self) -> Optional[int]: ...
 
     @abstractmethod
     def get_nbrs(
@@ -58,24 +62,7 @@ class DGStorageBase(ABC):
         seed_nodes: Set[int],
         num_nbrs: List[int],
         slice: DGSliceTracker,
-    ) -> Dict[int, List[List[Tuple[int, int]]]]:
-        pass
-
-    @abstractmethod
-    def get_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        pass
-
-    @abstractmethod
-    def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        pass
-
-    @abstractmethod
-    def get_node_feats_dim(self) -> Optional[int]:
-        pass
-
-    @abstractmethod
-    def get_edge_feats_dim(self) -> Optional[int]:
-        pass
+    ) -> Dict[int, List[List[Tuple[int, int]]]]: ...
 
     def _sort_events_list_if_needed(self, events: List[Event]) -> List[Event]:
         if not all(isinstance(event, Event) for event in events):
