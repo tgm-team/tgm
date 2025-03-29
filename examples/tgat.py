@@ -10,7 +10,7 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from torchmetrics.retrieval import RetrievalHitRate, RetrievalMRR
 
 from opendg.graph import DGBatch, DGraph
-from opendg.hooks import NeighborSamplerHook
+from opendg.hooks import LastNeighborHook
 from opendg.loader import DGDataLoader
 from opendg.nn import TemporalAttention, Time2Vec
 from opendg.util.perf import Usage
@@ -28,7 +28,7 @@ parser.add_argument('--gpu', type=int, default=-1, help='gpu to use (or -1 for c
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
-parser.add_argument('--n-nbrs', type=int, default=[20], help='num sampled nbrs')
+parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
 parser.add_argument(
@@ -84,8 +84,8 @@ class TGAT(nn.Module):
         z_dst = torch.rand(len(batch.src), self.embed_dim)
         z_neg = torch.rand(len(batch.src), self.embed_dim)
 
-        pos_out = self.link_predictor(z_src, z_dst)
-        neg_out = self.link_predictor(z_src, z_neg)
+        pos_out = self.link_predictor(z_src, z_dst).view(-1)
+        neg_out = self.link_predictor(z_src, z_neg).view(-1)
         return pos_out, neg_out
 
 
@@ -139,17 +139,17 @@ test_dg = DGraph(args.dataset, split='test')
 
 train_loader = DGDataLoader(
     train_dg,
-    hook=NeighborSamplerHook(num_nbrs=args.n_nbrs),
+    hook=LastNeighborHook(num_nodes=train_dg.num_nodes, size=args.n_nbrs),
     batch_size=args.bsize,
 )
 val_loader = DGDataLoader(
     val_dg,
-    hook=NeighborSamplerHook(num_nbrs=args.n_nbrs),
+    hook=LastNeighborHook(num_nodes=val_dg.num_nodes, size=args.n_nbrs),
     batch_size=args.bsize,
 )
 test_loader = DGDataLoader(
     test_dg,
-    hook=NeighborSamplerHook(num_nbrs=args.n_nbrs),
+    hook=LastNeighborHook(num_nodes=test_dg.num_nodes, size=args.n_nbrs),
     batch_size=args.bsize,
 )
 
@@ -159,7 +159,7 @@ model = TGAT(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
-    num_layers=len(args.n_nbrs),
+    num_layers=1,  # TODO: Multi-hop
     n_heads=args.n_heads,
     dropout=float(args.dropout),
 ).to(device)

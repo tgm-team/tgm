@@ -25,6 +25,10 @@ class NegativeEdgeSamplerHook:
     """
 
     def __init__(self, low: int, high: int, neg_sampling_ratio: float = 1.0) -> None:
+        if not 0 < neg_sampling_ratio <= 1:
+            raise ValueError('neg_sampling_ratio must be in (0, 1]')
+        if not low < high:
+            raise ValueError(f'low ({low}) must be strictly less than high ({high})')
         self.low = low
         self.high = high
         self.neg_sampling_ratio = neg_sampling_ratio
@@ -37,12 +41,34 @@ class NegativeEdgeSamplerHook:
         return batch
 
 
+class LastNeighborHook:
+    r"""Keep track of last neighbor interactions.
+
+    Args:
+        num_nodes (int): Total number of nodes to track memory for
+        size (int): The number of neighbors to track for each node in the memory.
+
+    Raises:
+        ValueError: If the num_nodes or size are non-positive.
+    """
+
+    def __init__(self, num_nodes: int, size: int) -> None:
+        if num_nodes <= 0:
+            raise ValueError('Number of total nodes must be strictly positive')
+        if size <= 0:
+            raise ValueError('Number of neighbors to track must be strictly positive')
+        self._num_nodes = num_nodes
+        self._size = size
+
+    def __call__(self, dg: DGraph) -> DGBatch:
+        return dg.materialize()
+
+
 class NeighborSamplerHook:
     r"""Load data from DGraph using a memory based sampling function.
 
     Args:
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
-        **kwargs (Any): Additional arguments to the DGDataLoader
 
     Raises:
         ValueError: If the num_nbrs list is empty.
