@@ -17,7 +17,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
         batch_size (int): The batch size to yield at each iteration.
         batch_unit (str): The unit corresponding to the batch_size.
         hook (Optional[DGHook]): Arbitrary transform behaviour to execute before materializing a batch.
-        **kwargs (Any): Additional arugments to torch.utils.data.DataLoader.
+        **kwargs (Any): Additional arguments to torch.utils.data.DataLoader.
 
     Raises:
         ValueError: If the batch_unit and dg time unit are not both ordered or both not ordered.
@@ -67,7 +67,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
         start_idx = 0 if batch_ordered else dg.start_time
         stop_idx = dg.num_events if batch_ordered else dg.end_time
 
-        # TODO: Clean up exlusive/inclusive
+        # TODO: Clean up exclusive/inclusive
         self._iterate_by_time = not batch_ordered
         if self._iterate_by_time:
             stop_idx += 1

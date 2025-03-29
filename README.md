@@ -3,7 +3,7 @@
 <div align="center">
   <h1 style="font-size:3vw;padding:0;margin:0;display:inline">OpenDG</h3>
   <h3 style="margin:0">An Open Library for Temporal Graph Learning</h3>
-  <a href="https://opendg.readthedocs.io/en/latest"/><strong>Read the docs»</strong></a>
+  <a href="https://opendg.readthedocs.io/en/latest"/><strong>Documentation</strong></a>
 </div>
 
 <br/>
@@ -21,7 +21,7 @@
 
 ## About The Project
 
-_OpenDG_ is a Python library for scalable and efficent temporal graph learning methods.
+_OpenDG_ is a Python library for scalable and efficient temporal graph learning methods.
 
 ### Library Highlights
 
