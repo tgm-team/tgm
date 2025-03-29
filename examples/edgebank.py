@@ -44,12 +44,12 @@ test_dg = DGraph(args.dataset, split='test')
 train_data = train_dg.materialize(materialize_features=False)
 val_loader = DGDataLoader(
     val_dg,
-    hook=NegativeEdgeSamplerHook(),
+    hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
     batch_size=args.bsize,
 )
 test_loader = DGDataLoader(
     test_dg,
-    hook=NegativeEdgeSamplerHook(),
+    hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
     batch_size=args.bsize,
 )
 

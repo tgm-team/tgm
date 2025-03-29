@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import List, Protocol
 
+import torch
+
 from opendg._storage import DGSliceTracker
 from opendg.graph import DGBatch, DGraph
 
@@ -13,12 +15,25 @@ class DGHook(Protocol):
 
 
 class NegativeEdgeSamplerHook:
-    r"""Sample negative edges for dynamic link prediction."""
+    r"""Sample negative edges for dynamic link prediction.
+
+    Args:
+        low (int): The minimum node id to sample
+        high (int) : The maximum node id to sample
+        neg_sampling_ratio (float): The ratio of sampled negative destination nodes
+            to the number of positive destination nodes (default = 1.0).
+    """
+
+    def __init__(self, low: int, high: int, neg_sampling_ratio: float = 1.0) -> None:
+        self.low = low
+        self.high = high
+        self.neg_sampling_ratio = neg_sampling_ratio
 
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
-        batch.neg = batch.dst  # type: ignore
+        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
+        batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
         return batch
 
 
@@ -26,7 +41,6 @@ class NeighborSamplerHook:
     r"""Load data from DGraph using a memory based sampling function.
 
     Args:
-        dg (DGraph): The dynamic graph to iterate.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
         **kwargs (Any): Additional arguments to the DGDataLoader
 
