@@ -1,7 +1,8 @@
 import pytest
+import torch
 
 from opendg.events import EdgeEvent
-from opendg.graph import DGraph
+from opendg.graph import DGBatch, DGraph
 from opendg.loader import DGNeighborLoader
 from opendg.timedelta import TimeDeltaDG
 
@@ -39,27 +40,26 @@ def test_iteration_with_sampling(drop_last):
     ]
     dg = DGraph(events, time_delta=TimeDeltaDG('s'))
     loader = DGNeighborLoader(
-        dg,
-        num_nbrs=[1],
-        batch_size=2,
-        batch_unit='m',
-        drop_last=drop_last,
-        materialize=False,
+        dg, num_nbrs=[1], batch_size=2, batch_unit='m', drop_last=drop_last
     )
 
+    src, _, _ = dg.edges
     batch_num = 0
     for batch in loader:
-        assert isinstance(batch, DGraph)
+        assert isinstance(batch, DGBatch)
         if batch_num == 0:
-            assert batch.to_events() == events[:5]
+            torch.testing.assert_close(batch.src, src[:5])
         elif batch_num == 1:
-            assert batch.to_events() == events[3:7]
+            torch.testing.assert_close(batch.src, src[3:7])
         elif batch_num == 2:
-            assert batch.to_events() == events[6:]
+            torch.testing.assert_close(batch.src, src[6:])
         else:
             assert False
         batch_num += 1
-    assert batch_num == 2 if drop_last else 3
+    if drop_last:
+        assert batch_num == 2
+    else:
+        assert batch_num == 3
 
 
 @pytest.mark.parametrize('drop_last', [True, False])
@@ -77,27 +77,26 @@ def test_iteration_with_full_neighborhood_sampling(drop_last):
     ]
     dg = DGraph(events, time_delta=TimeDeltaDG('s'))
     loader = DGNeighborLoader(
-        dg,
-        num_nbrs=[-1],
-        batch_size=2,
-        batch_unit='m',
-        drop_last=drop_last,
-        materialize=False,
+        dg, num_nbrs=[-1], batch_size=2, batch_unit='m', drop_last=drop_last
     )
 
+    src, _, _ = dg.edges
     batch_num = 0
     for batch in loader:
-        assert isinstance(batch, DGraph)
+        assert isinstance(batch, DGBatch)
         if batch_num == 0:
-            assert batch.to_events() == events[:5]
+            torch.testing.assert_close(batch.src, src[:5])
         elif batch_num == 1:
-            assert batch.to_events() == events[3:7]
+            torch.testing.assert_close(batch.src, src[3:7])
         elif batch_num == 2:
-            assert batch.to_events() == events[5:]
+            torch.testing.assert_close(batch.src, src[5:])
         else:
             assert False
         batch_num += 1
-    assert batch_num == 2 if drop_last else 3
+    if drop_last:
+        assert batch_num == 2
+    else:
+        assert batch_num == 3
 
 
 @pytest.mark.skip('Multi-hop not supported')

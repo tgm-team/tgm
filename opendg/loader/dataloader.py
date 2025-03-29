@@ -15,7 +15,6 @@ class DGDataLoader(torch.utils.data.DataLoader):
         dg (DGraph): The dynamic graph to iterate.
         batch_size (int): The batch size to yield at each iteration.
         batch_unit (str): The unit corresponding to the batch_size.
-        materialize (bool): If True (default), auto-materialize the DGraph before yielding a batch.
         **kwargs (Any): Additional arugments to torch.utils.data.DataLoader.
 
     Raises:
@@ -28,7 +27,6 @@ class DGDataLoader(torch.utils.data.DataLoader):
         dg: DGraph,
         batch_size: int = 1,
         batch_unit: str = 'r',
-        materialize: bool = True,
         **kwargs: Any,
     ) -> None:
         if batch_size <= 0:
@@ -59,7 +57,6 @@ class DGDataLoader(torch.utils.data.DataLoader):
         assert dg.end_time is not None
 
         self._dg = dg
-        self._materialize = materialize
         self._batch_size = batch_size
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
 
@@ -89,4 +86,4 @@ class DGDataLoader(torch.utils.data.DataLoader):
 
         batch = self._slice_op(slice_start[0], slice_end)
         batch = self.pre_yield(batch)
-        return batch.materialize() if self._materialize else batch
+        return batch.materialize()

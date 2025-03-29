@@ -1,4 +1,5 @@
 import pytest
+import torch
 
 from opendg.events import EdgeEvent
 from opendg.graph import DGBatch, DGraph
@@ -30,8 +31,7 @@ def test_init_non_ordered_dg_ordered_batch(batch_unit):
 
 
 @pytest.mark.parametrize('drop_last', [True, False])
-@pytest.mark.parametrize('materialize', [True, False])
-def test_iteration(drop_last, materialize):
+def test_iteration(drop_last):
     events = [
         EdgeEvent(t=0, src=1, dst=2),
         EdgeEvent(t=1, src=2, dst=3),
@@ -45,38 +45,25 @@ def test_iteration(drop_last, materialize):
         EdgeEvent(t=9, src=10, dst=11),
     ]
     dg = DGraph(events, time_delta=TimeDeltaDG('r'))
-    loader = DGDataLoader(
-        dg,
-        batch_size=3,
-        batch_unit='r',
-        drop_last=drop_last,
-        materialize=materialize,
-    )
+    loader = DGDataLoader(dg, batch_size=3, batch_unit='r', drop_last=drop_last)
 
+    src, dst, t = dg.edges
     batch_num = 0
     for batch in loader:
-        if materialize:
-            assert isinstance(batch, DGBatch)
-        else:
-            assert isinstance(batch, DGraph)
-            if batch_num == 0:
-                assert batch.to_events() == events[0:3]
-            elif batch_num == 1:
-                assert batch.to_events() == events[3:6]
-            elif batch_num == 2:
-                assert batch.to_events() == events[6:9]
-            elif batch_num == 3:
-                assert not drop_last
-                assert batch.to_events() == events[9:]
-            else:
-                assert False
+        assert isinstance(batch, DGBatch)
+        torch.testing.assert_close(batch.src, src[3 * batch_num : 3 * (batch_num + 1)])
+        torch.testing.assert_close(batch.dst, dst[3 * batch_num : 3 * (batch_num + 1)])
+        torch.testing.assert_close(batch.time, t[3 * batch_num : 3 * (batch_num + 1)])
+        assert batch_num < 4
         batch_num += 1
-    assert batch_num == 3 if drop_last else 4
+    if drop_last:
+        assert batch_num == 3
+    else:
+        assert batch_num == 4
 
 
 @pytest.mark.parametrize('drop_last', [True, False])
-@pytest.mark.parametrize('materialize', [True, False])
-def test_iteration_by_time_equal_unit(drop_last, materialize):
+def test_iteration_by_time_equal_unit(drop_last):
     events = [
         EdgeEvent(t=0, src=1, dst=2),
         EdgeEvent(t=1, src=2, dst=3),
@@ -95,33 +82,25 @@ def test_iteration_by_time_equal_unit(drop_last, materialize):
         batch_size=3,
         batch_unit='s',
         drop_last=drop_last,
-        materialize=materialize,
     )
 
+    src, dst, t = dg.edges
     batch_num = 0
     for batch in loader:
-        if materialize:
-            assert isinstance(batch, DGBatch)
-        else:
-            assert isinstance(batch, DGraph)
-            if batch_num == 0:
-                assert batch.to_events() == events[0:3]
-            elif batch_num == 1:
-                assert batch.to_events() == events[3:6]
-            elif batch_num == 2:
-                assert batch.to_events() == events[6:9]
-            elif batch_num == 3:
-                assert not drop_last
-                assert batch.to_events() == events[9:]
-            else:
-                assert False
+        assert isinstance(batch, DGBatch)
+        torch.testing.assert_close(batch.src, src[3 * batch_num : 3 * (batch_num + 1)])
+        torch.testing.assert_close(batch.dst, dst[3 * batch_num : 3 * (batch_num + 1)])
+        torch.testing.assert_close(batch.time, t[3 * batch_num : 3 * (batch_num + 1)])
+        assert batch_num < 4
         batch_num += 1
-    assert batch_num == 3 if drop_last else 4
+    if drop_last:
+        assert batch_num == 3
+    else:
+        assert batch_num == 4
 
 
 @pytest.mark.parametrize('drop_last', [True, False])
-@pytest.mark.parametrize('materialize', [True, False])
-def test_iteration_batch_larger_than_dg(drop_last, materialize):
+def test_iteration_batch_larger_than_dg(drop_last):
     events = [
         EdgeEvent(t=0, src=1, dst=2),
         EdgeEvent(t=0, src=2, dst=3),
@@ -139,26 +118,25 @@ def test_iteration_batch_larger_than_dg(drop_last, materialize):
         batch_size=10,
         batch_unit='r',
         drop_last=drop_last,
-        materialize=materialize,
     )
 
+    src, dst, t = dg.edges
     batch_num = 0
     for batch in loader:
-        assert not drop_last
-        if materialize:
-            assert isinstance(batch, DGBatch)
-        else:
-            assert isinstance(batch, DGraph)
-            assert batch_num < 1
-            assert len(batch) == 5
-            assert batch.to_events() == events
+        assert isinstance(batch, DGBatch)
+        torch.testing.assert_close(batch.src, src)
+        torch.testing.assert_close(batch.dst, dst)
+        torch.testing.assert_close(batch.time, t)
+        assert batch_num < 2
         batch_num += 1
-    assert batch_num == 0 if drop_last else 1
+    if drop_last:
+        assert batch_num == 0
+    else:
+        assert batch_num == 1
 
 
 @pytest.mark.parametrize('drop_last', [True, False])
-@pytest.mark.parametrize('materialize', [True, False])
-def test_iteration_by_time_with_conversion(drop_last, materialize):
+def test_iteration_by_time_with_conversion(drop_last):
     events = [
         EdgeEvent(t=0, src=1, dst=2),  # Batch 1
         EdgeEvent(t=0, src=2, dst=3),  # Batch 1
@@ -171,34 +149,29 @@ def test_iteration_by_time_with_conversion(drop_last, materialize):
         EdgeEvent(t=240, src=9, dst=10),  # Batch 3
     ]
     dg = DGraph(events, time_delta=TimeDeltaDG('s'))
-    loader = DGDataLoader(
-        dg, batch_size=2, batch_unit='m', drop_last=drop_last, materialize=materialize
-    )
+    loader = DGDataLoader(dg, batch_size=2, batch_unit='m', drop_last=drop_last)
 
+    src, _, _ = dg.edges
     batch_num = 0
     for batch in loader:
-        if materialize:
-            assert isinstance(batch, DGBatch)
+        assert isinstance(batch, DGBatch)
+        if batch_num == 0:
+            torch.testing.assert_close(batch.src, src[:5])
+        elif batch_num == 1:
+            torch.testing.assert_close(batch.src, src[5:7])
+        elif batch_num == 2:
+            torch.testing.assert_close(batch.src, src[7:])
         else:
-            assert isinstance(batch, DGraph)
-            if batch_num == 0:
-                expected_events = events[:5]
-            elif batch_num == 1:
-                expected_events = events[5:7]
-            elif batch_num == 2:
-                expected_events = events[7:]
-            else:
-                assert False
-
-            assert isinstance(batch, DGraph)
-            assert batch.to_events() == expected_events
+            assert False
         batch_num += 1
-    assert batch_num == 2 if drop_last else 3
+    if drop_last:
+        assert batch_num == 2
+    else:
+        assert batch_num == 3
 
 
 @pytest.mark.parametrize('drop_last', [True, False])
-@pytest.mark.parametrize('materialize', [True, False])
-def test_iteration_by_time_with_conversion_time_delta_value(drop_last, materialize):
+def test_iteration_by_time_with_conversion_time_delta_value(drop_last):
     events = [
         EdgeEvent(t=0, src=1, dst=2),  # Batch 1
         EdgeEvent(t=0, src=2, dst=3),  # Batch 1
@@ -211,29 +184,25 @@ def test_iteration_by_time_with_conversion_time_delta_value(drop_last, materiali
         EdgeEvent(t=24, src=9, dst=10),  # Batch 3
     ]
     dg = DGraph(events, time_delta=TimeDeltaDG('s', value=10))
-    loader = DGDataLoader(
-        dg, batch_size=2, batch_unit='m', drop_last=drop_last, materialize=materialize
-    )
+    loader = DGDataLoader(dg, batch_size=2, batch_unit='m', drop_last=drop_last)
 
+    src, _, _ = dg.edges
     batch_num = 0
     for batch in loader:
-        if materialize:
-            assert isinstance(batch, DGBatch)
+        assert isinstance(batch, DGBatch)
+        if batch_num == 0:
+            torch.testing.assert_close(batch.src, src[:5])
+        elif batch_num == 1:
+            torch.testing.assert_close(batch.src, src[5:7])
+        elif batch_num == 2:
+            torch.testing.assert_close(batch.src, src[7:])
         else:
-            assert isinstance(batch, DGraph)
-            if batch_num == 0:
-                expected_events = events[:5]
-            elif batch_num == 1:
-                expected_events = events[5:7]
-            elif batch_num == 2:
-                expected_events = events[7:]
-            else:
-                assert False
-
-            assert isinstance(batch, DGraph)
-            assert batch.to_events() == expected_events
+            assert False
         batch_num += 1
-    assert batch_num == 2 if drop_last else 3
+    if drop_last:
+        assert batch_num == 2
+    else:
+        assert batch_num == 3
 
 
 def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
