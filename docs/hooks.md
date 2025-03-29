@@ -1,4 +1,5 @@
 ## DGHooks
 
 ::: opendg.hooks.DGHook
-::: opendg.hooks.DGNeighborSamplerHook
+::: opendg.hooks.NeighborSamplerHook
+::: opendg.hooks.NegativeEdgeSamplerHook

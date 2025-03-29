@@ -1,8 +1,7 @@
 import argparse
 
-import torch
-
 from opendg.graph import DGraph
+from opendg.hooks import NegativeEdgeSamplerHook
 from opendg.loader import DGDataLoader
 from opendg.nn import EdgeBankPredictor
 from opendg.util.perf import Usage
@@ -29,9 +28,8 @@ parser.add_argument(
 def eval(loader: DGDataLoader, model: EdgeBankPredictor) -> float:
     mrrs = []
     for batch in loader:
-        neg = torch.randint(high=100, size=(len(batch.src),))  # Move to dataloader
         model(batch.src, batch.dst)
-        model(batch.src, neg)
+        model(batch.src, batch.neg)
         mrrs.append(0)
     return sum(mrrs) / len(mrrs)
 
@@ -44,8 +42,16 @@ val_dg = DGraph(args.dataset, split='valid')
 test_dg = DGraph(args.dataset, split='test')
 
 train_data = train_dg.materialize(materialize_features=False)
-val_loader = DGDataLoader(val_dg, batch_size=args.bsize)
-test_loader = DGDataLoader(test_dg, batch_size=args.bsize)
+val_loader = DGDataLoader(
+    val_dg,
+    hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
+    batch_size=args.bsize,
+)
+test_loader = DGDataLoader(
+    test_dg,
+    hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
+    batch_size=args.bsize,
+)
 
 model = EdgeBankPredictor(
     train_data.src,

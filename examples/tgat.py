@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from opendg.graph import DGBatch, DGraph
-from opendg.hooks import DGNeighborSamplerHook
+from opendg.hooks import NeighborSamplerHook
 from opendg.loader import DGDataLoader
 from opendg.nn import TemporalAttention, Time2Vec
 from opendg.util.perf import Usage
@@ -131,17 +131,17 @@ test_dg = DGraph(args.dataset, split='test')
 
 train_loader = DGDataLoader(
     train_dg,
-    hook=DGNeighborSamplerHook(num_nbrs=args.n_nbrs),
+    hook=NeighborSamplerHook(num_nbrs=args.n_nbrs),
     batch_size=args.bsize,
 )
 val_loader = DGDataLoader(
     val_dg,
-    hook=DGNeighborSamplerHook(num_nbrs=args.n_nbrs),
+    hook=NeighborSamplerHook(num_nbrs=args.n_nbrs),
     batch_size=args.bsize,
 )
 test_loader = DGDataLoader(
     test_dg,
-    hook=DGNeighborSamplerHook(num_nbrs=args.n_nbrs),
+    hook=NeighborSamplerHook(num_nbrs=args.n_nbrs),
     batch_size=args.bsize,
 )
 
