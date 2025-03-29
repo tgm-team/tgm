@@ -8,7 +8,7 @@ from torch import Tensor
 
 @dataclass(slots=True)
 class NodeEvent:
-    r"""A Node event that occured in a dynamic graph."""
+    r"""A Node event that occurred in a dynamic graph."""
 
     t: int
     src: int
@@ -18,7 +18,7 @@ class NodeEvent:
 
 @dataclass(slots=True)
 class EdgeEvent:
-    r"""An Edge event that occured in a dynamic graph."""
+    r"""An Edge event that occurred in a dynamic graph."""
 
     t: int
     src: int
