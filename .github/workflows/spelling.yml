@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run spellcheck
-        uses: rojopolis/spellcheck-github-actions@v0
+        uses: codespell-project/actions-codespell@v2
         with:
-          config_path: .github/config/.spellcheck.yml
+          ignore_words_file: .github/config/.codespellignore
+          only_warn: 1
