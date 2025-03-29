@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
-parser.add_argument('--bsize', type=int, default=200, help='batch size')
+parser.add_argument('--bsize', type=int, default=5, help='batch size')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument('--gpu', type=int, default=-1, help='gpu to use (or -1 for cpu)')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')

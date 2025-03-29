@@ -46,7 +46,7 @@ class LastNeighborHook:
 
     Args:
         num_nodes (int): Total number of nodes to track memory for
-        size (int): The number of neighbors to track for each node in the memory.
+        size (int): The number of nbrs to track for each node in the memory.
 
     Raises:
         ValueError: If the num_nodes or size are non-positive.
@@ -56,19 +56,71 @@ class LastNeighborHook:
         if num_nodes <= 0:
             raise ValueError('Number of total nodes must be strictly positive')
         if size <= 0:
-            raise ValueError('Number of neighbors to track must be strictly positive')
-        self._num_nodes = num_nodes
+            raise ValueError('Number of nbrs to track must be strictly positive')
+
+        self._nbrs = torch.empty((num_nodes, size), dtype=torch.long)
         self._size = size
 
+        self._cur_e_id = 0
+        self._e_id = torch.empty((num_nodes, size), dtype=torch.long)
+        self._assoc = torch.empty(num_nodes, dtype=torch.long)
+        self.reset()
+
     def __call__(self, dg: DGraph) -> DGBatch:
-        return dg.materialize()
+        # TODO: What about negatives (compose hooks)
+        batch = dg.materialize(materialize_features=False)
+        batch_size = len(batch.src)
+        batch_nbrs = torch.cat([batch.src, batch.dst], dim=0)
+        batch_nodes = torch.cat([batch.dst, batch.src], dim=0)
+        unique_batch_nodes = batch_nodes.unique()
+        unique_batch_nodes_repeat = unique_batch_nodes.view(-1, 1).repeat(1, self._size)
+
+        mask = (e_id := self._e_id[unique_batch_nodes]) > 0
+        nbrs = self._nbrs[unique_batch_nodes][mask]
+        n_id = torch.cat([unique_batch_nodes, nbrs]).unique()
+        self._assoc[n_id] = torch.arange(n_id.size(0))
+
+        batch.nbrs = self._assoc[nbrs]  # type: ignore
+        batch.nodes = self._assoc[unique_batch_nodes_repeat[mask]]  # type: ignore
+        batch.e_id = e_id[mask]  # type: ignore
+
+        # Convert interaction ids to point to "dense" locations of shape [num_nodes, size]
+        e_id = torch.arange(self._cur_e_id, self._cur_e_id + batch_size).repeat(2)
+        self._cur_e_id += batch_size
+        batch_nodes, perm = batch_nodes.sort()
+        batch_nbrs, e_id = batch_nbrs[perm], e_id[perm]
+
+        # Duplicate work?
+        n_id = batch_nodes.unique()
+        self._assoc[n_id] = torch.arange(n_id.numel())
+
+        dense_id = torch.arange(batch_nodes.size(0)) % self._size
+        dense_id += self._assoc[batch_nodes].mul_(self._size)
+
+        dense_e_id = e_id.new_full((n_id.numel() * self._size,), -1)
+        dense_e_id[dense_id] = e_id
+        dense_e_id = dense_e_id.view(-1, self._size)
+
+        dense_nbrs = e_id.new_empty(n_id.numel() * self._size)
+        dense_nbrs[dense_id] = batch_nbrs
+        dense_nbrs = dense_nbrs.view(-1, self._size)
+
+        e_id = torch.cat([self._e_id[n_id, : self._size], dense_e_id], dim=-1)
+        nbrs = torch.cat([self._nbrs[n_id, : self._size], dense_nbrs], dim=-1)
+        self._e_id[n_id], perm = e_id.topk(self._size, dim=-1)
+        self._nbrs[n_id] = torch.gather(nbrs, 1, perm)
+        return batch
+
+    def reset(self) -> None:
+        self._cur_e_id = 0
+        self._e_id.fill_(-1)
 
 
 class NeighborSamplerHook:
     r"""Load data from DGraph using a memory based sampling function.
 
     Args:
-        num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
+        num_nbrs (List[int]): Number of nbrs to sample at each hop (-1 to keep all)
 
     Raises:
         ValueError: If the num_nbrs list is empty.
