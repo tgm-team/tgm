@@ -1,0 +1,23 @@
+name: Spellcheck Action
+
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Spellcheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+      - uses: actions/checkout@v4
+
+      - name: Run spellcheck
+      - uses: rojopolis/spellcheck-github-actions@v0
