@@ -6,7 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from opendg.graph import DGBatch, DGraph
-from opendg.loader import DGNeighborLoader
+from opendg.hooks import DGNeighborSamplerHook
+from opendg.loader import DGDataLoader
 from opendg.nn import TemporalAttention, Time2Vec
 from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
@@ -97,9 +98,7 @@ class LinkPredictor(nn.Module):
         return self.lin_out(h)
 
 
-def train(
-    loader: DGNeighborLoader, model: nn.Module, opt: torch.optim.Optimizer
-) -> float:
+def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) -> float:
     model.train()
     total_loss = 0
     for batch in loader:
@@ -114,7 +113,7 @@ def train(
 
 
 @torch.no_grad()
-def eval(loader: DGNeighborLoader, model: nn.Module) -> float:
+def eval(loader: DGDataLoader, model: nn.Module) -> float:
     model.eval()
     mrrs = []
     for batch in loader:
@@ -130,9 +129,21 @@ train_dg = DGraph(args.dataset, split='train')
 val_dg = DGraph(args.dataset, split='valid')
 test_dg = DGraph(args.dataset, split='test')
 
-train_loader = DGNeighborLoader(train_dg, num_nbrs=args.n_nbrs, batch_size=args.bsize)
-val_loader = DGNeighborLoader(val_dg, num_nbrs=args.n_nbrs, batch_size=args.bsize)
-test_loader = DGNeighborLoader(test_dg, num_nbrs=args.n_nbrs, batch_size=args.bsize)
+train_loader = DGDataLoader(
+    train_dg,
+    hook=DGNeighborSamplerHook(num_nbrs=args.n_nbrs),
+    batch_size=args.bsize,
+)
+val_loader = DGDataLoader(
+    val_dg,
+    hook=DGNeighborSamplerHook(num_nbrs=args.n_nbrs),
+    batch_size=args.bsize,
+)
+test_loader = DGDataLoader(
+    test_dg,
+    hook=DGNeighborSamplerHook(num_nbrs=args.n_nbrs),
+    batch_size=args.bsize,
+)
 
 device = torch.device(f'cuda:{args.gpu}' if args.gpu >= 0 else 'cpu')
 model = TGAT(

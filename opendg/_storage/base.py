@@ -45,14 +45,6 @@ class DGStorageBase(ABC):
     def get_num_events(self, slice: DGSliceTracker) -> int: ...
 
     @abstractmethod
-    def get_nbrs(
-        self,
-        seed_nodes: Set[int],
-        num_nbrs: List[int],
-        slice: DGSliceTracker,
-    ) -> Dict[int, List[List[Tuple[int, int]]]]: ...
-
-    @abstractmethod
     def get_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]: ...
 
     @abstractmethod
@@ -63,6 +55,14 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def get_edge_feats_dim(self) -> Optional[int]: ...
+
+    @abstractmethod
+    def get_nbrs(
+        self,
+        seed_nodes: Set[int],
+        num_nbrs: List[int],
+        slice: DGSliceTracker,
+    ) -> Dict[int, List[List[Tuple[int, int]]]]: ...
 
     def _sort_events_list_if_needed(self, events: List[Event]) -> List[Event]:
         if not all(isinstance(event, Event) for event in events):
