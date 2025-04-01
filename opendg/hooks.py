@@ -96,7 +96,7 @@ class RecencyNeighborSamplerHook:
     def __init__(
         self,
         num_nbrs: List[int],
-        return_nbr_graph: bool = True,
+        return_nbr_graph: bool = False,
     ) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
@@ -140,28 +140,37 @@ class RecencyNeighborSamplerHook:
                         Queue(maxsize=self._num_nbrs[0]),
                         Queue(maxsize=self._num_nbrs[0]),
                     ]
-            out_nbrs[node] = [
-                list(self._nbr_dict[node][i].queue) for i in len(self._nbr_dict[node])
-            ]  # (dst,time, edge_feats)
 
+            out_nbrs[node] = []  # (dst,time, edge_feats)
+            out_nbrs[node].append(torch.tensor(list(self._nbr_dict[node][0].queue))) #dst
+            out_nbrs[node].append(torch.tensor(list(self._nbr_dict[node][1].queue))) #time
+            if batch.edge_feats is not None:
+                if (self._nbr_dict[node][2].empty()):
+                    out_nbrs[node].append(torch.tensor([]))
+                else:
+                    out_nbrs[node].append(torch.stack(list(self._nbr_dict[node][2].queue))) # stack edge_feats [num_edge, num_feats]
+                  
         # add new neighbors to the recency dict
         #! do we need it to be undirected? don't think so, thus only adding src->dst
         for i in range(src.size(0)):
             src_nbr = src[i].item()
             if self._nbr_dict[src_nbr][0].full():
+                # pop the oldest neighbor
                 for k in range(len(self._nbr_dict[src_nbr])):
                     self._nbr_dict[src_nbr][k].get()
 
-            self._nbr_dict[src_nbr][0].put(dst[i])
-            self._nbr_dict[src_nbr][1].put(batch.time[i])
+            self._nbr_dict[src_nbr][0].put(dst[i].item())
+            self._nbr_dict[src_nbr][1].put(batch.time[i].item())
             if batch.edge_feats is not None:
                 self._nbr_dict[src_nbr][2].put(batch.edge_feats[i])
 
+        
+        batch.nbrs = out_nbrs
         # create the new batch
         if self.return_nbr_graph:
-            src_nbr = []
-
+            raise NotImplementedError(
+                'RecencyNeighborSamplerHook currently does not support returning the neighbor graph'
+            )
         else:
-            return
+            return batch
 
-        return dg.materialize()

@@ -8,9 +8,10 @@ from opendg.hooks import RecencyNeighborSamplerHook
 @pytest.fixture
 def events():
     return [
-        EdgeEvent(t=1, src=2, dst=2),
-        EdgeEvent(t=5, src=2, dst=4),
-        EdgeEvent(t=20, src=1, dst=8),
+        EdgeEvent(t=1, src=1, dst=10),
+        EdgeEvent(t=1, src=1, dst=11),
+        EdgeEvent(t=2, src=1, dst=12),
+        EdgeEvent(t=2, src=1, dst=13),
     ]
 
 
@@ -25,8 +26,8 @@ def test_bad_neighbor_sampler_init():
 
 def test_neighbor_sampler_hook(events):
     dg = DGraph(events)
-    hook = RecencyNeighborSamplerHook(num_nodes=dg.num_nodes, size=3)
+    hook = RecencyNeighborSamplerHook(num_nbrs=[2])
     batch = hook(dg)
     assert isinstance(batch, DGBatch)
-
+    print(batch.nbrs)
     # TODO: Add logic for testing
