@@ -1,6 +1,6 @@
 import pytest
 
-from opendg.events import EdgeEvent, NodeEvent
+from opendg.events import EdgeEvent
 from opendg.graph import DGBatch, DGraph
 from opendg.hooks import RecencyNeighborSamplerHook
 

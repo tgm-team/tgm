@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from queue import Queue
 from typing import List, Protocol
 
 import torch
-from queue import Queue
+
 from opendg._storage import DGSliceTracker
 from opendg.graph import DGBatch, DGraph
 
@@ -80,12 +81,8 @@ class NeighborSamplerHook:
         return dg.materialize()
 
 
-
-
-
-
 class RecencyNeighborSamplerHook:
-    r"""Load neighbors from DGraph using a recency sampling strategy where each node maintains a fixed number of most recent neighbors. 
+    r"""Load neighbors from DGraph using a recency sampling strategy where each node maintains a fixed number of most recent neighbors.
 
     Args:
         num_nbrs (List[int]): Number of neighbors to sample at each hop, also indicates the max number of neighbors to keep in the recency sampling strategy. (int must be > 0)
@@ -96,9 +93,11 @@ class RecencyNeighborSamplerHook:
         ValueError: If the num_nbrs list is empty.
     """
 
-    def __init__(self, 
-                 num_nbrs: List[int], 
-                 return_nbr_graph: bool = True,) -> None:
+    def __init__(
+        self,
+        num_nbrs: List[int],
+        return_nbr_graph: bool = True,
+    ) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
@@ -107,15 +106,13 @@ class RecencyNeighborSamplerHook:
             raise ValueError('RecencyNeighborSamplerHook only supports 1 hop for now')
         self._num_nbrs = num_nbrs
         self.return_nbr_graph = return_nbr_graph
-        self._nbr_dict = {} # {node_id: queue(maxlen=num_nbr)} # one queue for dst id, time, edge_feats
-
+        self._nbr_dict = {}  # {node_id: queue(maxlen=num_nbr)} # one queue for dst id, time, edge_feats
 
     @property
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph) -> DGBatch:
-
         batch = dg.materialize()
         """
         src: Tensor
@@ -132,35 +129,39 @@ class RecencyNeighborSamplerHook:
         # retrieve recent neighbors for each node
         for node in nids.tolist():
             if node not in self._nbr_dict:
-                if (batch.edge_feats is not None):
-                    self._nbr_dict[node] = [Queue(maxsize=self._num_nbrs[0]), Queue(maxsize=self._num_nbrs[0]), Queue(maxsize=self._num_nbrs[0])]
+                if batch.edge_feats is not None:
+                    self._nbr_dict[node] = [
+                        Queue(maxsize=self._num_nbrs[0]),
+                        Queue(maxsize=self._num_nbrs[0]),
+                        Queue(maxsize=self._num_nbrs[0]),
+                    ]
                 else:
-                    self._nbr_dict[node] = [Queue(maxsize=self._num_nbrs[0]), Queue(maxsize=self._num_nbrs[0])]                
-            out_nbrs[node] = [list(self._nbr_dict[node][i].queue) for i in len(self._nbr_dict[node])]  #(dst,time, edge_feats)
-        
+                    self._nbr_dict[node] = [
+                        Queue(maxsize=self._num_nbrs[0]),
+                        Queue(maxsize=self._num_nbrs[0]),
+                    ]
+            out_nbrs[node] = [
+                list(self._nbr_dict[node][i].queue) for i in len(self._nbr_dict[node])
+            ]  # (dst,time, edge_feats)
+
         # add new neighbors to the recency dict
         #! do we need it to be undirected? don't think so, thus only adding src->dst
         for i in range(src.size(0)):
             src_nbr = src[i].item()
-            if (self._nbr_dict[src_nbr][0].full()):
+            if self._nbr_dict[src_nbr][0].full():
                 for k in range(len(self._nbr_dict[src_nbr])):
                     self._nbr_dict[src_nbr][k].get()
 
             self._nbr_dict[src_nbr][0].put(dst[i])
             self._nbr_dict[src_nbr][1].put(batch.time[i])
-            if (batch.edge_feats is not None):
-                self._nbr_dict[src_nbr][2].put(batch.edge_feats[i])  
+            if batch.edge_feats is not None:
+                self._nbr_dict[src_nbr][2].put(batch.edge_feats[i])
 
-        # create the new batch              
+        # create the new batch
         if self.return_nbr_graph:
             src_nbr = []
 
         else:
-            return 
-
-
-
-
-
+            return
 
         return dg.materialize()
