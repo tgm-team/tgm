@@ -84,8 +84,8 @@ class TGAT(nn.Module):
         z_dst = torch.rand(len(batch.src), self.embed_dim)
         z_neg = torch.rand(len(batch.src), self.embed_dim)
 
-        pos_out = self.link_predictor(z_src, z_dst)
-        neg_out = self.link_predictor(z_src, z_neg)
+        pos_out = self.link_predictor(z_src, z_dst).view(-1)
+        neg_out = self.link_predictor(z_src, z_neg).view(-1)
         return pos_out, neg_out
 
 
