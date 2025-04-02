@@ -74,25 +74,19 @@ class TGAT(nn.Module):
         self.embed_dim = embed_dim
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        hop = 0
-
         # TODO: Go back to recursive embedding for multi-hop
-        def _embed(src: torch.Tensor, nbrs: Tuple[torch.Tensor, ...]) -> torch.Tensor:
-            nbr_nodes, nbr_times, nbr_feat, nbr_mask = nbrs
-            return self.attn[hop](
-                node_feat=torch.zeros((*src.shape, self.embed_dim)),
-                nbr_node_feat=torch.zeros((*nbr_nodes.shape, self.embed_dim)),
-                time_feat=self.time_encoder(torch.zeros(len(src))),
-                nbr_time_feat=self.time_encoder(nbr_times - batch.time[:, None]),
-                edge_feat=nbr_feat,
-                nbr_mask=nbr_mask,
-            )
-
-        # TODO: Make this a single forward pass (add src/dst/neg mask as in TGN)
-        z_src = _embed(batch.src, batch.src_nbrs[hop])
-        z_dst = _embed(batch.dst, batch.dst_nbrs[hop])
-        z_neg = _embed(batch.dst, batch.dst_nbrs[hop])  # TODO: Chain negative edge hook
-
+        hop = 0
+        z = self.attn[hop](
+            node_feat=torch.zeros((*batch.nids[hop].shape, self.embed_dim)),
+            nbr_node_feat=torch.zeros((*batch.nbr_nids[hop].shape, self.embed_dim)),
+            time_feat=self.time_encoder(torch.zeros(len(batch.nids[hop]))),
+            nbr_time_feat=self.time_encoder(
+                batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
+            ),
+            edge_feat=batch.nbr_feats[hop],
+            nbr_mask=batch.nbr_mask[hop],
+        )
+        z_src, z_dst, z_neg = z.chunk(3, dim=0)
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out

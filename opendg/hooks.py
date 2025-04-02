@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Protocol, Tuple
+from typing import List, Protocol
 
 import torch
 
@@ -64,7 +64,6 @@ class NeighborSamplerHook:
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
-        batch_size = len(batch.src)
         nbrs = dg._storage.get_nbrs(
             seed_nodes=dg.nodes,
             num_nbrs=self.num_nbrs,
@@ -72,20 +71,22 @@ class NeighborSamplerHook:
         )
 
         # TODO: This is terrible, should change get_nbrs to return the right format
-        def _parse_nbrs(seed_nodes: torch.Tensor, hop: int) -> Tuple[torch.Tensor, ...]:
-            nbr_ids = torch.empty(batch_size, self.num_nbrs[hop], dtype=torch.long)
-            nbr_times = torch.empty(batch_size, self.num_nbrs[hop])
-            nbr_feats = torch.zeros(batch_size, self.num_nbrs[hop], dg.edge_feats_dim)  # type: ignore
-            src_nbr_mask = torch.zeros(batch_size, self.num_nbrs[hop])
-            for batch_idx, node in enumerate(seed_nodes):
-                for nbr_idx, (nbr_id, nbr_time) in enumerate(nbrs[node.item()][hop]):
-                    nbr_ids[batch_idx, nbr_idx] = nbr_id
-                    nbr_times[batch_idx, nbr_idx] = nbr_time
-                    src_nbr_mask[batch_idx, nbr_idx] = 1
-                    # nbr_feats[batch_idx, nbr_idx] = nbr_feat
-            return nbr_ids, nbr_times, nbr_feats, src_nbr_mask
+        hop = 0
+        seed_nodes = torch.cat([batch.src, batch.dst, batch.dst])
+        nbr_nids = torch.empty(len(seed_nodes), self.num_nbrs[hop], dtype=torch.long)
+        nbr_times = torch.empty(len(seed_nodes), self.num_nbrs[hop])
+        nbr_feats = torch.zeros(len(seed_nodes), self.num_nbrs[hop], dg.edge_feats_dim)  # type: ignore
+        nbr_mask = torch.zeros(len(seed_nodes), self.num_nbrs[hop])
+        for batch_idx, node in enumerate(seed_nodes):
+            for nbr_idx, (nbr_id, nbr_time) in enumerate(nbrs[node.item()][hop]):
+                nbr_nids[batch_idx, nbr_idx] = nbr_id
+                nbr_times[batch_idx, nbr_idx] = nbr_time
+                nbr_mask[batch_idx, nbr_idx] = 1
+                # nbr_feats[batch_idx, nbr_idx] = nbr_feat
 
-        batch.src_nbrs = [_parse_nbrs(batch.src, hop=0)]  # type: ignore
-        batch.dst_nbrs = [_parse_nbrs(batch.dst, hop=0)]  # type: ignore
-        batch.neg_nbrs = [_parse_nbrs(batch.src, hop=0)]  # type: ignore
+        batch.nids = [seed_nodes]  # type: ignore
+        batch.nbr_nids = [nbr_nids]  # type: ignore
+        batch.nbr_times = [nbr_times]  # type: ignore
+        batch.nbr_feats = [nbr_feats]  # type: ignore
+        batch.nbr_mask = [nbr_mask]  # type: ignore
         return batch
