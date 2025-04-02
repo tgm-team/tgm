@@ -1068,6 +1068,7 @@ docs = [
 ]
 examples = [
     { name = "torchmetrics" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -1092,7 +1093,10 @@ docs = [
     { name = "mkdocs-material", specifier = ">=9.6.9" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.0" },
 ]
-examples = [{ name = "torchmetrics", specifier = ">=1.7.0" }]
+examples = [
+    { name = "torchmetrics", specifier = ">=1.7.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+]
 
 [[package]]
 name = "packaging"
