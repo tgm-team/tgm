@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Protocol
+from typing import List, Protocol, Tuple
 
 import torch
 
@@ -63,10 +63,29 @@ class NeighborSamplerHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize(materialize_features=False)
-        batch.nbrs = dg._storage.get_nbrs(  # type: ignore
+        batch = dg.materialize()
+        batch_size = len(batch.src)
+        nbrs = dg._storage.get_nbrs(
             seed_nodes=dg.nodes,
             num_nbrs=self.num_nbrs,
             slice=DGSliceTracker(end_idx=dg._slice.end_idx),
         )
+
+        # TODO: This is terrible, should change get_nbrs to return the right format
+        def _parse_nbrs(seed_nodes: torch.Tensor, hop: int) -> Tuple[torch.Tensor, ...]:
+            nbr_ids = torch.empty(batch_size, self.num_nbrs[hop], dtype=torch.long)
+            nbr_times = torch.empty(batch_size, self.num_nbrs[hop])
+            nbr_feats = torch.zeros(batch_size, self.num_nbrs[hop], dg.edge_feats_dim)  # type: ignore
+            src_nbr_mask = torch.zeros(batch_size, self.num_nbrs[hop])
+            for batch_idx, node in enumerate(seed_nodes):
+                for nbr_idx, (nbr_id, nbr_time) in enumerate(nbrs[node.item()][hop]):
+                    nbr_ids[batch_idx, nbr_idx] = nbr_id
+                    nbr_times[batch_idx, nbr_idx] = nbr_time
+                    src_nbr_mask[batch_idx, nbr_idx] = 1
+                    # nbr_feats[batch_idx, nbr_idx] = nbr_feat
+            return nbr_ids, nbr_times, nbr_feats, src_nbr_mask
+
+        batch.src_nbrs = [_parse_nbrs(batch.src, hop=0)]  # type: ignore
+        batch.dst_nbrs = [_parse_nbrs(batch.dst, hop=0)]  # type: ignore
+        batch.neg_nbrs = [_parse_nbrs(batch.src, hop=0)]  # type: ignore
         return batch

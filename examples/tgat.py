@@ -1,6 +1,6 @@
 import argparse
 from pprint import pprint
-from typing import Tuple
+from typing import List, Tuple
 
 import torch
 import torch.nn as nn
@@ -75,43 +75,28 @@ class TGAT(nn.Module):
         self.embed_dim = embed_dim
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        batch_size = len(batch.src)
-        num_nbrs = 20
-
-        # TODO: This is terrible, should change get_nbrs to return the right format
-        def _parse_nbrs(seed_nodes: torch.Tensor, hop: int) -> Tuple[torch.Tensor, ...]:
-            src_nbrs = torch.empty(batch_size, num_nbrs, dtype=torch.long)
-            src_nbr_times = torch.empty(batch_size, num_nbrs)
-            src_nbr_feats = torch.zeros(batch_size, num_nbrs, self.edge_dim)
-            src_nbr_mask = torch.zeros(batch_size, num_nbrs)
-            for batch_idx, node in enumerate(seed_nodes):
-                nbrs = batch.nbrs[node.item()][hop]
-                for nbr_idx, (nbr_id, nbr_time) in enumerate(nbrs):
-                    src_nbrs[batch_idx, nbr_idx] = nbr_id
-                    src_nbr_times[batch_idx, nbr_idx] = nbr_time
-                    src_nbr_mask[batch_idx, nbr_idx] = 1
-                    # src_nbr_feats[batch_idx, nbr_idx] = nbr_feat
-            return src_nbrs, src_nbr_times, src_nbr_feats, src_nbr_mask
-
         def _recursive_forward(
-            src: torch.Tensor, time: torch.Tensor, hop: int
+            src: torch.Tensor,
+            nbrs: List[Tuple[torch.Tensor, ...]],
+            time: torch.Tensor,
+            hop: int,
         ) -> torch.Tensor:
             if hop == 0:
                 return torch.zeros((*src.shape, self.embed_dim))
-            nbr_nodes, nbr_times, nbr_feats, nbr_mask = _parse_nbrs(src, hop=hop - 1)
+            nbr_nodes, nbr_times, nbr_feats, nbr_mask = nbrs[hop - 1]
             return self.attn[hop - 1](
-                node_feat=_recursive_forward(src, time, hop - 1),
-                nbr_node_feat=_recursive_forward(nbr_nodes, nbr_times, hop - 1),
-                time_feat=self.time_encoder(torch.zeros(batch_size)),
+                node_feat=_recursive_forward(src, nbrs, time, hop - 1),
+                nbr_node_feat=_recursive_forward(nbr_nodes, nbrs, nbr_times, hop - 1),
+                time_feat=self.time_encoder(torch.zeros(len(src))),
                 nbr_time_feat=self.time_encoder(nbr_times - time[:, None]),
                 edge_feat=nbr_feats,
                 nbr_mask=nbr_mask,
             )
 
         # TODO: Make this a single forward pass (add src/dst/neg mask as in TGN)
-        z_src = _recursive_forward(batch.src, batch.time, hop=1)
-        z_dst = _recursive_forward(batch.dst, batch.time, hop=1)
-        z_neg = _recursive_forward(batch.src, batch.time, hop=1)  # TODO: batch.neg
+        z_src = _recursive_forward(batch.src, batch.src_nbrs, batch.time, hop=1)
+        z_dst = _recursive_forward(batch.dst, batch.dst_nbrs, batch.time, hop=1)
+        z_neg = _recursive_forward(batch.src, batch.neg_nbrs, batch.time, hop=1)
 
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
