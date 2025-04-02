@@ -1,6 +1,6 @@
 import argparse
 from pprint import pprint
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -71,32 +71,27 @@ class TGAT(nn.Module):
         )
 
         # Temporary
-        self.edge_dim = edge_dim
         self.embed_dim = embed_dim
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        def _recursive_forward(
-            src: torch.Tensor,
-            nbrs: List[Tuple[torch.Tensor, ...]],
-            time: torch.Tensor,
-            hop: int,
-        ) -> torch.Tensor:
-            if hop == 0:
-                return torch.zeros((*src.shape, self.embed_dim))
-            nbr_nodes, nbr_times, nbr_feats, nbr_mask = nbrs[hop - 1]
-            return self.attn[hop - 1](
-                node_feat=_recursive_forward(src, nbrs, time, hop - 1),
-                nbr_node_feat=_recursive_forward(nbr_nodes, nbrs, nbr_times, hop - 1),
+        hop = 0
+
+        # TODO: Go back to recursive embedding for multi-hop
+        def _embed(src: torch.Tensor, nbrs: Tuple[torch.Tensor, ...]) -> torch.Tensor:
+            nbr_nodes, nbr_times, nbr_feat, nbr_mask = nbrs
+            return self.attn[hop](
+                node_feat=torch.zeros((*src.shape, self.embed_dim)),
+                nbr_node_feat=torch.zeros((*nbr_nodes.shape, self.embed_dim)),
                 time_feat=self.time_encoder(torch.zeros(len(src))),
-                nbr_time_feat=self.time_encoder(nbr_times - time[:, None]),
-                edge_feat=nbr_feats,
+                nbr_time_feat=self.time_encoder(nbr_times - batch.time[:, None]),
+                edge_feat=nbr_feat,
                 nbr_mask=nbr_mask,
             )
 
         # TODO: Make this a single forward pass (add src/dst/neg mask as in TGN)
-        z_src = _recursive_forward(batch.src, batch.src_nbrs, batch.time, hop=1)
-        z_dst = _recursive_forward(batch.dst, batch.dst_nbrs, batch.time, hop=1)
-        z_neg = _recursive_forward(batch.src, batch.neg_nbrs, batch.time, hop=1)
+        z_src = _embed(batch.src, batch.src_nbrs[hop])
+        z_dst = _embed(batch.dst, batch.dst_nbrs[hop])
+        z_neg = _embed(batch.dst, batch.dst_nbrs[hop])  # TODO: Chain negative edge hook
 
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
