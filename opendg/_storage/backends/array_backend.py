@@ -96,6 +96,45 @@ class DGStorageArrayBackend(DGStorageBase):
                 num_events += 1
         return num_events
 
+    def get_nbrs2(
+        self,
+        seed: Tensor,
+        num_nbrs: List[int],
+        slice: DGSliceTracker,
+    ) -> Tuple[List[Tensor], ...]:
+        # TODO: Take in a sample_func to enable more than uniform sampling
+        if len(num_nbrs) > 1:
+            raise NotImplementedError(f'Multi-hop not implemented')
+        n_nbrs = num_nbrs[0]
+        seed_nodes, inverse_indices = seed.unique(return_inverse=True)
+        seed_nodes_set = set(seed_nodes.tolist())
+
+        nbrs: Dict[int, Set[Tuple[int, int]]] = {node: set() for node in seed_nodes_set}
+        for i in range(*self._binary_search(slice)):
+            event = self._events[i]
+            if isinstance(event, EdgeEvent):
+                edge = event.edge
+                if slice.node_slice is None or all(x in slice.node_slice for x in edge):
+                    if event.src in seed_nodes_set:
+                        nbrs[event.src].add((event.dst, event.t))
+                    if event.dst in seed_nodes_set:
+                        nbrs[event.dst].add((event.src, event.t))
+
+        nbr_nids = torch.empty(len(seed), n_nbrs, dtype=torch.long)
+        nbr_times = torch.empty(len(seed), n_nbrs, dtype=torch.long)
+        nbr_feats = torch.zeros(len(seed), n_nbrs, self._edge_feats_dim)  # type: ignore
+        nbr_mask = torch.zeros(len(seed), n_nbrs, dtype=torch.long)
+        for i, nbrs_list in enumerate(nbrs.values()):
+            node_nbrs = list(nbrs_list)
+            if n_nbrs != -1 and len(node_nbrs) > n_nbrs:
+                node_nbrs = random.sample(node_nbrs, k=n_nbrs)
+            nn = len(node_nbrs)
+            mask = inverse_indices == i
+            nbr_nids[mask, :nn] = torch.tensor([x[0] for x in node_nbrs])
+            nbr_times[mask, :nn] = torch.tensor([x[1] for x in node_nbrs])
+            nbr_mask[mask, :nn] = 1
+        return [seed], [nbr_nids], [nbr_times.float()], [nbr_feats], [nbr_mask]
+
     def get_nbrs(
         self,
         seed_nodes: Set[int],

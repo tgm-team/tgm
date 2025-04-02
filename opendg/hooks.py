@@ -63,30 +63,12 @@ class NeighborSamplerHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize()
-        nbrs = dg._storage.get_nbrs(
-            seed_nodes=dg.nodes,
-            num_nbrs=self.num_nbrs,
-            slice=DGSliceTracker(end_idx=dg._slice.end_idx),
+        batch = dg.materialize(materialize_features=False)
+        batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
+            dg._storage.get_nbrs2(
+                seed=torch.cat([batch.src, batch.dst, batch.dst]),
+                num_nbrs=self.num_nbrs,
+                slice=DGSliceTracker(end_idx=dg._slice.end_idx),
+            )
         )
-
-        # TODO: This is terrible, should change get_nbrs to return the right format
-        hop = 0
-        seed_nodes = torch.cat([batch.src, batch.dst, batch.dst])
-        nbr_nids = torch.empty(len(seed_nodes), self.num_nbrs[hop], dtype=torch.long)
-        nbr_times = torch.empty(len(seed_nodes), self.num_nbrs[hop])
-        nbr_feats = torch.zeros(len(seed_nodes), self.num_nbrs[hop], dg.edge_feats_dim)  # type: ignore
-        nbr_mask = torch.zeros(len(seed_nodes), self.num_nbrs[hop])
-        for batch_idx, node in enumerate(seed_nodes):
-            for nbr_idx, (nbr_id, nbr_time) in enumerate(nbrs[node.item()][hop]):
-                nbr_nids[batch_idx, nbr_idx] = nbr_id
-                nbr_times[batch_idx, nbr_idx] = nbr_time
-                nbr_mask[batch_idx, nbr_idx] = 1
-                # nbr_feats[batch_idx, nbr_idx] = nbr_feat
-
-        batch.nids = [seed_nodes]  # type: ignore
-        batch.nbr_nids = [nbr_nids]  # type: ignore
-        batch.nbr_times = [nbr_times]  # type: ignore
-        batch.nbr_feats = [nbr_feats]  # type: ignore
-        batch.nbr_mask = [nbr_mask]  # type: ignore
         return batch
