@@ -74,31 +74,32 @@ class TGAT(nn.Module):
         self.embed_dim = embed_dim
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO: TGAT Multi-hop forward
         batch_size = len(batch.src)
+
+        # TODO: Get these from the batch
+        num_nbrs = 20
+        nbr_nodes = batch.src.unsqueeze(dim=1).repeat(1, num_nbrs)
+        nbr_times = batch.time.unsqueeze(dim=1).repeat(1, num_nbrs).float()
+        nbr_edge_feats = batch.edge_feats.unsqueeze(dim=1).repeat(1, num_nbrs, 1)
 
         def _recursive_forward(
             src: torch.Tensor, time: torch.Tensor, layer: int
         ) -> torch.Tensor:
             if layer == 0:
                 return torch.zeros((*src.shape, self.embed_dim))
-
-            # TODO: Get these from the batch
-            num_nbrs = 20
-            nbr_nodes = src.unsqueeze(dim=1).repeat(1, num_nbrs)
-            nbr_times = time.unsqueeze(dim=1).repeat(1, num_nbrs).float()
             return self.attn[layer - 1](
                 node_feat=_recursive_forward(src, time, layer - 1),
                 nbr_node_feat=_recursive_forward(nbr_nodes, nbr_times, layer - 1),
                 time_feat=self.time_encoder(torch.zeros(batch_size)),
                 nbr_time_feat=self.time_encoder(nbr_times - time[:, None]),
-                edge_feat=batch.edge_feats.unsqueeze(dim=1).repeat(1, num_nbrs, 1),
+                edge_feat=nbr_edge_feats,
                 nbr_mask=nbr_nodes >= 0,
             )
 
+        # TODO: Make this a single forward pass (add src/dst/neg mask as in TGN)
         z_src = _recursive_forward(batch.src, batch.time, layer=1)
         z_dst = _recursive_forward(batch.dst, batch.time, layer=1)
-        z_neg = _recursive_forward(batch.src, batch.time, layer=1)
+        z_neg = _recursive_forward(batch.src, batch.time, layer=1)  # TODO: batch.neg
 
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
