@@ -63,7 +63,7 @@ class NeighborSamplerHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize()
+        batch = dg.materialize(materialize_features=False)
         batch.nbrs = dg._storage.get_nbrs(  # type: ignore
             seed_nodes=dg.nodes,
             num_nbrs=self.num_nbrs,
