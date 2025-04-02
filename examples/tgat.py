@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from torchmetrics.retrieval import RetrievalHitRate, RetrievalMRR
+from tqdm import tqdm
 
 from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NeighborSamplerHook
@@ -73,13 +74,7 @@ class TGAT(nn.Module):
         self.embed_dim = embed_dim
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO: TGAT Multi-hop forward pass
-        # src, dst, time = batch.src, batch.dst, batch.time
-        # node_feats, edge_feats = batch.node_feats, batch.edge_feats
-        # out = self.attn(node_feats, time_feat, edge_feat, nbr_node_feat, nbr_time_feat, nbr_mask)
-        # pos_prob = self.link_predictor(self.src_embed, self.dst_embed)
-        # neg_prob = self.link_predictor(self.src_embed, self.neg_embed)
-
+        # TODO: TGAT Multi-hop forward
         z_src = torch.rand(len(batch.src), self.embed_dim)
         z_dst = torch.rand(len(batch.src), self.embed_dim)
         z_neg = torch.rand(len(batch.src), self.embed_dim)
@@ -99,13 +94,13 @@ class LinkPredictor(nn.Module):
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         h = self.lin_src(z_src) + self.lin_dst(z_dst)
         h = h.relu()
-        return self.lin_out(h)
+        return self.lin_out(h).sigmoid().view(-1)
 
 
 def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) -> float:
     model.train()
     total_loss = 0
-    for batch in loader:
+    for batch in tqdm(loader):
         opt.zero_grad()
         pos_out, neg_out = model(batch)
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
@@ -119,14 +114,14 @@ def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) ->
 @torch.no_grad()
 def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
     model.eval()
-    for batch in loader:
+    for batch in tqdm(loader):
         pos_out, neg_out = model(batch)
-        y_pred = torch.cat([pos_out, neg_out], dim=0).sigmoid()
+        y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = torch.cat(
             [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-        )
-        indexes = torch.zeros(y_pred.size(0))
-        metrics(y_true, y_pred.long(), indexes=indexes.long())
+        ).long()
+        indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
+        metrics(y_pred, y_true, indexes=indexes)
     pprint(metrics.compute())
 
 
