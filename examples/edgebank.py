@@ -36,12 +36,12 @@ def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> Non
     for batch in tqdm(loader):
         pos_out = model(batch.src, batch.dst)
         neg_out = model(batch.src, batch.neg)
-        y_pred = torch.cat([pos_out, neg_out], dim=0)
+        y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = torch.cat(
             [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-        )
-        indexes = torch.zeros(y_pred.size(0))
-        metrics(y_true, y_pred.long(), indexes=indexes.long())
+        ).long()
+        indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
+        metrics(y_pred, y_true, indexes=indexes)
     pprint(metrics.compute())
 
 
