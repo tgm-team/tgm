@@ -5,6 +5,7 @@ import torch
 from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from torchmetrics.retrieval import RetrievalHitRate, RetrievalMRR
+from tqdm import tqdm
 
 from opendg.graph import DGraph
 from opendg.hooks import NegativeEdgeSamplerHook
@@ -32,7 +33,7 @@ parser.add_argument(
 
 
 def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> None:
-    for batch in loader:
+    for batch in tqdm(loader):
         pos_out = model(batch.src, batch.dst)
         neg_out = model(batch.src, batch.neg)
         y_pred = torch.cat([pos_out, neg_out], dim=0)
