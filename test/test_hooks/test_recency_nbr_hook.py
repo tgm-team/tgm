@@ -28,6 +28,5 @@ def test_neighbor_sampler_hook(events):
     dg = DGraph(events)
     hook = RecencyNeighborSamplerHook(num_nbrs=[2], num_nodes=dg.num_nodes)
     batch = hook(dg)
-    assert isinstance(batch, DGBatch)
-    print(batch.nbrs)
     # TODO: Add logic for testing
+    assert isinstance(batch, DGBatch)
