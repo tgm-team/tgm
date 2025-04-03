@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from queue import Queue
-from typing import Any, Dict, List, Protocol
+from collections import deque
+from typing import Any, Deque, Dict, List, Protocol
 
 import torch
 
@@ -82,7 +82,7 @@ class NeighborSamplerHook:
 
 
 class RecencyNeighborSamplerHook:
-    r"""Load neighbors from DGraph using a recency sampling strategy where each node maintains a fixed number of most recent neighbors.
+    r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
@@ -99,7 +99,7 @@ class RecencyNeighborSamplerHook:
         if len(num_nbrs) > 1:
             raise ValueError('RecencyNeighborSamplerHook only supports 1 hop for now')
         self._num_nbrs = num_nbrs
-        self._nbr_dict: Dict[int, List[Queue[Any]]] = {}
+        self._nbr_dict: Dict[int, List[Deque[Any]]] = {}
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -107,9 +107,7 @@ class RecencyNeighborSamplerHook:
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
-        src = batch.src
-        dst = batch.dst
-        nids = torch.unique(torch.cat((src, dst)))
+        nids = torch.unique(torch.cat((batch.src, batch.dst)))
         out_nbrs: Dict[int, List[torch.Tensor]] = {}
 
         # retrieve recent neighbors for each node
@@ -117,44 +115,34 @@ class RecencyNeighborSamplerHook:
             if node not in self._nbr_dict:
                 if batch.edge_feats is not None:
                     self._nbr_dict[node] = [
-                        Queue(maxsize=self._num_nbrs[0]),
-                        Queue(maxsize=self._num_nbrs[0]),
-                        Queue(maxsize=self._num_nbrs[0]),
+                        deque(maxlen=self._num_nbrs[0]),
+                        deque(maxlen=self._num_nbrs[0]),
+                        deque(maxlen=self._num_nbrs[0]),
                     ]
                 else:
                     self._nbr_dict[node] = [
-                        Queue(maxsize=self._num_nbrs[0]),
-                        Queue(maxsize=self._num_nbrs[0]),
+                        deque(maxlen=self._num_nbrs[0]),
+                        deque(maxlen=self._num_nbrs[0]),
                     ]
 
-            out_nbrs[node] = []  # (dst,time, edge_feats)
-            out_nbrs[node].append(
-                torch.tensor(list(self._nbr_dict[node][0].queue))
-            )  # dst
-            out_nbrs[node].append(
-                torch.tensor(list(self._nbr_dict[node][1].queue))
-            )  # time
+            out_nbrs[node] = []  # (dst, time, edge_feats)
+            out_nbrs[node].append(torch.tensor(self._nbr_dict[node][0]))
+            out_nbrs[node].append(torch.tensor(self._nbr_dict[node][1]))
             if batch.edge_feats is not None:
-                if self._nbr_dict[node][2].empty():
-                    out_nbrs[node].append(torch.tensor([]))
+                if len(self._nbr_dict[node][2]):
+                    # stack edge_feats [num_edge, num_feats]
+                    out_nbrs[node].append(torch.stack(list(self._nbr_dict[node][2])))
                 else:
-                    out_nbrs[node].append(
-                        torch.stack(list(self._nbr_dict[node][2].queue))
-                    )  # stack edge_feats [num_edge, num_feats]
+                    out_nbrs[node].append(torch.tensor([]))
 
         # add new neighbors to the recency dict
         #! do we need it to be undirected? don't think so, thus only adding src->dst
-        for i in range(src.size(0)):
-            src_nbr = int(src[i].item())
-            if self._nbr_dict[src_nbr][0].full():
-                # pop the oldest neighbor
-                for k in range(len(self._nbr_dict[src_nbr])):
-                    self._nbr_dict[src_nbr][k].get()
-
-            self._nbr_dict[src_nbr][0].put(dst[i].item())
-            self._nbr_dict[src_nbr][1].put(batch.time[i].item())
+        for i in range(batch.src.size(0)):
+            src_nbr = int(batch.src[i].item())
+            self._nbr_dict[src_nbr][0].append(batch.dst[i].item())
+            self._nbr_dict[src_nbr][1].append(batch.time[i].item())
             if batch.edge_feats is not None:
-                self._nbr_dict[src_nbr][2].put(batch.edge_feats[i])
+                self._nbr_dict[src_nbr][2].append(batch.edge_feats[i])
 
         batch.nbrs = out_nbrs  # type: ignore
         return batch
