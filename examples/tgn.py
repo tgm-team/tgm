@@ -35,9 +35,8 @@ class TGN(torch.nn.Module):
             time_dim=self.node_dim,
             embed_dim=self.embed_dim,
         )
-        self.link_predictor = LinkPredictor(self.node_dim)
 
-    def forward(self, src, dst, neg_nodes, edge_times, edge_idxs, n_nbrs=20):
+    def forward(self, src, dst, neg_nodes, edge_times, edge_idxs):
         unique_nodes, unique_msg, unique_times = self.msg_agg(
             list(range(self.n_nodes)), self.memory.msgs
         )
@@ -51,12 +50,10 @@ class TGN(torch.nn.Module):
         dst_time_diff = torch.LongTensor(edge_times) - last_update[dst].long()
         neg_time_diff = torch.LongTensor(edge_times) - last_update[neg_nodes].long()
 
-        z = self.gat(
+        pos_out, neg_out = self.gat(
             memory=memory,
             src=np.concatenate([src, dst, neg_nodes]),
             time=np.concatenate([edge_times, edge_times, edge_times]),
-            num_layers=self.num_layers,
-            n_nbrs=n_nbrs,
             time_diffs=torch.cat([src_time_diff, dst_time_diff, neg_time_diff], dim=0),
         )
 
@@ -76,9 +73,6 @@ class TGN(torch.nn.Module):
         self.memory.store_raw_msgs(unique_src, src_to_msgs)
         self.memory.store_raw_msgs(unique_dst, dst_to_msgs)
 
-        z_src, z_dst, z_neg = z.chunk(3, dim=0)
-        pos_out = self.link_predictor(z_src, z_dst)
-        neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
 
     def _get_raw_msgs(self, src, dst, edge_times, edge_idxs):
@@ -86,13 +80,10 @@ class TGN(torch.nn.Module):
         edge_feats = self.edge_raw_features[edge_idxs]
         src_memory = self.memory.get_memory(src)
         dst_memory = self.memory.get_memory(dst)
-        src_time_delta = edge_times - self.memory.last_update[src]
-        src_time_delta_encoding = self.time_encoder(
-            src_time_delta.unsqueeze(dim=1)
-        ).view(len(src), -1)
+        time_delta = edge_times - self.memory.last_update[src]
+        time_feat = self.time_encoder(time_delta.unsqueeze(dim=1)).view(len(src), -1)
 
-        msg = [src_memory, dst_memory, edge_feats, src_time_delta_encoding]
-        src_msg = torch.cat(msg, dim=1)
+        src_msg = torch.cat([src_memory, dst_memory, edge_feats, time_feat], dim=1)
         msgs = defaultdict(list)
         unique_src = np.unique(src)
         for i in range(len(src)):
@@ -136,6 +127,7 @@ class GraphAttentionEmbedding(nn.Module):
         super().__init__()
         self.node_feats, self.edge_feats = node_feats, edge_feats
         self.time_encoder = time_encoder
+        self.link_predictor = LinkPredictor(self.node_dim)
         self.attn = nn.ModuleList(
             [
                 TemporalAttention(
@@ -150,35 +142,32 @@ class GraphAttentionEmbedding(nn.Module):
             ]
         )
 
-    def forward(self, memory, src, time, num_layers, n_nbrs=20):
+    def forward(self, memory, src, time, n_nbrs=20):
+        # TODO: Go back to recursive embedding for multi-hop
+        hop = 0
         src_torch = torch.from_numpy(src).long()
         node_feat = memory[src, :] + self.node_feats[src_torch, :]
-        if num_layers == 0:
-            return node_feat
-        node_feat = self.forward(
-            memory, src, time, num_layers=num_layers - 1, n_nbrs=n_nbrs
-        )
         time_torch = torch.unsqueeze(torch.from_numpy(time).float(), dim=1)
         time_feat = self.time_encoder(torch.zeros_like(time_torch))
         nbrs, edge_idxs, edge_times = self.nbr_finder.get_nbrs(src, time, n_nbrs)
-        nbrs_torch = torch.from_numpy(nbrs).long()
         edge_idxs = torch.from_numpy(edge_idxs).long()
         time_delta = torch.from_numpy(time[:, None] - edge_times).float()
-        nbr_embeddings = self.forward(
-            memory,
-            nbrs.flatten(),
-            np.repeat(time, n_nbrs),
-            num_layers=num_layers - 1,
-            n_nbrs=n_nbrs,
-        ).view(len(src), n_nbrs, -1)
-        return self.attn[num_layers - 1](
+
+        nbrs_torch = torch.from_numpy(nbrs).long()
+        nbr_feat = memory[nbrs, :] + self.node_feats[nbrs_torch, :]
+        nbr_feat = nbr_feat.view(len(src), n_nbrs, -1)
+        z = self.attn[hop](
             node_feat=node_feat,
             time_feat=time_feat,
-            nbr_node_feat=nbr_embeddings,
+            nbr_node_feat=nbr_feat,
             nbr_time_feat=self.time_encoder(time_delta),
             edge_feat=self.edge_feats[edge_idxs, :],
             nbr_mask=nbrs_torch == 0,
         )
+        z_src, z_dst, z_neg = z.chunk(3, dim=0)
+        pos_out = self.link_predictor(z_src, z_dst)
+        neg_out = self.link_predictor(z_src, z_neg)
+        return pos_out, neg_out
 
 
 class GRUMemoryUpdater(nn.Module):
