@@ -17,25 +17,17 @@ def events():
 
 def test_bad_neighbor_sampler_init():
     with pytest.raises(ValueError):
-        RecencyNeighborSamplerHook(num_nbrs=[0])
+        RecencyNeighborSamplerHook(num_nbrs=[0], num_nodes=2)
     with pytest.raises(ValueError):
-        RecencyNeighborSamplerHook(num_nbrs=[-1])
+        RecencyNeighborSamplerHook(num_nbrs=[-1], num_nodes=2)
     with pytest.raises(ValueError):
-        RecencyNeighborSamplerHook(num_nbrs=[1, 2])
+        RecencyNeighborSamplerHook(num_nbrs=[1, 2], num_nodes=2)
 
 
 def test_neighbor_sampler_hook(events):
     dg = DGraph(events)
-    hook = RecencyNeighborSamplerHook(num_nbrs=[2])
+    hook = RecencyNeighborSamplerHook(num_nbrs=[2], num_nodes=dg.num_nodes)
     batch = hook(dg)
     assert isinstance(batch, DGBatch)
     print(batch.nbrs)
     # TODO: Add logic for testing
-
-
-@pytest.mark.skip('TODO')
-def test_bad_neighbor_sampler_init():
-    with pytest.raises(ValueError):
-        LastNeighborHook(num_nodes=0, size=10)
-    with pytest.raises(ValueError):
-        LastNeighborHook(num_nodes=10, size=0)
