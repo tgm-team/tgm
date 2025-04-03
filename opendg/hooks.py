@@ -26,6 +26,10 @@ class NegativeEdgeSamplerHook:
     """
 
     def __init__(self, low: int, high: int, neg_sampling_ratio: float = 1.0) -> None:
+        if not 0 < neg_sampling_ratio <= 1:
+            raise ValueError('neg_sampling_ratio must be in (0, 1]')
+        if not low < high:
+            raise ValueError(f'low ({low}) must be strictly less than high ({high})')
         self.low = low
         self.high = high
         self.neg_sampling_ratio = neg_sampling_ratio
@@ -43,7 +47,6 @@ class NeighborSamplerHook:
 
     Args:
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
-        **kwargs (Any): Additional arguments to the DGDataLoader
 
     Raises:
         ValueError: If the num_nbrs list is empty.
@@ -61,24 +64,13 @@ class NeighborSamplerHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph) -> DGBatch:
-        slice = DGSliceTracker(end_time=dg.start_time, end_idx=dg._slice.start_idx)
-        nbrs = dg._storage.get_nbrs(
-            seed_nodes=dg.nodes, num_nbrs=self.num_nbrs, slice=slice
+        batch = dg.materialize()
+        batch.nbrs = dg._storage.get_nbrs(  # type: ignore
+            seed_nodes=dg.nodes,
+            num_nbrs=self.num_nbrs,
+            slice=DGSliceTracker(end_idx=dg._slice.end_idx),
         )
-        temporal_nbrhood = dg.nodes
-        for seed_nbrhood in nbrs.values():
-            for node, _ in seed_nbrhood[-1]:  # Only care about final hop
-                temporal_nbrhood.add(node)  # Don't care about time info either
-
-        # TODO: Verify we don't need the original graph!!!!
-        # batch = self._dg.slice_events(end_idx=batch._slice.end_idx)
-        # batch = batch.slice_nodes(list(temporal_nbrhood))
-        # if self._iterate_by_time: # TODO: We need to store info about whether we are iterating by time or events
-        # batch = self._dg.slice_time(end_time=batch.end_time)
-        dg._slice = DGSliceTracker(
-            end_idx=dg._slice.start_idx, node_slice=temporal_nbrhood
-        )
-        return dg.materialize()
+        return batch
 
 
 class RecencyNeighborSamplerHook:

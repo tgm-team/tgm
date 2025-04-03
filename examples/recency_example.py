@@ -1,5 +1,7 @@
 import argparse
 
+from tqdm import tqdm
+
 from opendg.graph import DGraph
 from opendg.hooks import RecencyNeighborSamplerHook
 from opendg.loader import DGDataLoader
@@ -25,5 +27,5 @@ loader = DGDataLoader(
 )
 
 with Usage('RecencySampler'):
-    for batch in loader:
+    for batch in tqdm(loader):
         ...
