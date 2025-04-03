@@ -74,13 +74,21 @@ class TGAT(nn.Module):
         self.embed_dim = embed_dim
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO: TGAT Multi-hop forward
-        z_src = torch.rand(len(batch.src), self.embed_dim)
-        z_dst = torch.rand(len(batch.src), self.embed_dim)
-        z_neg = torch.rand(len(batch.src), self.embed_dim)
-
-        pos_out = self.link_predictor(z_src, z_dst).view(-1)
-        neg_out = self.link_predictor(z_src, z_neg).view(-1)
+        # TODO: Go back to recursive embedding for multi-hop
+        hop = 0
+        z = self.attn[hop](
+            node_feat=torch.zeros((*batch.nids[hop].shape, self.embed_dim)),
+            nbr_node_feat=torch.zeros((*batch.nbr_nids[hop].shape, self.embed_dim)),
+            time_feat=self.time_encoder(torch.zeros(len(batch.nids[hop]))),
+            nbr_time_feat=self.time_encoder(
+                batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
+            ),
+            edge_feat=batch.nbr_feats[hop],
+            nbr_mask=batch.nbr_mask[hop],
+        )
+        z_src, z_dst, z_neg = z.chunk(3, dim=0)
+        pos_out = self.link_predictor(z_src, z_dst)
+        neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
 
 

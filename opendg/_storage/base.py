@@ -1,7 +1,7 @@
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple
 
 from torch import Tensor
 
@@ -59,10 +59,10 @@ class DGStorageBase(ABC):
     @abstractmethod
     def get_nbrs(
         self,
-        seed_nodes: Set[int],
+        seed_nodes: Tensor,
         num_nbrs: List[int],
         slice: DGSliceTracker,
-    ) -> Dict[int, List[List[Tuple[int, int]]]]: ...
+    ) -> Tuple[List[Tensor], ...]: ...
 
     def _sort_events_list_if_needed(self, events: List[Event]) -> List[Event]:
         if not all(isinstance(event, Event) for event in events):

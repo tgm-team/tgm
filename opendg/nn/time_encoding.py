@@ -19,5 +19,5 @@ class Time2Vec(nn.Module):
         self.w.bias = torch.nn.Parameter(torch.zeros(time_dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.unsqueeze(dim=-1)  # (batch_size, seq_len, 1)
+        x = x.unsqueeze(dim=-1).float()  # (batch_size, seq_len, 1)
         return torch.cos(self.w(x))

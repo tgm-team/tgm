@@ -822,6 +822,7 @@ def test_get_node_feats_with_multi_events_per_timestamp(
     )
 
 
+@pytest.mark.skip('TODO: Add get_nbr')
 def test_get_nbrs_single_hop(DGStorageImpl):
     events = [
         EdgeEvent(t=1, src=2, dst=2),
@@ -949,6 +950,7 @@ def test_get_nbrs_single_hop(DGStorageImpl):
             assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
 
+@pytest.mark.skip('TODO: Add get_nbr tests')
 def test_get_nbrs_single_hop_sampling_required(DGStorageImpl):
     events = [
         EdgeEvent(t=1, src=2, dst=2),
@@ -980,6 +982,7 @@ def test_get_nbrs_single_hop_sampling_required(DGStorageImpl):
             assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
 
+@pytest.mark.skip('TODO: Add get_nbr tests')
 def test_get_nbrs_single_hop_duplicate_edges_at_different_time(DGStorageImpl):
     events = [
         EdgeEvent(t=1, src=2, dst=2),

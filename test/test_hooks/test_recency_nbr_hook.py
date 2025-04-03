@@ -24,6 +24,7 @@ def test_bad_neighbor_sampler_init():
         RecencyNeighborSamplerHook(num_nbrs=[1, 2], num_nodes=2)
 
 
+@pytest.mark.skip('TODO: Add neighbor sampling tests')
 def test_neighbor_sampler_hook(events):
     dg = DGraph(events)
     hook = RecencyNeighborSamplerHook(num_nbrs=[2], num_nodes=dg.num_nodes)

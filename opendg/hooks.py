@@ -64,11 +64,13 @@ class NeighborSamplerHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize()
-        batch.nbrs = dg._storage.get_nbrs(  # type: ignore
-            seed_nodes=dg.nodes,
-            num_nbrs=self.num_nbrs,
-            slice=DGSliceTracker(end_idx=dg._slice.end_idx),
+        batch = dg.materialize(materialize_features=False)
+        batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
+            dg._storage.get_nbrs(
+                seed_nodes=torch.cat([batch.src, batch.dst, batch.dst]),  # TODO:
+                num_nbrs=self.num_nbrs,
+                slice=DGSliceTracker(end_idx=dg._slice.end_idx),
+            )
         )
         return batch
 

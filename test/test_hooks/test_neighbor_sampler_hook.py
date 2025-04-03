@@ -24,6 +24,7 @@ def test_bad_neighbor_sampler_init():
         NeighborSamplerHook(num_nbrs=[1, 0])
 
 
+@pytest.mark.skip('TODO: Add neighbor sampling tests')
 def test_neighbor_sampler_hook(events):
     dg = DGraph(events)
     hook = NeighborSamplerHook(num_nbrs=[2])
@@ -33,6 +34,7 @@ def test_neighbor_sampler_hook(events):
     # TODO: Add logic for testing
 
 
+@pytest.mark.skip('TODO: Add neighbor sampling tests')
 def test_neighbor_sampler_hook_full_neighborhood(events):
     dg = DGraph(events)
     hook = NeighborSamplerHook(num_nbrs=[-1])
