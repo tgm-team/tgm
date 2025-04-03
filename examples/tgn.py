@@ -8,13 +8,7 @@ from opendg.nn import TemporalAttention, Time2Vec
 
 
 class TGN(torch.nn.Module):
-    def __init__(
-        self,
-        node_feats,
-        edge_feats,
-        num_layers=2,
-        memory_dim=500,
-    ):
+    def __init__(self, node_feats, edge_feats, num_layers=2, memory_dim=500):
         super().__init__()
         self.num_layers = num_layers
         self.node_raw_features = torch.from_numpy(node_feats.astype(np.float32))
@@ -31,7 +25,7 @@ class TGN(torch.nn.Module):
         msg_dim = 2 * self.memory_dim + self.edge_dim + self.time_encoder.time_dim
         self.memory = Memory(n_nodes=self.n_nodes, memory_dim=self.memory_dim)
         self.memory_updater = GRUMemoryUpdater(self.memory, msg_dim, self.memory_dim)
-        self.gat_embedding = GraphAttentionEmbedding(
+        self.gat = GraphAttentionEmbedding(
             node_feats=self.node_raw_features,
             edge_feats=self.edge_raw_features,
             time_encoder=self.time_encoder,
@@ -43,15 +37,7 @@ class TGN(torch.nn.Module):
         )
         self.link_predictor = LinkPredictor(self.node_dim)
 
-    def forward(
-        self,
-        src,
-        dst,
-        neg_nodes,
-        edge_times,
-        edge_idxs,
-        n_nbrs=20,
-    ):
+    def forward(self, src, dst, neg_nodes, edge_times, edge_idxs, n_nbrs=20):
         unique_nodes, unique_msg, unique_times = self.msg_agg(
             list(range(self.n_nodes)), self.memory.msgs
         )
@@ -65,10 +51,10 @@ class TGN(torch.nn.Module):
         dst_time_diff = torch.LongTensor(edge_times) - last_update[dst].long()
         neg_time_diff = torch.LongTensor(edge_times) - last_update[neg_nodes].long()
 
-        z = self.gat_embedding.compute_embedding(
+        z = self.gat(
             memory=memory,
             src=np.concatenate([src, dst, neg_nodes]),
-            timestamps=np.concatenate([edge_times, edge_times, edge_times]),
+            time=np.concatenate([edge_times, edge_times, edge_times]),
             num_layers=self.num_layers,
             n_nbrs=n_nbrs,
             time_diffs=torch.cat([src_time_diff, dst_time_diff, neg_time_diff], dim=0),
@@ -79,7 +65,7 @@ class TGN(torch.nn.Module):
         unique_nodes, unique_msg, unique_times = self.msg_agg(pos, self.memory.msg)
         if len(unique_nodes) > 0:
             unique_msg = self.msg_func(unique_msg)
-        self.memory_updater.update(unique_nodes, unique_msg, timestamps=unique_times)
+        self.memory_updater.update(unique_nodes, unique_msg, time=unique_times)
         assert torch.allclose(
             memory[pos], self.memory.get_memory(pos), atol=1e-5
         ), 'Something wrong in how the memory was updated'
@@ -95,13 +81,7 @@ class TGN(torch.nn.Module):
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
 
-    def _get_raw_msgs(
-        self,
-        src,
-        dst,
-        edge_times,
-        edge_idxs,
-    ):
+    def _get_raw_msgs(self, src, dst, edge_times, edge_idxs):
         edge_times = torch.from_numpy(edge_times).float()
         edge_feats = self.edge_raw_features[edge_idxs]
         src_memory = self.memory.get_memory(src)
@@ -170,58 +150,34 @@ class GraphAttentionEmbedding(nn.Module):
             ]
         )
 
-    def compute_embedding(
-        self,
-        memory,
-        src,
-        timestamps,
-        num_layers,
-        n_nbrs=20,
-    ):
-        src_nodes_torch = torch.from_numpy(src).long()
-        timestamps_torch = torch.unsqueeze(torch.from_numpy(timestamps).float(), dim=1)
-
-        # query node always has the start time -> time span == 0
-        src_nodes_time_embedding = self.time_encoder(torch.zeros_like(timestamps_torch))
-        src_node_features = self.node_feats[src_nodes_torch, :]
-        src_node_features = memory[src, :] + src_node_features
-
+    def forward(self, memory, src, time, num_layers, n_nbrs=20):
+        src_torch = torch.from_numpy(src).long()
+        node_feat = memory[src, :] + self.node_feats[src_torch, :]
         if num_layers == 0:
-            return src_node_features
-        src_node_features = self.compute_embedding(
-            memory,
-            src,
-            timestamps,
-            num_layers=num_layers - 1,
-            n_nbrs=n_nbrs,
+            return node_feat
+        node_feat = self.forward(
+            memory, src, time, num_layers=num_layers - 1, n_nbrs=n_nbrs
         )
-
-        nbrs, edge_idxs, edge_times = self.nbr_finder.get_nbrs(
-            src, timestamps, n_nbrs=n_nbrs
-        )
-
-        neighbors_torch = torch.from_numpy(nbrs).long()
+        time_torch = torch.unsqueeze(torch.from_numpy(time).float(), dim=1)
+        time_feat = self.time_encoder(torch.zeros_like(time_torch))
+        nbrs, edge_idxs, edge_times = self.nbr_finder.get_nbrs(src, time, n_nbrs)
+        nbrs_torch = torch.from_numpy(nbrs).long()
         edge_idxs = torch.from_numpy(edge_idxs).long()
-        edge_deltas = timestamps[:, np.newaxis] - edge_times
-        edge_deltas_torch = torch.from_numpy(edge_deltas).float()
-        nbrs = nbrs.flatten()
-        nbr_embeddings = self.compute_embedding(
+        time_delta = torch.from_numpy(time[:, None] - edge_times).float()
+        nbr_embeddings = self.forward(
             memory,
-            nbrs,
-            np.repeat(timestamps, n_nbrs),
+            nbrs.flatten(),
+            np.repeat(time, n_nbrs),
             num_layers=num_layers - 1,
             n_nbrs=n_nbrs,
         ).view(len(src), n_nbrs, -1)
-        edge_time_embeddings = self.time_encoder(edge_deltas_torch)
-        edge_feats = self.edge_feats[edge_idxs, :]
-        mask = neighbors_torch == 0
         return self.attn[num_layers - 1](
-            src_node_features,
-            src_nodes_time_embedding,
-            nbr_embeddings,
-            edge_time_embeddings,
-            edge_feats,
-            mask,
+            node_feat=node_feat,
+            time_feat=time_feat,
+            nbr_node_feat=nbr_embeddings,
+            nbr_time_feat=self.time_encoder(time_delta),
+            edge_feat=self.edge_feats[edge_idxs, :],
+            nbr_mask=nbrs_torch == 0,
         )
 
 
@@ -233,29 +189,29 @@ class GRUMemoryUpdater(nn.Module):
         self.msg_dim = msg_dim
         self.memory_updater = nn.GRUCell(input_size=msg_dim, hidden_size=memory_dim)
 
-    def update(self, unique_node_ids, unique_msg, timestamps):
+    def update(self, unique_node_ids, unique_msg, time):
         if len(unique_node_ids) <= 0:
             return
         assert (
-            (self.memory.get_last_update(unique_node_ids) <= timestamps).all().item()
+            (self.memory.get_last_update(unique_node_ids) <= time).all().item()
         ), 'Trying to update memory to time in the past'
         memory = self.memory.get_memory(unique_node_ids)
-        self.memory.last_update[unique_node_ids] = timestamps
+        self.memory.last_update[unique_node_ids] = time
         updated_memory = self.memory_updater(unique_msg, memory)
         self.memory.set_memory(unique_node_ids, updated_memory)
 
-    def get_updated_memory(self, unique_node_ids, unique_msg, timestamps):
+    def get_updated_memory(self, unique_node_ids, unique_msg, time):
         if len(unique_node_ids) <= 0:
             return self.memory.memory.data.clone(), self.memory.last_update.data.clone()
         assert (
-            (self.memory.get_last_update(unique_node_ids) <= timestamps).all().item()
+            (self.memory.get_last_update(unique_node_ids) <= time).all().item()
         ), 'Trying to update memory to time in the past'
         updated_memory = self.memory.memory.data.clone()
         updated_memory[unique_node_ids] = self.memory_updater(
             unique_msg, updated_memory[unique_node_ids]
         )
         updated_last_update = self.memory.last_update.data.clone()
-        updated_last_update[unique_node_ids] = timestamps
+        updated_last_update[unique_node_ids] = time
         return updated_memory, updated_last_update
 
 
