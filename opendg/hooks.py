@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from queue import Queue
-from typing import List, Protocol
+from collections import deque
+from typing import Any, Deque, Dict, List, Protocol
 
 import torch
 
@@ -82,22 +82,17 @@ class NeighborSamplerHook:
 
 
 class RecencyNeighborSamplerHook:
-    r"""Load neighbors from DGraph using a recency sampling strategy where each node maintains a fixed number of most recent neighbors.
+    r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
-        num_nbrs (List[int]): Number of neighbors to sample at each hop, also indicates the max number of neighbors to keep in the recency sampling strategy. (int must be > 0)
-        return_nbr_graph (bool): Whether to return the neighbor graph in DGBatch or not. Default is False, if True, the DGBatch edges in this case will not be sorted chronologically.
-        **kwargs (Any): Additional arguments to the DGDataLoader
+        num_nodes (int): Total number of nodes to track.
+        num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
 
     Raises:
         ValueError: If the num_nbrs list is empty.
     """
 
-    def __init__(
-        self,
-        num_nbrs: List[int],
-        return_nbr_graph: bool = False,
-    ) -> None:
+    def __init__(self, num_nodes: int, num_nbrs: List[int]) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
@@ -105,8 +100,9 @@ class RecencyNeighborSamplerHook:
         if len(num_nbrs) > 1:
             raise ValueError('RecencyNeighborSamplerHook only supports 1 hop for now')
         self._num_nbrs = num_nbrs
-        self.return_nbr_graph = return_nbr_graph
-        self._nbr_dict = {}  # {node_id: queue(maxlen=num_nbr)} # one queue for dst id, time, edge_feats
+        self._nbrs: Dict[int, List[Deque[Any]]] = {}
+        for node in range(num_nodes):
+            self._nbrs[node] = [deque(maxlen=num_nbrs[0]) for _ in range(3)]
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -114,63 +110,28 @@ class RecencyNeighborSamplerHook:
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
-        """
-        src: Tensor
-        dst: Tensor
-        time: Tensor
-        node_feats: Optional[Tensor] = None
-        edge_feats: Optional[Tensor] = None
-        """
-        src = batch.src
-        dst = batch.dst
-        nids = torch.unique(torch.cat((src, dst)))
-        out_nbrs = {}
+        nids = torch.unique(torch.cat((batch.src, batch.dst)))
+        out_nbrs: Dict[int, List[torch.Tensor]] = {}
 
-        # retrieve recent neighbors for each node
         for node in nids.tolist():
-            if node not in self._nbr_dict:
-                if batch.edge_feats is not None:
-                    self._nbr_dict[node] = [
-                        Queue(maxsize=self._num_nbrs[0]),
-                        Queue(maxsize=self._num_nbrs[0]),
-                        Queue(maxsize=self._num_nbrs[0]),
-                    ]
-                else:
-                    self._nbr_dict[node] = [
-                        Queue(maxsize=self._num_nbrs[0]),
-                        Queue(maxsize=self._num_nbrs[0]),
-                    ]
-
-            out_nbrs[node] = []  # (dst,time, edge_feats)
-            out_nbrs[node].append(torch.tensor(list(self._nbr_dict[node][0].queue))) #dst
-            out_nbrs[node].append(torch.tensor(list(self._nbr_dict[node][1].queue))) #time
+            out_nbrs[node] = [
+                torch.tensor(self._nbrs[node][0]),
+                torch.tensor(self._nbrs[node][1]),
+            ]
             if batch.edge_feats is not None:
-                if (self._nbr_dict[node][2].empty()):
+                if len(self._nbrs[node][2]):  # stack edge_feats [num_edge, num_feats]
+                    out_nbrs[node].append(torch.stack(list(self._nbrs[node][2])))
+                else:
                     out_nbrs[node].append(torch.tensor([]))
-                else:
-                    out_nbrs[node].append(torch.stack(list(self._nbr_dict[node][2].queue))) # stack edge_feats [num_edge, num_feats]
-                  
-        # add new neighbors to the recency dict
+        batch.nbrs = out_nbrs  # type: ignore
+        self._update(batch)
+        return batch
+
+    def _update(self, batch: DGBatch) -> None:
         #! do we need it to be undirected? don't think so, thus only adding src->dst
-        for i in range(src.size(0)):
-            src_nbr = src[i].item()
-            if self._nbr_dict[src_nbr][0].full():
-                # pop the oldest neighbor
-                for k in range(len(self._nbr_dict[src_nbr])):
-                    self._nbr_dict[src_nbr][k].get()
-
-            self._nbr_dict[src_nbr][0].put(dst[i].item())
-            self._nbr_dict[src_nbr][1].put(batch.time[i].item())
+        for i in range(batch.src.size(0)):
+            src_nbr = int(batch.src[i].item())
+            self._nbrs[src_nbr][0].append(batch.dst[i].item())
+            self._nbrs[src_nbr][1].append(batch.time[i].item())
             if batch.edge_feats is not None:
-                self._nbr_dict[src_nbr][2].put(batch.edge_feats[i])
-
-        
-        batch.nbrs = out_nbrs
-        # create the new batch
-        if self.return_nbr_graph:
-            raise NotImplementedError(
-                'RecencyNeighborSamplerHook currently does not support returning the neighbor graph'
-            )
-        else:
-            return batch
-
+                self._nbrs[src_nbr][2].append(batch.edge_feats[i])
