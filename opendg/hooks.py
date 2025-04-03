@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Protocol
+from collections import deque
+from typing import Any, Deque, Dict, List, Protocol
 
 import torch
 
@@ -72,3 +73,59 @@ class NeighborSamplerHook:
             )
         )
         return batch
+
+
+class RecencyNeighborSamplerHook:
+    r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
+
+    Args:
+        num_nodes (int): Total number of nodes to track.
+        num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
+
+    Raises:
+        ValueError: If the num_nbrs list is empty.
+    """
+
+    def __init__(self, num_nodes: int, num_nbrs: List[int]) -> None:
+        if not len(num_nbrs):
+            raise ValueError('num_nbrs must be non-empty')
+        if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
+            raise ValueError('Each value in num_nbrs must be a positive integer')
+        if len(num_nbrs) > 1:
+            raise ValueError('RecencyNeighborSamplerHook only supports 1 hop for now')
+        self._num_nbrs = num_nbrs
+        self._nbrs: Dict[int, List[Deque[Any]]] = {}
+        for node in range(num_nodes):
+            self._nbrs[node] = [deque(maxlen=num_nbrs[0]) for _ in range(3)]
+
+    @property
+    def num_nbrs(self) -> List[int]:
+        return self._num_nbrs
+
+    def __call__(self, dg: DGraph) -> DGBatch:
+        batch = dg.materialize()
+        nids = torch.unique(torch.cat((batch.src, batch.dst)))
+        out_nbrs: Dict[int, List[torch.Tensor]] = {}
+
+        for node in nids.tolist():
+            out_nbrs[node] = [
+                torch.tensor(self._nbrs[node][0]),
+                torch.tensor(self._nbrs[node][1]),
+            ]
+            if batch.edge_feats is not None:
+                if len(self._nbrs[node][2]):  # stack edge_feats [num_edge, num_feats]
+                    out_nbrs[node].append(torch.stack(list(self._nbrs[node][2])))
+                else:
+                    out_nbrs[node].append(torch.tensor([]))
+        batch.nbrs = out_nbrs  # type: ignore
+        self._update(batch)
+        return batch
+
+    def _update(self, batch: DGBatch) -> None:
+        #! do we need it to be undirected? don't think so, thus only adding src->dst
+        for i in range(batch.src.size(0)):
+            src_nbr = int(batch.src[i].item())
+            self._nbrs[src_nbr][0].append(batch.dst[i].item())
+            self._nbrs[src_nbr][1].append(batch.time[i].item())
+            if batch.edge_feats is not None:
+                self._nbrs[src_nbr][2].append(batch.edge_feats[i])
