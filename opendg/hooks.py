@@ -99,7 +99,7 @@ class RecencyNeighborSamplerHook:
         if len(num_nbrs) > 1:
             raise ValueError('RecencyNeighborSamplerHook only supports 1 hop for now')
         self._num_nbrs = num_nbrs
-        self._nbr_dict: Dict[int, List[Deque[Any]]] = {}
+        self._nbrs: Dict[int, List[Deque[Any]]] = {}
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -110,39 +110,30 @@ class RecencyNeighborSamplerHook:
         nids = torch.unique(torch.cat((batch.src, batch.dst)))
         out_nbrs: Dict[int, List[torch.Tensor]] = {}
 
-        # retrieve recent neighbors for each node
         for node in nids.tolist():
-            if node not in self._nbr_dict:
-                if batch.edge_feats is not None:
-                    self._nbr_dict[node] = [
-                        deque(maxlen=self._num_nbrs[0]),
-                        deque(maxlen=self._num_nbrs[0]),
-                        deque(maxlen=self._num_nbrs[0]),
-                    ]
-                else:
-                    self._nbr_dict[node] = [
-                        deque(maxlen=self._num_nbrs[0]),
-                        deque(maxlen=self._num_nbrs[0]),
-                    ]
+            if node not in self._nbrs:
+                num_queues = 3 if batch.edge_feats is not None else 2
+                self._nbrs[node] = [
+                    deque(maxlen=self.num_nbrs[0]) for _ in range(num_queues)
+                ]
 
-            out_nbrs[node] = []  # (dst, time, edge_feats)
-            out_nbrs[node].append(torch.tensor(self._nbr_dict[node][0]))
-            out_nbrs[node].append(torch.tensor(self._nbr_dict[node][1]))
+            out_nbrs[node] = [
+                torch.tensor(self._nbrs[node][0]),
+                torch.tensor(self._nbrs[node][1]),
+            ]
             if batch.edge_feats is not None:
-                if len(self._nbr_dict[node][2]):
+                if len(self._nbrs[node][2]):
                     # stack edge_feats [num_edge, num_feats]
-                    out_nbrs[node].append(torch.stack(list(self._nbr_dict[node][2])))
+                    out_nbrs[node].append(torch.stack(list(self._nbrs[node][2])))
                 else:
                     out_nbrs[node].append(torch.tensor([]))
+        batch.nbrs = out_nbrs  # type: ignore
 
-        # add new neighbors to the recency dict
         #! do we need it to be undirected? don't think so, thus only adding src->dst
         for i in range(batch.src.size(0)):
             src_nbr = int(batch.src[i].item())
-            self._nbr_dict[src_nbr][0].append(batch.dst[i].item())
-            self._nbr_dict[src_nbr][1].append(batch.time[i].item())
+            self._nbrs[src_nbr][0].append(batch.dst[i].item())
+            self._nbrs[src_nbr][1].append(batch.time[i].item())
             if batch.edge_feats is not None:
-                self._nbr_dict[src_nbr][2].append(batch.edge_feats[i])
-
-        batch.nbrs = out_nbrs  # type: ignore
+                self._nbrs[src_nbr][2].append(batch.edge_feats[i])
         return batch
