@@ -1,16 +1,9 @@
 import argparse
-from pprint import pprint
 import timeit
-import torch
-from torchmetrics import Metric, MetricCollection
-from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
-from torchmetrics.retrieval import RetrievalHitRate, RetrievalMRR
 
 from opendg.graph import DGraph
-from opendg.hooks import NegativeEdgeSamplerHook,RecencyNeighborSamplerHook
+from opendg.hooks import RecencyNeighborSamplerHook
 from opendg.loader import DGDataLoader
-from opendg.nn import EdgeBankPredictor
-from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
