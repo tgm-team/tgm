@@ -112,23 +112,22 @@ class RecencyNeighborSamplerHook:
 
         for node in nids.tolist():
             if node not in self._nbrs:
-                num_queues = 3 if batch.edge_feats is not None else 2
-                self._nbrs[node] = [
-                    deque(maxlen=self.num_nbrs[0]) for _ in range(num_queues)
-                ]
-
+                n_q = 3 if batch.edge_feats is not None else 2
+                self._nbrs[node] = [deque(maxlen=self.num_nbrs[0]) for _ in range(n_q)]
             out_nbrs[node] = [
                 torch.tensor(self._nbrs[node][0]),
                 torch.tensor(self._nbrs[node][1]),
             ]
             if batch.edge_feats is not None:
-                if len(self._nbrs[node][2]):
-                    # stack edge_feats [num_edge, num_feats]
+                if len(self._nbrs[node][2]):  # stack edge_feats [num_edge, num_feats]
                     out_nbrs[node].append(torch.stack(list(self._nbrs[node][2])))
                 else:
                     out_nbrs[node].append(torch.tensor([]))
         batch.nbrs = out_nbrs  # type: ignore
+        self._update(batch)
+        return batch
 
+    def _update(self, batch: DGBatch) -> None:
         #! do we need it to be undirected? don't think so, thus only adding src->dst
         for i in range(batch.src.size(0)):
             src_nbr = int(batch.src[i].item())
@@ -136,4 +135,3 @@ class RecencyNeighborSamplerHook:
             self._nbrs[src_nbr][1].append(batch.time[i].item())
             if batch.edge_feats is not None:
                 self._nbrs[src_nbr][2].append(batch.edge_feats[i])
-        return batch
