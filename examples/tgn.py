@@ -18,10 +18,6 @@ class TGN(torch.nn.Module):
         dropout=0.1,
         message_dimension=100,
         memory_dimension=500,
-        mean_time_shift_src=0,
-        std_time_shift_src=1,
-        mean_time_shift_dst=0,
-        std_time_shift_dst=1,
         n_neighbors=None,
         use_destination_embedding_in_message=False,
         use_source_embedding_in_message=False,
@@ -40,12 +36,6 @@ class TGN(torch.nn.Module):
         self.use_source_embedding_in_message = use_source_embedding_in_message
         self.time_encoder = Time2Vec(time_dim=self.node_dim)
         self.memory = None
-
-        self.mean_time_shift_src = mean_time_shift_src
-        self.std_time_shift_src = std_time_shift_src
-        self.mean_time_shift_dst = mean_time_shift_dst
-        self.std_time_shift_dst = std_time_shift_dst
-
         self.memory_dimension = memory_dimension
 
         raw_message_dimension = (
@@ -85,13 +75,13 @@ class TGN(torch.nn.Module):
         self,
         src_ndoes,
         dst_nodes,
-        negative_nodes,
+        neg_nodes,
         edge_times,
         edge_idxs,
         n_neighbors=20,
     ):
         n_samples = len(src_ndoes)
-        nodes = np.concatenate([src_ndoes, dst_nodes, negative_nodes])
+        nodes = np.concatenate([src_ndoes, dst_nodes, neg_nodes])
         positives = np.concatenate([src_ndoes, dst_nodes])
         timestamps = np.concatenate([edge_times, edge_times, edge_times])
 
@@ -105,19 +95,8 @@ class TGN(torch.nn.Module):
         ### Compute differences between the time the memory of a node was last updated,
         ### and the time for which we want to compute the embedding of a node
         src_time_diffs = torch.LongTensor(edge_times) - last_update[src_ndoes].long()
-        src_time_diffs = (
-            src_time_diffs - self.mean_time_shift_src
-        ) / self.std_time_shift_src
         dst_time_diffs = torch.LongTensor(edge_times) - last_update[dst_nodes].long()
-        dst_time_diffs = (
-            dst_time_diffs - self.mean_time_shift_dst
-        ) / self.std_time_shift_dst
-        neg_time_diffs = (
-            torch.LongTensor(edge_times) - last_update[negative_nodes].long()
-        )
-        neg_time_diffs = (
-            neg_time_diffs - self.mean_time_shift_dst
-        ) / self.std_time_shift_dst
+        neg_time_diffs = torch.LongTensor(edge_times) - last_update[neg_nodes].long()
 
         time_diffs = torch.cat([src_time_diffs, dst_time_diffs, neg_time_diffs], dim=0)
 
@@ -168,7 +147,7 @@ class TGN(torch.nn.Module):
         self,
         src_ndoes,
         dst_nodes,
-        negative_nodes,
+        neg_nodes,
         edge_times,
         edge_idxs,
         n_neighbors=20,
@@ -177,7 +156,7 @@ class TGN(torch.nn.Module):
         z_src, z_dst, z_neg = self.compute_temporal_embeddings(
             src_ndoes,
             dst_nodes,
-            negative_nodes,
+            neg_nodes,
             edge_times,
             edge_idxs,
             n_neighbors,
@@ -236,33 +215,27 @@ class TGN(torch.nn.Module):
             else z_dst
         )
         src_time_delta = edge_times - self.memory.last_update[src_ndoes]
-        source_time_delta_encoding = self.time_encoder(
+        src_time_delta_encoding = self.time_encoder(
             src_time_delta.unsqueeze(dim=1)
         ).view(len(src_ndoes), -1)
 
-        source_message = torch.cat(
+        src_message = torch.cat(
             [
                 src_memory,
                 dst_memory,
                 edge_features,
-                source_time_delta_encoding,
+                src_time_delta_encoding,
             ],
             dim=1,
         )
         messages = defaultdict(list)
         unique_src = np.unique(src_ndoes)
         for i in range(len(src_ndoes)):
-            messages[src_ndoes[i]].append((source_message[i], edge_times[i]))
+            messages[src_ndoes[i]].append((src_message[i], edge_times[i]))
         return unique_src, messages
 
 
 class LastMessageAggregator(torch.nn.Module):
-    def group_by_id(self, node_ids, messages, timestamps):
-        node_id_to_messages = defaultdict(list)
-        for i, node_id in enumerate(node_ids):
-            node_id_to_messages[node_id].append((messages[i], timestamps[i]))
-        return node_id_to_messages
-
     def aggregate(self, node_ids, messages):
         unique_node_ids = np.unique(node_ids)
         unique_msg, unique_timestamps, to_update_node_ids = [], [], []
@@ -343,49 +316,46 @@ class GraphAttentionEmbedding(nn.Module):
 
         if num_layers == 0:
             return src_node_features
-        else:
-            src_node_features = self.compute_embedding(
-                memory,
-                src_ndoes,
-                timestamps,
-                num_layers=num_layers - 1,
-                n_neighbors=n_neighbors,
-            )
+        src_node_features = self.compute_embedding(
+            memory,
+            src_ndoes,
+            timestamps,
+            num_layers=num_layers - 1,
+            n_neighbors=n_neighbors,
+        )
 
-            neighbors, edge_idxs, edge_times = (
-                self.neighbor_finder.get_temporal_neighbor(
-                    src_ndoes, timestamps, n_neighbors=n_neighbors
-                )
-            )
+        neighbors, edge_idxs, edge_times = self.neighbor_finder.get_temporal_neighbor(
+            src_ndoes, timestamps, n_neighbors=n_neighbors
+        )
 
-            neighbors_torch = torch.from_numpy(neighbors).long()
-            edge_idxs = torch.from_numpy(edge_idxs).long()
-            edge_deltas = timestamps[:, np.newaxis] - edge_times
-            edge_deltas_torch = torch.from_numpy(edge_deltas).float()
-            neighbors = neighbors.flatten()
-            neighbor_embeddings = self.compute_embedding(
-                memory,
-                neighbors,
-                np.repeat(timestamps, n_neighbors),
-                num_layers=num_layers - 1,
-                n_neighbors=n_neighbors,
-            )
+        neighbors_torch = torch.from_numpy(neighbors).long()
+        edge_idxs = torch.from_numpy(edge_idxs).long()
+        edge_deltas = timestamps[:, np.newaxis] - edge_times
+        edge_deltas_torch = torch.from_numpy(edge_deltas).float()
+        neighbors = neighbors.flatten()
+        neighbor_embeddings = self.compute_embedding(
+            memory,
+            neighbors,
+            np.repeat(timestamps, n_neighbors),
+            num_layers=num_layers - 1,
+            n_neighbors=n_neighbors,
+        )
 
-            effective_n_neighbors = n_neighbors if n_neighbors > 0 else 1
-            neighbor_embeddings = neighbor_embeddings.view(
-                len(src_ndoes), effective_n_neighbors, -1
-            )
-            edge_time_embeddings = self.time_encoder(edge_deltas_torch)
-            edge_features = self.edge_features[edge_idxs, :]
-            mask = neighbors_torch == 0
-            return self.attn[num_layers - 1](
-                src_node_features,
-                src_nodes_time_embedding,
-                neighbor_embeddings,
-                edge_time_embeddings,
-                edge_features,
-                mask,
-            )
+        effective_n_neighbors = n_neighbors if n_neighbors > 0 else 1
+        neighbor_embeddings = neighbor_embeddings.view(
+            len(src_ndoes), effective_n_neighbors, -1
+        )
+        edge_time_embeddings = self.time_encoder(edge_deltas_torch)
+        edge_features = self.edge_features[edge_idxs, :]
+        mask = neighbors_torch == 0
+        return self.attn[num_layers - 1](
+            src_node_features,
+            src_nodes_time_embedding,
+            neighbor_embeddings,
+            edge_time_embeddings,
+            edge_features,
+            mask,
+        )
 
 
 class GRUMemoryUpdater(nn.Module):
