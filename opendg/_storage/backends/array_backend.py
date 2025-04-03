@@ -96,9 +96,9 @@ class DGStorageArrayBackend(DGStorageBase):
                 num_events += 1
         return num_events
 
-    def get_nbrs2(
+    def get_nbrs(
         self,
-        seed: Tensor,
+        seed_nodes: Tensor,
         num_nbrs: List[int],
         slice: DGSliceTracker,
     ) -> Tuple[List[Tensor], ...]:
@@ -106,7 +106,7 @@ class DGStorageArrayBackend(DGStorageBase):
         if len(num_nbrs) > 1:
             raise NotImplementedError(f'Multi-hop not implemented')
         n_nbrs = num_nbrs[0]
-        seed_nodes, inverse_indices = seed.unique(return_inverse=True)
+        seed_nodes, inverse_indices = seed_nodes.unique(return_inverse=True)
         seed_nodes_set = set(seed_nodes.tolist())
 
         nbrs: Dict[int, Set[Tuple[int, int]]] = {node: set() for node in seed_nodes_set}
@@ -120,10 +120,11 @@ class DGStorageArrayBackend(DGStorageBase):
                     if event.dst in seed_nodes_set:
                         nbrs[event.dst].add((event.src, event.t))
 
-        nbr_nids = torch.empty(len(seed), n_nbrs, dtype=torch.long)
-        nbr_times = torch.empty(len(seed), n_nbrs, dtype=torch.long)
-        nbr_feats = torch.zeros(len(seed), n_nbrs, self._edge_feats_dim)  # type: ignore
-        nbr_mask = torch.zeros(len(seed), n_nbrs, dtype=torch.long)
+        batch_size = len(seed_nodes)
+        nbr_nids = torch.empty(batch_size, n_nbrs, dtype=torch.long)
+        nbr_times = torch.empty(batch_size, n_nbrs, dtype=torch.long)
+        nbr_feats = torch.zeros(batch_size, n_nbrs, self._edge_feats_dim)  # type: ignore
+        nbr_mask = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
         for i, nbrs_list in enumerate(nbrs.values()):
             node_nbrs = list(nbrs_list)
             if n_nbrs != -1 and len(node_nbrs) > n_nbrs:
@@ -133,41 +134,7 @@ class DGStorageArrayBackend(DGStorageBase):
             nbr_nids[mask, :nn] = torch.tensor([x[0] for x in node_nbrs])
             nbr_times[mask, :nn] = torch.tensor([x[1] for x in node_nbrs])
             nbr_mask[mask, :nn] = 1
-        return [seed], [nbr_nids], [nbr_times.float()], [nbr_feats], [nbr_mask]
-
-    def get_nbrs(
-        self,
-        seed_nodes: Set[int],
-        num_nbrs: List[int],
-        slice: DGSliceTracker,
-    ) -> Dict[int, List[List[Tuple[int, int]]]]:
-        # TODO: Take in a sample_func to enable more than uniform sampling
-        if len(num_nbrs) > 1:
-            raise NotImplementedError(f'Multi-hop not implemented')
-
-        T = Tuple[int, int]
-        nbrs: Dict[int, List[Set[T]]] = {node: [set()] for node in seed_nodes}
-        sampled_nbrs: Dict[int, List[List[T]]] = {node: [[]] for node in seed_nodes}
-        if not len(self._events):
-            return sampled_nbrs
-
-        hop = 0
-        for i in range(*self._binary_search(slice)):
-            event = self._events[i]
-            if isinstance(event, EdgeEvent):
-                edge = event.edge
-                if slice.node_slice is None or all(x in slice.node_slice for x in edge):
-                    if event.src in seed_nodes:
-                        nbrs[event.src][hop].add((event.dst, event.t))
-                    if event.dst in seed_nodes:
-                        nbrs[event.dst][hop].add((event.src, event.t))
-
-        for node, nbrs_list in nbrs.items():
-            node_nbrs = list(nbrs_list[hop])
-            if num_nbrs[hop] != -1 and len(node_nbrs) > num_nbrs[hop]:
-                node_nbrs = random.sample(node_nbrs, k=num_nbrs[hop])
-            sampled_nbrs[node] = [node_nbrs]
-        return sampled_nbrs
+        return [seed_nodes], [nbr_nids], [nbr_times.float()], [nbr_feats], [nbr_mask]
 
     def get_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         max_time, max_node_id = -1, -1  # Assuming these are both non-negative
