@@ -106,8 +106,8 @@ class DGStorageArrayBackend(DGStorageBase):
         if len(num_nbrs) > 1:
             raise NotImplementedError(f'Multi-hop not implemented')
         n_nbrs = num_nbrs[0]
-        seed_nodes, inverse_indices = seed_nodes.unique(return_inverse=True)
-        seed_nodes_set = set(seed_nodes.tolist())
+        unique, inverse_indices = seed_nodes.unique(return_inverse=True)
+        seed_nodes_set = set(unique.tolist())
 
         nbrs: Dict[int, Set[Tuple[int, int]]] = {node: set() for node in seed_nodes_set}
         for i in range(*self._binary_search(slice)):
@@ -115,26 +115,39 @@ class DGStorageArrayBackend(DGStorageBase):
             if isinstance(event, EdgeEvent):
                 edge = event.edge
                 if slice.node_slice is None or all(x in slice.node_slice for x in edge):
+                    # Use 0/1 flag to denote dst/src neighbor, respectively
                     if event.src in seed_nodes_set:
-                        nbrs[event.src].add((event.dst, event.t))
+                        nbrs[event.src].add((i, 1))
                     if event.dst in seed_nodes_set:
-                        nbrs[event.dst].add((event.src, event.t))
+                        nbrs[event.dst].add((i, 0))
 
+        # TODO: Node feats
         batch_size = len(seed_nodes)
         nbr_nids = torch.empty(batch_size, n_nbrs, dtype=torch.long)
         nbr_times = torch.empty(batch_size, n_nbrs, dtype=torch.long)
         nbr_feats = torch.zeros(batch_size, n_nbrs, self._edge_feats_dim)  # type: ignore
         nbr_mask = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
-        for i, nbrs_list in enumerate(nbrs.values()):
-            node_nbrs = list(nbrs_list)
+        for i, nbrs_set in enumerate(nbrs.values()):
+            node_nbrs = list(nbrs_set)
             if n_nbrs != -1 and len(node_nbrs) > n_nbrs:
                 node_nbrs = random.sample(node_nbrs, k=n_nbrs)
+
+            nbr_nids_, nbr_times_, nbr_feats_ = [], [], []
+            for event_idx, edge_idx in node_nbrs:
+                nbr_nids_.append(self._events[event_idx].edge[edge_idx])  # type: ignore
+                nbr_times_.append(self._events[event_idx].t)
+                if self._events[event_idx].features is not None:
+                    nbr_feats_.append(self._events[event_idx].features)
+                else:
+                    raise NotImplementedError('Some edges do not have features')
+
             nn = len(node_nbrs)
             mask = inverse_indices == i
-            nbr_nids[mask, :nn] = torch.tensor([x[0] for x in node_nbrs])
-            nbr_times[mask, :nn] = torch.tensor([x[1] for x in node_nbrs])
+            nbr_nids[mask, :nn] = torch.tensor(nbr_nids_)
+            nbr_times[mask, :nn] = torch.tensor(nbr_times_)
+            nbr_feats[mask, :nn] = torch.stack(nbr_feats_)  # type: ignore
             nbr_mask[mask, :nn] = 1
-        return [seed_nodes], [nbr_nids], [nbr_times.float()], [nbr_feats], [nbr_mask]
+        return [seed_nodes], [nbr_nids], [nbr_times], [nbr_feats], [nbr_mask]
 
     def get_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         max_time, max_node_id = -1, -1  # Assuming these are both non-negative
