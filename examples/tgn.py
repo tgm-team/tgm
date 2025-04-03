@@ -36,7 +36,7 @@ class TGN(torch.nn.Module):
             embed_dim=self.embed_dim,
         )
 
-    def forward(self, src, dst, neg_nodes, edge_times, edge_idxs):
+    def forward(self, src, dst, neg, time, edge_idxs):
         unique_nodes, unique_msg, unique_times = self.msg_agg(
             list(range(self.n_nodes)), self.memory.msgs
         )
@@ -46,14 +46,14 @@ class TGN(torch.nn.Module):
             unique_nodes, unique_msg, unique_times
         )
 
-        src_time_diff = torch.LongTensor(edge_times) - last_update[src].long()
-        dst_time_diff = torch.LongTensor(edge_times) - last_update[dst].long()
-        neg_time_diff = torch.LongTensor(edge_times) - last_update[neg_nodes].long()
+        src_time_diff = torch.LongTensor(time) - last_update[src].long()
+        dst_time_diff = torch.LongTensor(time) - last_update[dst].long()
+        neg_time_diff = torch.LongTensor(time) - last_update[neg].long()
 
         pos_out, neg_out = self.gat(
             memory=memory,
-            src=np.concatenate([src, dst, neg_nodes]),
-            time=np.concatenate([edge_times, edge_times, edge_times]),
+            src=np.concatenate([src, dst, neg]),
+            time=np.concatenate([time, time, time]),
             time_diffs=torch.cat([src_time_diff, dst_time_diff, neg_time_diff], dim=0),
         )
 
@@ -68,26 +68,26 @@ class TGN(torch.nn.Module):
         ), 'Something wrong in how the memory was updated'
         # Remove msgs for the pos since we have already updated the memory using them
         self.memory.clear_msgs(pos)
-        unique_src, src_to_msgs = self._get_raw_msgs(src, dst, edge_times, edge_idxs)
-        unique_dst, dst_to_msgs = self._get_raw_msgs(dst, src, edge_times, edge_idxs)
+        unique_src, src_to_msgs = self._get_raw_msgs(src, dst, time, edge_idxs)
+        unique_dst, dst_to_msgs = self._get_raw_msgs(dst, src, time, edge_idxs)
         self.memory.store_raw_msgs(unique_src, src_to_msgs)
         self.memory.store_raw_msgs(unique_dst, dst_to_msgs)
 
         return pos_out, neg_out
 
-    def _get_raw_msgs(self, src, dst, edge_times, edge_idxs):
-        edge_times = torch.from_numpy(edge_times).float()
+    def _get_raw_msgs(self, src, dst, time, edge_idxs):
+        time = torch.from_numpy(time).float()
         edge_feats = self.edge_raw_features[edge_idxs]
         src_memory = self.memory.get_memory(src)
         dst_memory = self.memory.get_memory(dst)
-        time_delta = edge_times - self.memory.last_update[src]
+        time_delta = time - self.memory.last_update[src]
         time_feat = self.time_encoder(time_delta.unsqueeze(dim=1)).view(len(src), -1)
 
         src_msg = torch.cat([src_memory, dst_memory, edge_feats, time_feat], dim=1)
         msgs = defaultdict(list)
         unique_src = np.unique(src)
         for i in range(len(src)):
-            msgs[src[i]].append((src_msg[i], edge_times[i]))
+            msgs[src[i]].append((src_msg[i], time[i]))
         return unique_src, msgs
 
 
@@ -149,9 +149,9 @@ class GraphAttentionEmbedding(nn.Module):
         node_feat = memory[src, :] + self.node_feats[src_torch, :]
         time_torch = torch.unsqueeze(torch.from_numpy(time).float(), dim=1)
         time_feat = self.time_encoder(torch.zeros_like(time_torch))
-        nbrs, edge_idxs, edge_times = self.nbr_finder.get_nbrs(src, time, n_nbrs)
+        nbrs, edge_idxs, time = self.nbr_finder.get_nbrs(src, time, n_nbrs)
         edge_idxs = torch.from_numpy(edge_idxs).long()
-        time_delta = torch.from_numpy(time[:, None] - edge_times).float()
+        time_delta = torch.from_numpy(time[:, None] - time).float()
 
         nbrs_torch = torch.from_numpy(nbrs).long()
         nbr_feat = memory[nbrs, :] + self.node_feats[nbrs_torch, :]
