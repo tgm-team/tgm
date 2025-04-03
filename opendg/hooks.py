@@ -85,13 +85,14 @@ class RecencyNeighborSamplerHook:
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
+        num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
 
     Raises:
         ValueError: If the num_nbrs list is empty.
     """
 
-    def __init__(self, num_nbrs: List[int]) -> None:
+    def __init__(self, num_nodes: int, num_nbrs: List[int]) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
@@ -100,6 +101,8 @@ class RecencyNeighborSamplerHook:
             raise ValueError('RecencyNeighborSamplerHook only supports 1 hop for now')
         self._num_nbrs = num_nbrs
         self._nbrs: Dict[int, List[Deque[Any]]] = {}
+        for node in range(num_nodes):
+            self._nbrs[node] = [deque(maxlen=num_nbrs[0]) for _ in range(3)]
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -111,9 +114,6 @@ class RecencyNeighborSamplerHook:
         out_nbrs: Dict[int, List[torch.Tensor]] = {}
 
         for node in nids.tolist():
-            if node not in self._nbrs:
-                n_q = 3 if batch.edge_feats is not None else 2
-                self._nbrs[node] = [deque(maxlen=self.num_nbrs[0]) for _ in range(n_q)]
             out_nbrs[node] = [
                 torch.tensor(self._nbrs[node][0]),
                 torch.tensor(self._nbrs[node][1]),

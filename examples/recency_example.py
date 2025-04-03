@@ -24,7 +24,7 @@ start_time = timeit.default_timer()
 
 loader = DGDataLoader(
     dg,
-    hook=RecencyNeighborSamplerHook(num_nbrs=[20]),
+    hook=RecencyNeighborSamplerHook(num_nbrs=[20], num_nodes=dg.num_nodes),
     batch_size=args.bsize,
 )
 
