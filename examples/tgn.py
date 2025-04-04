@@ -8,94 +8,83 @@ from opendg.nn import TemporalAttention, Time2Vec
 
 
 class TGN(torch.nn.Module):
-    def __init__(self, node_feats, edge_feats, num_layers=2, memory_dim=500):
+    def __init__(
+        self, node_dim, edge_dim, time_dim, embed_dim, num_layers=2, memory_dim=500
+    ):
         super().__init__()
-        self.num_layers = num_layers
-        self.node_raw_features = torch.from_numpy(node_feats.astype(np.float32))
-        self.edge_raw_features = torch.from_numpy(edge_feats.astype(np.float32))
-        self.node_dim = self.node_raw_features.shape[1]
-        self.n_nodes = self.node_raw_features.shape[0]
-        self.edge_dim = self.edge_raw_features.shape[1]
-        self.embed_dim = self.node_dim
-        self.time_encoder = Time2Vec(time_dim=self.embed_dim)
-        self.memory_dim = memory_dim
+        self.time_encoder = Time2Vec(time_dim=time_dim)
         self.msg_agg = LastMessageAggregator()
         self.msg_func = IdentityMessageFunction()
 
-        msg_dim = 2 * self.memory_dim + self.edge_dim + self.time_encoder.time_dim
-        self.memory = Memory(n_nodes=self.n_nodes, memory_dim=self.memory_dim)
-        self.memory_updater = GRUMemoryUpdater(self.memory, msg_dim, self.memory_dim)
+        msg_dim = 2 * memory_dim + edge_dim + time_dim
+        self.n_nodes = 100  # TODO
+        self.memory = Memory(n_nodes=self.n_nodes, memory_dim=memory_dim)
+        self.memory_updater = GRUMemoryUpdater(self.memory, msg_dim, memory_dim)
         self.gat = GraphAttentionEmbedding(
-            node_feats=self.node_raw_features,
-            edge_feats=self.edge_raw_features,
             time_encoder=self.time_encoder,
-            num_layers=self.num_layers,
-            node_dim=self.node_dim,
-            edge_dim=self.edge_dim,
-            time_dim=self.node_dim,
-            embed_dim=self.embed_dim,
+            num_layers=num_layers,
+            node_dim=node_dim,
+            edge_dim=edge_dim,
+            time_dim=node_dim,
+            embed_dim=embed_dim,
         )
 
-    def forward(self, src, dst, neg, time, edge_idxs):
-        unique_nodes, unique_msg, unique_times = self.msg_agg(
-            list(range(self.n_nodes)), self.memory.msgs
-        )
-        if len(unique_nodes) > 0:
+    def forward(self, batch):
+        nodes = list(range(self.n_nodes))
+        unique_nids, unique_msg, unique_times = self.msg_agg(nodes, self.memory.msgs)
+        if len(unique_nids) > 0:
             unique_msg = self.msg_func(unique_msg)
         memory, last_update = self.memory_updater.get_updated_memory(
-            unique_nodes, unique_msg, unique_times
+            unique_nids, unique_msg, unique_times
         )
+        batch.time - last_update[batch.src].long()
+        batch.time - last_update[batch.dst].long()
+        batch.time - last_update[batch.neg].long()
+        pos_out, neg_out = self.gat(batch, memory=memory)
+        self._update(batch, memory)
+        return pos_out, neg_out
 
-        src_time_diff = torch.LongTensor(time) - last_update[src].long()
-        dst_time_diff = torch.LongTensor(time) - last_update[dst].long()
-        neg_time_diff = torch.LongTensor(time) - last_update[neg].long()
+    def _update(self, batch, memory) -> None:
+        def _get_raw_msgs(src, dst, time, edge_idxs):
+            time = torch.from_numpy(time).float()
+            edge_feats = self.edge_raw_features[edge_idxs]
+            src_memory = self.memory.get_memory(src)
+            dst_memory = self.memory.get_memory(dst)
+            time_delta = time - self.memory.last_update[src]
+            time_feat = self.time_encoder(time_delta.unsqueeze(dim=1)).view(
+                len(src), -1
+            )
 
-        pos_out, neg_out = self.gat(
-            memory=memory,
-            src=np.concatenate([src, dst, neg]),
-            time=np.concatenate([time, time, time]),
-            time_diffs=torch.cat([src_time_diff, dst_time_diff, neg_time_diff], dim=0),
-        )
+            src_msg = torch.cat([src_memory, dst_memory, edge_feats, time_feat], dim=1)
+            msgs = defaultdict(list)
+            unique_src = np.unique(src)
+            for i in range(len(src)):
+                msgs[src[i]].append((src_msg[i], time[i]))
+            return unique_src, msgs
 
         # Persist the updates to the memory only for sources and destinations
+        src, dst, time, edge_idxs = batch.src, batch.dst, batch.time, batch.nbr_nids
         pos = np.concatenate([src, dst])
-        unique_nodes, unique_msg, unique_times = self.msg_agg(pos, self.memory.msg)
-        if len(unique_nodes) > 0:
+        unique_nids, unique_msg, unique_times = self.msg_agg(pos, self.memory.msg)
+        if len(unique_nids) > 0:
             unique_msg = self.msg_func(unique_msg)
-        self.memory_updater.update(unique_nodes, unique_msg, time=unique_times)
+        self.memory_updater.update(unique_nids, unique_msg, time=unique_times)
         assert torch.allclose(
             memory[pos], self.memory.get_memory(pos), atol=1e-5
         ), 'Something wrong in how the memory was updated'
         # Remove msgs for the pos since we have already updated the memory using them
         self.memory.clear_msgs(pos)
-        unique_src, src_to_msgs = self._get_raw_msgs(src, dst, time, edge_idxs)
-        unique_dst, dst_to_msgs = self._get_raw_msgs(dst, src, time, edge_idxs)
+        unique_src, src_to_msgs = _get_raw_msgs(src, dst, time, edge_idxs)
+        unique_dst, dst_to_msgs = _get_raw_msgs(dst, src, time, edge_idxs)
         self.memory.store_raw_msgs(unique_src, src_to_msgs)
         self.memory.store_raw_msgs(unique_dst, dst_to_msgs)
-
-        return pos_out, neg_out
-
-    def _get_raw_msgs(self, src, dst, time, edge_idxs):
-        time = torch.from_numpy(time).float()
-        edge_feats = self.edge_raw_features[edge_idxs]
-        src_memory = self.memory.get_memory(src)
-        dst_memory = self.memory.get_memory(dst)
-        time_delta = time - self.memory.last_update[src]
-        time_feat = self.time_encoder(time_delta.unsqueeze(dim=1)).view(len(src), -1)
-
-        src_msg = torch.cat([src_memory, dst_memory, edge_feats, time_feat], dim=1)
-        msgs = defaultdict(list)
-        unique_src = np.unique(src)
-        for i in range(len(src)):
-            msgs[src[i]].append((src_msg[i], time[i]))
-        return unique_src, msgs
 
 
 class LastMessageAggregator(torch.nn.Module):
     def forward(self, node_ids, msgs):
-        unique_node_ids = np.unique(node_ids)
+        unique_nids = np.unique(node_ids)
         unique_msg, unique_times, to_update_node_ids = [], [], []
-        for node_id in unique_node_ids:
+        for node_id in unique_nids:
             if len(msgs[node_id]) > 0:
                 to_update_node_ids.append(node_id)
                 unique_msg.append(msgs[node_id][-1][0])
@@ -113,8 +102,6 @@ class IdentityMessageFunction(nn.Module):
 class GraphAttentionEmbedding(nn.Module):
     def __init__(
         self,
-        node_feats,
-        edge_feats,
         time_encoder,
         num_layers,
         node_dim,
@@ -125,7 +112,6 @@ class GraphAttentionEmbedding(nn.Module):
         dropout: float = 0.1,
     ):
         super().__init__()
-        self.node_feats, self.edge_feats = node_feats, edge_feats
         self.time_encoder = time_encoder
         self.link_predictor = LinkPredictor(self.node_dim)
         self.attn = nn.ModuleList(
@@ -142,27 +128,21 @@ class GraphAttentionEmbedding(nn.Module):
             ]
         )
 
-    def forward(self, memory, src, time, n_nbrs=20):
+    def forward(self, batch, memory):
         # TODO: Go back to recursive embedding for multi-hop
         hop = 0
-        src_torch = torch.from_numpy(src).long()
-        node_feat = memory[src, :] + self.node_feats[src_torch, :]
-        time_torch = torch.unsqueeze(torch.from_numpy(time).float(), dim=1)
-        time_feat = self.time_encoder(torch.zeros_like(time_torch))
-        nbrs, edge_idxs, time = self.nbr_finder.get_nbrs(src, time, n_nbrs)
-        edge_idxs = torch.from_numpy(edge_idxs).long()
-        time_delta = torch.from_numpy(time[:, None] - time).float()
+        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim))
+        nbr_node_feat = torch.zeros((*batch.nbr_nids[hop].shape, self.embed_dim))
 
-        nbrs_torch = torch.from_numpy(nbrs).long()
-        nbr_feat = memory[nbrs, :] + self.node_feats[nbrs_torch, :]
-        nbr_feat = nbr_feat.view(len(src), n_nbrs, -1)
         z = self.attn[hop](
-            node_feat=node_feat,
-            time_feat=time_feat,
-            nbr_node_feat=nbr_feat,
-            nbr_time_feat=self.time_encoder(time_delta),
-            edge_feat=self.edge_feats[edge_idxs, :],
-            nbr_mask=nbrs_torch == 0,
+            node_feat=node_feat + memory[batch.nids[hop], :],
+            nbr_node_feat=nbr_node_feat + memory[batch.nbr_nids, :],
+            time_feat=self.time_encoder(torch.zeros(len(batch.nids[hop]))),
+            nbr_time_feat=self.time_encoder(
+                batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
+            ),
+            edge_feat=batch.nbr_feats[hop],
+            nbr_mask=batch.nbr_mask[hop],
         )
         z_src, z_dst, z_neg = z.chunk(3, dim=0)
         pos_out = self.link_predictor(z_src, z_dst)
@@ -174,33 +154,31 @@ class GRUMemoryUpdater(nn.Module):
     def __init__(self, memory, msg_dim, memory_dim):
         super().__init__()
         self.memory = memory
-        self.layer_norm = torch.nn.LayerNorm(memory_dim)
-        self.msg_dim = msg_dim
         self.memory_updater = nn.GRUCell(input_size=msg_dim, hidden_size=memory_dim)
 
-    def update(self, unique_node_ids, unique_msg, time):
-        if len(unique_node_ids) <= 0:
+    def update(self, unique_nids, unique_msg, time):
+        if len(unique_nids) <= 0:
             return
         assert (
-            (self.memory.get_last_update(unique_node_ids) <= time).all().item()
+            (self.memory.get_last_update(unique_nids) <= time).all().item()
         ), 'Trying to update memory to time in the past'
-        memory = self.memory.get_memory(unique_node_ids)
-        self.memory.last_update[unique_node_ids] = time
+        memory = self.memory.get_memory(unique_nids)
+        self.memory.last_update[unique_nids] = time
         updated_memory = self.memory_updater(unique_msg, memory)
-        self.memory.set_memory(unique_node_ids, updated_memory)
+        self.memory.set_memory(unique_nids, updated_memory)
 
-    def get_updated_memory(self, unique_node_ids, unique_msg, time):
-        if len(unique_node_ids) <= 0:
+    def get_updated_memory(self, unique_nids, unique_msg, time):
+        if len(unique_nids) <= 0:
             return self.memory.memory.data.clone(), self.memory.last_update.data.clone()
         assert (
-            (self.memory.get_last_update(unique_node_ids) <= time).all().item()
+            (self.memory.get_last_update(unique_nids) <= time).all().item()
         ), 'Trying to update memory to time in the past'
         updated_memory = self.memory.memory.data.clone()
-        updated_memory[unique_node_ids] = self.memory_updater(
-            unique_msg, updated_memory[unique_node_ids]
+        updated_memory[unique_nids] = self.memory_updater(
+            unique_msg, updated_memory[unique_nids]
         )
         updated_last_update = self.memory.last_update.data.clone()
-        updated_last_update[unique_node_ids] = time
+        updated_last_update[unique_nids] = time
         return updated_memory, updated_last_update
 
 
