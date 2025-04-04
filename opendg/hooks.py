@@ -131,7 +131,7 @@ class RecencyNeighborSamplerHook:
 
     def _update(self, batch: DGBatch) -> None:
         #! do we need it to be undirected? don't think so, thus only adding src->dst
-        for i in range(len(batch.src)):
+        for i in range(batch.src.size(0)):
             src_nbr = int(batch.src[i].item())
             self._nbrs[src_nbr][0].append(batch.dst[i].item())
             self._nbrs[src_nbr][1].append(batch.time[i].item())
