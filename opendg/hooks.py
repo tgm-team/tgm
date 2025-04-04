@@ -104,26 +104,34 @@ class RecencyNeighborSamplerHook:
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
-        nids = torch.unique(torch.cat((batch.src, batch.dst)))
-        out_nbrs: Dict[int, List[torch.Tensor]] = {}
+        seed_nodes = torch.cat([batch.src, batch.dst, batch.dst])  # TODO
+        unique, inverse_indices = seed_nodes.unique(return_inverse=True)
 
-        for node in nids.tolist():
-            out_nbrs[node] = [
-                torch.tensor(self._nbrs[node][0]),
-                torch.tensor(self._nbrs[node][1]),
-            ]
-            if batch.edge_feats is not None:
-                if len(self._nbrs[node][2]):  # stack edge_feats [num_edge, num_feats]
-                    out_nbrs[node].append(torch.stack(list(self._nbrs[node][2])))
-                else:
-                    out_nbrs[node].append(torch.tensor([]))
-        batch.nbrs = out_nbrs  # type: ignore
+        batch_size = len(seed_nodes)
+        nbr_nids = torch.empty(batch_size, self._num_nbrs[0], dtype=torch.long)
+        nbr_times = torch.empty(batch_size, self._num_nbrs[0], dtype=torch.long)
+        nbr_feats = torch.zeros(batch_size, self._num_nbrs[0], dg.edge_feats_dim)  # type: ignore
+        nbr_mask = torch.zeros(batch_size, self._num_nbrs[0], dtype=torch.long)
+        for i, node in enumerate(unique.tolist()):
+            if nn := len(self._nbrs[node][0]):
+                mask = inverse_indices == i
+                nbr_nids[mask, :nn] = torch.LongTensor(self._nbrs[node][0])
+                nbr_times[mask, :nn] = torch.LongTensor(self._nbrs[node][1])
+                nbr_feats[mask, :nn] = torch.stack(list(self._nbrs[node][2]))  # TODO:
+                nbr_mask[mask, :nn] = nn >= self._num_nbrs[0]
+
+        batch.nids = [seed_nodes]  # type: ignore
+        batch.nbr_nids = [nbr_nids]  # type: ignore
+        batch.nbr_times = [nbr_times]  # type: ignore
+        batch.nbr_feats = [nbr_feats]  # type: ignore
+        batch.nbr_mask = [nbr_mask]  # type: ignore
+
         self._update(batch)
         return batch
 
     def _update(self, batch: DGBatch) -> None:
         #! do we need it to be undirected? don't think so, thus only adding src->dst
-        for i in range(batch.src.size(0)):
+        for i in range(len(batch.src)):
             src_nbr = int(batch.src[i].item())
             self._nbrs[src_nbr][0].append(batch.dst[i].item())
             self._nbrs[src_nbr][1].append(batch.time[i].item())
