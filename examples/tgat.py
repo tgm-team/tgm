@@ -7,7 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
-from torchmetrics.retrieval import RetrievalHitRate, RetrievalMRR
 from tqdm import tqdm
 
 from opendg.graph import DGBatch, DGraph
@@ -168,7 +167,7 @@ model = TGAT(
 ).to(device)
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-metrics = [BinaryAveragePrecision(), BinaryAUROC(), RetrievalHitRate(), RetrievalMRR()]
+metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
