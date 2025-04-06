@@ -10,7 +10,7 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from opendg.graph import DGBatch, DGraph
-from opendg.hooks import NeighborSamplerHook
+from opendg.hooks import NeighborSamplerHook, RecencyNeighborHook
 from opendg.loader import DGDataLoader
 from opendg.nn import TemporalAttention, Time2Vec
 from opendg.util.perf import Usage
@@ -24,7 +24,6 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
-parser.add_argument('--gpu', type=int, default=-1, help='gpu to use (or -1 for cpu)')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
@@ -34,8 +33,8 @@ parser.add_argument('--embed-dim', type=int, default=100, help='attention dimens
 parser.add_argument(
     '--sampling',
     type=str,
-    default='uniform',
-    choices=['uniform'],
+    default='recency',
+    choices=['uniform', 'recency'],
     help='sampling strategy',
 )
 
@@ -75,13 +74,17 @@ class TGAT(nn.Module):
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         # TODO: Go back to recursive embedding for multi-hop
         hop = 0
+        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim))
+        nbr_node_feat = torch.zeros((*batch.nbr_nids[hop].shape, self.embed_dim))
+        time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop])))
+        nbr_time_feat = self.time_encoder(
+            batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
+        )
         z = self.attn[hop](
-            node_feat=torch.zeros((*batch.nids[hop].shape, self.embed_dim)),
-            nbr_node_feat=torch.zeros((*batch.nbr_nids[hop].shape, self.embed_dim)),
-            time_feat=self.time_encoder(torch.zeros(len(batch.nids[hop]))),
-            nbr_time_feat=self.time_encoder(
-                batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
-            ),
+            node_feat=node_feat,
+            nbr_node_feat=nbr_node_feat,
+            time_feat=time_feat,
+            nbr_time_feat=nbr_time_feat,
             edge_feat=batch.nbr_feats[hop],
             nbr_mask=batch.nbr_mask[hop],
         )
@@ -139,23 +142,22 @@ train_dg = DGraph(args.dataset, split='train')
 val_dg = DGraph(args.dataset, split='valid')
 test_dg = DGraph(args.dataset, split='test')
 
-train_loader = DGDataLoader(
-    train_dg,
-    hook=NeighborSamplerHook(num_nbrs=args.n_nbrs),
-    batch_size=args.bsize,
-)
-val_loader = DGDataLoader(
-    val_dg,
-    hook=NeighborSamplerHook(num_nbrs=args.n_nbrs),
-    batch_size=args.bsize,
-)
-test_loader = DGDataLoader(
-    test_dg,
-    hook=NeighborSamplerHook(num_nbrs=args.n_nbrs),
-    batch_size=args.bsize,
-)
+if args.sampling == 'uniform':
+    train_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
+    val_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
+    test_hook = NeighborSamplerHook(num_nbrs=args.num_nbrs)
+elif args.sampling == 'recency':
+    train_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=train_dg.num_nodes)
+    val_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=val_dg.num_nodes)
+    test_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=test_dg.num_nodes)
+else:
+    raise ValueError(f'Unknown sampling type: {args.sampling}')
 
-device = torch.device(f'cuda:{args.gpu}' if args.gpu >= 0 else 'cpu')
+
+train_loader = DGDataLoader(train_dg, hook=train_hook, batch_size=args.bsize)
+val_loader = DGDataLoader(val_dg, hook=val_hook, batch_size=args.bsize)
+test_loader = DGDataLoader(test_dg, hook=test_hook, batch_size=args.bsize)
+
 model = TGAT(
     node_dim=train_dg.node_feats_dim or args.embed_dim,  # TODO: verify
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
@@ -164,7 +166,7 @@ model = TGAT(
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
-).to(device)
+)
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]

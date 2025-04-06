@@ -129,6 +129,8 @@ class DGStorageArrayBackend(DGStorageBase):
         nbr_mask = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
         for i, nbrs_set in enumerate(nbrs.values()):
             node_nbrs = list(nbrs_set)
+            if not len(node_nbrs):
+                continue
             if n_nbrs != -1 and len(node_nbrs) > n_nbrs:
                 node_nbrs = random.sample(node_nbrs, k=n_nbrs)
 
@@ -143,8 +145,8 @@ class DGStorageArrayBackend(DGStorageBase):
 
             nn = len(node_nbrs)
             mask = inverse_indices == i
-            nbr_nids[mask, :nn] = torch.tensor(nbr_nids_)
-            nbr_times[mask, :nn] = torch.tensor(nbr_times_)
+            nbr_nids[mask, :nn] = torch.LongTensor(nbr_nids_)
+            nbr_times[mask, :nn] = torch.LongTensor(nbr_times_)
             nbr_feats[mask, :nn] = torch.stack(nbr_feats_)  # type: ignore
             nbr_mask[mask, :nn] = 1
         return [seed_nodes], [nbr_nids], [nbr_times], [nbr_feats], [nbr_mask]

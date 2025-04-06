@@ -71,7 +71,7 @@ class NeighborSamplerHook:
         self.low = 0
         self.high = dg.num_nodes
         size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
+        batch.neg = torch.randint(self.low, self.high, size, dtype=torch.long)  # type: ignore
 
         batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
             dg._storage.get_nbrs(
@@ -83,7 +83,7 @@ class NeighborSamplerHook:
         return batch
 
 
-class RecencyNeighborSamplerHook:
+class RecencyNeighborHook:
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
@@ -118,7 +118,7 @@ class RecencyNeighborSamplerHook:
         self.low = 0
         self.high = dg.num_nodes
         size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
+        batch.neg = torch.randint(self.low, self.high, size, dtype=torch.long)  # type: ignore
 
         seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])  # type: ignore
         unique, inverse_indices = seed_nodes.unique(return_inverse=True)
