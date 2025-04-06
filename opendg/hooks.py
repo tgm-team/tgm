@@ -104,7 +104,15 @@ class RecencyNeighborSamplerHook:
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
-        seed_nodes = torch.cat([batch.src, batch.dst, batch.dst])  # TODO
+
+        # TODO: Compose hooks
+        self.neg_sampling_ratio = 1.0
+        self.low = 0
+        self.high = dg.num_nodes
+        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
+        batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
+
+        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])  # type: ignore
         unique, inverse_indices = seed_nodes.unique(return_inverse=True)
 
         batch_size = len(seed_nodes)
@@ -133,7 +141,14 @@ class RecencyNeighborSamplerHook:
         #! do we need it to be undirected? don't think so, thus only adding src->dst
         for i in range(batch.src.size(0)):
             src_nbr = int(batch.src[i].item())
+            dst_nbr = int(batch.dst[i].item())
             self._nbrs[src_nbr][0].append(batch.dst[i].item())
             self._nbrs[src_nbr][1].append(batch.time[i].item())
+
+            self._nbrs[dst_nbr][0].append(batch.src[i].item())
+            self._nbrs[dst_nbr][1].append(batch.time[i].item())
+
             if batch.edge_feats is not None:
                 self._nbrs[src_nbr][2].append(batch.edge_feats[i])
+            if batch.edge_feats is not None:
+                self._nbrs[dst_nbr][2].append(batch.edge_feats[i])

@@ -42,6 +42,7 @@ def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> Non
         ).long()
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
         metrics(y_pred, y_true, indexes=indexes)
+        model.update(batch.src, batch.dst, batch.neg)
     pprint(metrics.compute())
 
 
