@@ -65,9 +65,17 @@ class NeighborSamplerHook:
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize(materialize_features=False)
+
+        # TODO: Compose hooks
+        self.neg_sampling_ratio = 1.0
+        self.low = 0
+        self.high = dg.num_nodes
+        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
+        batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
+
         batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
             dg._storage.get_nbrs(
-                seed_nodes=torch.cat([batch.src, batch.dst, batch.dst]),  # TODO:
+                seed_nodes=torch.cat([batch.src, batch.dst, batch.neg]),  # type: ignore
                 num_nbrs=self.num_nbrs,
                 slice=DGSliceTracker(end_idx=dg._slice.end_idx),
             )
@@ -138,17 +146,15 @@ class RecencyNeighborSamplerHook:
         return batch
 
     def _update(self, batch: DGBatch) -> None:
-        #! do we need it to be undirected? don't think so, thus only adding src->dst
         for i in range(batch.src.size(0)):
             src_nbr = int(batch.src[i].item())
             dst_nbr = int(batch.dst[i].item())
-            self._nbrs[src_nbr][0].append(batch.dst[i].item())
-            self._nbrs[src_nbr][1].append(batch.time[i].item())
+            time = batch.time[i].item()
 
-            self._nbrs[dst_nbr][0].append(batch.src[i].item())
-            self._nbrs[dst_nbr][1].append(batch.time[i].item())
-
+            self._nbrs[src_nbr][0].append(dst_nbr)
+            self._nbrs[src_nbr][1].append(time)
+            self._nbrs[dst_nbr][0].append(src_nbr)
+            self._nbrs[dst_nbr][1].append(time)
             if batch.edge_feats is not None:
                 self._nbrs[src_nbr][2].append(batch.edge_feats[i])
-            if batch.edge_feats is not None:
                 self._nbrs[dst_nbr][2].append(batch.edge_feats[i])
