@@ -8,7 +8,7 @@ from typing import Any, List, Optional, Set, Tuple
 import pandas as pd
 from torch import Tensor
 
-from opendg._io import read_events
+from opendg._io import read_events, read_time_delta
 from opendg._storage import DGSliceTracker, DGStorage
 from opendg.events import Event
 from opendg.timedelta import TimeDeltaDG
@@ -34,6 +34,10 @@ class DGraph:
             if not len(events):
                 raise ValueError('Tried to initialize a DGraph with empty events list')
             self._storage = DGStorage(events)
+
+        # load the correct time granularity if loading TGB
+        if isinstance(data, str) and data.startswith('tgb'):
+            self.time_delta = read_time_delta(data)
 
         self._slice = DGSliceTracker()
 
