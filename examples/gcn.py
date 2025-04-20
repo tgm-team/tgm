@@ -74,15 +74,12 @@ class GCN(nn.Module):
         self,
         in_channels: int,
         hidden_channels: int,
-        out_channels: int,
         num_layers: int,
-        max_num_nodes: int,
         dropout: float,
     ) -> None:
         super().__init__()
         # define model architecture
         self.in_channels = in_channels
-        self.max_num_nodes = max_num_nodes
         self.encoder = GCNEncoder(
             in_channels=in_channels,
             hidden_channels=hidden_channels,
@@ -93,9 +90,9 @@ class GCN(nn.Module):
 
         self.decoder = MLPDecoder(in_channels=hidden_channels)
 
-    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        #! here we only assume node feat is not set, need to update when node feat is available
-        node_feat = torch.randn((self.max_num_nodes, self.in_channels))
+    def forward(
+        self, batch: DGBatch, node_feat: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         z = self.encoder(node_feat, edge_index)
         z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]
@@ -105,7 +102,10 @@ class GCN(nn.Module):
 
 
 def train(
-    loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer
+    loader: DGDataLoader,
+    model: nn.Module,
+    opt: torch.optim.Optimizer,
+    node_feat: torch.Tensor,
 ) -> Tuple[float, DGBatch]:
     model.train()
     total_loss = 0
@@ -114,7 +114,7 @@ def train(
         opt.zero_grad()
         if input_batch is None:
             input_batch = batch
-        pos_out, neg_out = model(input_batch)
+        pos_out, neg_out = model(input_batch, node_feat)
         criterion = torch.nn.MSELoss()
         loss = criterion(pos_out, torch.ones_like(pos_out))
         loss += criterion(neg_out, torch.zeros_like(neg_out))
@@ -127,11 +127,15 @@ def train(
 
 @torch.no_grad()
 def eval(
-    loader: DGDataLoader, model: nn.Module, metrics: Metric, input_batch: DGBatch
+    loader: DGDataLoader,
+    model: nn.Module,
+    metrics: Metric,
+    input_batch: DGBatch,
+    node_feat: torch.Tensor,
 ) -> DGBatch:
     model.eval()
     for batch in tqdm(loader):
-        pos_out, neg_out = model(batch)
+        pos_out, neg_out = model(batch, node_feat)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_pred = y_pred.view(-1)
         y_true = torch.cat(
@@ -203,12 +207,13 @@ if train_dg.node_feats_dim is not None:
         'node features are not supported yet, make sure to incorporate them in the model'
     )
 
+#! we need to add static node features to DGraph
+static_node_feats = torch.randn((test_dg.num_nodes, args.embed_dim))
+
 model = GCN(
     in_channels=args.embed_dim,
     hidden_channels=args.embed_dim,
-    out_channels=args.embed_dim,
     num_layers=args.num_layers,
-    max_num_nodes=test_dg.num_nodes,
     dropout=0.0,
 ).to(args.device)
 
@@ -218,12 +223,10 @@ metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
-train(train_loader, model, opt)
-
 for epoch in range(1, args.epochs + 1):
-    loss, input_batch = train(train_loader, model, opt)
+    loss, input_batch = train(train_loader, model, opt, static_node_feats)
     pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-    input_batch = eval(val_loader, model, val_metrics, input_batch)
-    input_batch = eval(test_loader, model, test_metrics, input_batch)
+    input_batch = eval(val_loader, model, val_metrics, input_batch, static_node_feats)
+    input_batch = eval(test_loader, model, test_metrics, input_batch, static_node_feats)
     val_metrics.reset()
     test_metrics.reset()
