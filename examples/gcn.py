@@ -104,27 +104,31 @@ class GCN(nn.Module):
         return pos_out, neg_out
 
 
-def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) -> float:
+def train(
+    loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer
+) -> Tuple[float, DGBatch]:
     model.train()
     total_loss = 0
-    prev_batch = None
+    input_batch = None
     for batch in tqdm(loader):
         opt.zero_grad()
-        if prev_batch is None:
-            prev_batch = batch
-        pos_out, neg_out = model(prev_batch)
+        if input_batch is None:
+            input_batch = batch
+        pos_out, neg_out = model(input_batch)
         criterion = torch.nn.MSELoss()
         loss = criterion(pos_out, torch.ones_like(pos_out))
         loss += criterion(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
-        prev_batch = batch
-    return total_loss
+        input_batch = batch
+    return total_loss, input_batch
 
 
 @torch.no_grad()
-def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
+def eval(
+    loader: DGDataLoader, model: nn.Module, metrics: Metric, input_batch: DGBatch
+) -> DGBatch:
     model.eval()
     for batch in tqdm(loader):
         pos_out, neg_out = model(batch)
@@ -135,7 +139,9 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
         ).long()
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
         metrics(y_pred, y_true, indexes=indexes)
+        input_batch = batch
     pprint(metrics.compute())
+    return input_batch
 
 
 parser = argparse.ArgumentParser(
@@ -215,9 +221,9 @@ test_metrics = MetricCollection(metrics, prefix='Test')
 train(train_loader, model, opt)
 
 for epoch in range(1, args.epochs + 1):
-    loss = train(train_loader, model, opt)
+    loss, input_batch = train(train_loader, model, opt)
     pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-    eval(val_loader, model, val_metrics)
-    eval(test_loader, model, test_metrics)
+    input_batch = eval(val_loader, model, val_metrics, input_batch)
+    input_batch = eval(test_loader, model, test_metrics, input_batch)
     val_metrics.reset()
     test_metrics.reset()
