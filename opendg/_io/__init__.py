@@ -32,4 +32,4 @@ def read_events(
 def read_time_delta(
     name: str,
 ) -> TimeDeltaDG:
-return TIME_DELTA_DICT.get(name, TimeDeltaDG('r')
+    return TIME_DELTA_DICT.get(name, TimeDeltaDG('r'))
