@@ -35,9 +35,10 @@ class DGraph:
                 raise ValueError('Tried to initialize a DGraph with empty events list')
             self._storage = DGStorage(events)
 
-        # load the correct time granularity if loading TGB
-        if isinstance(data, str) and data.startswith('tgb'):
-            self.time_delta = read_time_delta(data)
+        if time_delta.is_ordered:  # overwrite time_delta if it is ordered
+            # load the correct time granularity if loading TGB
+            if isinstance(data, str) and data.startswith('tgb'):
+                self.time_delta = read_time_delta(data)
 
         self._slice = DGSliceTracker()
 
