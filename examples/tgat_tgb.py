@@ -82,9 +82,19 @@ class TGAT(nn.Module):
         node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim))
         nbr_node_feat = torch.zeros((*batch.nbr_nids[hop].shape, self.embed_dim))
         time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop])))
-        nbr_time_feat = self.time_encoder(
-            batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
-        )
+        #! last batch, the nbr_times is not a direct multipler of batch.time
+        multipler = (
+            batch.nbr_times[hop].shape[0] // batch.time.shape[0]
+        )  # match batch.time shape with batch.nbr_times[hop]
+        if multipler * batch.time.shape[0] < batch.nbr_times[hop].shape[0]:
+            overflow = batch.nbr_times[hop].shape[0] - multipler * batch.time.shape[0]
+            expand_time = torch.cat(
+                [batch.time.repeat(multipler), batch.time[:overflow]]
+            )
+        else:
+            expand_time = batch.time.repeat(multipler)
+        expand_time = expand_time.unsqueeze(dim=1)
+        nbr_time_feat = self.time_encoder(batch.nbr_times[hop] - expand_time)
         z = self.attn[hop](
             node_feat=node_feat,
             nbr_node_feat=nbr_node_feat,
@@ -150,17 +160,23 @@ def eval(
             src = torch.full((1 + len(neg_batch),), pos_src, device=batch.src.device)
             dst = torch.tensor(
                 np.concatenate(
-                    ([np.array([pos_dst.cpu().numpy()[idx]]), np.array(neg_batch)]),
+                    ([np.array([pos_dst]), np.array(neg_batch)]),
                     axis=0,
                 ),
                 device=batch.dst.device,
                 dtype=torch.long,
             )
-            y_pred = decoder(z[src], z[dst])
+            nids = batch.nids[0]
+
+            src_ids = torch.where(torch.isin(src, nids))[0]
+            dst_ids = torch.where(torch.isin(dst, nids))[0]
+
+            y_pred = decoder(z[src_ids], z[dst_ids])
+            y_pred = y_pred.squeeze(dim=-1)
             # compute MRR
             input_dict = {
-                'y_pred_pos': np.array([y_pred[0, :].squeeze(dim=-1).cpu()]),
-                'y_pred_neg': np.array(y_pred[1:, :].squeeze(dim=-1).cpu()),
+                'y_pred_pos': np.array([y_pred[0].cpu()]),
+                'y_pred_neg': np.array(y_pred[1:].cpu()),
                 'eval_metric': [metric],
             }
             perf_list.append(evaluator.eval(input_dict)[metric])
