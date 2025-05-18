@@ -15,12 +15,16 @@ from opendg.timedelta import TimeDeltaDG
 
 
 class DGraph:
-    r"""Dynamic Graph Object provides a 'view' over a DGStorage backend."""
+    r"""Dynamic Graph Object provides a 'view' over a DGStorage backend.
+    load_data_time_delta: bool
+        If True, load the time delta from the data file and overwrites user defined input time_delta. This is useful when loading TGB files.
+    """
 
     def __init__(
         self,
         data: DGStorage | List[Event] | str | pathlib.Path | pd.DataFrame,
         time_delta: TimeDeltaDG = TimeDeltaDG(unit='r'),
+        load_data_time_delta: bool = False,
         **kwargs: Any,
     ) -> None:
         if not isinstance(time_delta, TimeDeltaDG):
@@ -35,7 +39,7 @@ class DGraph:
                 raise ValueError('Tried to initialize a DGraph with empty events list')
             self._storage = DGStorage(events)
 
-        if time_delta.is_ordered:  # overwrite time_delta if it is ordered
+        if load_data_time_delta:
             # load the correct time granularity if loading TGB
             if isinstance(data, str) and data.startswith('tgb'):
                 self.time_delta = read_time_delta(data)
