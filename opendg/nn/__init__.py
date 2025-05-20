@@ -1,5 +1,7 @@
+from .attention import TemporalAttention
 from .memory import EdgeBankPredictor
 from .time_encoding import Time2Vec
-from .attention import TemporalAttention
+from .recurrent import GCLSTM
 
-__all__ = ['EdgeBankPredictor', 'Time2Vec', 'TemporalAttention']
+
+__all__ = ['EdgeBankPredictor', 'GCLSTM', 'Time2Vec', 'TemporalAttention']
