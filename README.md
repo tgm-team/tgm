@@ -8,8 +8,8 @@
 <br/>
 <br/>
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/ComplexData-MILA/AIF-Gen)](https://github.com/shenyangHuang/opendg/stargazers)
-[![Unit Tests](https://github.com/ComplexData-MILA/AIF-Gen/actions/workflows/testing.yml/badge.svg)](https://github.com/shenyangHuang/opendg/actions/workflows/testing.yml)
+[![GitHub Repo stars](https://img.shields.io/github/stars/shenyangHuang/opendg)](https://github.com/shenyangHuang/opendg/stargazers)
+[![Unit Tests](https://github.com/shenyangHuang/opendg/actions/workflows/testing.yml/badge.svg)](https://github.com/shenyangHuang/opendg/actions/workflows/testing.yml)
 [![Linting](https://github.com/shenyangHuang/opendg/actions/workflows/ruff.yml/badge.svg)](https://github.com/shenuangHuang/opendg/actions/workflows/ruff.yml)
 
 </div>
