@@ -65,9 +65,17 @@ class NeighborSamplerHook:
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize(materialize_features=False)
+
+        # TODO: Compose hooks
+        self.neg_sampling_ratio = 1.0
+        self.low = 0
+        self.high = dg.num_nodes
+        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
+        batch.neg = torch.randint(self.low, self.high, size, dtype=torch.long)  # type: ignore
+
         batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
             dg._storage.get_nbrs(
-                seed_nodes=torch.cat([batch.src, batch.dst, batch.dst]),  # TODO:
+                seed_nodes=torch.cat([batch.src, batch.dst, batch.neg]),  # type: ignore
                 num_nbrs=self.num_nbrs,
                 slice=DGSliceTracker(end_idx=dg._slice.end_idx),
             )
@@ -75,7 +83,7 @@ class NeighborSamplerHook:
         return batch
 
 
-class RecencyNeighborSamplerHook:
+class RecencyNeighborHook:
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
@@ -104,28 +112,49 @@ class RecencyNeighborSamplerHook:
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
-        nids = torch.unique(torch.cat((batch.src, batch.dst)))
-        out_nbrs: Dict[int, List[torch.Tensor]] = {}
 
-        for node in nids.tolist():
-            out_nbrs[node] = [
-                torch.tensor(self._nbrs[node][0]),
-                torch.tensor(self._nbrs[node][1]),
-            ]
-            if batch.edge_feats is not None:
-                if len(self._nbrs[node][2]):  # stack edge_feats [num_edge, num_feats]
-                    out_nbrs[node].append(torch.stack(list(self._nbrs[node][2])))
-                else:
-                    out_nbrs[node].append(torch.tensor([]))
-        batch.nbrs = out_nbrs  # type: ignore
+        # TODO: Compose hooks
+        self.neg_sampling_ratio = 1.0
+        self.low = 0
+        self.high = dg.num_nodes
+        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
+        batch.neg = torch.randint(self.low, self.high, size, dtype=torch.long)  # type: ignore
+
+        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])  # type: ignore
+        unique, inverse_indices = seed_nodes.unique(return_inverse=True)
+
+        batch_size = len(seed_nodes)
+        nbr_nids = torch.empty(batch_size, self._num_nbrs[0], dtype=torch.long)
+        nbr_times = torch.empty(batch_size, self._num_nbrs[0], dtype=torch.long)
+        nbr_feats = torch.zeros(batch_size, self._num_nbrs[0], dg.edge_feats_dim)  # type: ignore
+        nbr_mask = torch.zeros(batch_size, self._num_nbrs[0], dtype=torch.long)
+        for i, node in enumerate(unique.tolist()):
+            if nn := len(self._nbrs[node][0]):
+                mask = inverse_indices == i
+                nbr_nids[mask, :nn] = torch.LongTensor(self._nbrs[node][0])
+                nbr_times[mask, :nn] = torch.LongTensor(self._nbrs[node][1])
+                nbr_feats[mask, :nn] = torch.stack(list(self._nbrs[node][2]))  # TODO:
+                nbr_mask[mask, :nn] = nn >= self._num_nbrs[0]
+
+        batch.nids = [seed_nodes]  # type: ignore
+        batch.nbr_nids = [nbr_nids]  # type: ignore
+        batch.nbr_times = [nbr_times]  # type: ignore
+        batch.nbr_feats = [nbr_feats]  # type: ignore
+        batch.nbr_mask = [nbr_mask]  # type: ignore
+
         self._update(batch)
         return batch
 
     def _update(self, batch: DGBatch) -> None:
-        #! do we need it to be undirected? don't think so, thus only adding src->dst
         for i in range(batch.src.size(0)):
             src_nbr = int(batch.src[i].item())
-            self._nbrs[src_nbr][0].append(batch.dst[i].item())
-            self._nbrs[src_nbr][1].append(batch.time[i].item())
+            dst_nbr = int(batch.dst[i].item())
+            time = batch.time[i].item()
+
+            self._nbrs[src_nbr][0].append(dst_nbr)
+            self._nbrs[src_nbr][1].append(time)
+            self._nbrs[dst_nbr][0].append(src_nbr)
+            self._nbrs[dst_nbr][1].append(time)
             if batch.edge_feats is not None:
                 self._nbrs[src_nbr][2].append(batch.edge_feats[i])
+                self._nbrs[dst_nbr][2].append(batch.edge_feats[i])

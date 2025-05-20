@@ -4,6 +4,30 @@ import torch
 from tgb.linkproppred.dataset import LinkPropPredDataset
 
 from opendg.events import EdgeEvent, Event
+from opendg.timedelta import TimeDeltaDG
+
+TIME_DELTA_DICT = {
+    'tgbl-wiki': TimeDeltaDG('s'),
+    'tgbl-subreddit': TimeDeltaDG('r'),
+    'tgbl-lastfm': TimeDeltaDG('r'),
+    'tgbl-review': TimeDeltaDG('s'),
+    'tgbl-coin': TimeDeltaDG('r'),
+    'tgbl-flight': TimeDeltaDG('r'),
+    'tgbl-comment': TimeDeltaDG('r'),
+    'tgbn-trade': TimeDeltaDG('r'),
+    'tgbn-genre': TimeDeltaDG('r'),
+    'tgbn-reddit': TimeDeltaDG('r'),
+    'tgbn-token': TimeDeltaDG('r'),
+    'tkgl-polecat': TimeDeltaDG('r'),
+    'tkgl-icews': TimeDeltaDG('r'),
+    'tkgl-yago': TimeDeltaDG('r'),
+    'tkgl-wikidata': TimeDeltaDG('r'),
+    'tkgl-smallpedia': TimeDeltaDG('r'),
+    'thgl-myket': TimeDeltaDG('r'),
+    'thgl-github': TimeDeltaDG('r'),
+    'thgl-forum': TimeDeltaDG('r'),
+    'thgl-software': TimeDeltaDG('r'),
+}
 
 
 def read_tgb(

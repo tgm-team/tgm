@@ -4,7 +4,6 @@ from pprint import pprint
 import torch
 from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
-from torchmetrics.retrieval import RetrievalHitRate, RetrievalMRR
 from tqdm import tqdm
 
 from opendg.graph import DGraph
@@ -42,6 +41,7 @@ def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> Non
         ).long()
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
         metrics(y_pred, y_true, indexes=indexes)
+        model.update(batch.src, batch.dst, batch.neg)
     pprint(metrics.compute())
 
 
@@ -73,7 +73,7 @@ model = EdgeBankPredictor(
     pos_prob=args.pos_prob,
 )
 
-metrics = [BinaryAveragePrecision(), BinaryAUROC(), RetrievalHitRate(), RetrievalMRR()]
+metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
