@@ -16,14 +16,16 @@
 
 ## About The Project
 
-OpenDG is a research library designed to accelerate the training over dynamic graphs, and facilitate rapid prototyping of new temporal graph learning methods.
+OpenDG is a research library designed to accelerate training workloads over dynamic graphs and facilitate prototyping of temporal graph learning methods.
 
-Our main goal is to provide an efficient and easy to use abstraction over dynamic graphs to enable new practitioners to quickly understand, train, and ulimately, contribute new research in the field. We natively support both discrete and continuous-time graphs.
+Our main goal is to provide an efficient abstraction over dynamic graphs to enable new practitioners to quickly understand, train, and ulimately, contribute to researc in the field. We natively support both discrete and continuous-time graphs.
 
 > \[!NOTE\]
 > OpenDG is still alpha software, and may introduce breaking changes.
 
 ### Library Highlights
+
+## Supported Methods
 
 ### Architecture Overview
 
