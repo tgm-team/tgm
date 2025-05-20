@@ -1,4 +1,4 @@
-name: Ruff Format and Linting
+name: Format and Linting
 
 on: # yamllint disable-line rule:truthy
   push:

@@ -62,7 +62,7 @@ to activate the environment.
 
 **Note**: after doing so, you will have direct access to all executables (e.g. Python) as usual.
 
-## Installation
+## Dev Installation
 
 ### Install openDG
 
@@ -125,8 +125,6 @@ To build the documentation:
 1. [Build and install](#Installation) openDG from source.
 1. Generate the documentation via:
    ```sh
-   cd docs
-   uv run make html
+   uv sync --group docs
+   uv run mkdocs serve
    ```
-
-The documentation is now available to view by opening `docs/build/html/index.html`.
