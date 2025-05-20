@@ -1,8 +1,4 @@
-"""code adapted from:
-https://github.com/shenyangHuang/UTG/blob/main/dtdg_gclstm.py
-mlp decoder architecture has been changed
-#! can support edge weights check with DGBatch
-"""
+"""Adapted from: https://github.com/shenyangHuang/UTG/blob/main/dtdg_gclstm.py."""
 
 import argparse
 from pprint import pprint
@@ -11,7 +7,6 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Linear
 from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
@@ -20,44 +15,27 @@ from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NegativeEdgeSamplerHook
 from opendg.loader import DGDataLoader
 from opendg.nn.recurrent import GCLSTM
+from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
-
-class RecurrentGCN(torch.nn.Module):
-    def __init__(self, node_feat_dim, hidden_dim, K=1):
-        super(RecurrentGCN, self).__init__()
-        self.recurrent = GCLSTM(
-            in_channels=node_feat_dim,
-            out_channels=hidden_dim,
-            K=K,
-        )  # K is the Chebyshev filter size
-        self.linear = torch.nn.Linear(hidden_dim, hidden_dim)
-
-    def forward(self, x, edge_index, edge_weight, h, c):
-        r"""Forward function for the model,
-        this is used for each snapshot
-        h: node hidden state matrix from previous time
-        c: cell state matrix from previous time
-        """
-        h_0, c_0 = self.recurrent(x, edge_index, edge_weight, h, c)
-        h = F.relu(h_0)
-        h = self.linear(h)
-        return h, h_0, c_0
-
-
-class MLPDecoder(torch.nn.Module):
-    r"""MLP decoder for link prediction."""
-
-    def __init__(self, in_channels):
-        super().__init__()
-        self.lin_src = Linear(in_channels, in_channels)
-        self.lin_dst = Linear(in_channels, in_channels)
-        self.lin_final = Linear(in_channels, 1)
-
-    def forward(self, z_src, z_dst):
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
-        h = h.relu()
-        return self.lin_final(h).sigmoid()
+parser = argparse.ArgumentParser(
+    description='GCLSTM Example',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
+parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument('--num_layers', type=int, default=2, help='number of GCN layers')
+parser.add_argument('--device', type=str, default='cpu', help='training device')
+parser.add_argument('--device_id', type=str, default='0', help='device id for gpu')
+parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument(
+    '--time_gran',
+    type=str,
+    default='h',
+    help='time granularity to operate on for snapshots',
+)
 
 
 class GCLSTM_Model(nn.Module):
@@ -67,33 +45,57 @@ class GCLSTM_Model(nn.Module):
         hidden_channels: int,
     ) -> None:
         super().__init__()
-        # define model architecture
         self.in_channels = in_channels
         self.encoder = RecurrentGCN(
             node_feat_dim=in_channels, hidden_dim=hidden_channels, K=1
         )
-        self.decoder = MLPDecoder(in_channels=hidden_channels)
+        self.decoder = LinkPredictor(hidden_channels)
 
     def forward(
         self,
         batch: DGBatch,
         node_feat: torch.Tensor,
-        h_0: torch.Tensor = None,
-        c_0: torch.Tensor = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        h_0: torch.Tensor | None = None,
+        c_0: torch.Tensor | None = None,
+    ) -> Tuple[torch.Tensor, ...]:
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         if hasattr(batch, 'edge_weight'):
             edge_weight = batch.edge_weight
-
         else:
             edge_weight = torch.ones(edge_index.size(1), dtype=torch.float).to(
                 node_feat.device
             )
         z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
-        z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]
+        z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
         pos_out = self.decoder(z_src, z_dst)
         neg_out = self.decoder(z_src, z_neg)
         return pos_out, neg_out, h_0, c_0
+
+
+class RecurrentGCN(torch.nn.Module):
+    def __init__(self, node_feat_dim: int, hidden_dim: int, K=1) -> None:
+        super().__init__()
+        self.recurrent = GCLSTM(in_channels=node_feat_dim, out_channels=hidden_dim, K=K)
+        self.linear = torch.nn.Linear(hidden_dim, hidden_dim)
+
+    def forward(self, x, edge_index, edge_weight, h, c):
+        h_0, c_0 = self.recurrent(x, edge_index, edge_weight, h, c)
+        h = F.relu(h_0)
+        h = self.linear(h)
+        return h, h_0, c_0
+
+
+class LinkPredictor(nn.Module):
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.lin_src = nn.Linear(dim, dim)
+        self.lin_dst = nn.Linear(dim, dim)
+        self.lin_out = nn.Linear(dim, 1)
+
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = h.relu()
+        return self.lin_out(h).sigmoid().view(-1)
 
 
 def train(
@@ -130,14 +132,13 @@ def eval(
     metrics: Metric,
     input_batch: DGBatch,
     node_feat: torch.Tensor,
-    h_0: torch.Tensor = None,
-    c_0: torch.Tensor = None,
-) -> DGBatch:
+    h_0: torch.Tensor | None = None,
+    c_0: torch.Tensor | None = None,
+) -> Tuple[float, DGBatch]:
     model.eval()
     for batch in tqdm(loader):
         pos_out, neg_out, h_0, c_0 = model(batch, node_feat, h_0, c_0)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
-        y_pred = y_pred.view(-1)
         y_true = torch.cat(
             [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
         ).long()
@@ -148,28 +149,9 @@ def eval(
     return input_batch, h_0, c_0
 
 
-parser = argparse.ArgumentParser(
-    description='GCN Example',
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-)
-parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
-parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
-parser.add_argument('--num_layers', type=int, default=2, help='number of GCN layers')
-parser.add_argument('--device', type=str, default='cpu', help='training device')
-parser.add_argument('--device_id', type=str, default='0', help='device id for gpu')
-parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
-parser.add_argument(
-    '--time_gran',
-    type=str,
-    default='h',
-    help='time granularity to operate on for snapshots',
-)
-
-
 args = parser.parse_args()
 seed_everything(args.seed)
+
 if int(args.device_id) >= 0 and torch.cuda.is_available():
     args.device = torch.device('cuda'.format(args.device_id))
     print('INFO: using gpu:{} to train the model'.format(args.device_id))
@@ -206,27 +188,27 @@ if train_dg.node_feats_dim is not None:
         'node features are not supported yet, make sure to incorporate them in the model'
     )
 
-#! we need to add static node features to DGraph
+# TODO: add static node features to DGraph
 static_node_feats = torch.randn((test_dg.num_nodes, args.embed_dim))
 
-model = GCLSTM_Model(
-    in_channels=args.embed_dim,
-    hidden_channels=args.embed_dim,
-).to(args.device)
+model = GCLSTM_Model(in_channels=args.embed_dim, hidden_channels=args.embed_dim).to(
+    args.device
+)
 
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
-for epoch in range(1, args.epochs + 1):
-    loss, input_batch, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
-    pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-    input_batch, h_0, c_0 = eval(
-        val_loader, model, val_metrics, input_batch, static_node_feats, h_0, c_0
-    )
-    input_batch, h_0, c_0 = eval(
-        test_loader, model, test_metrics, input_batch, static_node_feats, h_0, c_0
-    )
-    val_metrics.reset()
-    test_metrics.reset()
+with Usage(prefix='GCLSTM Training'):
+    for epoch in range(1, args.epochs + 1):
+        loss, input_batch, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
+        pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
+        input_batch, h_0, c_0 = eval(
+            val_loader, model, val_metrics, input_batch, static_node_feats, h_0, c_0
+        )
+        input_batch, h_0, c_0 = eval(
+            test_loader, model, test_metrics, input_batch, static_node_feats, h_0, c_0
+        )
+        val_metrics.reset()
+        test_metrics.reset()
