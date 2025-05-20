@@ -1,6 +1,4 @@
-"""implmentation adapted from
-https://github.com/benedekrozemberczki/pytorch_geometric_temporal/blob/master/torch_geometric_temporal/nn/recurrent/gc_lstm.py
-"""
+"""Adapted from https://github.com/benedekrozemberczki/pytorch_geometric_temporal/blob/master/torch_geometric_temporal/nn/recurrent/gc_lstm.py."""
 
 from typing import Tuple
 

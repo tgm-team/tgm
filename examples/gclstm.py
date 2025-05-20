@@ -39,17 +39,10 @@ parser.add_argument(
 
 
 class GCLSTM_Model(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        hidden_channels: int,
-    ) -> None:
+    def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
-        self.in_channels = in_channels
-        self.encoder = RecurrentGCN(
-            node_feat_dim=in_channels, hidden_dim=hidden_channels, K=1
-        )
-        self.decoder = LinkPredictor(hidden_channels)
+        self.encoder = RecurrentGCN(node_dim=node_dim, embed_dim=embed_dim, K=1)
+        self.decoder = LinkPredictor(embed_dim)
 
     def forward(
         self,
@@ -58,7 +51,7 @@ class GCLSTM_Model(nn.Module):
         h_0: torch.Tensor | None = None,
         c_0: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, ...]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.src, batch.dst], dim=0).to(node_feat.device)
         if hasattr(batch, 'edge_weight'):
             edge_weight = batch.edge_weight
         else:
@@ -73,12 +66,19 @@ class GCLSTM_Model(nn.Module):
 
 
 class RecurrentGCN(torch.nn.Module):
-    def __init__(self, node_feat_dim: int, hidden_dim: int, K=1) -> None:
+    def __init__(self, node_dim: int, embed_dim: int, K=1) -> None:
         super().__init__()
-        self.recurrent = GCLSTM(in_channels=node_feat_dim, out_channels=hidden_dim, K=K)
-        self.linear = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.recurrent = GCLSTM(in_channels=node_dim, out_channels=embed_dim, K=K)
+        self.linear = torch.nn.Linear(embed_dim, embed_dim)
 
-    def forward(self, x, edge_index, edge_weight, h, c):
+    def forward(
+        self,
+        x: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_weight: torch.Tensor,
+        h: torch.Tensor | None,
+        c: torch.Tensor | None,
+    ) -> Tuple[torch.Tensor, ...]:
         h_0, c_0 = self.recurrent(x, edge_index, edge_weight, h, c)
         h = F.relu(h_0)
         h = self.linear(h)
@@ -106,22 +106,19 @@ def train(
 ) -> Tuple[float, DGBatch]:
     model.train()
     total_loss = 0
-    input_batch = None
-    h_0, c_0 = None, None
+    input_batch, h_0, c_0 = None, None, None
     for batch in tqdm(loader):
         opt.zero_grad()
         if input_batch is None:
             input_batch = batch
         pos_out, neg_out, h_0, c_0 = model(input_batch, node_feat, h_0, c_0)
-        criterion = torch.nn.MSELoss()
-        loss = criterion(pos_out, torch.ones_like(pos_out))
-        loss += criterion(neg_out, torch.zeros_like(neg_out))
+        loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
+        loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
         input_batch = batch
-        h_0 = h_0.detach()
-        c_0 = c_0.detach()
+        h_0, c_0 = h_0.detach(), c_0.detach()
     return total_loss, input_batch, h_0, c_0
 
 
@@ -142,7 +139,8 @@ def eval(
         y_true = torch.cat(
             [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
         ).long()
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
+        y_true = y_true.to(y_pred.device)
+        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
         input_batch = batch
     pprint(metrics.compute())
@@ -169,7 +167,6 @@ train_loader = DGDataLoader(
     batch_size=1,
     batch_unit=args.time_gran,
 )
-
 val_loader = DGDataLoader(
     val_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
@@ -189,11 +186,10 @@ if train_dg.node_feats_dim is not None:
     )
 
 # TODO: add static node features to DGraph
-static_node_feats = torch.randn((test_dg.num_nodes, args.embed_dim))
+args.node_dim = args.embed_dim
+static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
 
-model = GCLSTM_Model(in_channels=args.embed_dim, hidden_channels=args.embed_dim).to(
-    args.device
-)
+model = GCLSTM_Model(node_dim=args.node_dim, embed_dim=args.embed_dim).to(args.device)
 
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
