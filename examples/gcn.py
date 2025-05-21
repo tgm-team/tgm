@@ -177,9 +177,9 @@ else:
     args.device = torch.device('cpu')
     print('INFO: using cpu to train the model')
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='valid')
-test_dg = DGraph(args.dataset, split='test')
+train_dg = DGraph(args.dataset, split='train', load_data_time_delta=True)
+val_dg = DGraph(args.dataset, split='valid', load_data_time_delta=True)
+test_dg = DGraph(args.dataset, split='test', load_data_time_delta=True)
 
 train_loader = DGDataLoader(
     train_dg,
