@@ -24,6 +24,21 @@ case "$METHOD" in
             --memory_mode unlimited
         ;;
 
+    tgat)
+        python "$ROOT_DIR/examples/tgat.py" \
+            --seed $SEED \
+            --dataset $DATASET \
+            --bsize 200 \
+            --epochs 10 \
+            --lr 0.0001 \
+            --dropout 0.1 \
+            --n-heads 2 \
+            --n-nbrs [20] \
+            --time-dim 100 \
+            --embed-dim 100 \
+            --sampling recency
+        ;;
+
     *)
         echo "Error: Unknown method '$METHOD'"
         exit 1
