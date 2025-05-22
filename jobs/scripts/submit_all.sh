@@ -10,18 +10,34 @@ SEEDS="0 1 2"
 
 mkdir -p "$ROOT_DIR/jobs/logs"
 
+get_slurm_resources() {
+    local method=$1
+    case "$method" in
+        edgebank)
+            echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:10:00"
+            ;;
+        tgat)
+            echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:30:00 --gres=gpu:a100l:1"
+            ;;
+        *)
+            echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:30:00"
+            ;;
+    esac
+}
+
 for METHOD in $METHODS; do
     for DATASET in $DATASETS; do
         for SEED in $SEEDS; do
+            RESOURCES=$(get_slurm_resources "$METHOD")
+            JOB_NAME="${METHOD}_${DATASET}_${SEED}"
             TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-            echo "Submitting: $METHOD | $DATASET | $SEED"
-            sbatch  --job-name=${METHOD}_${DATASET}_${SEED} \
-                    --output="$ROOT_DIR/jobs/logs/${METHOD}_${DATASET}_${SEED}_${TIMESTAMP}.out" \
-                    --error="$ROOT_DIR/jobs/logs/${METHOD}_${DATASET}_${SEED}_${TIMESTAMP}.err" \
-                    --partition=main \
-                    --mem=4G \
-                    --cpus-per-task=2 \
-                    --wrap="bash $ROOT_DIR/jobs/scripts/run_method.sh $METHOD $DATASET $SEED"
+
+            echo "Submitting: $JOB_NAME"
+            sbatch  --job-name="${JOB_NAME}" \
+                --output="$ROOT_DIR/jobs/logs/${JOB_NAME}_${TIMESTAMP}.out" \
+                --error="$ROOT_DIR/jobs/logs/${JOB_NAME}_${TIMESTAMP}.err" \
+                $RESOURCES \
+                --wrap="bash $ROOT_DIR/jobs/scripts/run_method.sh $METHOD $DATASET $SEED"
         done
     done
 done

@@ -14,7 +14,6 @@ from opendg.hooks import NeighborSamplerHook, RecencyNeighborHook
 from opendg.loader import DGDataLoader
 from opendg.nn import TemporalAttention, Time2Vec
 from opendg.timedelta import TimeDeltaDG
-from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -24,6 +23,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
+parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
@@ -174,11 +174,10 @@ metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
-with Usage(prefix='TGAT Training'):
-    for epoch in range(1, args.epochs + 1):
-        loss = train(train_loader, model, opt)
-        pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-        eval(val_loader, model, val_metrics)
-        eval(test_loader, model, test_metrics)
-        val_metrics.reset()
-        test_metrics.reset()
+for epoch in range(1, args.epochs + 1):
+    loss = train(train_loader, model, opt)
+    pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
+    eval(val_loader, model, val_metrics)
+    eval(test_loader, model, test_metrics)
+    val_metrics.reset()
+    test_metrics.reset()

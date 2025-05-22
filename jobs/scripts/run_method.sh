@@ -11,7 +11,18 @@ METHOD=$1
 DATASET=$2
 SEED=$3
 
-echo "Running $METHOD on $DATASET with seed $SEED"
+echo "===== JOB INFO ====="
+echo "Job ID: $SLURM_JOB_ID"
+echo "Job Name: $SLURM_JOB_NAME"
+echo "Node List: $SLURM_NODELIST"
+echo "Num CPUs: $SLURM_CPUS_PER_TASK"
+echo "GPU(s): ${CUDA_VISIBLE_DEVICES:-None}"
+echo "Memory: ${SLURM_MEM_PER_NODE:-N/A}"
+echo "Start Time: $(date)"
+echo "Method: $METHOD"
+echo "Dataset: $DATASET"
+echo "Seed: $SEED"
+echo "=========================="
 
 case "$METHOD" in
     edgebank)
@@ -29,6 +40,7 @@ case "$METHOD" in
             --seed $SEED \
             --dataset $DATASET \
             --bsize 200 \
+            --device cuda \
             --epochs 10 \
             --lr 0.0001 \
             --dropout 0.1 \
