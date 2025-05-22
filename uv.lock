@@ -1084,6 +1084,7 @@ dev = [
     { name = "pandas", specifier = ">=1.5.3" },
     { name = "pre-commit", specifier = ">=4.0.1" },
     { name = "py-tgb", specifier = ">=2.0.0" },
+    { name = "py-tgb", git = "https://github.com/shenyangHuang/TGB.git?rev=07c554d5ce16f1d12791eae291a1f834dbca84c4#07c554d5ce16f1d12791eae291a1f834dbca84c4" },
     { name = "pytest", specifier = ">=8.3.3" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
     { name = "ruff", specifier = "==0.11.1" },
@@ -1291,7 +1292,7 @@ wheels = [
 [[package]]
 name = "py-tgb"
 version = "2.0.0"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/shenyangHuang/TGB.git?rev=07c554d5ce16f1d12791eae291a1f834dbca84c4#07c554d5ce16f1d12791eae291a1f834dbca84c4" }
 dependencies = [
     { name = "clint" },
     { name = "pandas" },
@@ -1299,10 +1300,6 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "torch-geometric" },
     { name = "tqdm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/89/9f/5d626c8885d0bdb519bcd438f229d62d229da32a6a73d3f149f4c2e9de26/py_tgb-2.0.0.tar.gz", hash = "sha256:1b44108d2b54a083b44c21e71680ac65434254b2d0d160aef3eb2f5f3e6ad26d", size = 107753 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/94/cad884aded289d55eae03fc715ffc513c56ec988b2c8a131edf59e623878/py_tgb-2.0.0-py3-none-any.whl", hash = "sha256:4b910af8fea80408e112597d98990340536c00dd8c108dc8d46bc4448d3a649b", size = 149643 },
 ]
 
 [[package]]
