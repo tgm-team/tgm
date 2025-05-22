@@ -20,13 +20,9 @@ class DGraph:
     def __init__(
         self,
         data: DGStorage | List[Event] | str | pathlib.Path | pd.DataFrame,
-        time_delta: TimeDeltaDG = TimeDeltaDG(unit='r'),
+        time_delta: TimeDeltaDG | None = None,
         **kwargs: Any,
     ) -> None:
-        if not isinstance(time_delta, TimeDeltaDG):
-            raise ValueError(f'bad time_delta type: {type(time_delta)}')
-        self.time_delta = time_delta
-
         if isinstance(data, DGStorage):
             self._storage = data
         else:
@@ -35,10 +31,15 @@ class DGraph:
                 raise ValueError('Tried to initialize a DGraph with empty events list')
             self._storage = DGStorage(events)
 
-        if time_delta.is_ordered:  # overwrite time_delta if it is ordered
-            # load the correct time granularity if loading TGB
+        if time_delta is None:
             if isinstance(data, str) and data.startswith('tgb'):
                 self.time_delta = read_time_delta(data)
+            else:
+                self.time_delta = TimeDeltaDG('r')
+        elif isinstance(time_delta, TimeDeltaDG):
+            self.time_delta = time_delta
+        else:
+            raise ValueError(f'bad time_delta type: {type(time_delta)}')
 
         self._slice = DGSliceTracker()
 

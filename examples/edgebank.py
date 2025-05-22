@@ -10,6 +10,7 @@ from opendg.graph import DGraph
 from opendg.hooks import NegativeEdgeSamplerHook
 from opendg.loader import DGDataLoader
 from opendg.nn import EdgeBankPredictor
+from opendg.timedelta import TimeDeltaDG
 from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
@@ -48,9 +49,9 @@ def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> Non
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='valid')
-test_dg = DGraph(args.dataset, split='test')
+train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
+val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
+test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
 
 train_data = train_dg.materialize(materialize_features=False)
 val_loader = DGDataLoader(
