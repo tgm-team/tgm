@@ -26,6 +26,7 @@ dev = [
     "pytest>=8.3.3",
     "ruff==0.11.1",
     "py-tgb>=2.0.0",
+    "py-tgb @ git+https://github.com/shenyangHuang/TGB.git@07c554d5ce16f1d12791eae291a1f834dbca84c4",
     "pandas>=1.5.3",
 ]
 docs = [
