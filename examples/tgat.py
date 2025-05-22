@@ -13,6 +13,7 @@ from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NeighborSamplerHook, RecencyNeighborHook
 from opendg.loader import DGDataLoader
 from opendg.nn import TemporalAttention, Time2Vec
+from opendg.timedelta import TimeDeltaDG
 from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
@@ -138,9 +139,9 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='valid')
-test_dg = DGraph(args.dataset, split='test')
+train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
+val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
+test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
 
 if args.sampling == 'uniform':
     train_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)

@@ -15,6 +15,7 @@ from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NegativeEdgeSamplerHook
 from opendg.loader import DGDataLoader
 from opendg.nn.recurrent import GCLSTM
+from opendg.timedelta import TimeDeltaDG
 from opendg.util.perf import Usage
 from opendg.util.seed import seed_everything
 
@@ -156,9 +157,9 @@ else:
     args.device = torch.device('cpu')
     print('INFO: using cpu to train the model')
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='valid')
-test_dg = DGraph(args.dataset, split='test')
+train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
+val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
+test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
 
 train_loader = DGDataLoader(
     train_dg,
