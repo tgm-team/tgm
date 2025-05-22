@@ -41,7 +41,7 @@ case "$METHOD" in
             --dataset $DATASET \
             --bsize 200 \
             --device cuda \
-            --epochs 10 \
+            --epochs 5 \
             --lr 0.0001 \
             --dropout 0.1 \
             --n-heads 2 \

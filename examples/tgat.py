@@ -75,19 +75,27 @@ class TGAT(nn.Module):
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         # TODO: Go back to recursive embedding for multi-hop
         hop = 0
-        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim))
-        nbr_node_feat = torch.zeros((*batch.nbr_nids[hop].shape, self.embed_dim))
-        time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop])))
-        nbr_time_feat = self.time_encoder(
-            batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
+
+        # Temporary
+        device = next(self.parameters()).device
+
+        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim), device=device)
+        nbr_node_feat = torch.zeros(
+            (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
         )
+        time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop]), device=device))
+        nbr_time_feat = self.time_encoder(
+            batch.nbr_times[hop].to(device)
+            - batch.time.unsqueeze(dim=1).repeat(3, 1).to(device)
+        )
+
         z = self.attn[hop](
             node_feat=node_feat,
             nbr_node_feat=nbr_node_feat,
             time_feat=time_feat,
             nbr_time_feat=nbr_time_feat,
-            edge_feat=batch.nbr_feats[hop],
-            nbr_mask=batch.nbr_mask[hop],
+            edge_feat=batch.nbr_feats[hop].to(device),
+            nbr_mask=batch.nbr_mask[hop].to(device),
         )
         z_src, z_dst, z_neg = z.chunk(3, dim=0)
         pos_out = self.link_predictor(z_src, z_dst)
@@ -128,10 +136,14 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
     for batch in tqdm(loader):
         pos_out, neg_out = model(batch)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
-        y_true = torch.cat(
-            [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-        ).long()
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
+        y_true = (
+            torch.cat(
+                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
+            )
+            .long()
+            .to(y_pred.device)
+        )
+        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
     pprint(metrics.compute())
 
@@ -167,7 +179,7 @@ model = TGAT(
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
-)
+).to(args.device)
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
