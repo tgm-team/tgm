@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -euo pipefail
+
 source .env
 
 datasets=(
@@ -13,6 +14,6 @@ datasets=(
 
 for dataset in "${datasets[@]}"; do
     echo "Downloading dataset: $dataset"
-    python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('$dataset')"
+    echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('$dataset')"
     echo "Ok."
 done
