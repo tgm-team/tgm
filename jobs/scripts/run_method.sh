@@ -11,7 +11,18 @@ METHOD=$1
 DATASET=$2
 SEED=$3
 
-echo "Running $METHOD on $DATASET with seed $SEED"
+echo "===== JOB INFO ====="
+echo "Job ID: $SLURM_JOB_ID"
+echo "Job Name: $SLURM_JOB_NAME"
+echo "Node List: $SLURM_NODELIST"
+echo "Num CPUs: $SLURM_CPUS_PER_TASK"
+echo "GPU(s): ${CUDA_VISIBLE_DEVICES:-None}"
+echo "Memory: ${SLURM_MEM_PER_NODE:-N/A}"
+echo "Start Time: $(date)"
+echo "Method: $METHOD"
+echo "Dataset: $DATASET"
+echo "Seed: $SEED"
+echo "=========================="
 
 case "$METHOD" in
     edgebank)
@@ -22,6 +33,22 @@ case "$METHOD" in
             --window_ratio 0.15 \
             --pos_prob 1.0 \
             --memory_mode unlimited
+        ;;
+
+    tgat)
+        python "$ROOT_DIR/examples/tgat.py" \
+            --seed $SEED \
+            --dataset $DATASET \
+            --bsize 200 \
+            --device cuda \
+            --epochs 5 \
+            --lr 0.0001 \
+            --dropout 0.1 \
+            --n-heads 2 \
+            --n-nbrs [20] \
+            --time-dim 100 \
+            --embed-dim 100 \
+            --sampling recency
         ;;
 
     *)
