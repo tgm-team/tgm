@@ -8,6 +8,8 @@ DATASETS=$(cat "$ROOT_DIR/jobs/configs/datasets.txt")
 METHODS=$(cat "$ROOT_DIR/jobs/configs/methods.txt")
 SEEDS="0 1 2"
 
+mkdir -p "$ROOT_DIR/jobs/logs"
+
 for METHOD in $METHODS; do
     for DATASET in $DATASETS; do
         for SEED in $SEEDS; do
