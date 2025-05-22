@@ -1,7 +1,3 @@
-"""example on how to easily run GCN on snapshots from a CTDG.
-comparable script see: https://github.com/shenyangHuang/UTG/blob/main/ctdg_utg_gcn.py.
-"""
-
 import argparse
 from pprint import pprint
 from typing import Tuple
@@ -20,6 +16,25 @@ from opendg.hooks import NegativeEdgeSamplerHook
 from opendg.loader import DGDataLoader
 from opendg.timedelta import TimeDeltaDG
 from opendg.util.seed import seed_everything
+
+parser = argparse.ArgumentParser(
+    description='GCN Example',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
+parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
+parser.add_argument('--device', type=str, default='cpu', help='torch device')
+parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
+parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+parser.add_argument(
+    '--time-gran',
+    type=str,
+    default='h',
+    help='time granularity to operate on for snapshots',
+)
 
 
 class GCNEncoder(torch.nn.Module):
@@ -149,34 +164,8 @@ def eval(
     return input_batch
 
 
-parser = argparse.ArgumentParser(
-    description='GCN Example',
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-)
-parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
-parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
-parser.add_argument('--num_layers', type=int, default=2, help='number of GCN layers')
-parser.add_argument('--device', type=str, default='cpu', help='training device')
-parser.add_argument('--device_id', type=str, default='0', help='device id for gpu')
-parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
-parser.add_argument(
-    '--time_gran',
-    type=str,
-    default='h',
-    help='time granularity to operate on for snapshots',
-)
-
-
 args = parser.parse_args()
 seed_everything(args.seed)
-if int(args.device_id) >= 0 and torch.cuda.is_available():
-    args.device = torch.device('cuda'.format(args.device_id))
-    print('INFO: using gpu:{} to train the model'.format(args.device_id))
-else:
-    args.device = torch.device('cpu')
-    print('INFO: using cpu to train the model')
 
 train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
 val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
@@ -209,13 +198,13 @@ if train_dg.node_feats_dim is not None:
     )
 
 #! we need to add static node features to DGraph
-static_node_feats = torch.randn((test_dg.num_nodes, args.embed_dim))
+static_node_feats = torch.randn((test_dg.num_nodes, args.embed_dim), device=args.device)
 
 model = GCN(
     in_channels=args.embed_dim,
     hidden_channels=args.embed_dim,
-    num_layers=args.num_layers,
-    dropout=0.0,
+    num_layers=args.n_layers,
+    dropout=float(args.dropout),
 ).to(args.device)
 
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
