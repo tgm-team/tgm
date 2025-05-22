@@ -7,7 +7,7 @@
 #SBATCH --output=out/%x.%j.out
 #SBATCH --error=out/%x.%j.err
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=jacob.chmura@gmail.com
+#SBATCH --mail-user=jacobpaul.chmura@gmail.com
 
 source .env
 
