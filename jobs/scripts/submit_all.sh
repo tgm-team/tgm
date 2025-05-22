@@ -13,13 +13,14 @@ mkdir -p "$ROOT_DIR/jobs/logs"
 for METHOD in $METHODS; do
     for DATASET in $DATASETS; do
         for SEED in $SEEDS; do
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
             echo "Submitting: $METHOD | $DATASET | $SEED"
             sbatch  --job-name=${METHOD}_${DATASET}_${SEED} \
+                    --output="$ROOT_DIR/jobs/logs/${METHOD}_${DATASET}_${SEED}_${TIMESTAMP}.out" \
+                    --error="$ROOT_DIR/jobs/logs/${METHOD}_${DATASET}_${SEED}_${TIMESTAMP}.err" \
                     --partition=main \
-                    --output="$ROOT_DIR/jobs/logs/%x_%j.out" \
-                    --error="$ROOT_DIR/jobs/logs/%x_%j.err" \
                     --mem=4G \
-                    --cpus-per-task=4 \
+                    --cpus-per-task=2 \
                     --wrap="bash $ROOT_DIR/jobs/scripts/run_method.sh $METHOD $DATASET $SEED"
         done
     done
