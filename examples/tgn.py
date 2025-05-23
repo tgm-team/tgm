@@ -33,7 +33,6 @@ parser.add_argument('--n-heads', type=int, default=2, help='number of attention 
 parser.add_argument('--n-nbrs', type=int, default=[20], help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
-parser.add_argument('--memory_dim', type=int, default=172, help='memory dimension')
 parser.add_argument(
     '--sampling',
     type=str,
@@ -51,19 +50,18 @@ class TGN(torch.nn.Module):
         time_dim: int,
         embed_dim: int,
         num_layers: int,
-        memory_dim: int,
         n_heads: int,
         dropout: float,
+        num_nodes: int,
     ):
         super().__init__()
         self.time_encoder = Time2Vec(time_dim=time_dim)
         self.msg_agg = LastMessageAggregator()
-        self.msg_func = IdentityMessageFunction()
+        self.nodes = list(range(num_nodes))
 
-        msg_dim = 2 * memory_dim + edge_dim + time_dim
-        self.n_nodes = 100  # TODO
-        self.memory = Memory(n_nodes=self.n_nodes, memory_dim=memory_dim)
-        self.memory_updater = GRUMemoryUpdater(self.memory, msg_dim, memory_dim)
+        msg_dim = 2 * embed_dim + edge_dim + time_dim
+        self.memory = Memory(n_nodes=num_nodes, memory_dim=embed_dim)
+        self.memory_updater = GRUMemoryUpdater(self.memory, msg_dim, embed_dim)
         self.gat = GraphAttentionEmbedding(
             node_dim=node_dim,
             edge_dim=edge_dim,
@@ -76,24 +74,22 @@ class TGN(torch.nn.Module):
         )
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        nodes = list(range(self.n_nodes))
-        unique_nids, unique_msg, unique_times = self.msg_agg(nodes, self.memory.msgs)
-        if len(unique_nids) > 0:
-            unique_msg = self.msg_func(unique_msg)
-        memory, last_update = self.memory_updater.get_updated_memory(
-            unique_nids, unique_msg, unique_times
-        )
-        batch.time[batch.src] -= last_update[batch.src].long()
-        batch.time[batch.dst] -= last_update[batch.dst].long()
-        batch.time[batch.neg] -= last_update[batch.neg].long()  # type: ignore
+        agg_msgs = self.msg_agg(self.nodes, self.memory.msgs)
+        memory, last_update = self.memory_updater.get_updated_memory(*agg_msgs)
+        # TODO: I think this is only needed for multi-hop?
+        # Difference between the time the memory of a node was last updated,
+        # and the time for which we want to compute the embedding of a node
+        # batch.time[batch.src] -= last_update[batch.src].long()
+        # batch.time[batch.dst] -= last_update[batch.dst].long()
+        # batch.time[batch.neg] -= last_update[batch.neg].long()  # type: ignore
+
         pos_out, neg_out = self.gat(batch, memory=memory)
-        self._update(batch, memory)
+        self._update(batch)
         return pos_out, neg_out
 
-    def _update(self, batch: DGBatch, memory: 'Memory') -> None:
-        def _get_raw_msgs(src, dst, time, edge_idxs):
-            time = torch.from_numpy(time).float()
-            edge_feats = self.edge_raw_features[edge_idxs]
+    def _update(self, batch: DGBatch) -> None:
+        def _get_raw_msgs(src, dst, time):
+            edge_feats = batch.edge_feats
             src_memory = self.memory.get_memory(src)
             dst_memory = self.memory.get_memory(dst)
             time_delta = time - self.memory.last_update[src]
@@ -109,19 +105,14 @@ class TGN(torch.nn.Module):
             return unique_src, msgs
 
         # Persist the updates to the memory only for sources and destinations
-        src, dst, time, edge_idxs = batch.src, batch.dst, batch.time, batch.nbr_nids
-        pos = np.concatenate([src, dst])
-        unique_nids, unique_msg, unique_times = self.msg_agg(pos, self.memory.msg)
-        if len(unique_nids) > 0:
-            unique_msg = self.msg_func(unique_msg)
+        pos = torch.cat([batch.src, batch.dst])
+        unique_nids, unique_msg, unique_times = self.msg_agg(pos, self.memory.msgs)
         self.memory_updater.update(unique_nids, unique_msg, time=unique_times)
-        assert torch.allclose(
-            memory[pos], self.memory.get_memory(pos), atol=1e-5
-        ), 'Something wrong in how the memory was updated'
+
         # Remove msgs for the pos since we have already updated the memory using them
         self.memory.clear_msgs(pos)
-        unique_src, src_to_msgs = _get_raw_msgs(src, dst, time, edge_idxs)
-        unique_dst, dst_to_msgs = _get_raw_msgs(dst, src, time, edge_idxs)
+        unique_src, src_to_msgs = _get_raw_msgs(batch.src, batch.dst, batch.time)
+        unique_dst, dst_to_msgs = _get_raw_msgs(batch.dst, batch.src, batch.time)
         self.memory.store_raw_msgs(unique_src, src_to_msgs)
         self.memory.store_raw_msgs(unique_dst, dst_to_msgs)
 
@@ -142,17 +133,12 @@ class LastMessageAggregator(torch.nn.Module):
         return to_update_node_ids, unique_msg, unique_times
 
 
-class IdentityMessageFunction(nn.Module):
-    def forward(self, raw_msgs: torch.Tensor) -> torch.Tensor:
-        return raw_msgs
-
-
 class Memory(nn.Module):
-    def __init__(self, n_nodes: int, memory_dim: int) -> None:
+    def __init__(self, n_nodes: int, memory_dim: int, device: str = 'cpu') -> None:
         super().__init__()
         self.memory_dim = memory_dim
         self.n_nodes = n_nodes
-        self.device = 'cpu'
+        self.device = device
         self.msgs = defaultdict(list)
 
         self.reset()
@@ -298,8 +284,8 @@ class GraphAttentionEmbedding(nn.Module):
         )
 
         z = self.attn[hop](
-            node_feat=node_feat + memory[batch.nids[hop], :],
-            nbr_node_feat=nbr_node_feat + memory[batch.nbr_nids, :],
+            node_feat=node_feat + memory[batch.nids[hop]],
+            nbr_node_feat=nbr_node_feat,
             time_feat=time_feat,
             nbr_time_feat=nbr_time_feat,
             edge_feat=batch.nbr_feats[hop].to(device),
@@ -367,6 +353,9 @@ train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
 val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
 test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
 
+# Get global number of nodes for TGN Memory
+num_nodes = DGraph(args.dataset).num_nodes
+
 if args.sampling == 'uniform':
     train_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     val_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
@@ -391,7 +380,7 @@ model = TGN(
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
-    memory_dim=args.memory_dim,
+    num_nodes=num_nodes,
 ).to(args.device)
 model.memory.set_device(args.device)
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
