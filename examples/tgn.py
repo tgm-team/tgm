@@ -34,7 +34,6 @@ parser.add_argument('--n-nbrs', type=int, default=[20], help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
 parser.add_argument('--memory_dim', type=int, default=172, help='memory dimension')
-parser.add_argument('--message_dim', type=int, default=100, help='message dimension')
 parser.add_argument(
     '--sampling',
     type=str,
@@ -53,6 +52,8 @@ class TGN(torch.nn.Module):
         embed_dim: int,
         num_layers: int,
         memory_dim: int,
+        n_heads: int,
+        dropout: float,
     ):
         super().__init__()
         self.time_encoder = Time2Vec(time_dim=time_dim)
@@ -64,12 +65,14 @@ class TGN(torch.nn.Module):
         self.memory = Memory(n_nodes=self.n_nodes, memory_dim=memory_dim)
         self.memory_updater = GRUMemoryUpdater(self.memory, msg_dim, memory_dim)
         self.gat = GraphAttentionEmbedding(
-            time_encoder=self.time_encoder,
-            num_layers=num_layers,
             node_dim=node_dim,
             edge_dim=edge_dim,
             time_dim=node_dim,
             embed_dim=embed_dim,
+            num_layers=num_layers,
+            n_heads=n_heads,
+            dropout=dropout,
+            time_encoder=self.time_encoder,
         )
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -87,7 +90,7 @@ class TGN(torch.nn.Module):
         self._update(batch, memory)
         return pos_out, neg_out
 
-    def _update(self, batch: DGBatch, memory: Memory) -> None:
+    def _update(self, batch: DGBatch, memory: 'Memory') -> None:
         def _get_raw_msgs(src, dst, time, edge_idxs):
             time = torch.from_numpy(time).float()
             edge_feats = self.edge_raw_features[edge_idxs]
@@ -144,103 +147,27 @@ class IdentityMessageFunction(nn.Module):
         return raw_msgs
 
 
-class GraphAttentionEmbedding(nn.Module):
-    def __init__(
-        self,
-        time_encoder: Time2Vec,
-        num_layers: int,
-        node_dim: int,
-        edge_dim: int,
-        time_dim: int,
-        embed_dim: int,
-        n_heads: int = 2,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.time_encoder = time_encoder
-        self.link_predictor = LinkPredictor(self.node_dim)
-        self.attn = nn.ModuleList(
-            [
-                TemporalAttention(
-                    n_heads=n_heads,
-                    node_dim=node_dim if i == 0 else embed_dim,
-                    edge_dim=edge_dim,
-                    time_dim=time_dim,
-                    out_dim=embed_dim,
-                    dropout=dropout,
-                )
-                for i in range(num_layers)
-            ]
-        )
-
-    def forward(
-        self, batch: DGBatch, memory: Memory
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO: Go back to recursive embedding for multi-hop
-        hop = 0
-        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim))
-        nbr_node_feat = torch.zeros((*batch.nbr_nids[hop].shape, self.embed_dim))
-
-        z = self.attn[hop](
-            node_feat=node_feat + memory[batch.nids[hop], :],
-            nbr_node_feat=nbr_node_feat + memory[batch.nbr_nids, :],
-            time_feat=self.time_encoder(torch.zeros(len(batch.nids[hop]))),
-            nbr_time_feat=self.time_encoder(
-                batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
-            ),
-            edge_feat=batch.nbr_feats[hop],
-            nbr_mask=batch.nbr_mask[hop],
-        )
-        z_src, z_dst, z_neg = z.chunk(3, dim=0)
-        pos_out = self.link_predictor(z_src, z_dst)
-        neg_out = self.link_predictor(z_src, z_neg)
-        return pos_out, neg_out
-
-
-class GRUMemoryUpdater(nn.Module):
-    def __init__(self, memory: Memory, msg_dim: int, memory_dim: int) -> None:
-        super().__init__()
-        self.memory = memory
-        self.memory_updater = nn.GRUCell(input_size=msg_dim, hidden_size=memory_dim)
-
-    def update(
-        self, unique_nids: torch.Tensor, unique_msg: torch.Tensor, time: int
-    ) -> None:
-        if len(unique_nids) <= 0:
-            return
-        assert (
-            (self.memory.get_last_update(unique_nids) <= time).all().item()
-        ), 'Trying to update memory to time in the past'
-        memory = self.memory.get_memory(unique_nids)
-        self.memory.last_update[unique_nids] = time
-        updated_memory = self.memory_updater(unique_msg, memory)
-        self.memory.set_memory(unique_nids, updated_memory)
-
-    def get_updated_memory(
-        self, unique_nids: torch.Tensor, unique_msg: torch.Tensor, time: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        if len(unique_nids) <= 0:
-            return self.memory.memory.data.clone(), self.memory.last_update.data.clone()
-        assert (
-            (self.memory.get_last_update(unique_nids) <= time).all().item()
-        ), 'Trying to update memory to time in the past'
-        updated_memory = self.memory.memory.data.clone()
-        updated_memory[unique_nids] = self.memory_updater(
-            unique_msg, updated_memory[unique_nids]
-        )
-        updated_last_update = self.memory.last_update.data.clone()
-        updated_last_update[unique_nids] = time
-        return updated_memory, updated_last_update
-
-
 class Memory(nn.Module):
     def __init__(self, n_nodes: int, memory_dim: int) -> None:
         super().__init__()
-        self.memory = nn.Parameter(
-            torch.zeros((n_nodes, memory_dim)), requires_grad=False
-        )
-        self.last_update = nn.Parameter(torch.zeros(n_nodes), requires_grad=False)
+        self.memory_dim = memory_dim
+        self.n_nodes = n_nodes
+        self.device = 'cpu'
         self.msgs = defaultdict(list)
+
+        self.reset()
+
+    def set_device(self, device: str) -> None:
+        self.device = device
+
+    def reset(self) -> None:
+        self.memory = nn.Parameter(
+            torch.zeros((self.n_nodes, self.memory_dim), device=self.device),
+            requires_grad=False,
+        )
+        self.last_update = nn.Parameter(
+            torch.zeros(self.n_nodes, device=self.device), requires_grad=False
+        )
 
     def store_raw_msgs(
         self, nodes: torch.Tensor, node_id_to_msg: Dict[int, torch.Tensor]
@@ -285,6 +212,105 @@ class Memory(nn.Module):
             self.msgs[node] = []
 
 
+class GRUMemoryUpdater(nn.Module):
+    def __init__(self, memory: Memory, msg_dim: int, memory_dim: int) -> None:
+        super().__init__()
+        self.memory = memory
+        self.memory_updater = nn.GRUCell(input_size=msg_dim, hidden_size=memory_dim)
+
+    def update(
+        self, unique_nids: torch.Tensor, unique_msg: torch.Tensor, time: int
+    ) -> None:
+        if len(unique_nids) <= 0:
+            return
+        assert (
+            (self.memory.get_last_update(unique_nids) <= time).all().item()
+        ), 'Trying to update memory to time in the past'
+        memory = self.memory.get_memory(unique_nids)
+        self.memory.last_update[unique_nids] = time
+        updated_memory = self.memory_updater(unique_msg, memory)
+        self.memory.set_memory(unique_nids, updated_memory)
+
+    def get_updated_memory(
+        self, unique_nids: torch.Tensor, unique_msg: torch.Tensor, time: int
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        if len(unique_nids) <= 0:
+            return self.memory.memory.data.clone(), self.memory.last_update.data.clone()
+        assert (
+            (self.memory.get_last_update(unique_nids) <= time).all().item()
+        ), 'Trying to update memory to time in the past'
+        updated_memory = self.memory.memory.data.clone()
+        updated_memory[unique_nids] = self.memory_updater(
+            unique_msg, updated_memory[unique_nids]
+        )
+        updated_last_update = self.memory.last_update.data.clone()
+        updated_last_update[unique_nids] = time
+        return updated_memory, updated_last_update
+
+
+class GraphAttentionEmbedding(nn.Module):
+    def __init__(
+        self,
+        node_dim: int,
+        edge_dim: int,
+        time_dim: int,
+        embed_dim: int,
+        num_layers: int,
+        time_encoder: Time2Vec,
+        n_heads: int = 2,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.link_predictor = LinkPredictor(dim=embed_dim)
+        self.time_encoder = time_encoder
+        self.attn = nn.ModuleList(
+            [
+                TemporalAttention(
+                    n_heads=n_heads,
+                    node_dim=node_dim if i == 0 else embed_dim,
+                    edge_dim=edge_dim,
+                    time_dim=time_dim,
+                    out_dim=embed_dim,
+                    dropout=dropout,
+                )
+                for i in range(num_layers)
+            ]
+        )
+
+    def forward(
+        self, batch: DGBatch, memory: Memory
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # TODO: Go back to recursive embedding for multi-hop
+        hop = 0
+
+        # Temporary
+        device = next(self.parameters()).device
+
+        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim), device=device)
+        nbr_node_feat = torch.zeros(
+            (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
+        )
+        time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop]), device=device))
+        nbr_time_feat = self.time_encoder(
+            batch.nbr_times[hop].to(device)
+            - batch.time.unsqueeze(dim=1).repeat(3, 1).to(device)
+        )
+
+        z = self.attn[hop](
+            node_feat=node_feat + memory[batch.nids[hop], :],
+            nbr_node_feat=nbr_node_feat + memory[batch.nbr_nids, :],
+            time_feat=time_feat,
+            nbr_time_feat=nbr_time_feat,
+            edge_feat=batch.nbr_feats[hop].to(device),
+            nbr_mask=batch.nbr_mask[hop].to(device),
+        )
+        z_src, z_dst, z_neg = z.chunk(3, dim=0)
+        pos_out = self.link_predictor(z_src, z_dst)
+        neg_out = self.link_predictor(z_src, z_neg)
+        return pos_out, neg_out
+
+
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
@@ -300,7 +326,7 @@ class LinkPredictor(nn.Module):
 
 def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) -> float:
     # Reinitialize memory of the model at the start of each epoch
-    model.memory.__init_memory__()
+    model.memory.reset()
     model.train()
     total_loss = 0
     for batch in tqdm(loader):
@@ -358,16 +384,16 @@ val_loader = DGDataLoader(val_dg, hook=val_hook, batch_size=args.bsize)
 test_loader = DGDataLoader(test_dg, hook=test_hook, batch_size=args.bsize)
 
 model = TGN(
-    node_features=node_features,
-    edge_features=edge_features,
-    n_layers=args.n_layer,
+    node_dim=train_dg.node_feats_dim or args.embed_dim,  # TODO: verify
+    edge_dim=train_dg.edge_feats_dim or args.embed_dim,
+    time_dim=args.time_dim,
+    embed_dim=args.embed_dim,
+    num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
-    dropout=args.dropout,
-    message_dimension=args.message_dim,
-    node_dim=args.node_dim,
+    dropout=float(args.dropout),
     memory_dim=args.memory_dim,
-    n_neighbors=args.n_nbrs,
 ).to(args.device)
+model.memory.set_device(args.device)
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]

@@ -52,7 +52,7 @@ class TGAT(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
-        self.num_layers = num_layers
+        self.embed_dim = embed_dim
         self.link_predictor = LinkPredictor(dim=embed_dim)
         self.time_encoder = Time2Vec(time_dim=time_dim)
         self.attn = nn.ModuleList(
@@ -68,9 +68,6 @@ class TGAT(nn.Module):
                 for i in range(num_layers)
             ]
         )
-
-        # Temporary
-        self.embed_dim = embed_dim
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         # TODO: Go back to recursive embedding for multi-hop
