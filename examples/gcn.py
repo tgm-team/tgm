@@ -5,7 +5,6 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Linear
 from torch_geometric.nn import GCNConv
 from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
@@ -24,11 +23,11 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
-parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
-parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
+parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
     '--time-gran',
     type=str,
@@ -37,30 +36,66 @@ parser.add_argument(
 )
 
 
-class GCNEncoder(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout):
-        super(GCNEncoder, self).__init__()
-
+class GCN(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        embed_dim: int,
+        num_layers: int,
+        dropout: float,
+    ) -> None:
+        super().__init__()
         self.in_channels = in_channels
+        self.encoder = GCNEncoder(
+            in_channels=in_channels,
+            embed_dim=embed_dim,
+            out_channels=embed_dim,
+            num_layers=num_layers,
+            dropout=dropout,
+        )
+        self.decoder = LinkPredictor(dim=embed_dim)
 
-        self.convs = torch.nn.ModuleList()
-        self.convs.append(GCNConv(in_channels, hidden_channels, cached=True))
-        self.bns = torch.nn.ModuleList()
-        self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
-        for _ in range(num_layers - 2):
-            self.convs.append(GCNConv(hidden_channels, hidden_channels, cached=True))
-            self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
-        self.convs.append(GCNConv(hidden_channels, out_channels, cached=True))
+    def forward(
+        self, batch: DGBatch, node_feat: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        edge_index = torch.stack([batch.src, batch.dst], dim=0).to(node_feat.device)
+        z = self.encoder(node_feat, edge_index)
+        z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
+        pos_out = self.decoder(z_src, z_dst)
+        neg_out = self.decoder(z_src, z_neg)
+        return pos_out, neg_out
 
+
+class GCNEncoder(torch.nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        embed_dim: int,
+        out_channels: int,
+        num_layers: int,
+        dropout: float,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
         self.dropout = dropout
+        self.convs = torch.nn.ModuleList()
+        self.bns = torch.nn.ModuleList()
 
-    def reset_parameters(self):
+        self.convs.append(GCNConv(in_channels, embed_dim, cached=True))
+        self.bns.append(torch.nn.BatchNorm1d(embed_dim))
+
+        for _ in range(num_layers - 2):
+            self.convs.append(GCNConv(embed_dim, embed_dim, cached=True))
+            self.bns.append(torch.nn.BatchNorm1d(embed_dim))
+        self.convs.append(GCNConv(embed_dim, out_channels, cached=True))
+
+    def reset_parameters(self) -> None:
         for conv in self.convs:
             conv.reset_parameters()
         for bn in self.bns:
             bn.reset_parameters()
 
-    def forward(self, x, edge_index):
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
         for i, conv in enumerate(self.convs[:-1]):
             x = conv(x, edge_index)
             x = self.bns[i](x)
@@ -70,51 +105,17 @@ class GCNEncoder(torch.nn.Module):
         return x
 
 
-class MLPDecoder(torch.nn.Module):
-    r"""MLP decoder for link prediction."""
-
-    def __init__(self, in_channels):
+class LinkPredictor(nn.Module):
+    def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = Linear(in_channels, in_channels)
-        self.lin_dst = Linear(in_channels, in_channels)
-        self.lin_final = Linear(in_channels, 1)
+        self.lin_src = nn.Linear(dim, dim)
+        self.lin_dst = nn.Linear(dim, dim)
+        self.lin_out = nn.Linear(dim, 1)
 
-    def forward(self, z_src, z_dst):
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         h = self.lin_src(z_src) + self.lin_dst(z_dst)
         h = h.relu()
-        return self.lin_final(h).sigmoid()
-
-
-class GCN(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        hidden_channels: int,
-        num_layers: int,
-        dropout: float,
-    ) -> None:
-        super().__init__()
-        # define model architecture
-        self.in_channels = in_channels
-        self.encoder = GCNEncoder(
-            in_channels=in_channels,
-            hidden_channels=hidden_channels,
-            out_channels=hidden_channels,
-            num_layers=num_layers,
-            dropout=dropout,
-        )
-
-        self.decoder = MLPDecoder(in_channels=hidden_channels)
-
-    def forward(
-        self, batch: DGBatch, node_feat: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
-        z = self.encoder(node_feat, edge_index)
-        z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]
-        pos_out = self.decoder(z_src, z_dst)
-        neg_out = self.decoder(z_src, z_neg)
-        return pos_out, neg_out
+        return self.lin_out(h).sigmoid().view(-1)
 
 
 def train(
@@ -131,9 +132,8 @@ def train(
         if input_batch is None:
             input_batch = batch
         pos_out, neg_out = model(input_batch, node_feat)
-        criterion = torch.nn.MSELoss()
-        loss = criterion(pos_out, torch.ones_like(pos_out))
-        loss += criterion(neg_out, torch.zeros_like(neg_out))
+        loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
+        loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -153,11 +153,14 @@ def eval(
     for batch in tqdm(loader):
         pos_out, neg_out = model(batch, node_feat)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
-        y_pred = y_pred.view(-1)
-        y_true = torch.cat(
-            [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-        ).long()
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
+        y_true = (
+            torch.cat(
+                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
+            )
+            .long()
+            .to(y_pred.device)
+        )
+        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
         input_batch = batch
     pprint(metrics.compute())
@@ -174,41 +177,36 @@ test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
 train_loader = DGDataLoader(
     train_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes),
-    batch_size=1,
     batch_unit=args.time_gran,
 )
-
 val_loader = DGDataLoader(
     val_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
-    batch_size=1,
     batch_unit=args.time_gran,
 )
 test_loader = DGDataLoader(
     test_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
-    batch_size=1,
     batch_unit=args.time_gran,
 )
-
 
 if train_dg.node_feats_dim is not None:
     raise ValueError(
         'node features are not supported yet, make sure to incorporate them in the model'
     )
 
-#! we need to add static node features to DGraph
-static_node_feats = torch.randn((test_dg.num_nodes, args.embed_dim), device=args.device)
+# TODO: add static node features to DGraph
+args.node_dim = args.embed_dim
+static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
 
 model = GCN(
     in_channels=args.embed_dim,
-    hidden_channels=args.embed_dim,
+    embed_dim=args.embed_dim,
     num_layers=args.n_layers,
     dropout=float(args.dropout),
 ).to(args.device)
 
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
-
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
