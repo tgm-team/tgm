@@ -27,32 +27,21 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
-parser.add_argument('--gpu', type=int, default=-1, help='gpu to use (or -1 for cpu)')
+parser.add_argument('--device', type=str, default='cpu', help='torch device')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
-parser.add_argument('--n-nbrs', type=int, default=[10], help='num sampled nbrs')
+parser.add_argument('--n-nbrs', type=int, default=[20], help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
+parser.add_argument('--memory_dim', type=int, default=172, help='memory dimension')
 parser.add_argument(
     '--sampling',
     type=str,
     default='recency',
     choices=['uniform', 'recency'],
     help='sampling strategy',
-)
-
-parser.add_argument(
-    '--memory_dim',
-    type=int,
-    default=172,
-    help='Dimensions of the memory for each node',
-)
-parser.add_argument(
-    '--randomize_features',
-    action='store_true',
-    help='Whether to randomize node features',
 )
 
 
@@ -415,7 +404,7 @@ MEMORY_DIM = args.memory_dim
 ) = get_data(
     args.data,
     different_new_nodes_between_val_and_test=args.different_new_nodes,
-    randomize_features=args.randomize_features,
+    randomize_features=True,
 )
 
 # Initialize negative samplers. Set seeds for validation and testing so negatives are the same
