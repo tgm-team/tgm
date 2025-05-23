@@ -13,7 +13,6 @@ from tqdm import tqdm
 from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NegativeEdgeSamplerHook
 from opendg.loader import DGDataLoader
-from opendg.timedelta import TimeDeltaDG
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -170,9 +169,9 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
-val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
-test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
+train_dg = DGraph(args.dataset, split='train')
+val_dg = DGraph(args.dataset, split='valid')
+test_dg = DGraph(args.dataset, split='test')
 
 train_loader = DGDataLoader(
     train_dg,
