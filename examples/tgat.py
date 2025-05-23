@@ -13,7 +13,7 @@ from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NeighborSamplerHook, RecencyNeighborHook
 from opendg.loader import DGDataLoader
 from opendg.nn import TemporalAttention, Time2Vec
-from opendg.util.perf import Usage
+from opendg.timedelta import TimeDeltaDG
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -23,7 +23,8 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--device', type=str, default='cpu', help='torch device')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
@@ -74,19 +75,27 @@ class TGAT(nn.Module):
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         # TODO: Go back to recursive embedding for multi-hop
         hop = 0
-        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim))
-        nbr_node_feat = torch.zeros((*batch.nbr_nids[hop].shape, self.embed_dim))
-        time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop])))
-        nbr_time_feat = self.time_encoder(
-            batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
+
+        # Temporary
+        device = next(self.parameters()).device
+
+        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim), device=device)
+        nbr_node_feat = torch.zeros(
+            (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
         )
+        time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop]), device=device))
+        nbr_time_feat = self.time_encoder(
+            batch.nbr_times[hop].to(device)
+            - batch.time.unsqueeze(dim=1).repeat(3, 1).to(device)
+        )
+
         z = self.attn[hop](
             node_feat=node_feat,
             nbr_node_feat=nbr_node_feat,
             time_feat=time_feat,
             nbr_time_feat=nbr_time_feat,
-            edge_feat=batch.nbr_feats[hop],
-            nbr_mask=batch.nbr_mask[hop],
+            edge_feat=batch.nbr_feats[hop].to(device),
+            nbr_mask=batch.nbr_mask[hop].to(device),
         )
         z_src, z_dst, z_neg = z.chunk(3, dim=0)
         pos_out = self.link_predictor(z_src, z_dst)
@@ -127,10 +136,14 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
     for batch in tqdm(loader):
         pos_out, neg_out = model(batch)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
-        y_true = torch.cat(
-            [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-        ).long()
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
+        y_true = (
+            torch.cat(
+                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
+            )
+            .long()
+            .to(y_pred.device)
+        )
+        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
     pprint(metrics.compute())
 
@@ -138,9 +151,9 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='valid')
-test_dg = DGraph(args.dataset, split='test')
+train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
+val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
+test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
 
 if args.sampling == 'uniform':
     train_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
@@ -166,18 +179,17 @@ model = TGAT(
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
-)
+).to(args.device)
 opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
-with Usage(prefix='TGAT Training'):
-    for epoch in range(1, args.epochs + 1):
-        loss = train(train_loader, model, opt)
-        pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-        eval(val_loader, model, val_metrics)
-        eval(test_loader, model, test_metrics)
-        val_metrics.reset()
-        test_metrics.reset()
+for epoch in range(1, args.epochs + 1):
+    loss = train(train_loader, model, opt)
+    pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
+    eval(val_loader, model, val_metrics)
+    eval(test_loader, model, test_metrics)
+    val_metrics.reset()
+    test_metrics.reset()
