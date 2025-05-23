@@ -75,24 +75,27 @@ class TGN(torch.nn.Module):
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         agg_msgs = self.msg_agg(self.nodes, self.memory.msgs)
-        memory, last_update = self.memory_updater.get_updated_memory(*agg_msgs)
+        memory, _ = self.memory_updater.get_updated_memory(*agg_msgs)
         # TODO: I think this is only needed for multi-hop?
         # Difference between the time the memory of a node was last updated,
         # and the time for which we want to compute the embedding of a node
         # batch.time[batch.src] -= last_update[batch.src].long()
         # batch.time[batch.dst] -= last_update[batch.dst].long()
-        # batch.time[batch.neg] -= last_update[batch.neg].long()  # type: ignore
+        # batch.time[batch.neg] -= last_update[batch.neg].long()
 
         pos_out, neg_out = self.gat(batch, memory=memory)
-        self._update(batch)
+        self._update_memory(batch)
         return pos_out, neg_out
 
-    def _update(self, batch: DGBatch) -> None:
+    def _update_memory(self, batch: DGBatch) -> None:
+        # Temporary
+        device = next(self.parameters()).device
+
         def _get_raw_msgs(src, dst, time):
-            edge_feats = batch.edge_feats
+            edge_feats = batch.edge_feats.to(device)  # type: ignore
             src_memory = self.memory.get_memory(src)
             dst_memory = self.memory.get_memory(dst)
-            time_delta = time - self.memory.last_update[src]
+            time_delta = time.to(device) - self.memory.last_update[src]
             time_feat = self.time_encoder(time_delta.unsqueeze(dim=1)).view(
                 len(src), -1
             )
@@ -106,8 +109,8 @@ class TGN(torch.nn.Module):
 
         # Persist the updates to the memory only for sources and destinations
         pos = torch.cat([batch.src, batch.dst])
-        unique_nids, unique_msg, unique_times = self.msg_agg(pos, self.memory.msgs)
-        self.memory_updater.update(unique_nids, unique_msg, time=unique_times)
+        agg_msgs = self.msg_agg(pos, self.memory.msgs)
+        self.memory_updater.update(*agg_msgs)
 
         # Remove msgs for the pos since we have already updated the memory using them
         self.memory.clear_msgs(pos)
@@ -209,9 +212,6 @@ class GRUMemoryUpdater(nn.Module):
     ) -> None:
         if len(unique_nids) <= 0:
             return
-        assert (
-            (self.memory.get_last_update(unique_nids) <= time).all().item()
-        ), 'Trying to update memory to time in the past'
         memory = self.memory.get_memory(unique_nids)
         self.memory.last_update[unique_nids] = time
         updated_memory = self.memory_updater(unique_msg, memory)
@@ -222,9 +222,6 @@ class GRUMemoryUpdater(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         if len(unique_nids) <= 0:
             return self.memory.memory.data.clone(), self.memory.last_update.data.clone()
-        assert (
-            (self.memory.get_last_update(unique_nids) <= time).all().item()
-        ), 'Trying to update memory to time in the past'
         updated_memory = self.memory.memory.data.clone()
         updated_memory[unique_nids] = self.memory_updater(
             unique_msg, updated_memory[unique_nids]
