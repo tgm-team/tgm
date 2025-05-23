@@ -64,6 +64,18 @@ case "$METHOD" in
             --time-gran h
         ;;
 
+    gclstm)
+        python "$ROOT_DIR/examples/gclstm.py" \
+            --seed $SEED \
+            --dataset $DATASET \
+            --device cuda \
+            --embed-dim 128 \
+            --epochs 5 \
+            --lr 0.0001 \
+            --n-layers 2 \
+            --time-gran h
+        ;;
+
     *)
         echo "Error: Unknown method '$METHOD'"
         exit 1
