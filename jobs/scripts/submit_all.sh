@@ -19,6 +19,9 @@ get_slurm_resources() {
         tgat)
             echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:30:00 --gres=gpu:a100l:1"
             ;;
+        gcn)
+            echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:30:00 --gres=gpu:a100l:1"
+            ;;
         *)
             echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:30:00"
             ;;
