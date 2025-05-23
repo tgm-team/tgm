@@ -51,6 +51,19 @@ case "$METHOD" in
             --sampling recency
         ;;
 
+    gcn)
+        python "$ROOT_DIR/examples/gcn.py" \
+            --seed $SEED \
+            --dataset $DATASET \
+            --device cuda \
+            --embed-dim 128 \
+            --epochs 5 \
+            --lr 0.0001 \
+            --dropout 0.1 \
+            --n-layers 2 \
+            --time-gran h
+        ;;
+
     gclstm)
         python "$ROOT_DIR/examples/gclstm.py" \
             --seed $SEED \
