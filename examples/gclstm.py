@@ -28,7 +28,7 @@ parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
-    '--time_gran',
+    '--time-gran',
     type=str,
     default='h',
     help='time granularity to operate on for snapshots',
