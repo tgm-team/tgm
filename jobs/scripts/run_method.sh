@@ -22,7 +22,7 @@ echo "Start Time: $(date)"
 echo "Method: $METHOD"
 echo "Dataset: $DATASET"
 echo "Seed: $SEED"
-echo "=========================="
+echo "===================="
 
 case "$METHOD" in
     edgebank)
