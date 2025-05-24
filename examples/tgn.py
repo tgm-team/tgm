@@ -1,4 +1,5 @@
 import argparse
+import time
 from collections import defaultdict
 from typing import Dict, Tuple
 
@@ -388,13 +389,18 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
+    start_time = time.perf_counter()
     loss = train(train_loader, model, opt)
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+
     val_results = eval(val_loader, model, val_metrics)
+    val_metrics.reset()
+
     print(
-        f'Epoch={epoch:02d} Loss={loss:.4f} '
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
     )
-    val_metrics.reset()
 
     # Clear memory state between epochs
     model.memory.clear_msgs(list(range(num_nodes)))

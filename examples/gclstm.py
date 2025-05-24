@@ -1,4 +1,5 @@
 import argparse
+import time
 from typing import Tuple
 
 import torch
@@ -175,13 +176,18 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
+    start_time = time.perf_counter()
     loss, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+
     val_results = eval(val_loader, model, val_metrics, static_node_feats, h_0, c_0)
+    val_metrics.reset()
+
     print(
-        f'Epoch={epoch:02d} Loss={loss:.4f} '
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
     )
-    val_metrics.reset()
 
 test_results = eval(test_loader, model, test_metrics, static_node_feats)
 print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
