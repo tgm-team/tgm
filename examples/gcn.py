@@ -205,7 +205,7 @@ model = GCN(
     dropout=float(args.dropout),
 ).to(args.device)
 
-opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')

@@ -41,11 +41,11 @@ case "$METHOD" in
             --dataset $DATASET \
             --bsize 200 \
             --device cuda \
-            --epochs 5 \
+            --epochs 3 \
             --lr 0.0001 \
             --dropout 0.1 \
             --n-heads 2 \
-            --n-nbrs [20] \
+            --n-nbrs 20 \
             --time-dim 100 \
             --embed-dim 100 \
             --sampling recency
@@ -57,11 +57,11 @@ case "$METHOD" in
             --dataset $DATASET \
             --bsize 200 \
             --device cuda \
-            --epochs 5 \
+            --epochs 3 \
             --lr 0.0001 \
             --dropout 0.1 \
             --n-heads 2 \
-            --n-nbrs [20] \
+            --n-nbrs 20 \
             --time-dim 100 \
             --embed-dim 100 \
             --memory-dim 172 \
@@ -74,7 +74,7 @@ case "$METHOD" in
             --dataset $DATASET \
             --device cuda \
             --embed-dim 128 \
-            --epochs 5 \
+            --epochs 3 \
             --lr 0.0001 \
             --dropout 0.1 \
             --n-layers 2 \
@@ -87,7 +87,7 @@ case "$METHOD" in
             --dataset $DATASET \
             --device cuda \
             --embed-dim 128 \
-            --epochs 5 \
+            --epochs 3 \
             --lr 0.0001 \
             --n-layers 2 \
             --time-gran h

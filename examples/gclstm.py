@@ -176,7 +176,7 @@ static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.
 
 model = GCLSTM_Model(node_dim=args.node_dim, embed_dim=args.embed_dim).to(args.device)
 
-opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
