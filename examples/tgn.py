@@ -396,5 +396,9 @@ for epoch in range(1, args.epochs + 1):
     )
     val_metrics.reset()
 
+    # Clear memory state between epochs
+    model.memory.clear_msgs(list(range(num_nodes)))
+
+
 test_results = eval(test_loader, model, test_metrics)
 print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
