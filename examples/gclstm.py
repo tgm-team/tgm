@@ -52,7 +52,6 @@ class GCLSTM_Model(nn.Module):
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
         z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
-        z_src, z_dst, z_neg = z.chunk(3, dim=0)
         pos_out = self.decoder(z_src, z_dst)
         neg_out = self.decoder(z_src, z_neg)
         return pos_out, neg_out, h_0, c_0
