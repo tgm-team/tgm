@@ -127,6 +127,10 @@ def train(
     model.train()
     total_loss = 0
     for batch in tqdm(loader):
+        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
+        if not len(batch.src):
+            continue
+
         opt.zero_grad()
         pos_out, neg_out = model(batch, node_feat)
         loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
@@ -146,6 +150,10 @@ def eval(
 ) -> dict:
     model.eval()
     for batch in tqdm(loader):
+        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
+        if not len(batch.src):
+            continue
+
         pos_out, neg_out = model(batch, node_feat)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = (
