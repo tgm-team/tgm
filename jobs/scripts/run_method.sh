@@ -51,6 +51,23 @@ case "$METHOD" in
             --sampling recency
         ;;
 
+    tgn)
+        python "$ROOT_DIR/examples/tgn.py" \
+            --seed $SEED \
+            --dataset $DATASET \
+            --bsize 200 \
+            --device cuda \
+            --epochs 5 \
+            --lr 0.0001 \
+            --dropout 0.1 \
+            --n-heads 2 \
+            --n-nbrs [20] \
+            --time-dim 100 \
+            --embed-dim 100 \
+            --memory-dim 172 \
+            --sampling recency
+        ;;
+
     gcn)
         python "$ROOT_DIR/examples/gcn.py" \
             --seed $SEED \
