@@ -1,5 +1,4 @@
 import argparse
-from pprint import pprint
 
 import torch
 from torchmetrics import Metric, MetricCollection
@@ -31,7 +30,7 @@ parser.add_argument(
 )
 
 
-def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> None:
+def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> dict:
     for batch in tqdm(loader):
         pos_out = model(batch.src, batch.dst)
         neg_out = model(batch.src, batch.neg)
@@ -42,22 +41,16 @@ def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> Non
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
         metrics(y_pred, y_true, indexes=indexes)
         model.update(batch.src, batch.dst, batch.neg)
-    pprint(metrics.compute())
+    return metrics.compute()
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
 train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
-val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
 test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
 
 train_data = train_dg.materialize(materialize_features=False)
-val_loader = DGDataLoader(
-    val_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
-    batch_size=args.bsize,
-)
 test_loader = DGDataLoader(
     test_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
@@ -74,8 +67,7 @@ model = EdgeBankPredictor(
 )
 
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
-eval(val_loader, model, val_metrics)
-eval(test_loader, model, test_metrics)
+test_results = eval(test_loader, model, test_metrics)
+print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

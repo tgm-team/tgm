@@ -1,5 +1,4 @@
 import argparse
-from pprint import pprint
 from typing import Tuple
 
 import torch
@@ -128,7 +127,7 @@ def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) ->
 
 
 @torch.no_grad()
-def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
+def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> dict:
     model.eval()
     for batch in tqdm(loader):
         pos_out, neg_out = model(batch)
@@ -142,7 +141,7 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
         )
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
-    pprint(metrics.compute())
+    return metrics.compute()
 
 
 args = parser.parse_args()
@@ -187,8 +186,12 @@ test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
     loss = train(train_loader, model, opt)
-    pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-    eval(val_loader, model, val_metrics)
+    val_results = eval(val_loader, model, val_metrics)
+    print(
+        f'Epoch={epoch:02d} Loss={loss:.4f} '
+        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+    )
     val_metrics.reset()
 
-eval(test_loader, model, test_metrics)
+test_results = eval(test_loader, model, test_metrics)
+print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

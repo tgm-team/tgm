@@ -1,5 +1,4 @@
 import argparse
-from pprint import pprint
 from typing import Tuple
 
 import torch
@@ -143,7 +142,7 @@ def eval(
     model: nn.Module,
     metrics: Metric,
     node_feat: torch.Tensor,
-) -> None:
+) -> dict:
     model.eval()
     for batch in tqdm(loader):
         pos_out, neg_out = model(batch, node_feat)
@@ -157,7 +156,7 @@ def eval(
         )
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
-    pprint(metrics.compute())
+    return metrics.compute()
 
 
 args = parser.parse_args()
@@ -206,8 +205,12 @@ test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
     loss = train(train_loader, model, opt, static_node_feats)
-    pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-    eval(val_loader, model, val_metrics, static_node_feats)
+    val_results = eval(val_loader, model, val_metrics, static_node_feats)
+    print(
+        f'Epoch={epoch:02d} Loss={loss:.4f} '
+        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+    )
     val_metrics.reset()
 
-eval(test_loader, model, test_metrics, static_node_feats)
+test_results = eval(test_loader, model, test_metrics, static_node_feats)
+print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
