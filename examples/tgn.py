@@ -392,6 +392,6 @@ for epoch in range(1, args.epochs + 1):
     loss = train(train_loader, model, opt)
     pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
     eval(val_loader, model, val_metrics)
-    eval(test_loader, model, test_metrics)
     val_metrics.reset()
-    test_metrics.reset()
+
+eval(test_loader, model, test_metrics)

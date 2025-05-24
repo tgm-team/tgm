@@ -13,6 +13,7 @@ from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NegativeEdgeSamplerHook
 from opendg.loader import DGDataLoader
 from opendg.nn.recurrent import GCLSTM
+from opendg.timedelta import TimeDeltaDG
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -95,23 +96,20 @@ def train(
     model: nn.Module,
     opt: torch.optim.Optimizer,
     node_feat: torch.Tensor,
-) -> Tuple[float, DGBatch, torch.Tensor, torch.Tensor]:
+) -> Tuple[float, torch.Tensor, torch.Tensor]:
     model.train()
     total_loss = 0
-    input_batch, h_0, c_0 = None, None, None
+    h_0, c_0 = None, None
     for batch in tqdm(loader):
         opt.zero_grad()
-        if input_batch is None:
-            input_batch = batch
-        pos_out, neg_out, h_0, c_0 = model(input_batch, node_feat, h_0, c_0)
+        pos_out, neg_out, h_0, c_0 = model(batch, node_feat, h_0, c_0)
         loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
         loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
-        input_batch = batch
         h_0, c_0 = h_0.detach(), c_0.detach()
-    return total_loss, input_batch, h_0, c_0
+    return total_loss, h_0, c_0
 
 
 @torch.no_grad()
@@ -119,11 +117,10 @@ def eval(
     loader: DGDataLoader,
     model: nn.Module,
     metrics: Metric,
-    input_batch: DGBatch,
     node_feat: torch.Tensor,
     h_0: torch.Tensor | None = None,
     c_0: torch.Tensor | None = None,
-) -> Tuple[float, DGBatch, torch.Tensor, torch.Tensor]:
+) -> None:
     model.eval()
     for batch in tqdm(loader):
         pos_out, neg_out, h_0, c_0 = model(batch, node_feat, h_0, c_0)
@@ -137,17 +134,15 @@ def eval(
         )
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
-        input_batch = batch
     pprint(metrics.compute())
-    return input_batch, h_0, c_0
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='valid')
-test_dg = DGraph(args.dataset, split='test')
+train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='train')
+val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='valid')
+test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
 
 train_loader = DGDataLoader(
     train_dg,
@@ -182,13 +177,9 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
-    loss, input_batch, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
+    loss, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
     pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-    input_batch, h_0, c_0 = eval(
-        val_loader, model, val_metrics, input_batch, static_node_feats, h_0, c_0
-    )
-    input_batch, h_0, c_0 = eval(
-        test_loader, model, test_metrics, input_batch, static_node_feats, h_0, c_0
-    )
+    eval(val_loader, model, val_metrics, static_node_feats, h_0, c_0)
     val_metrics.reset()
-    test_metrics.reset()
+
+eval(test_loader, model, test_metrics, static_node_feats)

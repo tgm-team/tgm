@@ -79,5 +79,3 @@ test_metrics = MetricCollection(metrics, prefix='Test')
 
 eval(val_loader, model, val_metrics)
 eval(test_loader, model, test_metrics)
-val_metrics.reset()
-test_metrics.reset()
