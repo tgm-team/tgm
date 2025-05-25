@@ -17,16 +17,16 @@ get_slurm_resources() {
             echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:10:00"
             ;;
         tgat)
-            echo "--partition=main --cpus-per-task=2 --mem=8G --time=1:00:00 --gres=gpu:a100l:1"
+            echo "--partition=main --cpus-per-task=2 --mem=8G --time=3:00:00 --gres=gpu:a100l:1"
             ;;
         tgn)
-            echo "--partition=main --cpus-per-task=2 --mem=8G --time=1:00:00 --gres=gpu:a100l:1"
+            echo "--partition=main --cpus-per-task=2 --mem=8G --time=3:00:00 --gres=gpu:a100l:1"
             ;;
         gcn)
-            echo "--partition=main --cpus-per-task=2 --mem=4G --time=1:00:00 --gres=gpu:a100l:1"
+            echo "--partition=main --cpus-per-task=2 --mem=4G --time=3:00:00 --gres=gpu:a100l:1"
             ;;
         gclstm)
-            echo "--partition=main --cpus-per-task=2 --mem=4G --time=1:00:00 --gres=gpu:a100l:1"
+            echo "--partition=main --cpus-per-task=2 --mem=4G --time=3:00:00 --gres=gpu:a100l:1"
             ;;
         *)
             echo "--partition=main --cpus-per-task=2 --mem=4G --time=1:00:00"
