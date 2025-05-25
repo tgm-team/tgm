@@ -108,7 +108,7 @@ class TGN(torch.nn.Module):
             return unique_src, msgs
 
         # Persist the updates to the memory only for sources and destinations
-        pos = torch.cat([batch.src, batch.dst])
+        pos = torch.cat([batch.src, batch.dst]).numpy()
         agg_msgs = self.msg_agg(pos, self.memory.msgs)
         self.memory_updater.update(*agg_msgs)
 
