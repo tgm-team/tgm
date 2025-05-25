@@ -23,13 +23,13 @@ get_slurm_resources() {
             echo "--partition=main --cpus-per-task=2 --mem=8G --time=1:00:00 --gres=gpu:a100l:1"
             ;;
         gcn)
-            echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:30:00 --gres=gpu:a100l:1"
+            echo "--partition=main --cpus-per-task=2 --mem=4G --time=1:00:00 --gres=gpu:a100l:1"
             ;;
         gclstm)
-            echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:30:00 --gres=gpu:a100l:1"
+            echo "--partition=main --cpus-per-task=2 --mem=4G --time=1:00:00 --gres=gpu:a100l:1"
             ;;
         *)
-            echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:30:00"
+            echo "--partition=main --cpus-per-task=2 --mem=4G --time=1:00:00"
             ;;
     esac
 }
