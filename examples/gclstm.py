@@ -1,5 +1,5 @@
 import argparse
-from pprint import pprint
+import time
 from typing import Tuple
 
 import torch
@@ -13,6 +13,7 @@ from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NegativeEdgeSamplerHook
 from opendg.loader import DGDataLoader
 from opendg.nn.recurrent import GCLSTM
+from opendg.timedelta import TimeDeltaDG
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -27,7 +28,7 @@ parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
-    '--time_gran',
+    '--time-gran',
     type=str,
     default='h',
     help='time granularity to operate on for snapshots',
@@ -51,7 +52,6 @@ class GCLSTM_Model(nn.Module):
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
         z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
-        z_src, z_dst, z_neg = z.chunk(3, dim=0)
         pos_out = self.decoder(z_src, z_dst)
         neg_out = self.decoder(z_src, z_neg)
         return pos_out, neg_out, h_0, c_0
@@ -95,23 +95,24 @@ def train(
     model: nn.Module,
     opt: torch.optim.Optimizer,
     node_feat: torch.Tensor,
-) -> Tuple[float, DGBatch, torch.Tensor, torch.Tensor]:
+) -> Tuple[float, torch.Tensor, torch.Tensor]:
     model.train()
     total_loss = 0
-    input_batch, h_0, c_0 = None, None, None
+    h_0, c_0 = None, None
     for batch in tqdm(loader):
+        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
+        if not len(batch.src):
+            continue
+
         opt.zero_grad()
-        if input_batch is None:
-            input_batch = batch
-        pos_out, neg_out, h_0, c_0 = model(input_batch, node_feat, h_0, c_0)
+        pos_out, neg_out, h_0, c_0 = model(batch, node_feat, h_0, c_0)
         loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
         loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
-        input_batch = batch
         h_0, c_0 = h_0.detach(), c_0.detach()
-    return total_loss, input_batch, h_0, c_0
+    return total_loss, h_0, c_0
 
 
 @torch.no_grad()
@@ -119,13 +120,16 @@ def eval(
     loader: DGDataLoader,
     model: nn.Module,
     metrics: Metric,
-    input_batch: DGBatch,
     node_feat: torch.Tensor,
     h_0: torch.Tensor | None = None,
     c_0: torch.Tensor | None = None,
-) -> Tuple[float, DGBatch, torch.Tensor, torch.Tensor]:
+) -> dict:
     model.eval()
     for batch in tqdm(loader):
+        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
+        if not len(batch.src):
+            continue
+
         pos_out, neg_out, h_0, c_0 = model(batch, node_feat, h_0, c_0)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = (
@@ -137,17 +141,15 @@ def eval(
         )
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
-        input_batch = batch
-    pprint(metrics.compute())
-    return input_batch, h_0, c_0
+    return metrics.compute()
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='valid')
-test_dg = DGraph(args.dataset, split='test')
+train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='train')
+val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='valid')
+test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
 
 train_loader = DGDataLoader(
     train_dg,
@@ -176,19 +178,24 @@ static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.
 
 model = GCLSTM_Model(node_dim=args.node_dim, embed_dim=args.embed_dim).to(args.device)
 
-opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
-    loss, input_batch, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
-    pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-    input_batch, h_0, c_0 = eval(
-        val_loader, model, val_metrics, input_batch, static_node_feats, h_0, c_0
-    )
-    input_batch, h_0, c_0 = eval(
-        test_loader, model, test_metrics, input_batch, static_node_feats, h_0, c_0
-    )
+    start_time = time.perf_counter()
+    loss, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+
+    val_results = eval(val_loader, model, val_metrics, static_node_feats, h_0, c_0)
     val_metrics.reset()
-    test_metrics.reset()
+
+    print(
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+    )
+
+test_results = eval(test_loader, model, test_metrics, static_node_feats)
+print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

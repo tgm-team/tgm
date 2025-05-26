@@ -1,5 +1,5 @@
 import argparse
-from pprint import pprint
+import time
 from typing import Tuple
 
 import torch
@@ -28,7 +28,7 @@ parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
-parser.add_argument('--n-nbrs', type=int, default=[20], help='num sampled nbrs')
+parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
 parser.add_argument(
@@ -128,7 +128,7 @@ def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) ->
 
 
 @torch.no_grad()
-def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
+def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> dict:
     model.eval()
     for batch in tqdm(loader):
         pos_out, neg_out = model(batch)
@@ -142,7 +142,7 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> None:
         )
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
-    pprint(metrics.compute())
+    return metrics.compute()
 
 
 args = parser.parse_args()
@@ -153,13 +153,15 @@ val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
 test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
 
 if args.sampling == 'uniform':
-    train_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
-    val_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
-    test_hook = NeighborSamplerHook(num_nbrs=args.num_nbrs)
+    train_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs])
+    val_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs])
+    test_hook = NeighborSamplerHook(num_nbrs=[args.num_nbrs])
 elif args.sampling == 'recency':
-    train_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=train_dg.num_nodes)
-    val_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=val_dg.num_nodes)
-    test_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=test_dg.num_nodes)
+    train_hook = RecencyNeighborHook(
+        num_nbrs=[args.n_nbrs], num_nodes=train_dg.num_nodes
+    )
+    val_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=val_dg.num_nodes)
+    test_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=test_dg.num_nodes)
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -173,20 +175,29 @@ model = TGAT(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
-    num_layers=len(args.n_nbrs),
+    num_layers=1,
     n_heads=args.n_heads,
     dropout=float(args.dropout),
 ).to(args.device)
-opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
+    start_time = time.perf_counter()
     loss = train(train_loader, model, opt)
-    pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-    eval(val_loader, model, val_metrics)
-    eval(test_loader, model, test_metrics)
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+
+    val_results = eval(val_loader, model, val_metrics)
     val_metrics.reset()
-    test_metrics.reset()
+
+    print(
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+    )
+
+test_results = eval(test_loader, model, test_metrics)
+print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

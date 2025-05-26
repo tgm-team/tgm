@@ -1,5 +1,5 @@
 import argparse
-from pprint import pprint
+import time
 from typing import Tuple
 
 import torch
@@ -13,6 +13,7 @@ from tqdm import tqdm
 from opendg.graph import DGBatch, DGraph
 from opendg.hooks import NegativeEdgeSamplerHook
 from opendg.loader import DGDataLoader
+from opendg.timedelta import TimeDeltaDG
 from opendg.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -122,22 +123,22 @@ def train(
     model: nn.Module,
     opt: torch.optim.Optimizer,
     node_feat: torch.Tensor,
-) -> Tuple[float, DGBatch]:
+) -> float:
     model.train()
     total_loss = 0
-    input_batch = None
     for batch in tqdm(loader):
+        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
+        if not len(batch.src):
+            continue
+
         opt.zero_grad()
-        if input_batch is None:
-            input_batch = batch
-        pos_out, neg_out = model(input_batch, node_feat)
+        pos_out, neg_out = model(batch, node_feat)
         loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
         loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
-        input_batch = batch
-    return total_loss, input_batch
+    return total_loss
 
 
 @torch.no_grad()
@@ -145,11 +146,14 @@ def eval(
     loader: DGDataLoader,
     model: nn.Module,
     metrics: Metric,
-    input_batch: DGBatch,
     node_feat: torch.Tensor,
-) -> DGBatch:
+) -> dict:
     model.eval()
     for batch in tqdm(loader):
+        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
+        if not len(batch.src):
+            continue
+
         pos_out, neg_out = model(batch, node_feat)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = (
@@ -161,17 +165,15 @@ def eval(
         )
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
-        input_batch = batch
-    pprint(metrics.compute())
-    return input_batch
+    return metrics.compute()
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='valid')
-test_dg = DGraph(args.dataset, split='test')
+train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='train')
+val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='valid')
+test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
 
 train_loader = DGDataLoader(
     train_dg,
@@ -205,15 +207,23 @@ model = GCN(
     dropout=float(args.dropout),
 ).to(args.device)
 
-opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
-    loss, input_batch = train(train_loader, model, opt, static_node_feats)
-    pprint(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
-    input_batch = eval(val_loader, model, val_metrics, input_batch, static_node_feats)
-    input_batch = eval(test_loader, model, test_metrics, input_batch, static_node_feats)
+    start_time = time.perf_counter()
+    loss = train(train_loader, model, opt, static_node_feats)
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+
+    val_results = eval(val_loader, model, val_metrics, static_node_feats)
     val_metrics.reset()
-    test_metrics.reset()
+    print(
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+    )
+
+test_results = eval(test_loader, model, test_metrics, static_node_feats)
+print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
