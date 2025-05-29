@@ -10,7 +10,7 @@ from torch import Tensor
 
 from opendg._io import read_events, read_time_delta
 from opendg._storage import DGSliceTracker, DGStorage
-from opendg.events import Event
+from opendg.data import DGData
 from opendg.timedelta import TimeDeltaDG
 
 
@@ -19,17 +19,15 @@ class DGraph:
 
     def __init__(
         self,
-        data: DGStorage | List[Event] | str | pathlib.Path | pd.DataFrame,
+        data: DGStorage | DGData | str | pathlib.Path | pd.DataFrame,
         time_delta: TimeDeltaDG | None = None,
         **kwargs: Any,
     ) -> None:
         if isinstance(data, DGStorage):
             self._storage = data
         else:
-            events = data if isinstance(data, list) else read_events(data, **kwargs)
-            if not len(events):
-                raise ValueError('Tried to initialize a DGraph with empty events list')
-            self._storage = DGStorage(events)
+            data = data if isinstance(data, DGData) else read_events(data, **kwargs)
+            self._storage = DGStorage(data)
 
         if time_delta is None:
             if isinstance(data, str) and data.startswith('tgb'):
@@ -42,9 +40,6 @@ class DGraph:
             raise ValueError(f'bad time_delta type: {type(time_delta)}')
 
         self._slice = DGSliceTracker()
-
-    def to_events(self) -> List[Event]:
-        return self._storage.to_events(self._slice)
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""

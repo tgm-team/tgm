@@ -100,68 +100,6 @@ def test_attempt_init_empty(DGStorageImpl):
         DGStorageImpl([])
 
 
-@pytest.mark.parametrize(
-    'events', ['node_only_events_list', 'node_only_events_list_with_features']
-)
-def test_node_only_events_list_to_events(DGStorageImpl, events, request):
-    events = request.getfixturevalue(events)
-    storage = DGStorageImpl(events)
-    assert storage.to_events(DGSliceTracker()) == events
-    assert storage.to_events(DGSliceTracker(start_time=5)) == events[1:]
-    assert storage.to_events(DGSliceTracker(start_time=5, end_time=9)) == [events[1]]
-    assert storage.to_events(DGSliceTracker(node_slice={1, 2, 3})) == [events[0]]
-    assert (
-        storage.to_events(
-            DGSliceTracker(start_time=5, end_time=9, node_slice={1, 2, 3})
-        )
-        == []
-    )
-
-
-@pytest.mark.parametrize(
-    'events', ['edge_only_events_list', 'edge_only_events_list_with_features']
-)
-def test_edge_events_list_to_events(DGStorageImpl, events, request):
-    events = request.getfixturevalue(events)
-    storage = DGStorageImpl(events)
-    assert storage.to_events(DGSliceTracker()) == events
-    assert storage.to_events(DGSliceTracker(start_time=5)) == events[1:]
-    assert storage.to_events(DGSliceTracker(start_time=5, end_time=9)) == [events[1]]
-    assert storage.to_events(DGSliceTracker(node_slice={1, 2, 3})) == events[0:2]
-    assert (
-        storage.to_events(
-            DGSliceTracker(start_time=6, end_time=9, node_slice={1, 2, 3})
-        )
-        == []
-    )
-
-
-@pytest.mark.parametrize(
-    'events',
-    [
-        'events_list_with_multi_events_per_timestamp',
-        'events_list_with_features_multi_events_per_timestamp',
-    ],
-)
-def test_events_list_with_multi_events_per_timestamp_to_events(
-    DGStorageImpl, events, request
-):
-    events = request.getfixturevalue(events)
-    storage = DGStorageImpl(events)
-    assert storage.to_events(DGSliceTracker()) == events
-    assert storage.to_events(DGSliceTracker(start_time=5)) == events[2:]
-    assert storage.to_events(DGSliceTracker(start_time=5, end_time=9)) == events[2:-2]
-    assert storage.to_events(DGSliceTracker(node_slice={1, 2, 3})) == events[0:2] + [
-        events[3]
-    ] + [events[-1]]
-    assert (
-        storage.to_events(
-            DGSliceTracker(start_time=6, end_time=9, node_slice={1, 2, 3})
-        )
-        == []
-    )
-
-
 def test_init_incompatible_node_feature_dimension(DGStorageImpl):
     events = [
         EdgeEvent(t=1, src=2, dst=3, features=torch.rand(2, 5)),
