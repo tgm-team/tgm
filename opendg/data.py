@@ -1,3 +1,4 @@
+import warnings
 from dataclasses import dataclass
 
 import torch
@@ -41,8 +42,9 @@ class DGData:
         if self.timestamps.ndim != 1 or self.timestamps.shape[0] != num_edges:
             raise ValueError('timestamps must have shape [num_edges]')
 
-        # Sort if necessary
+        # Sort events if needed
         if not torch.all(torch.diff(self.timestamps) >= 0):
+            warnings.warn('received non-chronological events, sorting by time')
             sorted_idx = torch.argsort(self.timestamps)
             self.timestamps = self.timestamps[sorted_idx]
             self.edge_index = self.edge_index[sorted_idx]

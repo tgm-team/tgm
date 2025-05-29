@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from opendg.events import EdgeEvent, Event, NodeEvent
+from opendg.data import DGData
 
 from ..base import DGSliceTracker, DGStorageBase
 
@@ -13,12 +13,11 @@ from ..base import DGSliceTracker, DGStorageBase
 class DGStorageArrayBackend(DGStorageBase):
     r"""Array backed implementation of temporal graph storage engine."""
 
-    def __init__(self, events: List[Event]) -> None:
-        if not len(events):
-            raise ValueError(f'Tried to init {self.__class__.__name__} with empty data')
-        self._events = self._sort_events_list_if_needed(events[:])  # Make a copy
-        self._node_feats_dim, self._edge_feats_dim = self._check_feature_dims(events)
-        self._ts = np.array([event.t for event in self._events])
+    def __init__(self, data: DGData) -> None:
+        self._events = events[:]
+        self.data = data
+
+        self._ts = data.timestamps.numpy()
 
         # Binary search caches for finding timestamps in event array
         self._lb_cache: Dict[Optional[int], int] = {}
@@ -158,12 +157,13 @@ class DGStorageArrayBackend(DGStorageBase):
         # If the end_time is given, then it determines the dimension of the temporal axis
         # even if there are no events at the end time (could be the case after calling slice_time)
         max_time = slice.end_time or max_time
-        assert self._node_feats_dim is not None
+        node_feats_dim = self.get_node_feats_dim()
+        assert node_feats_dim is not None
 
         # https://pytorch.org/docs/stable/sparse.html#construction
         values_tensor = torch.stack(values)
         indices_tensor = torch.tensor(indices).t()
-        shape = (max_time + 1, max_node_id + 1, self._node_feats_dim)
+        shape = (max_time + 1, max_node_id + 1, node_feats_dim)
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
@@ -185,19 +185,24 @@ class DGStorageArrayBackend(DGStorageBase):
         # If the end_time is given, then it determines the dimension of the temporal axis
         # even if there are no events at the end time (could be the case after calling slice_time)
         max_time = slice.end_time or max_time
-        assert self._edge_feats_dim is not None
+        edge_feats_dim = self.get_edge_feats_dim()
+        assert edge_feats_dim is not None
 
         # https://pytorch.org/docs/stable/sparse.html#construction
         values_tensor = torch.stack(values)
         indices_tensor = torch.tensor(indices).t()
-        shape = (max_time + 1, max_node_id + 1, max_node_id + 1, self._edge_feats_dim)
+        shape = (max_time + 1, max_node_id + 1, max_node_id + 1, edge_feats_dim)
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     def get_node_feats_dim(self) -> Optional[int]:
-        return self._node_feats_dim
+        if self.data.node_feats is None:
+            return None
+        return self.data.node_feats.shape[1]
 
     def get_edge_feats_dim(self) -> Optional[int]:
-        return self._edge_feats_dim
+        if self.data.edge_feats is None:
+            return None
+        return self.data.edge_feats.shape[1]
 
     @staticmethod
     def _nodes_in_event(event: Event) -> Tuple[int, ...]:
