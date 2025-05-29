@@ -17,7 +17,7 @@ def read_csv(
     # TODO: Node Events not supported
 
     file_path = str(file_path) if isinstance(file_path, pathlib.Path) else file_path
-    edge_index_, timestamps_, edge_features_ = [], [], []
+    edge_index_, timestamps_, edge_feats_ = [], [], []
     with open(file_path, newline='') as f:
         for row in csv.DictReader(f):
             src = int(row[src_col])
@@ -29,9 +29,9 @@ def read_csv(
 
             if edge_feature_col is not None:
                 features = [float(row[feature_col]) for feature_col in edge_feature_col]
-                edge_features_.append(features)
+                edge_feats_.append(features)
 
-    edge_index = Tensor(edge_index_)
-    timestamps = Tensor(timestamps_)
-    edge_features = Tensor(edge_features_) if edge_feature_col is not None else None
-    return DGData(edge_index, timestamps, edge_features)
+    edge_index = Tensor(edge_index_).long()
+    timestamps = Tensor(timestamps_).long()
+    edge_feats = Tensor(edge_feats_) if edge_feature_col is not None else None
+    return DGData(edge_index, timestamps, edge_feats)

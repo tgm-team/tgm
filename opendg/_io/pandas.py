@@ -19,10 +19,10 @@ def read_pandas(
     edge_index = torch.from_numpy(df[[src_col, dst_col]].to_numpy()).long()
     timestamps = torch.from_numpy(df[time_col].to_numpy()).long()
     if edge_feature_col is None:
-        edge_features = None
+        edge_feats = None
     else:
-        edge_features = torch.from_numpy(df[edge_feature_col].to_numpy())
-    return DGData(edge_index, timestamps, edge_features)
+        edge_feats = torch.Tensor(df[edge_feature_col].tolist())
+    return DGData(edge_index, timestamps, edge_feats)
 
 
 def _check_pandas_import(min_version_number: Optional[str] = None) -> None:

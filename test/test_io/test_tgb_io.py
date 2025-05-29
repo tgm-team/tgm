@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from opendg._io import read_tgb
-from opendg.events import EdgeEvent
+from opendg.data import DGData
 
 # Constants for split sizes
 num_events = 157474
@@ -58,16 +58,18 @@ def test_tgb_conversion(mock_dataset_cls, split, expected_indices):
     mock_dataset_cls.return_value = mock_dataset
 
     # Run the function
-    events = read_tgb(name='tgbl-wiki', split=split)
+    data = read_tgb(name='tgbl-wiki', split=split)
 
     # Assertions
-    assert len(events) == len(expected_indices)
+    assert isinstance(data, DGData)
+    assert data.edge_feats is None
+    assert data.node_feats is None
 
+    edges_list = data.edge_index.tolist()
+    times_list = data.timestamps.tolist()
     for i, idx in enumerate(expected_indices[:5]):  # sample a few for sanity check
-        assert isinstance(events[i], EdgeEvent)
-        assert events[i].global_id == i
-        assert events[i].t == int(timestamps[idx])
-        assert events[i].edge == (int(sources[idx]), int(destinations[idx]))
+        assert times_list[i] == int(timestamps[idx])
+        assert edges_list[i] == [int(sources[idx]), int(destinations[idx])]
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbl-wiki')

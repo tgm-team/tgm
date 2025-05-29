@@ -63,7 +63,7 @@ def read_tgb(
     edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
     timestamps = torch.from_numpy(data['timestamps'][mask]).long()
     if data['edge_feat'] is None:
-        edge_features = None
+        edge_feats = None
     else:
-        edge_features = torch.from_numpy(data['edge_feat'][mask])
-    return DGData(edge_index, timestamps, edge_features)
+        edge_feats = torch.from_numpy(data['edge_feat'][mask])
+    return DGData(edge_index, timestamps, edge_feats)
