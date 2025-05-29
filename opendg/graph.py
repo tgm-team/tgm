@@ -11,7 +11,6 @@ from torch import Tensor
 from opendg._io import read_events, read_time_delta
 from opendg._storage import DGSliceTracker, DGStorage
 from opendg.data import DGData
-from opendg.events import EdgeEvent
 from opendg.timedelta import TimeDeltaDG
 
 
@@ -27,21 +26,8 @@ class DGraph:
         if isinstance(data, DGStorage):
             self._storage = data
         else:
-            # TODO: Temporary, switch storage API in subsequent PR
-            if isinstance(data, list):
-                self._storage = DGStorage(data)
-            else:
-                data = data if isinstance(data, DGData) else read_events(data, **kwargs)
-                events = []
-                for i in range(len(data.edge_index)):
-                    t = int(data.timestamps[i])
-                    src, dst = int(data.edge_index[i][0]), int(data.edge_index[i][1])
-                    global_id = i
-                    features = None
-                    if data.edge_feats is not None:
-                        features = data.edge_feats[i]
-                    events.append(EdgeEvent(t, src, dst, global_id, features))
-                self._storage = DGStorage(events)  # type: ignore
+            data = data if isinstance(data, DGData) else read_events(data, **kwargs)
+            self._storage = DGStorage(data)
 
         if time_delta is None:
             if isinstance(data, str) and data.startswith('tgb'):
