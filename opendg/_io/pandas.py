@@ -1,10 +1,9 @@
-from typing import List, Optional
+from typing import Optional
 
-import numpy as np
 import pandas as pd
 import torch
 
-from opendg.events import EdgeEvent, Event
+from opendg.data import DGData
 
 
 def read_pandas(
@@ -13,33 +12,17 @@ def read_pandas(
     dst_col: str,
     time_col: str,
     edge_feature_col: Optional[str] = None,
-) -> List[Event]:
+) -> DGData:
     _check_pandas_import()
     # TODO: Node Events not supported
 
-    # Pre-allocating buffer of events with the right size, and adding an index column
-    # into the dataframe, so that the df.apply() call below is thread safe, and can
-    # be run without the GIL. This index ensures that everything is processed in order.
-    _mock_event = EdgeEvent(t=-1, src=-1, dst=-1)
-    events: List[Event] = [_mock_event] * len(df)
-    df['index'] = np.arange(len(df))
-
-    def _construct_event_from_row(row: pd.Series) -> None:
-        src = int(row[src_col])
-        dst = int(row[dst_col])
-        t = int(row[time_col])
-        i = int(row['index'])
-
-        if edge_feature_col is not None:
-            features = torch.tensor(row[edge_feature_col])
-        else:
-            features = None
-
-        events[i] = EdgeEvent(t=t, src=src, dst=dst, global_id=i, features=features)
-
-    df.apply(_construct_event_from_row, axis=1)
-    df.drop('index', axis=1)  # Clean up temporary index column
-    return events
+    edge_index = torch.from_numpy(df[[src_col, dst_col]].to_numpy()).long()
+    timestamps = torch.from_numpy(df[time_col].to_numpy()).long()
+    if edge_feature_col is None:
+        edge_features = None
+    else:
+        edge_features = torch.from_numpy(df[edge_feature_col].to_numpy())
+    return DGData(edge_index, timestamps, edge_features)
 
 
 def _check_pandas_import(min_version_number: Optional[str] = None) -> None:

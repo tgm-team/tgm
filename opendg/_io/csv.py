@@ -2,9 +2,9 @@ import csv
 import pathlib
 from typing import List, Optional
 
-import torch
+from torch import Tensor
 
-from opendg.events import EdgeEvent, Event
+from opendg.data import DGData
 
 
 def read_csv(
@@ -13,23 +13,25 @@ def read_csv(
     dst_col: str,
     time_col: str,
     edge_feature_col: Optional[List[str]] = None,
-) -> List[Event]:
+) -> DGData:
     # TODO: Node Events not supported
+
     file_path = str(file_path) if isinstance(file_path, pathlib.Path) else file_path
-    events: List[Event] = []
+    edge_index_, timestamps_, edge_features_ = [], [], []
     with open(file_path, newline='') as f:
-        reader = csv.DictReader(f)
-        for i, row in enumerate(reader):
+        for row in csv.DictReader(f):
             src = int(row[src_col])
             dst = int(row[dst_col])
             t = int(row[time_col])
 
-            if edge_feature_col is None:
-                features = None
-            else:
-                msg_list = [float(row[feature_col]) for feature_col in edge_feature_col]
-                features = torch.tensor(msg_list)
+            edge_index_.append([src, dst])
+            timestamps_.append(t)
 
-            event = EdgeEvent(t=t, src=src, dst=dst, global_id=i, features=features)
-            events.append(event)
-    return events
+            if edge_feature_col is not None:
+                features = [float(row[feature_col]) for feature_col in edge_feature_col]
+                edge_features_.append(features)
+
+    edge_index = Tensor(edge_index_)
+    timestamps = Tensor(timestamps_)
+    edge_features = Tensor(edge_features_) if edge_feature_col is not None else None
+    return DGData(edge_index, timestamps, edge_features)
