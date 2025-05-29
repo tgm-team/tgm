@@ -20,7 +20,7 @@ class DGData:
         if self.edge_index.ndim != 2 or self.edge_index.shape[1] != 2:
             raise ValueError('edge_index must have shape [num_edges, 2]')
 
-        num_edges = self.edge_index.shape[1]
+        num_edges = self.edge_index.shape[0]
         if num_edges == 0:
             raise ValueError('empty graphs not supported')
 
