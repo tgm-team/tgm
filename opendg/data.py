@@ -40,8 +40,6 @@ class DGData:
         if not isinstance(self.timestamps, torch.Tensor):
             raise TypeError('timestamps must be a torch.Tensor')
         if self.timestamps.ndim != 1 or self.timestamps.shape[0] != num_edges:
-            print(self.edge_index.shape, self.timestamps.shape)
-            input()
             raise ValueError('timestamps must have shape [num_edges]')
 
         # Sort events if needed

@@ -31,7 +31,7 @@ test_indices = np.arange(num_train + num_val, num_events)
 def test_tgb_conversion(mock_dataset_cls, split, expected_indices):
     sources = np.random.randint(0, 1000, size=num_events)
     destinations = np.random.randint(0, 1000, size=num_events)
-    timestamps = np.random.randint(1_000_000_000, 2_000_000_000, size=num_events)
+    timestamps = np.arange(num_events)
     edge_feat = None
 
     train_mask = np.zeros(num_events, dtype=bool)
