@@ -34,14 +34,14 @@ class DGraph:
                 data = data if isinstance(data, DGData) else read_events(data, **kwargs)
                 events = []
                 for i in range(len(data.edge_index)):
-                    t = data.timestamps[i]
-                    src, dst = data.edge_index[i][0], data.edge_index[i][1]
+                    t = int(data.timestamps[i])
+                    src, dst = int(data.edge_index[i][0]), int(data.edge_index[i][1])
                     global_id = i
                     features = None
                     if data.edge_feats is not None:
                         features = data.edge_feats[i]
                     events.append(EdgeEvent(t, src, dst, global_id, features))
-                self._storage = DGStorage(events)
+                self._storage = DGStorage(events)  # type: ignore
 
         if time_delta is None:
             if isinstance(data, str) and data.startswith('tgb'):
