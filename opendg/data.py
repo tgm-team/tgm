@@ -1,3 +1,4 @@
+import warnings
 from dataclasses import dataclass
 
 import torch
@@ -43,6 +44,7 @@ class DGData:
 
         # Sort if necessary
         if not torch.all(torch.diff(self.timestamps) >= 0):
+            warnings.warn('received non-chronological events, sorting by time')
             sorted_idx = torch.argsort(self.timestamps)
             self.timestamps = self.timestamps[sorted_idx]
             self.edge_index = self.edge_index[sorted_idx]
