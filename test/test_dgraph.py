@@ -3,33 +3,29 @@ from dataclasses import asdict
 import pytest
 import torch
 
-from opendg.events import EdgeEvent, NodeEvent
+from opendg.data import DGData
 from opendg.graph import DGBatch, DGraph
-from opendg.timedelta import TimeDeltaDG
 
 
 @pytest.fixture
-def events():
-    return [
-        NodeEvent(t=1, src=2, features=torch.rand(5)),
-        EdgeEvent(t=1, src=2, dst=2, features=torch.rand(5)),
-        NodeEvent(t=5, src=4, features=torch.rand(5)),
-        EdgeEvent(t=5, src=2, dst=4, features=torch.rand(5)),
-        NodeEvent(t=10, src=6, features=torch.rand(5)),
-        EdgeEvent(t=20, src=1, dst=8, features=torch.rand(5)),
-    ]
+def data():
+    # TODO: Missing node events
+    edge_index = torch.Tensor([[2, 2], [2, 4], [1, 8]])
+    timestamps = torch.Tensor([1, 5, 20])
+    edge_feats = torch.rand(3, 5)
+    return DGData(edge_index, timestamps, edge_feats)
+    # return [
+    #    NodeEvent(t=1, src=2, features=torch.rand(5)),
+    #    EdgeEvent(t=1, src=2, dst=2, features=torch.rand(5)),
+    #    NodeEvent(t=5, src=4, features=torch.rand(5)),
+    #    EdgeEvent(t=5, src=2, dst=4, features=torch.rand(5)),
+    #    NodeEvent(t=10, src=6, features=torch.rand(5)),
+    #    EdgeEvent(t=20, src=1, dst=8, features=torch.rand(5)),
+    # ]
 
 
-@pytest.mark.parametrize(
-    'time_delta', [TimeDeltaDG('Y'), TimeDeltaDG('s'), TimeDeltaDG('r')]
-)
-def test_attempt_init_empty(time_delta):
-    with pytest.raises(ValueError):
-        DGraph(data=[], time_delta=time_delta)
-
-
-def test_init_from_events(events):
-    dg = DGraph(events)
+def test_init_from_data(data):
+    dg = DGraph(data)
 
     assert dg.time_delta.is_ordered
 
@@ -64,8 +60,8 @@ def test_init_from_events(events):
     torch.testing.assert_close(dg.edge_feats.to_dense(), exp_edge_feats)
 
 
-def test_init_from_storage(events):
-    dg_tmp = DGraph(events)
+def test_init_from_storage(data):
+    dg_tmp = DGraph(data)
     dg = DGraph(dg_tmp._storage)
     assert id(dg_tmp._storage) == id(dg._storage)
 
@@ -85,8 +81,8 @@ def test_materialize():
     torch.testing.assert_close(asdict(dg.materialize()), asdict(exp))
 
 
-def test_materialize_with_features(events):
-    dg = DGraph(events)
+def test_materialize_with_features(data):
+    dg = DGraph(data)
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
@@ -96,8 +92,8 @@ def test_materialize_with_features(events):
     torch.testing.assert_close(asdict(dg.materialize()), asdict(exp))
 
 
-def test_materialize_skip_feature_materialization(events):
-    dg = DGraph(events)
+def test_materialize_skip_feature_materialization(data):
+    dg = DGraph(data)
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
@@ -107,8 +103,8 @@ def test_materialize_skip_feature_materialization(events):
     )
 
 
-def test_slice_time_full_graph(events):
-    dg = DGraph(events)
+def test_slice_time_full_graph(data):
+    dg = DGraph(data)
 
     dg1 = dg.slice_time(1, 21)
     assert id(dg1._storage) == id(dg._storage)
@@ -143,8 +139,8 @@ def test_slice_time_full_graph(events):
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
-def test_slice_time_no_time_bounds(events):
-    dg = DGraph(events)
+def test_slice_time_no_time_bounds(data):
+    dg = DGraph(data)
 
     dg1 = dg.slice_time()
     assert id(dg1._storage) == id(dg._storage)
@@ -156,8 +152,6 @@ def test_slice_time_no_time_bounds(events):
     assert dg1.num_edges == 3
     assert dg1.num_timestamps == 4
     assert dg.nodes == {1, 2, 4, 6, 8}
-    assert dg.node_feats_dim == 5
-    assert dg.edge_feats_dim == 5
 
     exp_edges = (
         torch.LongTensor([2, 2, 1]),
@@ -179,8 +173,8 @@ def test_slice_time_no_time_bounds(events):
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
-def test_slice_time_no_upper_bound(events):
-    dg = DGraph(events)
+def test_slice_time_no_upper_bound(data):
+    dg = DGraph(data)
 
     dg1 = dg.slice_time(5)
     assert id(dg1._storage) == id(dg._storage)
@@ -192,8 +186,6 @@ def test_slice_time_no_upper_bound(events):
     assert dg1.num_edges == 2
     assert dg1.num_timestamps == 3
     assert dg.nodes == {1, 2, 4, 6, 8}
-    assert dg.node_feats_dim == 5
-    assert dg.edge_feats_dim == 5
 
     exp_edges = (
         torch.LongTensor([2, 1]),
@@ -213,8 +205,8 @@ def test_slice_time_no_upper_bound(events):
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
-def test_slice_time_no_lower_bound(events):
-    dg = DGraph(events)
+def test_slice_time_no_lower_bound(data):
+    dg = DGraph(data)
 
     dg1 = dg.slice_time(end_time=4)
     assert id(dg1._storage) == id(dg._storage)
@@ -226,8 +218,6 @@ def test_slice_time_no_lower_bound(events):
     assert dg1.num_edges == 1
     assert dg1.num_timestamps == 1
     assert dg.nodes == {1, 2, 4, 6, 8}
-    assert dg.node_feats_dim == 5
-    assert dg.edge_feats_dim == 5
 
     exp_edges = (
         torch.LongTensor([2]),
@@ -245,8 +235,8 @@ def test_slice_time_no_lower_bound(events):
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
-def test_slice_time_no_cache_refresh(events):
-    dg = DGraph(events)
+def test_slice_time_no_cache_refresh(data):
+    dg = DGraph(data)
 
     dg1 = dg.slice_time(0, 100)
     assert id(dg1._storage) == id(dg._storage)
@@ -258,8 +248,6 @@ def test_slice_time_no_cache_refresh(events):
     assert dg1.num_edges == 3
     assert dg1.num_timestamps == 4
     assert dg.nodes == {1, 2, 4, 6, 8}
-    assert dg.node_feats_dim == 5
-    assert dg.edge_feats_dim == 5
 
     exp_edges = (
         torch.LongTensor([2, 2, 1]),
@@ -281,8 +269,8 @@ def test_slice_time_no_cache_refresh(events):
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
 
-def test_slice_time_at_end_time(events):
-    dg = DGraph(events)
+def test_slice_time_at_end_time(data):
+    dg = DGraph(data)
 
     dg1 = dg.slice_time(1, 19)
     assert id(dg1._storage) == id(dg._storage)
@@ -343,8 +331,8 @@ def test_slice_time_at_end_time(events):
     assert torch.equal(dg.edge_feats.to_dense(), exp_edge_feats)
 
 
-def test_slice_time_to_empty(events):
-    dg = DGraph(events)
+def test_slice_time_to_empty(data):
+    dg = DGraph(data)
 
     original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
     original_node_feats[1, 2] = events[0].features
@@ -465,14 +453,14 @@ def test_slice_time_to_empty(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
 
-def test_slice_time_bad_args(events):
-    dg = DGraph(data=events)
+def test_slice_time_bad_args(data):
+    dg = DGraph(data)
     with pytest.raises(ValueError):
         dg.slice_time(2, 1)
 
 
-def test_slice_nodes_full_graph(events):
-    dg1 = DGraph(events)
+def test_slice_nodes_full_graph(data):
+    dg1 = DGraph(data)
 
     dg = dg1.slice_nodes({1, 2, 3, 4, 6, 8})  # Extra node (3) should just be ignored
     assert id(dg._storage) == id(dg1._storage)
@@ -506,8 +494,8 @@ def test_slice_nodes_full_graph(events):
     assert torch.equal(dg.edge_feats.to_dense(), exp_edge_feats)
 
 
-def test_slice_nodes_to_empty(events):
-    dg = DGraph(events)
+def test_slice_nodes_to_empty(data):
+    dg = DGraph(data)
 
     original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
     original_node_feats[1, 2] = events[0].features
@@ -636,8 +624,8 @@ def test_slice_nodes_to_empty(events):
     assert torch.equal(dg.edge_feats.to_dense(), original_edge_feats)
 
 
-def test_interleave_slice_time_slice_nodes(events):
-    dg = DGraph(events)
+def test_interleave_slice_time_slice_nodes(data):
+    dg = DGraph(data)
 
     original_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
     original_node_feats[1, 2] = events[0].features
@@ -807,9 +795,3 @@ def test_interleave_slice_time_slice_nodes(events):
 @pytest.mark.skip(reason='TODO: Add test for dg slice events!')
 def test_slice_events():
     pass
-
-
-def _assert_events_equal(expected_events, actual_events):
-    expected = [asdict(e) for e in expected_events]
-    actual = [asdict(e) for e in actual_events]
-    torch.testing.assert_close(expected, actual)
