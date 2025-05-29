@@ -51,6 +51,10 @@ def test_init_dg_data_bad_args():
     timestamps = torch.Tensor([5, 1])
     edge_feats = torch.rand(2, 5)
 
+    # Empty graph not supported
+    with pytest.raises(ValueError):
+        _ = DGData(torch.empty((0, 2)), torch.empty(0))
+
     # Bad types
     with pytest.raises(TypeError):
         _ = DGData('foo', timestamps)

@@ -20,6 +20,8 @@ class DGData:
             raise ValueError('edge_index must have shape [num_edges, 2]')
 
         num_edges = self.edge_index.shape[1]
+        if num_edges == 0:
+            raise ValueError('empty graphs not supported')
 
         # Validate edge features
         if self.edge_feats is not None:
@@ -39,15 +41,10 @@ class DGData:
         if self.timestamps.ndim != 1 or self.timestamps.shape[0] != num_edges:
             raise ValueError('timestamps must have shape [num_edges]')
 
-        if num_edges > 1:
-            if self.timestamps[0] > self.timestamps[-1]:
-                self._sort_by_timestamps()
-            elif not torch.all(self.timestamps[:-1] <= self.timestamps[1:]):
-                self._sort_by_timestamps()
-
-    def _sort_by_timestamps(self) -> None:
-        sorted_idx = torch.argsort(self.timestamps)
-        self.timestamps = self.timestamps[sorted_idx]
-        self.edge_index = self.edge_index[sorted_idx]
-        if self.edge_feats is not None:
-            self.edge_feats = self.edge_feats[sorted_idx]
+        # Sort if necessary
+        if not torch.all(torch.diff(self.timestamps) >= 0):
+            sorted_idx = torch.argsort(self.timestamps)
+            self.timestamps = self.timestamps[sorted_idx]
+            self.edge_index = self.edge_index[sorted_idx]
+            if self.edge_feats is not None:
+                self.edge_feats = self.edge_feats[sorted_idx]
