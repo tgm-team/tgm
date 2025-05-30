@@ -12,7 +12,6 @@ nav:
           - hooks.md
           - timedelta.md
           - data.md
-          - events.md
           - loader.md
           - nn (Neural Networks): nn.md
           - util: util.md
