@@ -32,11 +32,12 @@ class DGData:
                 raise ValueError('edge_feats must have shape [num_edges, D_edge]')
 
         # Validate node features
+        num_nodes = torch.max(self.edge_index) + 1  # 0-indexed
         if self.node_feats is not None:
             if not isinstance(self.node_feats, torch.Tensor):
                 raise TypeError('node_feats must be a torch.Tensor')
-            if self.node_feats.ndim != 2:
-                raise ValueError('node_feats must be 2-dimensional')
+            if self.node_feats.ndim != 2 or self.node_feats.shape[0] != num_nodes:
+                raise ValueError('node_feats must have shape [num_nodes, D_node]')
 
         # Validate timestamps
         if not isinstance(self.timestamps, torch.Tensor):

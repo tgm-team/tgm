@@ -19,7 +19,7 @@ def test_init_dg_data_with_feats():
     edge_index = torch.Tensor([[2, 3], [10, 20]])
     timestamps = torch.Tensor([1, 5])
     edge_feats = torch.rand(2, 5)
-    node_feats = torch.rand(100, 10)
+    node_feats = torch.rand(21, 10)
     data = DGData(edge_index, timestamps, edge_feats, node_feats)
 
     torch.testing.assert_close(data.edge_index, edge_index)
@@ -32,7 +32,7 @@ def test_init_dg_data_sort_required():
     edge_index = torch.Tensor([[2, 3], [10, 20]])
     timestamps = torch.Tensor([5, 1])
     edge_feats = torch.rand(2, 5)
-    node_feats = torch.rand(100, 10)
+    node_feats = torch.rand(21, 10)
     data = DGData(edge_index, timestamps, edge_feats, node_feats)
 
     # Expected sort
@@ -47,6 +47,7 @@ def test_init_dg_data_sort_required():
 
 
 def test_init_dg_data_bad_args():
+    # Num edges = 2, Num nodes = 21, D_edge = 5
     edge_index = torch.Tensor([[2, 3], [10, 20]])
     timestamps = torch.Tensor([5, 1])
     edge_feats = torch.rand(2, 5)
@@ -75,9 +76,11 @@ def test_init_dg_data_bad_args():
     with pytest.raises(ValueError):
         _ = DGData(edge_index, timestamps, torch.rand(1, 5))
     with pytest.raises(ValueError):
-        _ = DGData(edge_index, timestamps, torch.rand(1, 5, 5))
+        _ = DGData(edge_index, timestamps, torch.rand(100, 5))
     with pytest.raises(ValueError):
-        _ = DGData(edge_index, timestamps, torch.rand(2))
+        _ = DGData(edge_index, timestamps, torch.rand(21, 5, 5))
+    with pytest.raises(ValueError):
+        _ = DGData(edge_index, timestamps, torch.rand(21))
     with pytest.raises(ValueError):
         _ = DGData(edge_index, timestamps, edge_feats, torch.rand(2))
     with pytest.raises(ValueError):
