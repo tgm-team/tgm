@@ -43,9 +43,6 @@ class DGraph:
 
         self._slice = DGSliceTracker()
 
-    def to_events(self) -> List[Event]:
-        return self._storage.to_events(self._slice)
-
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""
         batch = DGBatch(*self.edges)

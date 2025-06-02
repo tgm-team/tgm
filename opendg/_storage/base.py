@@ -24,9 +24,6 @@ class DGStorageBase(ABC):
     def __init__(self, events: List[Event]) -> None: ...
 
     @abstractmethod
-    def to_events(self, slice: DGSliceTracker) -> List[Event]: ...
-
-    @abstractmethod
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]: ...
 
     @abstractmethod
