@@ -11,7 +11,7 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from opendg.graph import DGBatch, DGraph
-from opendg.hooks import NegativeEdgeSamplerHook
+from opendg.hooks import RecencyNeighborHook
 from opendg.loader import DGDataLoader
 from opendg.nn import Time2Vec
 from opendg.timedelta import TimeDeltaDG
@@ -29,6 +29,10 @@ parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of MLP layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
+parser.add_argument(
+    '--time-slot', type=int, default=2000, help='graphmixer time slot size'
+)
 parser.add_argument(
     '--token-dim-expansion',
     type=float,
@@ -53,7 +57,9 @@ class GraphMixer(nn.Module):
     def __init__(
         self,
         time_dim: int,
+        embed_dim: int,
         num_tokens: int,
+        time_gap: int = 2000,
         num_layers: int = 2,
         token_dim_expansion: float = 0.5,
         channel_dim_expansion: float = 4.0,
@@ -64,7 +70,9 @@ class GraphMixer(nn.Module):
         node_feat_dim = self.node_raw_features.shape[1]
         edge_feat_dim = self.edge_raw_features.shape[1]
 
+        self.time_gap = time_gap
         # in GraphMixer, the time encoding function is not trainable
+        self.link_predictor = LinkPredictor(dim=embed_dim)
         self.time_encoder = Time2Vec(time_dim=time_dim, parameter_requires_grad=False)
         self.projection_layer = nn.Linear(edge_feat_dim + time_dim, edge_feat_dim)
         self.mlp_mixers = nn.ModuleList(
@@ -88,7 +96,6 @@ class GraphMixer(nn.Module):
             node_ids: torch.Tensor,
             node_interact_times: torch.Tensor,
             num_neighbors: int = 20,
-            time_gap: int = 2000,
         ) -> torch.Tensor:
             nbr_nodes, nbr_edges, nbr_times = (
                 self.neighbor_sampler.get_historical_neighbors(
@@ -122,7 +129,7 @@ class GraphMixer(nn.Module):
                 self.neighbor_sampler.get_historical_neighbors(
                     node_ids=node_ids,
                     node_interact_times=node_interact_times,
-                    num_neighbors=time_gap,
+                    num_neighbors=self.time_gap,
                 )
             )  # (B, time_gap)
             time_gap_nbr_node_feats = self.node_raw_features[
@@ -153,7 +160,13 @@ class GraphMixer(nn.Module):
             node_ids=batch.dst,
             node_interact_times=batch.time,
         )
-        return z_src, z_dst
+        z_neg = _compute_node_temporal_embeddings(
+            node_ids=batch.neg,
+            node_interact_times=batch.time,
+        )
+        pos_out = self.link_predictor(z_src, z_dst)
+        neg_out = self.link_predictor(z_src, z_neg)
+        return pos_out, neg_out
 
 
 class FeedForwardNet(nn.Module):
@@ -190,13 +203,13 @@ class MLPMixer(nn.Module):
     ) -> None:
         super().__init__()
         self.token_norm = nn.LayerNorm(num_tokens)
-        self.token_feedforward = FeedForwardNet(
+        self.token_ff = FeedForwardNet(
             input_dim=num_tokens,
             dim_expansion_factor=token_dim_expansion,
             dropout=dropout,
         )
         self.channel_norm = nn.LayerNorm(num_channels)
-        self.channel_feedforward = FeedForwardNet(
+        self.channel_ff = FeedForwardNet(
             input_dim=num_channels,
             dim_expansion_factor=channel_dim_expansion,
             dropout=dropout,
@@ -205,14 +218,27 @@ class MLPMixer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # mix tokens
         z = self.token_norm(x.permute(0, 2, 1))  # (B, num_channels, num_tokens)
-        z = self.token_feedforward(z).permute(0, 2, 1)  # (B, num_tokens, num_channels)
+        z = self.token_ff(z).permute(0, 2, 1)  # (B, num_tokens, num_channels)
         out = z + x
 
         # mix channels
         z = self.channel_norm(out)  # (B, num_tokens, num_channels)
-        z = self.channel_feedforward(z)  # (B, num_tokens, num_channels)
+        z = self.channel_ff(z)  # (B, num_tokens, num_channels)
         out = z + out
         return out
+
+
+class LinkPredictor(nn.Module):
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.lin_src = nn.Linear(dim, dim)
+        self.lin_dst = nn.Linear(dim, dim)
+        self.lin_out = nn.Linear(dim, 1)
+
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = h.relu()
+        return self.lin_out(h).sigmoid().view(-1)
 
 
 def train(
@@ -272,21 +298,14 @@ train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='train')
 val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='valid')
 test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
 
-train_loader = DGDataLoader(
-    train_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes),
-    batch_unit=args.time_gran,
-)
-val_loader = DGDataLoader(
-    val_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
-    batch_unit=args.time_gran,
-)
-test_loader = DGDataLoader(
-    test_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
-    batch_unit=args.time_gran,
-)
+# Graphmixer always uses 1-hop recent neighbors
+train_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=train_dg.num_nodes)
+val_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=val_dg.num_nodes)
+test_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=test_dg.num_nodes)
+
+train_loader = DGDataLoader(train_dg, hook=train_hook, batch_unit=args.time_gran)
+val_loader = DGDataLoader(val_dg, hook=val_hook, batch_unit=args.time_gran)
+test_loader = DGDataLoader(test_dg, hook=test_hook, batch_unit=args.time_gran)
 
 if train_dg.node_feats_dim is not None:
     raise ValueError(
@@ -298,9 +317,11 @@ args.node_dim = args.embed_dim
 static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
 
 model = GraphMixer(
+    embed_dim=args.embed_dim,
     time_dim=args.time_dim,
     num_tokens=args.num_tokens,
     num_layers=args.num_layers,
+    time_gap=args.time_gap,
     token_dim_expansion=float(args.token_dim_expansion),
     channel_dim_expansion=float(args.channel_dim_expansion),
     dropout=float(args.dropout),
