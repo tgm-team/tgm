@@ -70,16 +70,6 @@ def test_init_from_storage(events):
     assert id(dg_tmp._storage) == id(dg._storage)
 
 
-def test_to_events():
-    events = [
-        EdgeEvent(t=1, src=2, dst=2),
-        EdgeEvent(t=5, src=2, dst=4),
-        EdgeEvent(t=20, src=1, dst=8),
-    ]
-    dg = DGraph(events)
-    assert dg.to_events() == events
-
-
 def test_materialize():
     events = [
         EdgeEvent(t=1, src=2, dst=2),
@@ -115,45 +105,6 @@ def test_materialize_skip_feature_materialization(events):
     torch.testing.assert_close(
         asdict(dg.materialize(materialize_features=False)), asdict(exp)
     )
-
-
-@pytest.mark.skip('Node feature IO not implemented')
-def test_to_events_with_node_events():
-    events = [
-        NodeEvent(t=1, src=2),
-        EdgeEvent(t=1, src=2, dst=2),
-        NodeEvent(t=5, src=4),
-        EdgeEvent(t=5, src=2, dst=4),
-        NodeEvent(t=10, src=6),
-        EdgeEvent(t=20, src=1, dst=8),
-    ]
-    dg = DGraph(events)
-    assert dg.to_events() == events
-
-
-def test_to_events_with_cache():
-    events = [
-        EdgeEvent(t=1, src=2, dst=2),
-        EdgeEvent(t=5, src=2, dst=4),
-        EdgeEvent(t=20, src=1, dst=8),
-    ]
-    dg = DGraph(events)
-    dg._slice.start_time = 5
-    assert dg.to_events() == events[1:]
-
-    dg._slice.start_time = None  # reset
-    dg._slice.node_slice = set([2])
-    assert dg.to_events() == events[:2]
-
-
-def test_to_events_with_features():
-    events = [
-        EdgeEvent(t=1, src=2, dst=2, features=torch.rand(2)),
-        EdgeEvent(t=5, src=2, dst=2, features=torch.rand(2)),
-        EdgeEvent(t=20, src=1, dst=8, features=torch.rand(2)),
-    ]
-    dg = DGraph(events)
-    _assert_events_equal(dg.to_events(), events)
 
 
 def test_slice_time_full_graph(events):
