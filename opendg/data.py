@@ -28,13 +28,16 @@ class DGData:
         if self.edge_feats is not None:
             if not isinstance(self.edge_feats, torch.Tensor):
                 raise TypeError('edge_feats must be a torch.Tensor')
-            if self.edge_feats.shape[0] != num_edges:
+            if self.edge_feats.ndim != 2 or self.edge_feats.shape[0] != num_edges:
                 raise ValueError('edge_feats must have shape [num_edges, D_edge]')
 
         # Validate node features
+        num_nodes = torch.max(self.edge_index) + 1  # 0-indexed
         if self.node_feats is not None:
             if not isinstance(self.node_feats, torch.Tensor):
                 raise TypeError('node_feats must be a torch.Tensor')
+            if self.node_feats.ndim != 2 or self.node_feats.shape[0] != num_nodes:
+                raise ValueError('node_feats must have shape [num_nodes, D_node]')
 
         # Validate timestamps
         if not isinstance(self.timestamps, torch.Tensor):
@@ -42,7 +45,7 @@ class DGData:
         if self.timestamps.ndim != 1 or self.timestamps.shape[0] != num_edges:
             raise ValueError('timestamps must have shape [num_edges]')
 
-        # Sort events if needed
+        # Sort if necessary
         if not torch.all(torch.diff(self.timestamps) >= 0):
             warnings.warn('received non-chronological events, sorting by time')
             sorted_idx = torch.argsort(self.timestamps)

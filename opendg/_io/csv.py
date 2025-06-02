@@ -2,7 +2,7 @@ import csv
 import pathlib
 from typing import List, Optional
 
-from torch import Tensor
+import torch
 
 from opendg.data import DGData
 
@@ -17,21 +17,23 @@ def read_csv(
     # TODO: Node Events not supported
 
     file_path = str(file_path) if isinstance(file_path, pathlib.Path) else file_path
-    edge_index_, timestamps_, edge_feats_ = [], [], []
     with open(file_path, newline='') as f:
-        for row in csv.DictReader(f):
-            src = int(row[src_col])
-            dst = int(row[dst_col])
-            t = int(row[time_col])
+        reader = list(csv.DictReader(f))  # Assumes the whole things fits in memory
+        num_edges = len(reader)
 
-            edge_index_.append([src, dst])
-            timestamps_.append(t)
+    edge_index = torch.empty((num_edges, 2), dtype=torch.long)
+    timestamps = torch.empty(num_edges, dtype=torch.long)
+    edge_feats = None
+    if edge_feature_col is not None:
+        edge_feats = torch.empty((num_edges, len(edge_feature_col)))
 
-            if edge_feature_col is not None:
-                features = [float(row[feature_col]) for feature_col in edge_feature_col]
-                edge_feats_.append(features)
+    for i, row in enumerate(reader):
+        edge_index[i, 0] = int(row[src_col])
+        edge_index[i, 1] = int(row[dst_col])
+        timestamps[i] = int(row[time_col])
+        if edge_feature_col is not None:
+            # This is likely better than creating a tensor copy for every event
+            for j, col in enumerate(edge_feature_col):
+                edge_feats[i, j] = float(row[col])  # type: ignore
 
-    edge_index = Tensor(edge_index_).long()
-    timestamps = Tensor(timestamps_).long()
-    edge_feats = Tensor(edge_feats_) if edge_feature_col is not None else None
     return DGData(edge_index, timestamps, edge_feats)
