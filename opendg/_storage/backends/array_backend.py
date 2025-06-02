@@ -24,18 +24,6 @@ class DGStorageArrayBackend(DGStorageBase):
         self._lb_cache: Dict[Optional[int], int] = {}
         self._ub_cache: Dict[Optional[int], int] = {}
 
-    def to_events(self, slice: DGSliceTracker) -> List[Event]:
-        lb_idx, ub_idx = self._binary_search(slice)
-        if slice.node_slice is None:
-            return self._events[lb_idx:ub_idx]
-
-        events = []
-        for i in range(lb_idx, ub_idx):
-            event = self._events[i]
-            if any(x in slice.node_slice for x in self._nodes_in_event(event)):
-                events.append(event)
-        return events
-
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
         for i in range(*self._binary_search(slice)):
             event = self._events[i]
