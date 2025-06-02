@@ -1,9 +1,10 @@
-from typing import Any, List
+from typing import Any
 
+import numpy as np
 import torch
 from tgb.linkproppred.dataset import LinkPropPredDataset
 
-from opendg.events import EdgeEvent, Event
+from opendg.data import DGData
 from opendg.timedelta import TimeDeltaDG
 
 TIME_DELTA_DICT = {
@@ -34,7 +35,7 @@ def read_tgb(
     name: str,
     split: str = 'all',  # Options: 'train', 'valid', 'test', 'all'
     **kwargs: Any,
-) -> List[Event]:
+) -> DGData:
     # TODO: Node Events not supported
     if name.startswith('tgbl-'):
         dataset = LinkPropPredDataset(name=name, **kwargs)
@@ -57,24 +58,12 @@ def read_tgb(
     else:
         raise ValueError(f'Unknown split: {split}')
 
-    sources = data['sources'][mask]
-    destinations = data['destinations'][mask]
-    timestamps = data['timestamps'][mask]
-    edge_feats = data['edge_feat'][mask] if data['edge_feat'] is not None else None
-
-    events: List[Event] = []
-    for i, (src, dst, t, feat) in enumerate(
-        zip(
-            sources,
-            destinations,
-            timestamps,
-            edge_feats if edge_feats is not None else [None] * len(sources),
-        )
-    ):
-        features = torch.tensor(feat, dtype=torch.float) if feat is not None else None
-        event = EdgeEvent(
-            t=int(t), src=int(src), dst=int(dst), global_id=i, features=features
-        )
-        events.append(event)
-
-    return events
+    src = data['sources'][mask]
+    dst = data['destinations'][mask]
+    edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
+    timestamps = torch.from_numpy(data['timestamps'][mask]).long()
+    if data['edge_feat'] is None:
+        edge_feats = None
+    else:
+        edge_feats = torch.from_numpy(data['edge_feat'][mask])
+    return DGData(edge_index, timestamps, edge_feats)

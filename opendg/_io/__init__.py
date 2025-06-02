@@ -2,17 +2,15 @@ from opendg._io.csv import read_csv
 from opendg._io.pandas import read_pandas
 from opendg._io.tgb import read_tgb, TIME_DELTA_DICT
 
-from typing import Any, List, Union
+from typing import Any, Union
 import pathlib
 
 import pandas as pd
 from opendg.timedelta import TimeDeltaDG
-from opendg.events import Event
+from opendg.data import DGData
 
 
-def read_events(
-    data: Union[str, pathlib.Path, pd.DataFrame], **kwargs: Any
-) -> List[Event]:
+def read_events(data: Union[str, pathlib.Path, pd.DataFrame], **kwargs: Any) -> DGData:
     if isinstance(data, pd.DataFrame):
         return read_pandas(data, **kwargs)
 

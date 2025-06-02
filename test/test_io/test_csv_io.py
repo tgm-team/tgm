@@ -1,45 +1,49 @@
 import csv
 import tempfile
-from dataclasses import asdict
 
 import torch
 
 from opendg._io import read_csv
-from opendg.events import EdgeEvent
+from opendg.data import DGData
 
 
 def test_csv_conversion_no_features():
-    events = [
-        EdgeEvent(t=1, src=2, dst=3, global_id=0),
-        EdgeEvent(t=1, src=10, dst=20, global_id=1),
-    ]
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    timestamps = torch.LongTensor([1, 1])
+    data = DGData(edge_index, timestamps)
 
     col_names = {'src_col': 'src', 'dst_col': 'dst', 'time_col': 't'}
     with tempfile.NamedTemporaryFile() as f:
-        _write_csv(events, f.name, **col_names)
-        recovered_events = read_csv(f.name, **col_names)
-    assert events == recovered_events
+        _write_csv(data, f.name, **col_names)
+        recovered_data = read_csv(f.name, **col_names)
+
+    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+    assert recovered_data.edge_feats is None
+    assert recovered_data.node_feats is None
 
 
 def test_csv_conversion_with_features():
-    events = [
-        EdgeEvent(t=1, src=2, dst=3, global_id=0, features=torch.rand(5)),
-        EdgeEvent(t=5, src=10, dst=20, global_id=1, features=torch.rand(5)),
-    ]
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    timestamps = torch.LongTensor([1, 5])
+    edge_feats = torch.rand(2, 5)
+    data = DGData(edge_index, timestamps, edge_feats)
 
     edge_feature_col = [f'dim_{i}' for i in range(5)]
     col_names = {'src_col': 'src', 'dst_col': 'dst', 'time_col': 't'}
     with tempfile.NamedTemporaryFile() as f:
-        _write_csv(events, f.name, edge_feature_col=edge_feature_col, **col_names)
-        recovered_events = read_csv(
+        _write_csv(data, f.name, edge_feature_col=edge_feature_col, **col_names)
+        recovered_data = read_csv(
             f.name, edge_feature_col=edge_feature_col, **col_names
         )
-    expected = [asdict(e) for e in events]
-    actual = [asdict(e) for e in recovered_events]
-    torch.testing.assert_close(expected, actual)
+
+    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+    torch.testing.assert_close(data.edge_feats, recovered_data.edge_feats)
+    assert recovered_data.node_feats is None
 
 
-def _write_csv(events, fp, src_col, dst_col, time_col, edge_feature_col=None):
+def _write_csv(data, fp, src_col, dst_col, time_col, edge_feature_col=None):
     with open(fp, 'w', newline='') as f:
         fieldnames = [src_col, dst_col, time_col]
         if edge_feature_col is not None:
@@ -47,25 +51,30 @@ def _write_csv(events, fp, src_col, dst_col, time_col, edge_feature_col=None):
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
 
-        for event in events:
-            assert isinstance(event, EdgeEvent)
-            row = {src_col: event.src, dst_col: event.dst, time_col: event.t}
-            if event.features is not None:
+        for i in range(len(data.edge_index)):
+            row = {
+                src_col: int(data.edge_index[i][0]),
+                dst_col: int(data.edge_index[i][1]),
+                time_col: int(data.timestamps[i]),
+            }
+            if data.edge_feats is not None:
                 if edge_feature_col is None:
                     raise ValueError(
                         'No feature column provided but events had features'
                     )
 
-                if len(event.features.shape) > 1:
+                feats = data.edge_feats[i]
+
+                if len(feats.shape) > 1:
                     raise ValueError('Multi-dimensional features not supported')
 
-                if len(event.features) != len(edge_feature_col):
+                if len(feats) != len(edge_feature_col):
                     raise ValueError(
-                        f'Got {len(event.features)}-dimensional feature tensor but only '
+                        f'Got {len(feats)}-dimensional feature tensor but only '
                         f'specified {len(edge_feature_col)} feature column names.'
                     )
 
-                features_list = event.features.tolist()
+                features_list = feats.tolist()
                 for feature_col, feature_val in zip(edge_feature_col, features_list):
                     row[feature_col] = feature_val
 
