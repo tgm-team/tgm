@@ -76,3 +76,9 @@ def test_init_dg_data_bad_args():
         _ = DGData(edge_index, timestamps, torch.rand(1, 5))
     with pytest.raises(ValueError):
         _ = DGData(edge_index, timestamps, torch.rand(1, 5, 5))
+    with pytest.raises(ValueError):
+        _ = DGData(edge_index, timestamps, torch.rand(2))
+    with pytest.raises(ValueError):
+        _ = DGData(edge_index, timestamps, edge_feats, torch.rand(2))
+    with pytest.raises(ValueError):
+        _ = DGData(edge_index, timestamps, edge_feats, torch.rand(2, 5, 5))
