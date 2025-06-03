@@ -279,18 +279,20 @@ class DGData:
 
     @classmethod
     def from_tgb(cls, name: str, split: str = 'all', **kwargs: Any) -> DGData:
-        def _check_tgb_import() -> None:
+        def _check_tgb_import() -> 'LinkPropPredDataset':  # type: ignore
             try:
-                pass
+                from tgb.linkproppred.dataset import LinkPropPredDataset
+
+                return LinkPropPredDataset
             except ImportError:
                 err_msg = 'User requires tgb to initialize a DGraph from a tgb dataset '
                 raise ImportError(err_msg)
 
-        _check_tgb_import()
+        LinkPropPredDataset = _check_tgb_import()
 
         # TODO: Node Events not supported
         if name.startswith('tgbl-'):
-            dataset = tgb.linkproppred.dataset.LinkPropPredDataset(name=name, **kwargs)  # type: ignore
+            dataset = LinkPropPredDataset(name=name, **kwargs)  # type: ignore
         elif name.startswith('tgbn-'):
             raise ValueError(f'Not Implemented dataset: {name}')
         else:
