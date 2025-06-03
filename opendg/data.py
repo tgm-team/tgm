@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import csv
+import pathlib
 import warnings
 from dataclasses import dataclass
+from typing import Any, List
 
+import numpy as np
 import torch
 from torch import Tensor
 
@@ -192,3 +196,146 @@ class DGData:
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
         )
+
+    @classmethod
+    def from_csv(
+        cls,
+        file_path: str | pathlib.Path,
+        src_col: str,
+        dst_col: str,
+        time_col: str,
+        edge_feature_col: List[str] | None = None,
+    ) -> DGData:
+        # TODO: Node Events not supported
+        file_path = str(file_path) if isinstance(file_path, pathlib.Path) else file_path
+        with open(file_path, newline='') as f:
+            reader = list(csv.DictReader(f))  # Assumes the whole things fits in memory
+            num_edges = len(reader)
+
+        edge_index = torch.empty((num_edges, 2), dtype=torch.long)
+        timestamps = torch.empty(num_edges, dtype=torch.long)
+        edge_feats = None
+        if edge_feature_col is not None:
+            edge_feats = torch.empty((num_edges, len(edge_feature_col)))
+
+        for i, row in enumerate(reader):
+            edge_index[i, 0] = int(row[src_col])
+            edge_index[i, 1] = int(row[dst_col])
+            timestamps[i] = int(row[time_col])
+            if edge_feature_col is not None:
+                # This is likely better than creating a tensor copy for every event
+                for j, col in enumerate(edge_feature_col):
+                    edge_feats[i, j] = float(row[col])  # type: ignore
+        return cls.from_raw(
+            edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+        )
+
+    @classmethod
+    def from_pandas(
+        cls,
+        df: 'pandas.DataFrame',  # type: ignore
+        src_col: str,
+        dst_col: str,
+        time_col: str,
+        edge_feature_col: str | None = None,
+    ) -> DGData:
+        # TODO: Node Events not supported
+
+        def _check_pandas_import(min_version_number: str | None = None) -> None:
+            try:
+                import pandas
+
+                user_pandas_version = pandas.__version__
+            except ImportError:
+                user_pandas_version = None
+
+            err_msg = 'User requires pandas '
+            if min_version_number is not None:
+                err_msg += f'>={min_version_number} '
+            err_msg += 'to initialize a DGraph a dataframe'
+
+            if user_pandas_version is None:
+                raise ImportError(err_msg)
+            elif (
+                min_version_number is not None
+                and user_pandas_version < min_version_number
+            ):
+                err_msg += (
+                    f', found pandas=={user_pandas_version} < {min_version_number}'
+                )
+                raise ImportError(err_msg)
+
+        _check_pandas_import()
+
+        edge_index = torch.from_numpy(df[[src_col, dst_col]].to_numpy()).long()
+        timestamps = torch.from_numpy(df[time_col].to_numpy()).long()
+        if edge_feature_col is None:
+            edge_feats = None
+        else:
+            edge_feats = torch.Tensor(df[edge_feature_col].tolist())
+        return cls.from_raw(
+            edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+        )
+
+    @classmethod
+    def from_tgb(cls, name: str, split: str = 'all', **kwargs: Any) -> DGData:
+        def _check_tgb_import() -> None:
+            try:
+                pass
+            except ImportError:
+                err_msg = 'User requires tgb to initialize a DGraph from a tgb dataset '
+                raise ImportError(err_msg)
+
+        _check_tgb_import()
+
+        # TODO: Node Events not supported
+        if name.startswith('tgbl-'):
+            dataset = tgb.linkproppred.dataset.LinkPropPredDataset(name=name, **kwargs)  # type: ignore
+        elif name.startswith('tgbn-'):
+            raise ValueError(f'Not Implemented dataset: {name}')
+        else:
+            raise ValueError(f'Unknown dataset: {name}')
+        data = dataset.full_data
+
+        split_masks = {
+            'train': dataset.train_mask,
+            'valid': dataset.val_mask,
+            'test': dataset.test_mask,
+        }
+
+        if split == 'all':
+            mask = slice(None)  # selects everything
+        elif split in split_masks:
+            mask = split_masks[split]
+        else:
+            raise ValueError(f'Unknown split: {split}')
+
+        src = data['sources'][mask]
+        dst = data['destinations'][mask]
+        edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
+        timestamps = torch.from_numpy(data['timestamps'][mask]).long()
+        if data['edge_feat'] is None:
+            edge_feats = None
+        else:
+            edge_feats = torch.from_numpy(data['edge_feat'][mask])
+        return cls.from_raw(
+            edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+        )
+
+    @classmethod
+    def from_any(
+        cls,
+        data: str | pathlib.Path | 'pandas.DataFrame',  # type: ignore
+        **kwargs: Any,
+    ) -> DGData:
+        if isinstance(data, (str, pathlib.Path)):
+            data_str = str(data)
+            if data_str.startswith('tgbl-'):
+                return cls.from_tgb(name=data_str, **kwargs)
+            if data_str.endswith('.csv'):
+                return cls.from_csv(data, **kwargs)
+            raise ValueError(
+                f'Unsupported file format or dataset identifier: {data_str}'
+            )
+        else:
+            return cls.from_pandas(data, **kwargs)
