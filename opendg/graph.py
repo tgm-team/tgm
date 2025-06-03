@@ -8,10 +8,9 @@ from typing import Any, List, Optional, Set, Tuple
 import pandas as pd
 from torch import Tensor
 
-from opendg._io import read_events, read_time_delta
 from opendg._storage import DGSliceTracker, DGStorage
 from opendg.data import DGData
-from opendg.timedelta import TimeDeltaDG
+from opendg.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
 class DGraph:
@@ -23,21 +22,21 @@ class DGraph:
         time_delta: TimeDeltaDG | None = None,
         **kwargs: Any,
     ) -> None:
-        if isinstance(data, DGStorage):
-            self._storage = data
-        else:
-            data = data if isinstance(data, DGData) else read_events(data, **kwargs)
-            self._storage = DGStorage(data)
-
         if time_delta is None:
+            self.time_delta = TimeDeltaDG('r')
             if isinstance(data, str) and data.startswith('tgb'):
-                self.time_delta = read_time_delta(data)
-            else:
-                self.time_delta = TimeDeltaDG('r')
+                self.time_delta = TGB_TIME_DELTAS.get(data, self.time_delta)
         elif isinstance(time_delta, TimeDeltaDG):
             self.time_delta = time_delta
         else:
             raise ValueError(f'bad time_delta type: {type(time_delta)}')
+
+        if isinstance(data, DGStorage):
+            self._storage = data
+        else:
+            if not isinstance(data, DGData):
+                data = DGData.from_any(data, **kwargs)
+            self._storage = DGStorage(data)
 
         self._slice = DGSliceTracker()
 
