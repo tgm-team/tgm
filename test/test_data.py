@@ -123,6 +123,14 @@ def test_init_dg_data_bad_args_empty_graph():
         _ = DGData.from_raw(torch.empty((0, 2)), torch.empty(0))
 
 
+def test_init_dg_data_bad_args_negative_timestamps():
+    # Negative timestamps not supported
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([-1, 5])
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(edge_index, edge_timestamps)
+
+
 def test_init_dg_data_bad_args_bad_types():
     # Num edges = 2, Num nodes = 21, D_edge = 5, Num node events = 3, D_node_dynamic = 7
     edge_index = torch.LongTensor([[2, 3], [10, 20]])

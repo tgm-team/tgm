@@ -105,6 +105,8 @@ class DGData:
             or self.timestamps.shape[0] != num_edges + num_node_events
         ):
             raise ValueError('timestamps must have shape [num_edges + num_node_events]')
+        if not torch.all(self.timestamps >= 0):
+            raise ValueError('timestamps must be non-negative integers')
 
         # Sort if necessary
         if not torch.all(torch.diff(self.timestamps) >= 0):
