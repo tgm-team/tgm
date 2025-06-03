@@ -157,6 +157,7 @@ class DGData:
         timestamps = timestamps[sorted_idx]
         event_types = event_types[sorted_idx]
 
+        # Compute event masks
         edge_event_idx = (event_types == 0).nonzero(as_tuple=True)[0]
         node_event_idx = (
             (event_types == 1).nonzero(as_tuple=True)[0]
@@ -164,18 +165,22 @@ class DGData:
             else None
         )
 
-        edge_perm = sorted_idx[event_types == 0]
-        node_perm = (
-            sorted_idx[event_types == 1] if node_timestamps is not None else None
-        )
-
+        # Reorder data
+        edge_perm = torch.argsort(edge_timestamps)
         edge_index = edge_index[edge_perm]
         edge_feats = edge_feats[edge_perm] if edge_feats is not None else None
 
-        node_ids = node_ids[node_perm] if node_ids is not None else None
-        dynamic_node_feats = (
-            dynamic_node_feats[node_perm] if dynamic_node_feats is not None else None
-        )
+        if node_timestamps is not None:
+            node_perm = torch.argsort(node_timestamps)
+            node_ids = node_ids[node_perm] if node_ids is not None else None
+            dynamic_node_feats = (
+                dynamic_node_feats[node_perm]
+                if dynamic_node_feats is not None
+                else None
+            )
+        else:
+            node_ids = None
+            dynamic_node_feats = None
 
         return cls(
             timestamps=timestamps,
