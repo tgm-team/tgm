@@ -15,13 +15,23 @@ class DGStorageArrayBackend(DGStorageBase):
     def __init__(self, data: DGData) -> None:
         self._data = data
 
+        # Pre-compute edge event indices
+        self._edge_idx_map = {
+            idx.item(): i for i, idx in enumerate(self._data.edge_event_idx)
+        }
+        self._node_idx_map = (
+            {idx.item(): i for i, idx in enumerate(self._data.node_event_idx)}
+            if self._data.node_event_idx is not None
+            else None
+        )
+
         # Binary search caches for finding timestamps in event array
         self._lb_cache: Dict[Optional[int], int] = {}
         self._ub_cache: Dict[Optional[int], int] = {}
 
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
         for i in range(*self._binary_search(slice)):
-            nodes = self._data.edge_index[i].tolist()
+            nodes = self._nodes_in_event(i)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
                 return int(self._data.timestamps[i].item())
         return None
@@ -29,7 +39,7 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
         for i in range(ub_idx - 1, lb_idx - 1, -1):
-            nodes = self._data.edge_index[i].tolist()
+            nodes = self._nodes_in_event(i)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
                 return int(self._data.timestamps[i].item())
         return None
@@ -37,7 +47,7 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         all_nodes: Set[int] = set()
         for i in range(*self._binary_search(slice)):
-            nodes = self._data.edge_index[i].tolist()
+            nodes = self._nodes_in_event(i)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
                 all_nodes.update(nodes)
         return all_nodes
@@ -45,11 +55,14 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
         src, dst, time = [], [], []
         for i in range(*self._binary_search(slice)):
-            nodes = self._data.edge_index[i].tolist()
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                src.append(nodes[0])
-                dst.append(nodes[1])
-                time.append(self._data.timestamps[i].item())
+            if i in self._edge_idx_map:
+                nodes = self._nodes_in_event(i)
+                if slice.node_slice is None or any(
+                    x in slice.node_slice for x in nodes
+                ):
+                    src.append(nodes[0])
+                    dst.append(nodes[1])
+                    time.append(self._data.timestamps[i].item())
 
         src_tensor = torch.LongTensor(src)
         dst_tensor = torch.LongTensor(dst)
@@ -59,7 +72,7 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         timestamps = set()
         for i in range(*self._binary_search(slice)):
-            nodes = self._data.edge_index[i].tolist()
+            nodes = self._nodes_in_event(i)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
                 timestamps.add(self._data.timestamps[i].item())
         return len(timestamps)
@@ -67,7 +80,7 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_num_events(self, slice: DGSliceTracker) -> int:
         num_events = 0
         for i in range(*self._binary_search(slice)):
-            nodes = self._data.edge_index[i].tolist()
+            nodes = self._nodes_in_event(i)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
                 num_events += 1
         return num_events
@@ -87,20 +100,23 @@ class DGStorageArrayBackend(DGStorageBase):
 
         nbrs: Dict[int, Set[Tuple[int, int]]] = {node: set() for node in seed_nodes_set}
         for i in range(*self._binary_search(slice)):
-            nodes = self._data.edge_index[i].tolist()
-            if slice.node_slice is None or all(x in slice.node_slice for x in nodes):
-                # Use 0/1 flag to denote dst/src neighbor, respectively
-                src, dst = nodes
-                if src in seed_nodes_set:
-                    nbrs[src].add((i, 1))
-                if dst in seed_nodes_set:
-                    nbrs[dst].add((i, 0))
+            if i in self._edge_idx_map:
+                nodes = self._nodes_in_event(i)
+                if slice.node_slice is None or all(
+                    x in slice.node_slice for x in nodes
+                ):
+                    # Use 0/1 flag to denote dst/src neighbor, respectively
+                    src, dst = nodes
+                    if src in seed_nodes_set:
+                        nbrs[src].add((i, 1))
+                    if dst in seed_nodes_set:
+                        nbrs[dst].add((i, 0))
 
         # TODO: Node feats
         batch_size = len(seed_nodes)
         nbr_nids = torch.empty(batch_size, n_nbrs, dtype=torch.long)
         nbr_times = torch.empty(batch_size, n_nbrs, dtype=torch.long)
-        nbr_feats = torch.zeros(batch_size, n_nbrs, self.get_edge_feats_dim())  # type: ignore
+        nbr_feats = torch.zeros(batch_size, n_nbrs, self._edge_feats_dim)  # type: ignore
         nbr_mask = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
         for i, nbrs_set in enumerate(nbrs.values()):
             node_nbrs = list(nbrs_set)
@@ -125,19 +141,25 @@ class DGStorageArrayBackend(DGStorageBase):
         return [seed_nodes], [nbr_nids], [nbr_times], [nbr_feats], [nbr_mask]
 
     def get_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        # TODO: Figure out how we will store node features
-        if self._data.node_feats is None:
+        if self._data.dynamic_node_feats is None:
             return None
 
         max_time, max_node_id = -1, -1  # Assuming these are both non-negative
-        indices, values = [], []  # type: ignore
+        indices, values = [], []
         for i in range(*self._binary_search(slice)):
-            nodes = self._data.edge_index[i].tolist()
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                max_time = max(max_time, int(self._data.timestamps[i].item()))
-                max_node_id = max(max_node_id, *nodes)
-                # indices.append([event.t, event.src])
-                # values.append(event.features)
+            if i not in self._edge_idx_map:
+                nodes = self._nodes_in_event(i)
+                if slice.node_slice is None or any(
+                    x in slice.node_slice for x in nodes
+                ):
+                    time = int(self._data.timestamps[i].item())
+                    max_time = max(max_time, time)
+                    max_node_id = max(max_node_id, *nodes)
+                    indices.append([time, nodes[0]])
+                    values.append(self._data.dynamic_node_feats[self._node_idx_map[i]])  # type: ignore
+
+        if not len(values):
+            return None
 
         # If the end_time is given, then it determines the dimension of the temporal axis
         # even if there are no events at the end time (could be the case after calling slice_time)
@@ -158,15 +180,19 @@ class DGStorageArrayBackend(DGStorageBase):
         max_time, max_node_id = -1, -1  # Assuming these are both non-negative
         indices, values = [], []
         for i in range(*self._binary_search(slice)):
-            nodes = self._data.edge_index[i].tolist()
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                max_time = max(max_time, int(self._data.timestamps[i].item()))
-                max_node_id = max(max_node_id, *nodes)
-                t = self._data.timestamps[i].item()
-                src = self._data.edge_index[i][0].item()
-                dst = self._data.edge_index[i][1].item()
-                indices.append([t, src, dst])
-                values.append(self._data.edge_feats[i])
+            if i in self._edge_idx_map:
+                nodes = self._nodes_in_event(i)
+                if slice.node_slice is None or any(
+                    x in slice.node_slice for x in nodes
+                ):
+                    time = int(self._data.timestamps[i].item())
+                    max_time = max(max_time, time)
+                    max_node_id = max(max_node_id, *nodes)
+                    indices.append([time, nodes[0], nodes[1]])
+                    values.append(self._data.edge_feats[self._edge_idx_map[i]])
+
+        if not len(values):
+            return None
 
         # If the end_time is given, then it determines the dimension of the temporal axis
         # even if there are no events at the end time (could be the case after calling slice_time)
@@ -181,14 +207,20 @@ class DGStorageArrayBackend(DGStorageBase):
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
 
     def get_node_feats_dim(self) -> Optional[int]:
-        if self._data.node_feats is None:
+        if self._data.dynamic_node_feats is None:
             return None
-        return self._data.node_feats.shape[1]
+        return self._data.dynamic_node_feats.shape[1]
 
     def get_edge_feats_dim(self) -> Optional[int]:
         if self._data.edge_feats is None:
             return None
         return self._data.edge_feats.shape[1]
+
+    def _nodes_in_event(self, i: int) -> Tuple[int, ...]:
+        if i in self._edge_idx_map:
+            return tuple(self._data.edge_index[self._edge_idx_map[i]].tolist())
+        else:
+            return tuple(self._data.node_ids[self._node_idx_map[i]].tolist())  # type: ignore
 
     def _binary_search(self, slice: DGSliceTracker) -> Tuple[int, int]:
         ts = self._data.timestamps
