@@ -117,7 +117,12 @@ def test_init_dg_data_sort_required():
     torch.testing.assert_close(data.timestamps, torch.LongTensor([1, 5, 6, 7, 8]))
     torch.testing.assert_close(data.edge_feats, exp_edge_feats)
     torch.testing.assert_close(data.edge_event_idx, torch.LongTensor([1, 0]))
-    torch.testing.assert_close(data.node_event_idx, torch.LongTensor([4, 3, 2]))
+    torch.testing.assert_close(
+        data.node_event_idx,
+        torch.LongTensor(
+            [4, 3, 2],
+        ),
+    )
     torch.testing.assert_close(data.node_ids, exp_node_ids)
     torch.testing.assert_close(data.dynamic_node_feats, exp_dynamic_node_feats)
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
@@ -127,6 +132,14 @@ def test_init_dg_data_bad_args_empty_graph():
     # Empty graph not supported
     with pytest.raises(ValueError):
         _ = DGData.from_raw(torch.empty((0, 2)), torch.empty(0))
+
+
+def test_init_dg_data_bad_args_negative_timestamps():
+    # Negative timestamps not supported
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([-1, 5])
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(edge_index, edge_timestamps)
 
 
 def test_init_dg_data_bad_args_bad_types():
