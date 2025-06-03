@@ -6,7 +6,6 @@ import warnings
 from dataclasses import dataclass
 from typing import Any, List
 
-import numpy as np
 import torch
 from torch import Tensor
 
@@ -109,34 +108,36 @@ class DGData:
             or self.timestamps.shape[0] != num_edges + num_node_events
         ):
             raise ValueError('timestamps must have shape [num_edges + num_node_events]')
+        if not torch.all(self.timestamps >= 0):
+            raise ValueError('timestamps must be non-negative integers')
 
         # Sort if necessary
         if not torch.all(torch.diff(self.timestamps) >= 0):
             warnings.warn('received non-chronological events, sorting by time')
-            sorted_idx = torch.argsort(self.timestamps)
-            self.timestamps = self.timestamps[sorted_idx]
 
-            # Build reverse mapping from old to new indices
-            inverse_sort_idx = torch.empty_like(sorted_idx)
-            inverse_sort_idx[sorted_idx] = torch.arange(len(sorted_idx))
+            # Sort timestamps
+            sort_idx = torch.argsort(self.timestamps)
+            inverse_sort_idx = torch.empty_like(sort_idx)
+            inverse_sort_idx[sort_idx] = torch.arange(len(sort_idx))
+            self.timestamps = self.timestamps[sort_idx]
 
-            # Reorder edge and node events
+            # Update global event indices
             self.edge_event_idx = inverse_sort_idx[self.edge_event_idx]
             if self.node_event_idx is not None:
                 self.node_event_idx = inverse_sort_idx[self.node_event_idx]
 
-            # Reorder edge_index and edge_feats using edge_event_idx
-            self.edge_index = self.edge_index[self.edge_event_idx]
+            # Reorder edge-specific data
+            edge_order = torch.argsort(self.edge_event_idx)
+            self.edge_index = self.edge_index[edge_order]
             if self.edge_feats is not None:
-                self.edge_feats = self.edge_feats[self.edge_event_idx]
+                self.edge_feats = self.edge_feats[edge_order]
 
-            # Reorder dynamic node features
+            # Reorder node-specific data
             if self.node_event_idx is not None:
-                self.node_ids = self.node_ids[self.node_event_idx]  # type: ignore
+                node_order = torch.argsort(self.node_event_idx)
+                self.node_ids = self.node_ids[node_order]  # type: ignore
                 if self.dynamic_node_feats is not None:
-                    self.dynamic_node_feats = self.dynamic_node_feats[
-                        self.node_event_idx
-                    ]
+                    self.dynamic_node_feats = self.dynamic_node_feats[node_order]
 
     @classmethod
     def from_raw(
@@ -156,11 +157,6 @@ class DGData:
             timestamps = torch.cat([timestamps, node_timestamps])
             event_types = torch.cat([event_types, torch.ones_like(node_timestamps)])
 
-        # Sort event timeline
-        sorted_idx = torch.argsort(timestamps)
-        timestamps = timestamps[sorted_idx]
-        event_types = event_types[sorted_idx]
-
         # Compute event masks
         edge_event_idx = (event_types == 0).nonzero(as_tuple=True)[0]
         node_event_idx = (
@@ -168,23 +164,6 @@ class DGData:
             if node_timestamps is not None
             else None
         )
-
-        # Reorder data
-        edge_perm = torch.argsort(edge_timestamps)
-        edge_index = edge_index[edge_perm]
-        edge_feats = edge_feats[edge_perm] if edge_feats is not None else None
-
-        if node_timestamps is not None:
-            node_perm = torch.argsort(node_timestamps)
-            node_ids = node_ids[node_perm] if node_ids is not None else None
-            dynamic_node_feats = (
-                dynamic_node_feats[node_perm]
-                if dynamic_node_feats is not None
-                else None
-            )
-        else:
-            node_ids = None
-            dynamic_node_feats = None
 
         return cls(
             timestamps=timestamps,
