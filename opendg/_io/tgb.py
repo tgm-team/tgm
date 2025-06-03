@@ -66,4 +66,6 @@ def read_tgb(
         edge_feats = None
     else:
         edge_feats = torch.from_numpy(data['edge_feat'][mask])
-    return DGData(edge_index, timestamps, edge_feats)
+    return DGData.from_raw(
+        edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+    )

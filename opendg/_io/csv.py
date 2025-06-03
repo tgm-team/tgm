@@ -36,4 +36,6 @@ def read_csv(
             for j, col in enumerate(edge_feature_col):
                 edge_feats[i, j] = float(row[col])  # type: ignore
 
-    return DGData(edge_index, timestamps, edge_feats)
+    return DGData.from_raw(
+        edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+    )

@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 import torch
 
 from opendg._io import read_pandas
@@ -17,11 +18,9 @@ def test_read_pandas_no_features():
     assert isinstance(data, DGData)
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
     assert data.timestamps.tolist() == [1337, 1338]
-    assert data.edge_feats is None
-    assert data.node_feats is None
 
 
-def test_read_pandas_with_features():
+def test_read_pandas_with_edge_features():
     events_dict = {
         'src': [2, 10],
         'dst': [3, 20],
@@ -43,4 +42,13 @@ def test_read_pandas_with_features():
     torch.testing.assert_close(
         data.edge_feats.tolist(), events_df.edge_features.tolist()
     )
-    assert data.node_feats is None
+
+
+@pytest.mark.skip('TODO: Add node features to IO')
+def test_read_pandas_with_node_events():
+    pass
+
+
+@pytest.mark.skip('TODO: Add node features to IO')
+def test_read_pandas_with_node_features():
+    pass

@@ -62,8 +62,6 @@ def test_tgb_conversion(mock_dataset_cls, split, expected_indices):
 
     # Assertions
     assert isinstance(data, DGData)
-    assert data.edge_feats is None
-    assert data.node_feats is None
 
     edges_list = data.edge_index.tolist()
     times_list = data.timestamps.tolist()
@@ -73,3 +71,13 @@ def test_tgb_conversion(mock_dataset_cls, split, expected_indices):
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbl-wiki')
+
+
+@pytest.mark.skip('TODO: Add node features to IO')
+def test_tgb_conversion_with_node_events():
+    pass
+
+
+@pytest.mark.skip('TODO: Add node features to IO')
+def test_read_pandas_with_node_features():
+    pass

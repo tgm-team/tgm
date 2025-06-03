@@ -22,7 +22,9 @@ def read_pandas(
         edge_feats = None
     else:
         edge_feats = torch.Tensor(df[edge_feature_col].tolist())
-    return DGData(edge_index, timestamps, edge_feats)
+    return DGData.from_raw(
+        edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+    )
 
 
 def _check_pandas_import(min_version_number: Optional[str] = None) -> None:
