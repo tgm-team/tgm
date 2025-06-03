@@ -6,6 +6,7 @@ import warnings
 from dataclasses import dataclass
 from typing import Any, List
 
+import numpy as np
 import torch
 from torch import Tensor
 
