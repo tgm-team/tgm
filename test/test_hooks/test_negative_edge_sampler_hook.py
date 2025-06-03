@@ -8,18 +8,9 @@ from opendg.hooks import NegativeEdgeSamplerHook
 
 @pytest.fixture
 def data():
-    # TODO: Missing node events
     edge_index = torch.Tensor([[2, 2], [2, 4], [1, 8]])
-    timestamps = torch.Tensor([1, 5, 20])
-    return DGData(edge_index, timestamps)
-    # return [
-    #    NodeEvent(t=1, src=2),
-    #    EdgeEvent(t=1, src=2, dst=2),
-    #    NodeEvent(t=5, src=4),
-    #    EdgeEvent(t=5, src=2, dst=4),
-    #    NodeEvent(t=10, src=6),
-    #    EdgeEvent(t=20, src=1, dst=8),
-    # ]
+    edge_timestamps = torch.Tensor([1, 5, 20])
+    return DGData.from_raw(edge_timestamps, edge_index)
 
 
 def test_bad_negative_edge_sampler_init():

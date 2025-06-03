@@ -9,8 +9,8 @@ from opendg.hooks import RecencyNeighborHook
 @pytest.fixture
 def data():
     edge_index = torch.Tensor([[1, 10], [1, 11], [1, 12], [1, 13]])
-    timestamps = torch.Tensor([1, 1, 2, 2])
-    return DGData(edge_index, timestamps)
+    edge_timestamps = torch.Tensor([1, 1, 2, 2])
+    return DGData.from_raw(edge_timestamps, edge_index)
 
 
 def test_bad_neighbor_sampler_init():
