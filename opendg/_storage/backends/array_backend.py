@@ -145,15 +145,14 @@ class DGStorageArrayBackend(DGStorageBase):
         max_time, max_node_id = -1, -1  # Assuming these are both non-negative
         indices, values = [], []
         for i in range(*self._binary_search(slice)):
-            if i in self._edge_idx_map:
-                continue
             nodes = self._nodes_in_event(i)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
                 time = int(self._data.timestamps[i].item())
                 max_time = max(max_time, time)
                 max_node_id = max(max_node_id, *nodes)
-                indices.append([time, nodes[0]])
-                values.append(self._data.dynamic_node_feats[self._node_idx_map[i]])  # type: ignore
+                if i not in self._edge_idx_map:
+                    indices.append([time, nodes[0]])
+                    values.append(self._data.dynamic_node_feats[self._node_idx_map[i]])  # type: ignore
 
         if not len(values):
             return None
@@ -177,15 +176,14 @@ class DGStorageArrayBackend(DGStorageBase):
         max_time, max_node_id = -1, -1  # Assuming these are both non-negative
         indices, values = [], []
         for i in range(*self._binary_search(slice)):
-            if i not in self._edge_idx_map:
-                continue
             nodes = self._nodes_in_event(i)
             if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
                 time = int(self._data.timestamps[i].item())
                 max_time = max(max_time, time)
                 max_node_id = max(max_node_id, *nodes)
-                indices.append([time, nodes[0], nodes[1]])
-                values.append(self._data.edge_feats[self._edge_idx_map[i]])
+                if i in self._edge_idx_map:
+                    indices.append([time, nodes[0], nodes[1]])
+                    values.append(self._data.edge_feats[self._edge_idx_map[i]])
 
         if not len(values):
             return None
@@ -216,7 +214,7 @@ class DGStorageArrayBackend(DGStorageBase):
         if i in self._edge_idx_map:
             return tuple(self._data.edge_index[self._edge_idx_map[i]].tolist())
         else:
-            return tuple(self._data.node_ids[self._node_idx_map[i]].tolist())  # type: ignore
+            return (int(self._data.node_ids[self._node_idx_map[i]].item()),)  # type: ignore
 
     def _binary_search(self, slice: DGSliceTracker) -> Tuple[int, int]:
         ts = self._data.timestamps
