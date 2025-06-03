@@ -386,9 +386,9 @@ def test_from_tgb(mock_dataset_cls, split, expected_indices):
     mock_dataset_cls.assert_called_once_with(name='tgbl-wiki')
 
 
-@pytest.mark.skip('TODO: Add node features to IO')
+# @pytest.mark.skip('TODO: Add node features to IO')
 def test_from_tgb_with_node_events():
-    pass
+    data = DGData.from_tgb(name='tgbn-trade', split='test')
 
 
 @pytest.mark.skip('TODO: Add node features to IO')

@@ -259,22 +259,23 @@ class DGData:
 
     @classmethod
     def from_tgb(cls, name: str, split: str = 'all', **kwargs: Any) -> DGData:
-        def _check_tgb_import() -> 'LinkPropPredDataset':  # type: ignore
+        def _check_tgb_import() -> tuple['LinkPropPredDataset', 'NodePropPredDataset']:  # type: ignore
             try:
                 from tgb.linkproppred.dataset import LinkPropPredDataset
+                from tgb.nodeproppred.dataset import NodePropPredDataset
 
-                return LinkPropPredDataset
+                return LinkPropPredDataset, NodePropPredDataset
             except ImportError:
                 err_msg = 'User requires tgb to initialize a DGraph from a tgb dataset '
                 raise ImportError(err_msg)
 
-        LinkPropPredDataset = _check_tgb_import()
+        LinkPropPredDataset, NodePropPredDataset = _check_tgb_import()
 
         # TODO: Node Events not supported
         if name.startswith('tgbl-'):
             dataset = LinkPropPredDataset(name=name, **kwargs)  # type: ignore
         elif name.startswith('tgbn-'):
-            raise ValueError(f'Not Implemented dataset: {name}')
+            dataset = NodePropPredDataset(name=name, **kwargs)  # type: ignore
         else:
             raise ValueError(f'Unknown dataset: {name}')
         data = dataset.full_data
@@ -300,8 +301,47 @@ class DGData:
             edge_feats = None
         else:
             edge_feats = torch.from_numpy(data['edge_feat'][mask])
+
+        node_timestamps = None
+        node_ids = None
+        dynamic_node_feats = None
+
+        if name.startswith('tgbn-'):
+            if 'node_label_dict' in data:
+                node_label_dict = data['node_label_dict']
+            else:
+                raise ValueError('please update your tgb package or install by source')
+            num_node_events = 0
+            node_label_dim = 0
+            for t in node_label_dict:
+                for node_id, label in node_label_dict[t].items():
+                    num_node_events += 1
+                    node_label_dim = label.shape[0]
+
+            node_timestamps = np.zeros(num_node_events, dtype=np.int64)
+            node_ids = np.zeros(num_node_events, dtype=np.int64)
+            dynamic_node_feats = np.zeros(
+                (num_node_events, node_label_dim), dtype=np.float32
+            )
+            idx = 0
+            for t in node_label_dict:
+                for node_id, label in node_label_dict[t].items():
+                    node_timestamps[idx] = t
+                    node_ids[idx] = node_id
+                    dynamic_node_feats[idx] = label
+                    idx += 1
+
+            node_timestamps = torch.from_numpy(node_timestamps).long()
+            node_ids = torch.from_numpy(node_ids).long()
+            dynamic_node_feats = torch.from_numpy(dynamic_node_feats).float()
+
         return cls.from_raw(
-            edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+            edge_timestamps=timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
         )
 
     @classmethod
