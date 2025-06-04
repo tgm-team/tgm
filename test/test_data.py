@@ -386,9 +386,56 @@ def test_from_tgb(mock_dataset_cls, split, expected_indices):
     mock_dataset_cls.assert_called_once_with(name='tgbl-wiki')
 
 
-# @pytest.mark.skip('TODO: Add node features to IO')
-def test_from_tgb_with_node_events():
-    data = DGData.from_tgb(name='tgbn-trade', split='test')
+@pytest.mark.parametrize(
+    'split,expected_indices',
+    [
+        ('train', train_indices),
+        ('valid', val_indices),
+        ('test', test_indices),
+        ('all', np.arange(num_events)),
+    ],
+)
+@patch('tgb.nodeproppred.dataset.NodePropPredDataset')
+def test_from_tgb_with_node_events(mock_dataset_cls, split, expected_indices):
+    sources = np.arange(num_events)
+    destinations = np.arange(num_events)
+    timestamps = np.arange(num_events)
+    node_label_dict = {
+        1: {1: np.zeros(10)},
+        2: {1: np.zeros(10)},
+    }
+
+    edge_feat = None
+
+    train_mask = np.zeros(num_events, dtype=bool)
+    train_mask[train_indices] = True
+
+    val_mask = np.zeros(num_events, dtype=bool)
+    val_mask[val_indices] = True
+
+    test_mask = np.zeros(num_events, dtype=bool)
+    test_mask[test_indices] = True
+
+    mock_dataset = MagicMock()
+    mock_dataset.full_data = {
+        'sources': sources,
+        'destinations': destinations,
+        'timestamps': timestamps,
+        'edge_feat': edge_feat,
+        'node_label_dict': node_label_dict,
+    }
+    mock_dataset.train_mask = train_mask
+    mock_dataset.val_mask = val_mask
+    mock_dataset.test_mask = test_mask
+    mock_dataset.num_edges = num_events
+
+    mock_dataset_cls.return_value = mock_dataset
+
+    data = DGData.from_tgb(name='tgbn-trade', split=split)
+    assert isinstance(data, DGData)
+    data.edge_index.tolist()
+    data.timestamps.tolist()
+    mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
 
 
 @pytest.mark.skip('TODO: Add node features to IO')

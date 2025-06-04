@@ -331,9 +331,9 @@ class DGData:
                     dynamic_node_feats[idx] = label
                     idx += 1
 
-            node_timestamps = torch.from_numpy(node_timestamps).long()
-            node_ids = torch.from_numpy(node_ids).long()
-            dynamic_node_feats = torch.from_numpy(dynamic_node_feats).float()
+            node_timestamps = torch.from_numpy(node_timestamps).long()  # type: ignore
+            node_ids = torch.from_numpy(node_ids).long()  # type: ignore
+            dynamic_node_feats = torch.from_numpy(dynamic_node_feats).float()  # type: ignore
 
         return cls.from_raw(
             edge_timestamps=timestamps,
@@ -342,7 +342,7 @@ class DGData:
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
-        )
+        ) 
 
     @classmethod
     def from_any(
@@ -352,7 +352,7 @@ class DGData:
     ) -> DGData:
         if isinstance(data, (str, pathlib.Path)):
             data_str = str(data)
-            if data_str.startswith('tgbl-'):
+            if data_str.startswith('tgbl-') or data_str.startswith('tgbn-'):
                 return cls.from_tgb(name=data_str, **kwargs)
             if data_str.endswith('.csv'):
                 return cls.from_csv(data, **kwargs)
