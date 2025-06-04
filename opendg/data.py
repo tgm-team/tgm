@@ -362,7 +362,6 @@ class DGData:
 
         LinkPropPredDataset = _check_tgb_import()
 
-        # TODO: Node Events not supported
         if name.startswith('tgbl-'):
             dataset = LinkPropPredDataset(name=name, **kwargs)  # type: ignore
         elif name.startswith('tgbn-'):
@@ -392,8 +391,25 @@ class DGData:
             edge_feats = None
         else:
             edge_feats = torch.from_numpy(data['edge_feat'][mask])
+
+        # TGB Datasets do not support dynamic node features
+        node_timestamps = None
+        node_ids = None
+        dynamic_node_feats = None
+
+        # Read static node features if they exist
+        static_node_feats = None
+        if dataset.node_feat is not None:
+            static_node_feats = torch.from_numpy(dataset.node_feat)
+
         return cls.from_raw(
-            edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+            edge_timestamps=timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            static_node_feats=static_node_feats,
         )
 
     @classmethod

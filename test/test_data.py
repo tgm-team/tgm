@@ -359,6 +359,7 @@ def test_from_tgb(mock_dataset_cls, split, expected_indices):
     test_mask[test_indices] = True
 
     mock_dataset = MagicMock()
+    mock_dataset.node_feat = None
     mock_dataset.full_data = {
         'sources': sources,
         'destinations': destinations,
