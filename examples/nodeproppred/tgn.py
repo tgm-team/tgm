@@ -266,6 +266,7 @@ class GraphAttentionEmbedding(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # TODO: Go back to recursive embedding for multi-hop
         hop = 0
+        print (batch.node_feats)
 
         # Temporary
         device = next(self.parameters()).device
