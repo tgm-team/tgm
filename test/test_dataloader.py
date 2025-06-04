@@ -1,50 +1,67 @@
 import pytest
 import torch
 
-from opendg.events import EdgeEvent
+from opendg.data import DGData
 from opendg.graph import DGBatch, DGraph
 from opendg.loader import DGDataLoader
 from opendg.timedelta import TimeDeltaDG
+from opendg.util.seed import seed_everything
+
+
+@pytest.fixture(autouse=True)
+def run_seed_before_tests():
+    seed_everything(1337)
+    yield
 
 
 def test_init_ordered_dg_ordered_batch():
-    events = [EdgeEvent(t=1, src=2, dst=3)]
-    dg = DGraph(events)
+    edge_index = torch.LongTensor([[2, 3]])
+    edge_timestamps = torch.LongTensor([1])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data)
     loader = DGDataLoader(dg)
     assert loader._batch_size == 1
 
 
 @pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
 def test_init_ordered_dg_non_ordered_batch(batch_unit):
-    events = [EdgeEvent(t=1, src=2, dst=3)]
-    dg = DGraph(events)
+    edge_index = torch.LongTensor([[2, 3]])
+    edge_timestamps = torch.LongTensor([1])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data)
     with pytest.raises(ValueError):
         _ = DGDataLoader(dg, batch_unit=batch_unit)
 
 
 @pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
 def test_init_non_ordered_dg_ordered_batch(batch_unit):
-    events = [EdgeEvent(t=1, src=2, dst=3)]
-    dg = DGraph(events, time_delta=TimeDeltaDG(batch_unit))
+    edge_index = torch.LongTensor([[2, 3]])
+    edge_timestamps = torch.LongTensor([1])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta=TimeDeltaDG(batch_unit))
     with pytest.raises(ValueError):
         _ = DGDataLoader(dg)
 
 
 @pytest.mark.parametrize('drop_last', [True, False])
 def test_iteration(drop_last):
-    events = [
-        EdgeEvent(t=0, src=1, dst=2),
-        EdgeEvent(t=1, src=2, dst=3),
-        EdgeEvent(t=2, src=3, dst=4),
-        EdgeEvent(t=3, src=4, dst=5),
-        EdgeEvent(t=4, src=5, dst=6),
-        EdgeEvent(t=5, src=6, dst=7),
-        EdgeEvent(t=6, src=7, dst=8),
-        EdgeEvent(t=7, src=8, dst=9),
-        EdgeEvent(t=8, src=9, dst=10),
-        EdgeEvent(t=9, src=10, dst=11),
-    ]
-    dg = DGraph(events, time_delta=TimeDeltaDG('r'))
+    edge_index = torch.LongTensor(
+        [
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 8],
+            [8, 9],
+            [9, 10],
+            [10, 11],
+        ]
+    )
+    edge_timestamps = torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta=TimeDeltaDG('r'))
     loader = DGDataLoader(dg, batch_size=3, batch_unit='r', drop_last=drop_last)
 
     src, dst, t = dg.edges
@@ -64,19 +81,23 @@ def test_iteration(drop_last):
 
 @pytest.mark.parametrize('drop_last', [True, False])
 def test_iteration_by_time_equal_unit(drop_last):
-    events = [
-        EdgeEvent(t=0, src=1, dst=2),
-        EdgeEvent(t=1, src=2, dst=3),
-        EdgeEvent(t=2, src=3, dst=4),
-        EdgeEvent(t=3, src=4, dst=5),
-        EdgeEvent(t=4, src=5, dst=6),
-        EdgeEvent(t=5, src=6, dst=7),
-        EdgeEvent(t=6, src=7, dst=8),
-        EdgeEvent(t=7, src=8, dst=9),
-        EdgeEvent(t=8, src=9, dst=10),
-        EdgeEvent(t=9, src=10, dst=11),
-    ]
-    dg = DGraph(events, time_delta=TimeDeltaDG('s'))
+    edge_index = torch.LongTensor(
+        [
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 8],
+            [8, 9],
+            [9, 10],
+            [10, 11],
+        ]
+    )
+    edge_timestamps = torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta=TimeDeltaDG('s'))
     loader = DGDataLoader(
         dg,
         batch_size=3,
@@ -101,18 +122,22 @@ def test_iteration_by_time_equal_unit(drop_last):
 
 @pytest.mark.parametrize('drop_last', [True, False])
 def test_iteration_batch_larger_than_dg(drop_last):
-    events = [
-        EdgeEvent(t=0, src=1, dst=2),
-        EdgeEvent(t=0, src=2, dst=3),
-        EdgeEvent(t=0, src=3, dst=4),
-        EdgeEvent(t=1, src=4, dst=5),
-        EdgeEvent(t=1, src=5, dst=6),
-        EdgeEvent(t=2, src=6, dst=7),
-        EdgeEvent(t=2, src=7, dst=8),
-        EdgeEvent(t=3, src=8, dst=9),
-        EdgeEvent(t=4, src=9, dst=10),
-    ]
-    dg = DGraph(events, time_delta=TimeDeltaDG('r'))
+    edge_index = torch.LongTensor(
+        [
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 8],
+            [8, 9],
+            [9, 10],
+        ]
+    )
+    edge_timestamps = torch.LongTensor([0, 0, 0, 1, 1, 2, 2, 3, 4])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta=TimeDeltaDG('r'))
     loader = DGDataLoader(
         dg,
         batch_size=10,
@@ -137,18 +162,22 @@ def test_iteration_batch_larger_than_dg(drop_last):
 
 @pytest.mark.parametrize('drop_last', [True, False])
 def test_iteration_by_time_with_conversion(drop_last):
-    events = [
-        EdgeEvent(t=0, src=1, dst=2),  # Batch 1
-        EdgeEvent(t=0, src=2, dst=3),  # Batch 1
-        EdgeEvent(t=100, src=3, dst=4),  # Batch 1
-        EdgeEvent(t=100, src=4, dst=5),  # Batch 1
-        EdgeEvent(t=100, src=5, dst=6),  # Batch 1
-        EdgeEvent(t=120, src=6, dst=7),  # Batch 2
-        EdgeEvent(t=180, src=7, dst=8),  # Batch 2
-        EdgeEvent(t=240, src=8, dst=9),  # Batch 3
-        EdgeEvent(t=240, src=9, dst=10),  # Batch 3
-    ]
-    dg = DGraph(events, time_delta=TimeDeltaDG('s'))
+    edge_index = torch.LongTensor(
+        [
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 8],
+            [8, 9],
+            [9, 10],
+        ]
+    )
+    edge_timestamps = torch.LongTensor([0, 0, 100, 100, 100, 120, 180, 240, 240])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta=TimeDeltaDG('s'))
     loader = DGDataLoader(dg, batch_size=2, batch_unit='m', drop_last=drop_last)
 
     src, _, _ = dg.edges
@@ -172,18 +201,22 @@ def test_iteration_by_time_with_conversion(drop_last):
 
 @pytest.mark.parametrize('drop_last', [True, False])
 def test_iteration_by_time_with_conversion_time_delta_value(drop_last):
-    events = [
-        EdgeEvent(t=0, src=1, dst=2),  # Batch 1
-        EdgeEvent(t=0, src=2, dst=3),  # Batch 1
-        EdgeEvent(t=1, src=3, dst=4),  # Batch 1
-        EdgeEvent(t=1, src=4, dst=5),  # Batch 1
-        EdgeEvent(t=1, src=5, dst=6),  # Batch 1
-        EdgeEvent(t=12, src=6, dst=7),  # Batch 2
-        EdgeEvent(t=18, src=7, dst=8),  # Batch 2
-        EdgeEvent(t=24, src=8, dst=9),  # Batch 3
-        EdgeEvent(t=24, src=9, dst=10),  # Batch 3
-    ]
-    dg = DGraph(events, time_delta=TimeDeltaDG('s', value=10))
+    edge_index = torch.LongTensor(
+        [
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 8],
+            [8, 9],
+            [9, 10],
+        ]
+    )
+    edge_timestamps = torch.LongTensor([0, 0, 1, 1, 1, 12, 18, 24, 24])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta=TimeDeltaDG('s', value=10))
     loader = DGDataLoader(dg, batch_size=2, batch_unit='m', drop_last=drop_last)
 
     src, _, _ = dg.edges
@@ -206,13 +239,15 @@ def test_iteration_by_time_with_conversion_time_delta_value(drop_last):
 
 
 def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
-    events = [EdgeEvent(t=1, src=2, dst=3)]
-    dg = DGraph(events, time_delta=TimeDeltaDG('m'))
+    edge_index = torch.LongTensor([[2, 3]])
+    edge_timestamps = torch.LongTensor([1])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta=TimeDeltaDG('m'))
     with pytest.raises(ValueError):
         # Seconds are too granular of an iteration unit for DG with minute time granularity
         _ = DGDataLoader(dg, batch_unit='s')
 
-    dg = DGraph(events, time_delta=TimeDeltaDG('s', value=30))
+    dg = DGraph(data, time_delta=TimeDeltaDG('s', value=30))
     with pytest.raises(ValueError):
         # Seconds are too granular of an iteration unit for DG with 'every 30 seconds' time granularity
         _ = DGDataLoader(dg, batch_unit='s')
