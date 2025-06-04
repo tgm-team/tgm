@@ -45,6 +45,7 @@ class DGraph:
         batch = DGBatch(*self.edges)
         if materialize_features and self.node_feats is not None:
             batch.node_feats = self.node_feats._values()
+            batch.node_times, batch.node_ids = self.node_feats._indices()
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats._values()
         return batch
@@ -199,5 +200,7 @@ class DGBatch:
     src: Tensor
     dst: Tensor
     time: Tensor
-    node_feats: Optional[Tensor] = None
     edge_feats: Optional[Tensor] = None
+    node_feats: Optional[Tensor] = None
+    node_ids: Optional[Tensor] = None
+    node_times: Optional[Tensor] = None

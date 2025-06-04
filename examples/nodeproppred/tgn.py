@@ -266,7 +266,7 @@ class GraphAttentionEmbedding(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # TODO: Go back to recursive embedding for multi-hop
         hop = 0
-        print (batch.node_feats)
+        print(batch.node_feats)
 
         # Temporary
         device = next(self.parameters()).device
@@ -314,6 +314,9 @@ def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) ->
     criterion = torch.nn.CrossEntropyLoss()
     for batch in tqdm(loader):
         opt.zero_grad()
+        batch.node_feats
+        batch.node_ids
+        batch.node_times
         pred_label = model(batch)
         loss = criterion(pred_label, batch.node_labels)
         loss.backward()
@@ -344,9 +347,9 @@ def eval(loader: DGDataLoader, model: nn.Module, metric: str, evaluator: any) ->
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
-val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
-test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
+train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='train')
+val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='valid')
+test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
 
 # Get global number of nodes for TGN Memory
 num_nodes = DGraph(args.dataset).num_nodes
@@ -367,9 +370,9 @@ else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
 
 
-train_loader = DGDataLoader(train_dg, hook=train_hook, batch_size=args.bsize)
-val_loader = DGDataLoader(val_dg, hook=val_hook, batch_size=args.bsize)
-test_loader = DGDataLoader(test_dg, hook=test_hook, batch_size=args.bsize)
+train_loader = DGDataLoader(train_dg, hook=train_hook, batch_unit='m')
+val_loader = DGDataLoader(val_dg, hook=val_hook, batch_unit='m')
+test_loader = DGDataLoader(test_dg, hook=test_hook, batch_unit='m')
 
 model = TGN(
     node_dim=train_dg.node_feats_dim or args.embed_dim,  # TODO: verify
