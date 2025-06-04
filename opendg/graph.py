@@ -156,6 +156,11 @@ class DGraph:
         return self._storage.get_edges(self._slice)
 
     @cached_property
+    def static_node_feats(self) -> Optional[Tensor]:
+        r"""The static node features over the dynamic graph."""
+        return self._storage.get_static_node_feats()
+
+    @cached_property
     def dynamic_node_feats(self) -> Optional[Tensor]:
         r"""The aggregated dynamic node features over the dynamic graph.
 
@@ -170,6 +175,11 @@ class DGraph:
         If edge features exist, returns a Tensor.sparse_coo_tensor(T x V x V x d_edge).
         """
         return self._storage.get_edge_feats(self._slice)
+
+    @cached_property
+    def static_node_feats_dim(self) -> Optional[int]:
+        r"""Static Node feature dimension or None if not Node features on the Graph."""
+        return self._storage.get_static_node_feats_dim()
 
     @cached_property
     def dynamic_node_feats_dim(self) -> Optional[int]:
