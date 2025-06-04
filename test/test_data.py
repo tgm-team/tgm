@@ -231,7 +231,7 @@ def test_from_csv_no_features():
     timestamps = torch.LongTensor([1, 1])
     data = DGData.from_raw(edge_timestamps=timestamps, edge_index=edge_index)
 
-    col_names = {'src_col': 'src', 'dst_col': 'dst', 'time_col': 't'}
+    col_names = {'edge_src_col': 'src', 'edge_dst_col': 'dst', 'edge_time_col': 't'}
     with tempfile.NamedTemporaryFile() as f:
         _write_csv(data, f.name, **col_names)
         recovered_data = DGData.from_csv(f.name, **col_names)
@@ -248,12 +248,12 @@ def test_from_csv_with_edge_features():
         edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
     )
 
-    edge_feature_col = [f'dim_{i}' for i in range(5)]
-    col_names = {'src_col': 'src', 'dst_col': 'dst', 'time_col': 't'}
+    edge_feats_col = [f'dim_{i}' for i in range(5)]
+    col_names = {'edge_src_col': 'src', 'edge_dst_col': 'dst', 'edge_time_col': 't'}
     with tempfile.NamedTemporaryFile() as f:
-        _write_csv(data, f.name, edge_feature_col=edge_feature_col, **col_names)
+        _write_csv(data, f.name, edge_feats_col=edge_feats_col, **col_names)
         recovered_data = DGData.from_csv(
-            f.name, edge_feature_col=edge_feature_col, **col_names
+            f.name, edge_feats_col=edge_feats_col, **col_names
         )
 
     torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
@@ -299,7 +299,7 @@ def test_from_pandas_with_edge_features():
         src_col='src',
         dst_col='dst',
         time_col='t',
-        edge_feature_col='edge_features',
+        edge_feats_col='edge_features',
     )
     assert isinstance(data, DGData)
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
@@ -396,22 +396,24 @@ def test_from_tgb_with_node_features():
     pass
 
 
-def _write_csv(data, fp, src_col, dst_col, time_col, edge_feature_col=None):
+def _write_csv(
+    data, fp, edge_src_col, edge_dst_col, edge_time_col, edge_feats_col=None
+):
     with open(fp, 'w', newline='') as f:
-        fieldnames = [src_col, dst_col, time_col]
-        if edge_feature_col is not None:
-            fieldnames += edge_feature_col
+        fieldnames = [edge_src_col, edge_dst_col, edge_time_col]
+        if edge_feats_col is not None:
+            fieldnames += edge_feats_col
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
 
         for i in range(len(data.edge_index)):
             row = {
-                src_col: int(data.edge_index[i][0]),
-                dst_col: int(data.edge_index[i][1]),
-                time_col: int(data.timestamps[i]),
+                edge_src_col: int(data.edge_index[i][0]),
+                edge_dst_col: int(data.edge_index[i][1]),
+                edge_time_col: int(data.timestamps[i]),
             }
             if data.edge_feats is not None:
-                if edge_feature_col is None:
+                if edge_feats_col is None:
                     raise ValueError(
                         'No feature column provided but events had features'
                     )
@@ -421,14 +423,14 @@ def _write_csv(data, fp, src_col, dst_col, time_col, edge_feature_col=None):
                 if len(feats.shape) > 1:
                     raise ValueError('Multi-dimensional features not supported')
 
-                if len(feats) != len(edge_feature_col):
+                if len(feats) != len(edge_feats_col):
                     raise ValueError(
                         f'Got {len(feats)}-dimensional feature tensor but only '
-                        f'specified {len(edge_feature_col)} feature column names.'
+                        f'specified {len(edge_feats_col)} feature column names.'
                     )
 
                 features_list = feats.tolist()
-                for feature_col, feature_val in zip(edge_feature_col, features_list):
+                for feature_col, feature_val in zip(edge_feats_col, features_list):
                     row[feature_col] = feature_val
 
             writer.writerow(row)

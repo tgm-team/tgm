@@ -180,34 +180,88 @@ class DGData:
     @classmethod
     def from_csv(
         cls,
-        file_path: str | pathlib.Path,
-        src_col: str,
-        dst_col: str,
-        time_col: str,
-        edge_feature_col: List[str] | None = None,
+        edge_file_path: str | pathlib.Path,
+        edge_src_col: str,
+        edge_dst_col: str,
+        edge_time_col: str,
+        edge_feats_col: List[str] | None = None,
+        node_file_path: str | pathlib.Path | None = None,
+        node_id_col: str | None = None,
+        node_time_col: str | None = None,
+        dynamic_node_feats_col: List[str] | None = None,
+        static_node_feats_file_path: str | pathlib.Path | None = None,
+        static_node_feats_col: List[str] | None = None,
     ) -> DGData:
-        # TODO: Node Events not supported
-        file_path = str(file_path) if isinstance(file_path, pathlib.Path) else file_path
-        with open(file_path, newline='') as f:
-            reader = list(csv.DictReader(f))  # Assumes the whole things fits in memory
-            num_edges = len(reader)
+        def _read_csv(fp: str | pathlib.Path) -> List[dict]:
+            # Assumes the whole things fits in memory
+            fp = str(fp) if isinstance(fp, pathlib.Path) else fp
+            with open(fp, newline='') as f:
+                return list(csv.DictReader(f))
+
+        # Read in edge data
+        edge_reader = _read_csv(edge_file_path)
+        num_edges = len(edge_reader)
 
         edge_index = torch.empty((num_edges, 2), dtype=torch.long)
         timestamps = torch.empty(num_edges, dtype=torch.long)
         edge_feats = None
-        if edge_feature_col is not None:
-            edge_feats = torch.empty((num_edges, len(edge_feature_col)))
+        if edge_feats_col is not None:
+            edge_feats = torch.empty((num_edges, len(edge_feats_col)))
 
-        for i, row in enumerate(reader):
-            edge_index[i, 0] = int(row[src_col])
-            edge_index[i, 1] = int(row[dst_col])
-            timestamps[i] = int(row[time_col])
-            if edge_feature_col is not None:
-                # This is likely better than creating a tensor copy for every event
-                for j, col in enumerate(edge_feature_col):
+        for i, row in enumerate(edge_reader):
+            edge_index[i, 0] = int(row[edge_src_col])
+            edge_index[i, 1] = int(row[edge_dst_col])
+            timestamps[i] = int(row[edge_time_col])
+            if edge_feats_col is not None:
+                for j, col in enumerate(edge_feats_col):
                     edge_feats[i, j] = float(row[col])  # type: ignore
+
+        # Read in dynamic node data
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None
+        if node_file_path is not None:
+            if node_id_col is None or node_time_col is None:
+                raise ValueError(
+                    'specified node_file_path without specifying node_id_col and node_time_col'
+                )
+            node_reader = _read_csv(node_file_path)
+            num_node_events = len(node_reader)
+
+            node_timestamps = torch.empty(num_node_events, dtype=torch.long)
+            node_ids = torch.empty(num_node_events, dtype=torch.long)
+            if dynamic_node_feats_col is not None:
+                dynamic_node_feats = torch.empty(
+                    (num_node_events, len(dynamic_node_feats_col))
+                )
+
+            for i, row in enumerate(node_reader):
+                node_timestamps[i] = int(row[node_time_col])
+                node_ids[i] = int(row[node_id_col])
+                if dynamic_node_feats_col is not None:
+                    for j, col in enumerate(dynamic_node_feats_col):
+                        dynamic_node_feats[i, j] = float(row[col])  # type: ignore
+
+        # Read in static node data
+        static_node_feats = None
+        if static_node_feats_file_path is not None:
+            if static_node_feats_col is None:
+                raise ValueError(
+                    'specified static_node_feats_file_path without specifying static_node_feats_col'
+                )
+            static_node_feats_reader = _read_csv(static_node_feats_file_path)
+            num_nodes = len(static_node_feats_reader)
+            static_node_feats = torch.empty((num_nodes, len(static_node_feats_col)))
+            for i, row in enumerate(static_node_feats_reader):
+                for j, col in enumerate(static_node_feats_col):
+                    static_node_feats[i, j] = float(row[col])
+
         return cls.from_raw(
-            edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+            edge_timestamps=timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            static_node_feats=static_node_feats,
         )
 
     @classmethod
@@ -217,7 +271,7 @@ class DGData:
         src_col: str,
         dst_col: str,
         time_col: str,
-        edge_feature_col: str | None = None,
+        edge_feats_col: str | None = None,
     ) -> DGData:
         # TODO: Node Events not supported
 
@@ -249,10 +303,10 @@ class DGData:
 
         edge_index = torch.from_numpy(df[[src_col, dst_col]].to_numpy()).long()
         timestamps = torch.from_numpy(df[time_col].to_numpy()).long()
-        if edge_feature_col is None:
+        if edge_feats_col is None:
             edge_feats = None
         else:
-            edge_feats = torch.Tensor(df[edge_feature_col].tolist())
+            edge_feats = torch.Tensor(df[edge_feats_col].tolist())
         return cls.from_raw(
             edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
         )
