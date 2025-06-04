@@ -279,7 +279,9 @@ def test_from_pandas_no_features():
     }
     events_df = pd.DataFrame(events_dict)
 
-    data = DGData.from_pandas(events_df, src_col='src', dst_col='dst', time_col='t')
+    data = DGData.from_pandas(
+        events_df, edge_src_col='src', edge_dst_col='dst', edge_time_col='t'
+    )
     assert isinstance(data, DGData)
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
     assert data.timestamps.tolist() == [1337, 1338]
@@ -296,9 +298,9 @@ def test_from_pandas_with_edge_features():
 
     data = DGData.from_pandas(
         events_df,
-        src_col='src',
-        dst_col='dst',
-        time_col='t',
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
         edge_feats_col='edge_features',
     )
     assert isinstance(data, DGData)

@@ -267,14 +267,18 @@ class DGData:
     @classmethod
     def from_pandas(
         cls,
-        df: 'pandas.DataFrame',  # type: ignore
-        src_col: str,
-        dst_col: str,
-        time_col: str,
+        edge_df: 'pandas.DataFrame',  # type: ignore
+        edge_src_col: str,
+        edge_dst_col: str,
+        edge_time_col: str,
         edge_feats_col: str | None = None,
+        node_df: 'pandas.DataFrame' | None = None,  # type: ignore
+        node_id_col: str | None = None,
+        node_time_col: str | None = None,
+        dynamic_node_feats_col: List[str] | None = None,
+        static_node_feats_df: 'pandas.DataFrame' | None = None,  # type: ignore
+        static_node_feats_col: List[str] | None = None,
     ) -> DGData:
-        # TODO: Node Events not supported
-
         def _check_pandas_import(min_version_number: str | None = None) -> None:
             try:
                 import pandas
@@ -301,14 +305,48 @@ class DGData:
 
         _check_pandas_import()
 
-        edge_index = torch.from_numpy(df[[src_col, dst_col]].to_numpy()).long()
-        timestamps = torch.from_numpy(df[time_col].to_numpy()).long()
-        if edge_feats_col is None:
-            edge_feats = None
-        else:
-            edge_feats = torch.Tensor(df[edge_feats_col].tolist())
+        # Read in edge data
+        edge_index = torch.from_numpy(
+            edge_df[[edge_src_col, edge_dst_col]].to_numpy()
+        ).long()
+        edge_timestamps = torch.from_numpy(edge_df[edge_time_col].to_numpy()).long()
+        edge_feats = None
+        if edge_feats_col is not None:
+            edge_feats = torch.Tensor(edge_df[edge_feats_col].tolist())
+
+        # Read in dynamic node data
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None
+        if node_df is not None:
+            if node_id_col is None or node_time_col is None:
+                raise ValueError(
+                    'specified node_df without specifying node_id_col and node_time_col'
+                )
+            node_timestamps = torch.from_numpy(node_df[node_time_col].to_numpy()).long()
+            node_ids = torch.from_numpy(node_df[node_ids].to_numpy()).long()
+            if dynamic_node_feats_col is not None:
+                dynamic_node_feats = torch.Tensor(
+                    node_df[dynamic_node_feats_col].tolist()
+                )
+
+        # Read in static node data
+        static_node_feats = None
+        if static_node_feats_df is not None:
+            if static_node_feats_col is None:
+                raise ValueError(
+                    'specified static_node_feats_df without specifying static_node_feats_col'
+                )
+            static_node_feats = torch.Tensor(
+                static_node_feats_df[static_node_feats_col].tolist()
+            )
+
         return cls.from_raw(
-            edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
+            edge_timestamps=edge_timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            static_node_feats=static_node_feats,
         )
 
     @classmethod
