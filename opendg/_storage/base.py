@@ -47,10 +47,16 @@ class DGStorageBase(ABC):
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]: ...
 
     @abstractmethod
+    def get_static_node_feats(self) -> Optional[Tensor]: ...
+
+    @abstractmethod
     def get_dynamic_node_feats_dim(self) -> Optional[int]: ...
 
     @abstractmethod
     def get_edge_feats_dim(self) -> Optional[int]: ...
+
+    @abstractmethod
+    def get_static_node_feats_dim(self) -> Optional[int]: ...
 
     @abstractmethod
     def get_nbrs(

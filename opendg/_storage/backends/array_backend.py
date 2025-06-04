@@ -138,6 +138,9 @@ class DGStorageArrayBackend(DGStorageBase):
             nbr_mask[mask, :nn] = 1
         return [seed_nodes], [nbr_nids], [nbr_times], [nbr_feats], [nbr_mask]
 
+    def get_static_node_feats(self) -> Optional[Tensor]:
+        return self._data.static_node_feats
+
     def get_dynamic_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.dynamic_node_feats is None:
             return None
@@ -199,6 +202,11 @@ class DGStorageArrayBackend(DGStorageBase):
         indices_tensor = torch.tensor(indices).t()
         shape = (max_time + 1, max_node_id + 1, max_node_id + 1, edge_feats_dim)
         return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
+
+    def get_static_node_feats_dim(self) -> Optional[int]:
+        if self._data.static_node_feats is None:
+            return None
+        return self._data.static_node_feats.shape[1]
 
     def get_dynamic_node_feats_dim(self) -> Optional[int]:
         if self._data.dynamic_node_feats is None:
