@@ -271,7 +271,7 @@ class DGData:
         edge_src_col: str,
         edge_dst_col: str,
         edge_time_col: str,
-        edge_feats_col: str | None = None,
+        edge_feats_col: List[str] | None = None,
         node_df: 'pandas.DataFrame' | None = None,  # type: ignore
         node_id_col: str | None = None,
         node_time_col: str | None = None,
@@ -322,7 +322,7 @@ class DGData:
                     'specified node_df without specifying node_id_col and node_time_col'
                 )
             node_timestamps = torch.from_numpy(node_df[node_time_col].to_numpy()).long()
-            node_ids = torch.from_numpy(node_df[node_ids].to_numpy()).long()
+            node_ids = torch.from_numpy(node_df[node_id_col].to_numpy()).long()
             if dynamic_node_feats_col is not None:
                 dynamic_node_feats = torch.Tensor(
                     node_df[dynamic_node_feats_col].tolist()
@@ -393,9 +393,7 @@ class DGData:
             edge_feats = torch.from_numpy(data['edge_feat'][mask])
 
         # TGB Datasets do not support dynamic node features
-        node_timestamps = None
-        node_ids = None
-        dynamic_node_feats = None
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None
 
         # Read static node features if they exist
         static_node_feats = None
