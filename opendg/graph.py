@@ -10,7 +10,6 @@ from torch import Tensor
 
 from opendg._storage import DGSliceTracker, DGStorage
 from opendg.data import DGData
-from opendg.events import EdgeEvent
 from opendg.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
@@ -23,38 +22,21 @@ class DGraph:
         time_delta: TimeDeltaDG | None = None,
         **kwargs: Any,
     ) -> None:
-        if isinstance(data, DGStorage):
-            self._storage = data
-        else:
-            # TODO: Temporary, switch storage API in subsequent PR
-            if isinstance(data, list):
-                self._storage = DGStorage(data)
-            else:
-                data = (
-                    data
-                    if isinstance(data, DGData)
-                    else DGData.from_any(data, **kwargs)
-                )
-                events = []
-                for i in range(len(data.edge_index)):
-                    t = int(data.timestamps[i])
-                    src, dst = int(data.edge_index[i][0]), int(data.edge_index[i][1])
-                    global_id = i
-                    features = None
-                    if data.edge_feats is not None:
-                        features = data.edge_feats[i]
-                    events.append(EdgeEvent(t, src, dst, global_id, features))
-                self._storage = DGStorage(events)  # type: ignore
-
         if time_delta is None:
+            self.time_delta = TimeDeltaDG('r')
             if isinstance(data, str) and data.startswith('tgb'):
-                self.time_delta = TGB_TIME_DELTAS.get(data, TimeDeltaDG('r'))
-            else:
-                self.time_delta = TimeDeltaDG('r')
+                self.time_delta = TGB_TIME_DELTAS.get(data, self.time_delta)
         elif isinstance(time_delta, TimeDeltaDG):
             self.time_delta = time_delta
         else:
             raise ValueError(f'bad time_delta type: {type(time_delta)}')
+
+        if isinstance(data, DGStorage):
+            self._storage = data
+        else:
+            if not isinstance(data, DGData):
+                data = DGData.from_any(data, **kwargs)
+            self._storage = DGStorage(data)
 
         self._slice = DGSliceTracker()
 

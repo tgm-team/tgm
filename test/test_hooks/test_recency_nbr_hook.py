@@ -1,18 +1,16 @@
 import pytest
+import torch
 
-from opendg.events import EdgeEvent
+from opendg.data import DGData
 from opendg.graph import DGBatch, DGraph
 from opendg.hooks import RecencyNeighborHook
 
 
 @pytest.fixture
-def events():
-    return [
-        EdgeEvent(t=1, src=1, dst=10),
-        EdgeEvent(t=1, src=1, dst=11),
-        EdgeEvent(t=2, src=1, dst=12),
-        EdgeEvent(t=2, src=1, dst=13),
-    ]
+def data():
+    edge_index = torch.LongTensor([[1, 10], [1, 11], [1, 12], [1, 13]])
+    edge_timestamps = torch.LongTensor([1, 1, 2, 2])
+    return DGData.from_raw(edge_timestamps, edge_index)
 
 
 def test_bad_neighbor_sampler_init():
@@ -25,8 +23,8 @@ def test_bad_neighbor_sampler_init():
 
 
 @pytest.mark.skip('TODO: Add neighbor sampling tests')
-def test_neighbor_sampler_hook(events):
-    dg = DGraph(events)
+def test_neighbor_sampler_hook(data):
+    dg = DGraph(data)
     hook = RecencyNeighborHook(num_nbrs=[2], num_nodes=dg.num_nodes)
     batch = hook(dg)
     # TODO: Add logic for testing
