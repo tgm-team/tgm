@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import fields
-from typing import Any, Deque, Dict, List, Protocol, Set
+from typing import Any, Deque, Dict, List, Protocol, Set, runtime_checkable
 
 import torch
 
@@ -10,6 +10,7 @@ from opendg._storage import DGSliceTracker
 from opendg.graph import DGBatch, DGraph
 
 
+@runtime_checkable
 class DGHook(Protocol):
     requires: Set[str]
     produces: Set[str]
@@ -20,13 +21,31 @@ class DGHook(Protocol):
 
 
 class HookManager:
-    def __init__(self, hooks: List[DGHook], device: str = 'cpu') -> None:
+    def __init__(self, dg: DGraph, hooks: List[DGHook]) -> None:
+        device = 'cpu'  # TODO: Get device from dgraph
         if device != 'cpu':
             hooks.append(PinMemoryHook())
             hooks.append(DeviceTransferHook(device))
 
         self.hooks = hooks
         self._validate_hook_dependencies()
+
+    @classmethod
+    def from_any(
+        cls, dg: DGraph, hook_like: HookManager | DGHook | List[DGHook] | None
+    ) -> HookManager:
+        if isinstance(hook_like, cls):
+            return hook_like
+        elif hook_like is None:
+            return cls(dg, hooks=[])
+        elif isinstance(hook_like, DGHook):
+            return cls(dg, hooks=[hook_like])
+        elif isinstance(hook_like, list):
+            if not all(isinstance(h, DGHook) for h in hook_like):
+                raise TypeError('All items in hook list must follwo DGHook protocol')
+            return cls(dg, hooks=hook_like)
+        else:
+            raise TypeError(f'Invalid hook type: {type(hook_like)}')
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
@@ -46,8 +65,8 @@ class HookManager:
 
 
 class PinMemoryHook:
-    requires = set()
-    produces = set()
+    requires: Set[str] = set()
+    produces: Set[str] = set()
 
     r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
 
@@ -60,8 +79,8 @@ class PinMemoryHook:
 
 
 class DeviceTransferHook:
-    requires = set()
-    produces = set()
+    requires: Set[str] = set()
+    produces: Set[str] = set()
 
     r"""Moves all tensors in the DGBatch to the specified device."""
 
@@ -77,7 +96,7 @@ class DeviceTransferHook:
 
 
 class NegativeEdgeSamplerHook:
-    requires = set()
+    produces: Set[str] = set()
     produces = {'neg'}
 
     r"""Sample negative edges for dynamic link prediction.

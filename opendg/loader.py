@@ -5,7 +5,7 @@ from typing import Any, List
 import torch
 
 from opendg.graph import DGBatch, DGraph
-from opendg.hooks import HookManager
+from opendg.hooks import DGHook, HookManager
 from opendg.timedelta import TimeDeltaDG
 
 
@@ -16,7 +16,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
         dg (DGraph): The dynamic graph to iterate.
         batch_size (int): The batch size to yield at each iteration.
         batch_unit (str): The unit corresponding to the batch_size.
-        hook (Optional[HookManager]): Arbitrary transform behaviour to execute before materializing a batch.
+        hook (HookManager | Hook | List[Hook] | None): Arbitrary transform behaviour to execute before materializing a batch.
         **kwargs (Any): Additional arguments to torch.utils.data.DataLoader.
 
     Raises:
@@ -29,7 +29,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
         dg: DGraph,
         batch_size: int = 1,
         batch_unit: str = 'r',
-        hook: HookManager | None = None,
+        hook: HookManager | DGHook | List[DGHook] | None = None,
         **kwargs: Any,
     ) -> None:
         if batch_size <= 0:
@@ -61,11 +61,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
 
         self._dg = dg
         self._batch_size = batch_size
-
-        if hook is None:
-            # If nothing else, we materialize the batch on the right device
-            # TODO: use device from dg
-            self._hook = HookManager(hooks=[], device='cpu')
+        self._hook = HookManager.from_any(dg, hook)
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
 
         start_idx = 0 if batch_ordered else dg.start_time
