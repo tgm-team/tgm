@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import fields
 from typing import Any, Deque, Dict, List, Protocol, Set, runtime_checkable
 
 import torch
@@ -22,6 +21,11 @@ class DGHook(Protocol):
 
 class HookManager:
     def __init__(self, dg: DGraph, hooks: List[DGHook]) -> None:
+        if not isinstance(hooks, list):
+            raise TypeError(f'Invalid hook type: {type(hooks)}')
+        if not all(isinstance(h, DGHook) for h in hooks):
+            raise TypeError('All items in hook list must follow DGHook protocol')
+
         device = 'cpu'  # TODO: Get device from dgraph
         if device != 'cpu':
             hooks.append(PinMemoryHook())
@@ -41,8 +45,6 @@ class HookManager:
         elif isinstance(hook_like, DGHook):
             return cls(dg, hooks=[hook_like])
         elif isinstance(hook_like, list):
-            if not all(isinstance(h, DGHook) for h in hook_like):
-                raise TypeError('All items in hook list must follwo DGHook protocol')
             return cls(dg, hooks=hook_like)
         else:
             raise TypeError(f'Invalid hook type: {type(hook_like)}')
@@ -71,10 +73,9 @@ class PinMemoryHook:
     r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        for k in fields(batch):
-            v = getattr(batch, k.name)
+        for k, v in vars(batch).items():
             if isinstance(v, torch.Tensor) and not v.is_cuda and not v.is_pinned():
-                setattr(batch, k.name, v.pin_memory())
+                setattr(batch, k, v.pin_memory())
         return batch
 
 
@@ -88,15 +89,14 @@ class DeviceTransferHook:
         self.device = device
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        for k in fields(batch):
-            v = getattr(batch, k.name)
+        for k, v in vars(batch).items():
             if isinstance(v, torch.Tensor) and v.device != self.device:
-                setattr(batch, k.name, v.to(device=self.device, non_blocking=True))
+                setattr(batch, k, v.to(device=self.device, non_blocking=True))
         return batch
 
 
 class NegativeEdgeSamplerHook:
-    produces: Set[str] = set()
+    requires: Set[str] = set()
     produces = {'neg'}
 
     r"""Sample negative edges for dynamic link prediction.

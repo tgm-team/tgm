@@ -13,6 +13,11 @@ def data():
     return DGData.from_raw(edge_timestamps, edge_index)
 
 
+def test_hook_dependancies():
+    assert NegativeEdgeSamplerHook.requires == set()
+    assert NegativeEdgeSamplerHook.produces == {'neg'}
+
+
 def test_bad_negative_edge_sampler_init():
     with pytest.raises(ValueError):
         NegativeEdgeSamplerHook(low=0, high=0)
@@ -25,7 +30,7 @@ def test_bad_negative_edge_sampler_init():
 def test_negative_edge_sampler(data):
     dg = DGraph(data)
     hook = NegativeEdgeSamplerHook(low=0, high=10)
-    batch = hook(dg)
+    batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
     assert torch.is_tensor(batch.neg)
     assert batch.neg.shape == batch.dst.shape
