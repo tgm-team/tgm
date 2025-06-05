@@ -19,7 +19,10 @@ def test_hook_dependancies():
     assert PinMemoryHook.produces == set()
 
 
+@pytest.mark.gpu
 def test_pin_memory_hook_cpu(dg):
+    # Note: The gpu is not actually used, but torch complains when calling .pin_memory()
+    # and no accelerator backend is available in the torch install.
     hook = PinMemoryHook()
     batch = dg.materialize()
 
