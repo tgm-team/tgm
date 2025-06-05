@@ -89,6 +89,10 @@ addopts = [
     "--color=yes",
     "-vvv",
 ]
+markers = [
+    "gpu: Tests that require a GPU",
+    "slow: Tests that are slow",
+]
 
 [tool.coverage.run]
 source = ["opendg"]
