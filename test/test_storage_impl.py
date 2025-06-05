@@ -58,6 +58,7 @@ def data_with_features_multi_events_per_timestamp():
     node_timestamps = torch.LongTensor([1, 5, 10])
     node_ids = torch.LongTensor([2, 4, 6])
     dynamic_node_feats = torch.rand(3, 5)
+    static_node_feats = torch.rand(9, 11)
     return DGData.from_raw(
         edge_timestamps,
         edge_index,
@@ -65,6 +66,7 @@ def data_with_features_multi_events_per_timestamp():
         node_timestamps,
         node_ids,
         dynamic_node_feats,
+        static_node_feats,
     )
 
 
@@ -537,6 +539,31 @@ def test_get_dynamic_node_feats_with_multi_events_per_timestamp(
         )
         is None
     )
+
+
+@pytest.mark.parametrize(
+    'data',
+    [
+        'edge_only_data',
+        'edge_only_data_with_features',
+        'data_with_multi_events_per_timestamp',
+    ],
+)
+def test_get_static_node_feats_no_node_feats(DGStorageImpl, data, request):
+    data = request.getfixturevalue(data)
+    storage = DGStorageImpl(data)
+    assert storage.get_static_node_feats() is None
+    assert storage.get_static_node_feats_dim() is None
+
+
+def test_get_static_node_feats_with_multi_events_per_timestamp(
+    DGStorageImpl, data_with_features_multi_events_per_timestamp
+):
+    data = data_with_features_multi_events_per_timestamp
+    storage = DGStorageImpl(data)
+
+    assert storage.get_static_node_feats().shape == (9, 11)
+    assert storage.get_static_node_feats_dim() == 11
 
 
 @pytest.mark.skip('TODO: Add get_nbr')

@@ -157,14 +157,14 @@ class DGraph:
 
     @cached_property
     def static_node_feats(self) -> Optional[Tensor]:
-        r"""The static node features over the dynamic graph."""
+        r"""If static node features exist, returns a dense Tensor(num_nodes x d_node_static)."""
         return self._storage.get_static_node_feats()
 
     @cached_property
     def dynamic_node_feats(self) -> Optional[Tensor]:
         r"""The aggregated dynamic node features over the dynamic graph.
 
-        If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_edge).
+        If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
         """
         return self._storage.get_dynamic_node_feats(self._slice)
 
