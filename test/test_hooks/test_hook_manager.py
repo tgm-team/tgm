@@ -55,12 +55,9 @@ def test_hook_manager_init_gpu_empty(dg):
 
     exp_batch = dg.materialize()
     batch = hook(dg)
-    assert batch.src.device.type == 'cuda'
-    assert batch.dst.device.type == 'cuda'
-    assert batch.time.device.type == 'cuda'
-    torch.testing.assert_close(exp_batch.src, batch.src.cpu())
-    torch.testing.assert_close(exp_batch.dst, batch.dst.cpu())
-    torch.testing.assert_close(exp_batch.time, batch.time.cpu())
+    torch.testing.assert_close(exp_batch.src, batch.src)
+    torch.testing.assert_close(exp_batch.dst, batch.dst)
+    torch.testing.assert_close(exp_batch.time, batch.time)
 
 
 def test_hook_manager_init_gpu_non_empty(dg):
@@ -72,12 +69,9 @@ def test_hook_manager_init_gpu_non_empty(dg):
     exp_batch = dg.materialize()
     exp_batch.time *= 2
     batch = hook(dg)
-    assert batch.src.device.type == 'cuda'
-    assert batch.dst.device.type == 'cuda'
-    assert batch.time.device.type == 'cuda'
-    torch.testing.assert_close(exp_batch.src, batch.src.cpu())
-    torch.testing.assert_close(exp_batch.dst, batch.dst.cpu())
-    torch.testing.assert_close(exp_batch.time, batch.time.cpu())
+    torch.testing.assert_close(exp_batch.src, batch.src)
+    torch.testing.assert_close(exp_batch.dst, batch.dst)
+    torch.testing.assert_close(exp_batch.time, batch.time)
 
 
 def test_hook_manager_bad_hooks(dg):

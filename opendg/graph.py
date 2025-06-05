@@ -164,12 +164,17 @@ class DGraph:
     @cached_property
     def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
         r"""The src, dst, time tensors over the dynamic graph."""
-        return self._storage.get_edges(self._slice)
+        src, dst, time = self._storage.get_edges(self._slice)
+        src, dst, time = src.to(self.device), dst.to(self.device), time.to(self.device)
+        return src, dst, time
 
     @cached_property
     def static_node_feats(self) -> Optional[Tensor]:
         r"""If static node features exist, returns a dense Tensor(num_nodes x d_node_static)."""
-        return self._storage.get_static_node_feats()
+        feats = self._storage.get_static_node_feats()
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
 
     @cached_property
     def dynamic_node_feats(self) -> Optional[Tensor]:
@@ -177,7 +182,10 @@ class DGraph:
 
         If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
         """
-        return self._storage.get_dynamic_node_feats(self._slice)
+        feats = self._storage.get_dynamic_node_feats(self._slice)
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
 
     @cached_property
     def edge_feats(self) -> Optional[Tensor]:
@@ -185,7 +193,10 @@ class DGraph:
 
         If edge features exist, returns a Tensor.sparse_coo_tensor(T x V x V x d_edge).
         """
-        return self._storage.get_edge_feats(self._slice)
+        feats = self._storage.get_edge_feats(self._slice)
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
 
     @cached_property
     def static_node_feats_dim(self) -> Optional[int]:
