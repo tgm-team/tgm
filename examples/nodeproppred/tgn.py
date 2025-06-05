@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='tgbn-trade', help='Dataset name')
+parser.add_argument('--dataset', type=str, default='tgbn-genre', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
@@ -245,6 +245,8 @@ class GraphAttentionEmbedding(nn.Module):
     ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
+        print (num_classes)
+        print (embed_dim)
         self.node_predictor = NodePredictor(in_dim=embed_dim, out_dim=num_classes)
         self.time_encoder = time_encoder
         self.attn = nn.ModuleList(
@@ -266,7 +268,9 @@ class GraphAttentionEmbedding(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # TODO: Go back to recursive embedding for multi-hop
         hop = 0
-        print(batch.node_feats)
+        timestamps = batch.node_times 
+        node_ids = batch.node_ids 
+        labels = batch.node_feats
 
         # Temporary
         device = next(self.parameters()).device
@@ -290,7 +294,7 @@ class GraphAttentionEmbedding(nn.Module):
             nbr_mask=batch.nbr_mask[hop].to(device),
         )
         pred_label = self.node_predictor(z)
-        return pred_label
+        return pred_label[node_ids]
 
 
 class NodePredictor(torch.nn.Module):
@@ -314,11 +318,12 @@ def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) ->
     criterion = torch.nn.CrossEntropyLoss()
     for batch in tqdm(loader):
         opt.zero_grad()
-        batch.node_feats
-        batch.node_ids
-        batch.node_times
+        print (batch.node_feats.shape)
+        print (batch.node_ids.shape)
+        print (batch.node_times.shape)
+        label = batch.node_feats
         pred_label = model(batch)
-        loss = criterion(pred_label, batch.node_labels)
+        loss = criterion(pred_label, label)
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -353,7 +358,7 @@ test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
 
 # Get global number of nodes for TGN Memory
 num_nodes = DGraph(args.dataset).num_nodes
-label_dim = DGraph.node_feats_dim
+label_dim = DGraph.node_feats_dim()
 
 
 if args.sampling == 'uniform':
@@ -370,9 +375,9 @@ else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
 
 
-train_loader = DGDataLoader(train_dg, hook=train_hook, batch_unit='m')
-val_loader = DGDataLoader(val_dg, hook=val_hook, batch_unit='m')
-test_loader = DGDataLoader(test_dg, hook=test_hook, batch_unit='m')
+train_loader = DGDataLoader(train_dg, hook=train_hook, batch_unit='D')
+val_loader = DGDataLoader(val_dg, hook=val_hook, batch_unit='D')
+test_loader = DGDataLoader(test_dg, hook=test_hook, batch_unit='D')
 
 model = TGN(
     node_dim=train_dg.node_feats_dim or args.embed_dim,  # TODO: verify
@@ -383,6 +388,7 @@ model = TGN(
     n_heads=args.n_heads,
     dropout=float(args.dropout),
     num_nodes=num_nodes,
+    num_classes=label_dim,
 ).to(args.device)
 model.memory.set_device(args.device)
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
