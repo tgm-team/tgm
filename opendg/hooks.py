@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import fields
-from typing import Any, Deque, Dict, List, Protocol
+from typing import Any, Deque, Dict, List, Protocol, Set
 
 import torch
 
@@ -11,16 +11,47 @@ from opendg.graph import DGBatch, DGraph
 
 
 class DGHook(Protocol):
+    requires: Set[str]
+    produces: Set[str]
+
     r"""The behaviours to be executed on a DGraph before materializing."""
 
-    def __call__(self, dg: DGraph) -> DGBatch: ...
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch: ...
 
 
-class PinMemoryHook:
-    r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
+class HookManager:
+    def __init__(self, hooks: List[DGHook], device: str = 'cpu') -> None:
+        if device != 'cpu':
+            hooks.append(PinMemoryHook())
+            hooks.append(DeviceTransferHook(device))
+
+        self.hooks = hooks
+        self._validate_hook_dependencies()
 
     def __call__(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
+        for hook in self.hooks:
+            batch = hook(dg, batch)
+        return batch
+
+    def _validate_hook_dependencies(self) -> None:
+        produced: Set[str] = set()
+        for hook in self.hooks:
+            missing = hook.requires - produced
+            if missing:
+                raise ValueError(
+                    f'{hook.__class__.__name__} is missing required fields: {missing}'
+                )
+            produced |= hook.produces
+
+
+class PinMemoryHook:
+    requires = set()
+    produces = set()
+
+    r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         for k in fields(batch):
             v = getattr(batch, k.name)
             if isinstance(v, torch.Tensor) and not v.is_cuda and not v.is_pinned():
@@ -29,13 +60,15 @@ class PinMemoryHook:
 
 
 class DeviceTransferHook:
+    requires = set()
+    produces = set()
+
     r"""Moves all tensors in the DGBatch to the specified device."""
 
     def __init__(self, device: str) -> None:
         self.device = device
 
-    def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize()
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         for k in fields(batch):
             v = getattr(batch, k.name)
             if isinstance(v, torch.Tensor) and v.device != self.device:
@@ -63,8 +96,7 @@ class NegativeEdgeSamplerHook:
         self.neg_sampling_ratio = neg_sampling_ratio
 
     # TODO: Historical vs. random
-    def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize()
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
         batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
         return batch
@@ -91,9 +123,7 @@ class NeighborSamplerHook:
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
-    def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize(materialize_features=False)
-
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # TODO: Compose hooks
         self.neg_sampling_ratio = 1.0
         self.low = 0
@@ -138,9 +168,7 @@ class RecencyNeighborHook:
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
-    def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize()
-
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # TODO: Compose hooks
         self.neg_sampling_ratio = 1.0
         self.low = 0
