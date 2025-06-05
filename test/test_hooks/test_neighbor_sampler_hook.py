@@ -14,7 +14,7 @@ def data():
 
 
 def test_hook_dependancies():
-    assert NeighborSamplerHook.requires == {'neg'}
+    assert NeighborSamplerHook.requires == set()
     assert NeighborSamplerHook.produces == {
         'nids',
         'nbr_nids',

@@ -14,7 +14,7 @@ def data():
 
 
 def test_hook_dependancies():
-    assert RecencyNeighborHook.requires == {'neg'}
+    assert RecencyNeighborHook.requires == set()
     assert RecencyNeighborHook.produces == {
         'nids',
         'nbr_nids',

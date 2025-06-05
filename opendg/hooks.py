@@ -125,7 +125,7 @@ class NegativeEdgeSamplerHook:
 
 
 class NeighborSamplerHook:
-    requires = {'neg'}
+    requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'nbr_mask'}
 
     r"""Load data from DGraph using a memory based sampling function.
@@ -149,9 +149,14 @@ class NeighborSamplerHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        if hasattr(batch, 'neg'):
+            seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
+        else:
+            seed_nodes = torch.cat([batch.src, batch.dst])
+
         batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
             dg._storage.get_nbrs(
-                seed_nodes=torch.cat([batch.src, batch.dst, batch.neg]),  # type: ignore
+                seed_nodes=seed_nodes,
                 num_nbrs=self.num_nbrs,
                 slice=DGSliceTracker(end_idx=dg._slice.end_idx),
             )
@@ -160,7 +165,7 @@ class NeighborSamplerHook:
 
 
 class RecencyNeighborHook:
-    requires = {'neg'}
+    requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'nbr_mask'}
 
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
@@ -190,7 +195,11 @@ class RecencyNeighborHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])  # type: ignore
+        if hasattr(batch, 'neg'):
+            seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
+        else:
+            seed_nodes = torch.cat([batch.src, batch.dst])
+
         unique, inverse_indices = seed_nodes.unique(return_inverse=True)
 
         batch_size = len(seed_nodes)
