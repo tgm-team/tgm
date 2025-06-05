@@ -60,6 +60,7 @@ def test_hook_manager_init_gpu_empty(dg):
     torch.testing.assert_close(exp_batch.time, batch.time)
 
 
+@pytest.mark.gpu
 def test_hook_manager_init_gpu_non_empty(dg):
     dg = dg.to('cuda')
 
