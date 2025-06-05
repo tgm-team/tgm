@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import fields
 from typing import Any, Deque, Dict, List, Protocol
 
 import torch
@@ -13,6 +14,33 @@ class DGHook(Protocol):
     r"""The behaviours to be executed on a DGraph before materializing."""
 
     def __call__(self, dg: DGraph) -> DGBatch: ...
+
+
+class PinMemoryHook:
+    r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
+
+    def __call__(self, dg: DGraph) -> DGBatch:
+        batch = dg.materialize()
+        for k in fields(batch):
+            v = getattr(batch, k.name)
+            if isinstance(v, torch.Tensor) and not v.is_cuda and not v.is_pinned():
+                setattr(batch, k.name, v.pin_memory())
+        return batch
+
+
+class DeviceTransferHook:
+    r"""Moves all tensors in the DGBatch to the specified device."""
+
+    def __init__(self, device: str) -> None:
+        self.device = device
+
+    def __call__(self, dg: DGraph) -> DGBatch:
+        batch = dg.materialize()
+        for k in fields(batch):
+            v = getattr(batch, k.name)
+            if isinstance(v, torch.Tensor) and v.device != self.device:
+                setattr(batch, k.name, v.to(device=self.device, non_blocking=True))
+        return batch
 
 
 class NegativeEdgeSamplerHook:
