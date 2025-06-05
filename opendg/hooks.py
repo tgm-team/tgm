@@ -77,6 +77,9 @@ class DeviceTransferHook:
 
 
 class NegativeEdgeSamplerHook:
+    requires = set()
+    produces = {'neg'}
+
     r"""Sample negative edges for dynamic link prediction.
 
     Args:
@@ -103,6 +106,9 @@ class NegativeEdgeSamplerHook:
 
 
 class NeighborSamplerHook:
+    requires = {'neg'}
+    produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'nbr_mask'}
+
     r"""Load data from DGraph using a memory based sampling function.
 
     Args:
@@ -124,13 +130,6 @@ class NeighborSamplerHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        # TODO: Compose hooks
-        self.neg_sampling_ratio = 1.0
-        self.low = 0
-        self.high = dg.num_nodes
-        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size, dtype=torch.long)  # type: ignore
-
         batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
             dg._storage.get_nbrs(
                 seed_nodes=torch.cat([batch.src, batch.dst, batch.neg]),  # type: ignore
@@ -142,6 +141,9 @@ class NeighborSamplerHook:
 
 
 class RecencyNeighborHook:
+    requires = {'neg'}
+    produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'nbr_mask'}
+
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
@@ -169,13 +171,6 @@ class RecencyNeighborHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        # TODO: Compose hooks
-        self.neg_sampling_ratio = 1.0
-        self.low = 0
-        self.high = dg.num_nodes
-        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size, dtype=torch.long)  # type: ignore
-
         seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])  # type: ignore
         unique, inverse_indices = seed_nodes.unique(return_inverse=True)
 
