@@ -26,10 +26,9 @@ class HookManager:
         if not all(isinstance(h, DGHook) for h in hooks):
             raise TypeError('All items in hook list must follow DGHook protocol')
 
-        device = 'cpu'  # TODO: Get device from dgraph
-        if device != 'cpu':
+        if dg.device.type != 'cpu':
             hooks.append(PinMemoryHook())
-            hooks.append(DeviceTransferHook(device))
+            hooks.append(DeviceTransferHook(dg.device))
 
         self.hooks = hooks
         self._validate_hook_dependencies()
@@ -85,8 +84,8 @@ class DeviceTransferHook:
 
     r"""Moves all tensors in the DGBatch to the specified device."""
 
-    def __init__(self, device: str) -> None:
-        self.device = device
+    def __init__(self, device: str | torch.device) -> None:
+        self.device = torch.device(device)
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         for k, v in vars(batch).items():

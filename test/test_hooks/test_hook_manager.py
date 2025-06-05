@@ -47,15 +47,37 @@ def test_hook_manager_init_cpu_non_empty(dg):
 
 
 @pytest.mark.gpu
-@pytest.mark.skip('TODO: Add neighbor sampling tests')
 def test_hook_manager_init_gpu_empty(dg):
-    pass
+    dg = dg.to('cuda')
+
+    hook = HookManager(dg, hooks=[])
+    assert len(hook.hooks) == 2
+
+    exp_batch = dg.materialize()
+    batch = hook(dg)
+    assert batch.src.device.type == 'cuda'
+    assert batch.dst.device.type == 'cuda'
+    assert batch.time.device.type == 'cuda'
+    torch.testing.assert_close(exp_batch.src, batch.src.cpu())
+    torch.testing.assert_close(exp_batch.dst, batch.dst.cpu())
+    torch.testing.assert_close(exp_batch.time, batch.time.cpu())
 
 
-@pytest.mark.gpu
-@pytest.mark.skip('TODO: Add neighbor sampling tests')
 def test_hook_manager_init_gpu_non_empty(dg):
-    pass
+    dg = dg.to('cuda')
+
+    hook = HookManager(dg, hooks=[MockHook()])
+    assert len(hook.hooks) == 3
+
+    exp_batch = dg.materialize()
+    exp_batch.time *= 2
+    batch = hook(dg)
+    assert batch.src.device.type == 'cuda'
+    assert batch.dst.device.type == 'cuda'
+    assert batch.time.device.type == 'cuda'
+    torch.testing.assert_close(exp_batch.src, batch.src.cpu())
+    torch.testing.assert_close(exp_batch.dst, batch.dst.cpu())
+    torch.testing.assert_close(exp_batch.time, batch.time.cpu())
 
 
 def test_hook_manager_bad_hooks(dg):
