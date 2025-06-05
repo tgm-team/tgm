@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, Deque, Dict, List, Protocol
+from typing import Any, Deque, Dict, List, Protocol, Set, runtime_checkable
 
 import torch
 
@@ -9,13 +9,96 @@ from opendg._storage import DGSliceTracker
 from opendg.graph import DGBatch, DGraph
 
 
+@runtime_checkable
 class DGHook(Protocol):
+    requires: Set[str]
+    produces: Set[str]
+
     r"""The behaviours to be executed on a DGraph before materializing."""
 
-    def __call__(self, dg: DGraph) -> DGBatch: ...
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch: ...
+
+
+class HookManager:
+    def __init__(self, dg: DGraph, hooks: List[DGHook]) -> None:
+        if not isinstance(hooks, list):
+            raise TypeError(f'Invalid hook type: {type(hooks)}')
+        if not all(isinstance(h, DGHook) for h in hooks):
+            raise TypeError('All items in hook list must follow DGHook protocol')
+
+        device = 'cpu'  # TODO: Get device from dgraph
+        if device != 'cpu':
+            hooks.append(PinMemoryHook())
+            hooks.append(DeviceTransferHook(device))
+
+        self.hooks = hooks
+        self._validate_hook_dependencies()
+
+    @classmethod
+    def from_any(
+        cls, dg: DGraph, hook_like: HookManager | DGHook | List[DGHook] | None
+    ) -> HookManager:
+        if isinstance(hook_like, cls):
+            return hook_like
+        elif hook_like is None:
+            return cls(dg, hooks=[])
+        elif isinstance(hook_like, DGHook):
+            return cls(dg, hooks=[hook_like])
+        elif isinstance(hook_like, list):
+            return cls(dg, hooks=hook_like)
+        else:
+            raise TypeError(f'Invalid hook type: {type(hook_like)}')
+
+    def __call__(self, dg: DGraph) -> DGBatch:
+        batch = dg.materialize()
+        for hook in self.hooks:
+            batch = hook(dg, batch)
+        return batch
+
+    def _validate_hook_dependencies(self) -> None:
+        produced: Set[str] = set()
+        for hook in self.hooks:
+            missing = hook.requires - produced
+            if missing:
+                raise ValueError(
+                    f'{hook.__class__.__name__} is missing required fields: {missing}'
+                )
+            produced |= hook.produces
+
+
+class PinMemoryHook:
+    requires: Set[str] = set()
+    produces: Set[str] = set()
+
+    r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        for k, v in vars(batch).items():
+            if isinstance(v, torch.Tensor) and not v.is_cuda and not v.is_pinned():
+                setattr(batch, k, v.pin_memory())
+        return batch
+
+
+class DeviceTransferHook:
+    requires: Set[str] = set()
+    produces: Set[str] = set()
+
+    r"""Moves all tensors in the DGBatch to the specified device."""
+
+    def __init__(self, device: str) -> None:
+        self.device = device
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        for k, v in vars(batch).items():
+            if isinstance(v, torch.Tensor) and v.device != self.device:
+                setattr(batch, k, v.to(device=self.device, non_blocking=True))
+        return batch
 
 
 class NegativeEdgeSamplerHook:
+    requires: Set[str] = set()
+    produces = {'neg'}
+
     r"""Sample negative edges for dynamic link prediction.
 
     Args:
@@ -35,14 +118,16 @@ class NegativeEdgeSamplerHook:
         self.neg_sampling_ratio = neg_sampling_ratio
 
     # TODO: Historical vs. random
-    def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize()
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
         batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
         return batch
 
 
 class NeighborSamplerHook:
+    requires: Set[str] = set()
+    produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'nbr_mask'}
+
     r"""Load data from DGraph using a memory based sampling function.
 
     Args:
@@ -63,19 +148,15 @@ class NeighborSamplerHook:
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
-    def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize(materialize_features=False)
-
-        # TODO: Compose hooks
-        self.neg_sampling_ratio = 1.0
-        self.low = 0
-        self.high = dg.num_nodes
-        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size, dtype=torch.long)  # type: ignore
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        if hasattr(batch, 'neg'):
+            seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
+        else:
+            seed_nodes = torch.cat([batch.src, batch.dst])
 
         batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
             dg._storage.get_nbrs(
-                seed_nodes=torch.cat([batch.src, batch.dst, batch.neg]),  # type: ignore
+                seed_nodes=seed_nodes,
                 num_nbrs=self.num_nbrs,
                 slice=DGSliceTracker(end_idx=dg._slice.end_idx),
             )
@@ -84,6 +165,9 @@ class NeighborSamplerHook:
 
 
 class RecencyNeighborHook:
+    requires: Set[str] = set()
+    produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'nbr_mask'}
+
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
@@ -110,17 +194,12 @@ class RecencyNeighborHook:
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
-    def __call__(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize()
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        if hasattr(batch, 'neg'):
+            seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
+        else:
+            seed_nodes = torch.cat([batch.src, batch.dst])
 
-        # TODO: Compose hooks
-        self.neg_sampling_ratio = 1.0
-        self.low = 0
-        self.high = dg.num_nodes
-        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size, dtype=torch.long)  # type: ignore
-
-        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])  # type: ignore
         unique, inverse_indices = seed_nodes.unique(return_inverse=True)
 
         batch_size = len(seed_nodes)
