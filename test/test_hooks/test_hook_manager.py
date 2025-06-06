@@ -1,0 +1,96 @@
+from typing import Set
+
+import pytest
+import torch
+
+from opendg.data import DGData
+from opendg.graph import DGBatch, DGraph
+from opendg.hooks import HookManager
+
+
+class MockHook:
+    requires: Set[str] = set()
+    produces: Set[str] = set()
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        batch.time *= 2
+        return batch
+
+
+class MockHookRequires:
+    requires = {'foo'}
+    produces: Set[str] = set()
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        return batch
+
+
+@pytest.fixture
+def dg():
+    edge_index = torch.LongTensor([[1, 10], [1, 11], [1, 12], [1, 13]])
+    edge_timestamps = torch.LongTensor([1, 1, 2, 2])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    return DGraph(data)
+
+
+def test_hook_manager_init_cpu_empty(dg):
+    hook = HookManager(dg, hooks=[])
+    exp_batch = dg.materialize()
+    assert hook(dg) == exp_batch
+
+
+def test_hook_manager_init_cpu_non_empty(dg):
+    hook = HookManager(dg, hooks=[MockHook()])
+    exp_batch = dg.materialize()
+    exp_batch.time *= 2
+    assert hook(dg) == exp_batch
+
+
+@pytest.mark.gpu
+@pytest.mark.skip('TODO: Add neighbor sampling tests')
+def test_hook_manager_init_gpu_empty(dg):
+    pass
+
+
+@pytest.mark.gpu
+@pytest.mark.skip('TODO: Add neighbor sampling tests')
+def test_hook_manager_init_gpu_non_empty(dg):
+    pass
+
+
+def test_hook_manager_bad_hooks(dg):
+    with pytest.raises(TypeError):
+        _ = HookManager(dg, hooks='foo')
+    with pytest.raises(TypeError):
+        _ = HookManager(dg, hooks=['foo'])
+
+
+def test_hook_manager_bad_hook_dependancies(dg):
+    with pytest.raises(ValueError):
+        _ = HookManager(dg, hooks=[MockHook(), MockHookRequires()])
+
+
+def test_hook_manager_from_any_none(dg):
+    hook = HookManager.from_any(dg, None)
+    assert hook.hooks == []
+
+
+def test_hook_manager_from_manager(dg):
+    hook = HookManager(dg, hooks=[])
+    hook2 = HookManager.from_any(dg, hook)
+    assert hook is hook2
+
+
+def test_hook_manager_from_single_hook(dg):
+    hook = HookManager.from_any(dg, MockHook())
+    assert len(hook.hooks) == 1
+
+
+def test_hook_manager_from_hook_list(dg):
+    hook = HookManager.from_any(dg, [MockHook()])
+    assert len(hook.hooks) == 1
+
+
+def test_hook_manager_from_bad_hook_type(dg):
+    with pytest.raises(TypeError):
+        _ = HookManager.from_any(dg, 'foo')

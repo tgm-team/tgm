@@ -13,6 +13,17 @@ def data():
     return DGData.from_raw(edge_timestamps, edge_index)
 
 
+def test_hook_dependancies():
+    assert NeighborSamplerHook.requires == set()
+    assert NeighborSamplerHook.produces == {
+        'nids',
+        'nbr_nids',
+        'nbr_times',
+        'nbr_feats',
+        'nbr_mask',
+    }
+
+
 def test_bad_neighbor_sampler_init():
     with pytest.raises(ValueError):
         NeighborSamplerHook(num_nbrs=[])

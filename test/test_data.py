@@ -231,9 +231,19 @@ def test_from_csv_no_features():
     timestamps = torch.LongTensor([1, 1])
     data = DGData.from_raw(edge_timestamps=timestamps, edge_index=edge_index)
 
-    col_names = {'src_col': 'src', 'dst_col': 'dst', 'time_col': 't'}
-    with tempfile.NamedTemporaryFile() as f:
-        _write_csv(data, f.name, **col_names)
+    col_names = {'edge_src_col': 'src', 'edge_dst_col': 'dst', 'edge_time_col': 't'}
+    with tempfile.NamedTemporaryFile(mode='w') as f:
+        writer = csv.writer(f)
+        writer.writerow(list(col_names.values()))
+        writer.writerows(
+            zip(
+                edge_index[:, 0].tolist(),
+                edge_index[:, 1].tolist(),
+                timestamps.tolist(),
+            )
+        )
+        f.flush()
+
         recovered_data = DGData.from_csv(f.name, **col_names)
 
     torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
@@ -248,12 +258,27 @@ def test_from_csv_with_edge_features():
         edge_timestamps=timestamps, edge_index=edge_index, edge_feats=edge_feats
     )
 
-    edge_feature_col = [f'dim_{i}' for i in range(5)]
-    col_names = {'src_col': 'src', 'dst_col': 'dst', 'time_col': 't'}
-    with tempfile.NamedTemporaryFile() as f:
-        _write_csv(data, f.name, edge_feature_col=edge_feature_col, **col_names)
+    edge_feats_col = [f'dim_{i}' for i in range(5)]
+    col_names = {'edge_src_col': 'src', 'edge_dst_col': 'dst', 'edge_time_col': 't'}
+    with tempfile.NamedTemporaryFile(mode='w') as f:
+        writer = csv.writer(f)
+        writer.writerow(list(col_names.values()) + edge_feats_col)
+        writer.writerows(
+            zip(
+                edge_index[:, 0].tolist(),
+                edge_index[:, 1].tolist(),
+                timestamps.tolist(),
+                edge_feats[:, 0].tolist(),
+                edge_feats[:, 1].tolist(),
+                edge_feats[:, 2].tolist(),
+                edge_feats[:, 3].tolist(),
+                edge_feats[:, 4].tolist(),
+            )
+        )
+        f.flush()
+
         recovered_data = DGData.from_csv(
-            f.name, edge_feature_col=edge_feature_col, **col_names
+            f.name, edge_feats_col=edge_feats_col, **col_names
         )
 
     torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
@@ -261,14 +286,148 @@ def test_from_csv_with_edge_features():
     torch.testing.assert_close(data.edge_feats, recovered_data.edge_feats)
 
 
-@pytest.mark.skip('TODO: Add node features to IO')
 def test_from_csv_with_node_events():
-    pass
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 1])
+    node_ids = torch.LongTensor([7, 8])
+    node_timestamps = torch.LongTensor([3, 6])
+    data = DGData.from_raw(
+        edge_timestamps=edge_timestamps,
+        edge_index=edge_index,
+        node_ids=node_ids,
+        node_timestamps=node_timestamps,
+    )
+
+    edge_col_names = {
+        'edge_src_col': 'src',
+        'edge_dst_col': 'dst',
+        'edge_time_col': 't',
+    }
+    node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
+    with (
+        tempfile.NamedTemporaryFile(mode='w') as edge_file,
+        tempfile.NamedTemporaryFile(mode='w') as node_file,
+    ):
+        writer = csv.writer(edge_file)
+        writer.writerow(list(edge_col_names.values()))
+        writer.writerows(
+            zip(
+                edge_index[:, 0].tolist(),
+                edge_index[:, 1].tolist(),
+                edge_timestamps.tolist(),
+            )
+        )
+        edge_file.flush()
+
+        writer = csv.writer(node_file)
+        writer.writerow(list(node_col_names.values()))
+        writer.writerows(
+            zip(
+                node_ids.tolist(),
+                node_timestamps.tolist(),
+            )
+        )
+        node_file.flush()
+
+        recovered_data = DGData.from_csv(
+            edge_file_path=edge_file.name,
+            node_file_path=node_file.name,
+            **edge_col_names,
+            **node_col_names,
+        )
+
+    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+    torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
+    torch.testing.assert_close(
+        data.dynamic_node_feats, recovered_data.dynamic_node_feats
+    )
 
 
-@pytest.mark.skip('TODO: Add node features to IO')
 def test_from_csv_with_node_features():
-    pass
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 1])
+    node_ids = torch.LongTensor([7, 8])
+    node_timestamps = torch.LongTensor([3, 6])
+    dynamic_node_feats = torch.rand(2, 5)
+    static_node_feats = torch.rand(21, 3)
+
+    data = DGData.from_raw(
+        edge_timestamps=edge_timestamps,
+        edge_index=edge_index,
+        node_ids=node_ids,
+        node_timestamps=node_timestamps,
+        dynamic_node_feats=dynamic_node_feats,
+        static_node_feats=static_node_feats,
+    )
+
+    edge_col_names = {
+        'edge_src_col': 'src',
+        'edge_dst_col': 'dst',
+        'edge_time_col': 't',
+    }
+    node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
+    node_feats_col = [f'dim_{i}' for i in range(5)]
+    static_node_feats_col = [f'sdim_{i}' for i in range(3)]
+    with (
+        tempfile.NamedTemporaryFile(mode='w') as edge_file,
+        tempfile.NamedTemporaryFile(mode='w') as node_file,
+        tempfile.NamedTemporaryFile(mode='w') as static_node_file,
+    ):
+        writer = csv.writer(edge_file)
+        writer.writerow(list(edge_col_names.values()))
+        writer.writerows(
+            zip(
+                edge_index[:, 0].tolist(),
+                edge_index[:, 1].tolist(),
+                edge_timestamps.tolist(),
+            )
+        )
+        edge_file.flush()
+
+        writer = csv.writer(node_file)
+        writer.writerow(list(node_col_names.values()) + node_feats_col)
+        writer.writerows(
+            zip(
+                node_ids.tolist(),
+                node_timestamps.tolist(),
+                dynamic_node_feats[:, 0].tolist(),
+                dynamic_node_feats[:, 1].tolist(),
+                dynamic_node_feats[:, 2].tolist(),
+                dynamic_node_feats[:, 3].tolist(),
+                dynamic_node_feats[:, 4].tolist(),
+            )
+        )
+        node_file.flush()
+
+        writer = csv.writer(static_node_file)
+        writer.writerow(static_node_feats_col)
+        writer.writerows(
+            zip(
+                static_node_feats[:, 0].tolist(),
+                static_node_feats[:, 1].tolist(),
+                static_node_feats[:, 2].tolist(),
+            )
+        )
+        static_node_file.flush()
+
+        recovered_data = DGData.from_csv(
+            edge_file_path=edge_file.name,
+            node_file_path=node_file.name,
+            static_node_feats_file_path=static_node_file.name,
+            dynamic_node_feats_col=node_feats_col,
+            static_node_feats_col=static_node_feats_col,
+            **edge_col_names,
+            **node_col_names,
+        )
+
+    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+    torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
+    torch.testing.assert_close(
+        data.dynamic_node_feats, recovered_data.dynamic_node_feats
+    )
+    torch.testing.assert_close(data.static_node_feats, recovered_data.static_node_feats)
 
 
 def test_from_pandas_no_features():
@@ -279,7 +438,9 @@ def test_from_pandas_no_features():
     }
     events_df = pd.DataFrame(events_dict)
 
-    data = DGData.from_pandas(events_df, src_col='src', dst_col='dst', time_col='t')
+    data = DGData.from_pandas(
+        events_df, edge_src_col='src', edge_dst_col='dst', edge_time_col='t'
+    )
     assert isinstance(data, DGData)
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
     assert data.timestamps.tolist() == [1337, 1338]
@@ -296,10 +457,10 @@ def test_from_pandas_with_edge_features():
 
     data = DGData.from_pandas(
         events_df,
-        src_col='src',
-        dst_col='dst',
-        time_col='t',
-        edge_feature_col='edge_features',
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
+        edge_feats_col='edge_features',
     )
     assert isinstance(data, DGData)
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
@@ -309,14 +470,61 @@ def test_from_pandas_with_edge_features():
     )
 
 
-@pytest.mark.skip('TODO: Add node features to IO')
 def test_from_pandas_with_node_events():
-    pass
+    edge_dict = {
+        'src': [2, 10],
+        'dst': [3, 20],
+        't': [1337, 1338],
+    }
+    node_dict = {'node': [7, 8], 't': [3, 6]}
+
+    data = DGData.from_pandas(
+        edge_df=pd.DataFrame(edge_dict),
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
+        node_df=pd.DataFrame(node_dict),
+        node_id_col='node',
+        node_time_col='t',
+    )
+    assert isinstance(data, DGData)
+    assert data.edge_index.tolist() == [[2, 3], [10, 20]]
+    assert data.timestamps.tolist() == [3, 6, 1337, 1338]
+    assert data.node_ids.tolist() == [7, 8]
+    assert data.dynamic_node_feats is None
 
 
-@pytest.mark.skip('TODO: Add node features to IO')
 def test_from_pandas_with_node_features():
-    pass
+    edge_dict = {
+        'src': [2, 10],
+        'dst': [3, 20],
+        't': [1337, 1338],
+    }
+    edge_df = pd.DataFrame(edge_dict)
+    node_dict = {
+        'node': [7, 8],
+        't': [3, 6],
+        'node_features': [torch.rand(5).tolist(), torch.rand(5).tolist()],
+    }
+    node_df = pd.DataFrame(node_dict)
+
+    data = DGData.from_pandas(
+        edge_df=edge_df,
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
+        node_df=node_df,
+        node_id_col='node',
+        node_time_col='t',
+        dynamic_node_feats_col='node_features',
+    )
+    assert isinstance(data, DGData)
+    assert data.edge_index.tolist() == [[2, 3], [10, 20]]
+    assert data.timestamps.tolist() == [3, 6, 1337, 1338]
+    assert data.node_ids.tolist() == [7, 8]
+    torch.testing.assert_close(
+        data.dynamic_node_feats.tolist(), node_df.node_features.tolist()
+    )
 
 
 # Constants for split sizes
@@ -332,16 +540,22 @@ test_indices = np.arange(num_train + num_val, num_events)
 
 
 @pytest.mark.parametrize(
-    'split,expected_indices',
+    'split,expected_indices,with_node_features',
     [
-        ('train', train_indices),
-        ('valid', val_indices),
-        ('test', test_indices),
-        ('all', np.arange(num_events)),
+        ('train', train_indices, False),
+        ('valid', val_indices, False),
+        ('test', test_indices, False),
+        ('all', np.arange(num_events), False),
+        ('train', train_indices, True),
+        ('valid', val_indices, True),
+        ('test', test_indices, True),
+        ('all', np.arange(num_events), True),
     ],
 )
 @patch('tgb.linkproppred.dataset.LinkPropPredDataset')
-def test_from_tgb(mock_dataset_cls, split, expected_indices):
+def test_from_tgb_with_static_node_features(
+    mock_dataset_cls, split, expected_indices, with_node_features
+):
     sources = np.random.randint(0, 1000, size=num_events)
     destinations = np.random.randint(0, 1000, size=num_events)
     timestamps = np.arange(num_events)
@@ -357,6 +571,13 @@ def test_from_tgb(mock_dataset_cls, split, expected_indices):
     test_mask[test_indices] = True
 
     mock_dataset = MagicMock()
+
+    if with_node_features:
+        num_nodes = 1 + max(np.max(sources), np.max(destinations))
+        mock_dataset.node_feat = np.random.rand(num_nodes, 10)
+    else:
+        mock_dataset.node_feat = None
+
     mock_dataset.full_data = {
         'sources': sources,
         'destinations': destinations,
@@ -385,9 +606,16 @@ def test_from_tgb(mock_dataset_cls, split, expected_indices):
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbl-wiki')
 
+    if with_node_features:
+        torch.testing.assert_close(
+            data.static_node_feats, torch.Tensor(mock_dataset.node_feat).double()
+        )
+    else:
+        assert data.static_node_feats is None
+
 
 @pytest.mark.parametrize(
-    'split,expected_indices',
+    'split',
     [
         ('train', train_indices),
         ('valid', val_indices),
@@ -396,7 +624,7 @@ def test_from_tgb(mock_dataset_cls, split, expected_indices):
     ],
 )
 @patch('tgb.nodeproppred.dataset.NodePropPredDataset')
-def test_from_tgb_with_node_events(mock_dataset_cls, split, expected_indices):
+def test_from_tgb_with_node_events(mock_dataset_cls, split):
     sources = np.arange(num_events)
     destinations = np.arange(num_events)
     timestamps = np.arange(num_events)
@@ -436,46 +664,3 @@ def test_from_tgb_with_node_events(mock_dataset_cls, split, expected_indices):
     data.edge_index.tolist()
     data.timestamps.tolist()
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
-
-
-@pytest.mark.skip('TODO: Add node features to IO')
-def test_from_tgb_with_node_features():
-    pass
-
-
-def _write_csv(data, fp, src_col, dst_col, time_col, edge_feature_col=None):
-    with open(fp, 'w', newline='') as f:
-        fieldnames = [src_col, dst_col, time_col]
-        if edge_feature_col is not None:
-            fieldnames += edge_feature_col
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-
-        for i in range(len(data.edge_index)):
-            row = {
-                src_col: int(data.edge_index[i][0]),
-                dst_col: int(data.edge_index[i][1]),
-                time_col: int(data.timestamps[i]),
-            }
-            if data.edge_feats is not None:
-                if edge_feature_col is None:
-                    raise ValueError(
-                        'No feature column provided but events had features'
-                    )
-
-                feats = data.edge_feats[i]
-
-                if len(feats.shape) > 1:
-                    raise ValueError('Multi-dimensional features not supported')
-
-                if len(feats) != len(edge_feature_col):
-                    raise ValueError(
-                        f'Got {len(feats)}-dimensional feature tensor but only '
-                        f'specified {len(edge_feature_col)} feature column names.'
-                    )
-
-                features_list = feats.tolist()
-                for feature_col, feature_val in zip(edge_feature_col, features_list):
-                    row[feature_col] = feature_val
-
-            writer.writerow(row)

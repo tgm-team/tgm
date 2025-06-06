@@ -43,9 +43,9 @@ class DGraph:
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""
         batch = DGBatch(*self.edges)
-        if materialize_features and self.node_feats is not None:
-            batch.node_feats = self.node_feats._values()
-            batch.node_times, batch.node_ids = self.node_feats._indices()
+        if materialize_features and self.dynamic_node_feats is not None:
+            batch.node_times, batch.node_ids = self.dynamic_node_feats._indices()
+            batch.dynamic_node_feats = self.dynamic_node_feats._values()
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats._values()
         return batch
@@ -157,12 +157,17 @@ class DGraph:
         return self._storage.get_edges(self._slice)
 
     @cached_property
-    def node_feats(self) -> Optional[Tensor]:
-        r"""The aggregated node features over the dynamic graph.
+    def static_node_feats(self) -> Optional[Tensor]:
+        r"""If static node features exist, returns a dense Tensor(num_nodes x d_node_static)."""
+        return self._storage.get_static_node_feats()
 
-        If node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_edge).
+    @cached_property
+    def dynamic_node_feats(self) -> Optional[Tensor]:
+        r"""The aggregated dynamic node features over the dynamic graph.
+
+        If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
         """
-        return self._storage.get_node_feats(self._slice)
+        return self._storage.get_dynamic_node_feats(self._slice)
 
     @cached_property
     def edge_feats(self) -> Optional[Tensor]:
@@ -173,9 +178,14 @@ class DGraph:
         return self._storage.get_edge_feats(self._slice)
 
     @cached_property
-    def node_feats_dim(self) -> Optional[int]:
-        r"""Node feature dimension or None if not Node features on the Graph."""
-        return self._storage.get_node_feats_dim()
+    def static_node_feats_dim(self) -> Optional[int]:
+        r"""Static Node feature dimension or None if not Node features on the Graph."""
+        return self._storage.get_static_node_feats_dim()
+
+    @cached_property
+    def dynamic_node_feats_dim(self) -> Optional[int]:
+        r"""Dynamic Node feature dimension or None if not Node features on the Graph."""
+        return self._storage.get_dynamic_node_feats_dim()
 
     @cached_property
     def edge_feats_dim(self) -> Optional[int]:
@@ -200,6 +210,7 @@ class DGBatch:
     src: Tensor
     dst: Tensor
     time: Tensor
+    dynamic_node_feats: Optional[Tensor] = None
     edge_feats: Optional[Tensor] = None
     node_feats: Optional[Tensor] = None
     node_ids: Optional[Tensor] = None

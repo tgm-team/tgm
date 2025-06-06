@@ -13,7 +13,7 @@ authors = [
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
 ]
 dependencies = [
-    "numpy==1.26.4",
+    "numpy>=2.2.6",
     "torch>=2.5.1",
 ]
 
@@ -25,8 +25,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "pytest>=8.3.3",
     "ruff==0.11.1",
-    "py-tgb>=2.0.0",
-    "py-tgb @ git+https://github.com/shenyangHuang/TGB.git@07c554d5ce16f1d12791eae291a1f834dbca84c4",
+    "py-tgb>=2.1.0",
     "pandas>=1.5.3",
 ]
 docs = [
@@ -88,6 +87,10 @@ addopts = [
     "--capture=no",
     "--color=yes",
     "-vvv",
+]
+markers = [
+    "gpu: Tests that require a GPU",
+    "slow: Tests that are slow",
 ]
 
 [tool.coverage.run]
