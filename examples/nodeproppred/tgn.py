@@ -75,13 +75,6 @@ class TGN(torch.nn.Module):
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         agg_msgs = self.msg_agg(self.nodes, self.memory.msgs)
         memory, _ = self.memory_updater.get_updated_memory(*agg_msgs)
-        # TODO: I think this is only needed for multi-hop?
-        # Difference between the time the memory of a node was last updated,
-        # and the time for which we want to compute the embedding of a node
-        # batch.time[batch.src] -= last_update[batch.src].long()
-        # batch.time[batch.dst] -= last_update[batch.dst].long()
-        # batch.time[batch.neg] -= last_update[batch.neg].long()
-
         pred_labels = self.gat(batch, memory=memory)
         self._update_memory(batch)
         return pred_labels
@@ -245,8 +238,6 @@ class GraphAttentionEmbedding(nn.Module):
     ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
-        print (num_classes)
-        print (embed_dim)
         self.node_predictor = NodePredictor(in_dim=embed_dim, out_dim=num_classes)
         self.time_encoder = time_encoder
         self.attn = nn.ModuleList(
@@ -358,7 +349,7 @@ test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
 
 # Get global number of nodes for TGN Memory
 num_nodes = DGraph(args.dataset).num_nodes
-label_dim = DGraph.node_feats_dim()
+label_dim = train_dg.node_feats_dim
 
 
 if args.sampling == 'uniform':
