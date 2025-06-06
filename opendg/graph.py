@@ -117,8 +117,7 @@ class DGraph:
         return self._device
 
     def to(self, device: str | torch.device) -> DGraph:
-        self._device = torch.device(device)
-        return self
+        return DGraph(data=self._storage, time_delta=self.time_delta, device=device)
 
     @cached_property
     def start_time(self) -> Optional[int]:

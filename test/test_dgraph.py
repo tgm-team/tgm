@@ -43,6 +43,8 @@ def test_init_from_data(data):
     assert dg.static_node_feats_dim == 11
     assert dg.dynamic_node_feats_dim == 5
     assert dg.edge_feats_dim == 5
+    assert dg.device == torch.device('cpu')
+    assert isinstance(dg.__str__(), str)
 
     expected_edges = (
         torch.tensor([2, 2, 1], dtype=torch.int64),
@@ -61,6 +63,34 @@ def test_init_from_data(data):
     exp_edge_feats[1, 2, 2] = data.edge_feats[0]
     exp_edge_feats[5, 2, 4] = data.edge_feats[1]
     exp_edge_feats[20, 1, 8] = data.edge_feats[2]
+    torch.testing.assert_close(dg.edge_feats.to_dense(), exp_edge_feats)
+
+
+@pytest.mark.gpu
+def test_init_gpu(data):
+    dg = DGraph(data, device='cuda')
+
+    assert dg.device == torch.device('cuda')
+
+    expected_edges = (
+        torch.tensor([2, 2, 1], dtype=torch.int64, device='cuda'),
+        torch.tensor([2, 4, 8], dtype=torch.int64, device='cuda'),
+        torch.tensor([1, 5, 20], dtype=torch.int64, device='cuda'),
+    )
+    torch.testing.assert_close(dg.edges, expected_edges)
+
+    exp_dynamic_node_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
+    exp_dynamic_node_feats[1, 2] = data.dynamic_node_feats[0]
+    exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
+    exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
+    exp_dynamic_node_feats = exp_dynamic_node_feats.cuda()
+    torch.testing.assert_close(dg.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
+
+    exp_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
+    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
+    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
+    exp_edge_feats[20, 1, 8] = data.edge_feats[2]
+    exp_edge_feats = exp_edge_feats.cuda()
     torch.testing.assert_close(dg.edge_feats.to_dense(), exp_edge_feats)
 
 
@@ -94,6 +124,22 @@ def test_materialize_with_features(data):
         exp_t,
         dg.dynamic_node_feats._values(),
         dg.edge_feats._values(),
+    )
+    torch.testing.assert_close(asdict(dg.materialize()), asdict(exp))
+
+
+@pytest.mark.gpu
+def test_materialize_with_features_gpu(data):
+    dg = DGraph(data, device='cuda')
+    exp_src = torch.tensor([2, 2, 1], dtype=torch.int64, device='cuda')
+    exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64, device='cuda')
+    exp_t = torch.tensor([1, 5, 20], dtype=torch.int64, device='cuda')
+    exp = DGBatch(
+        exp_src,
+        exp_dst,
+        exp_t,
+        dg.dynamic_node_feats._values().cuda(),
+        dg.edge_feats._values().cuda(),
     )
     torch.testing.assert_close(asdict(dg.materialize()), asdict(exp))
 
@@ -248,6 +294,13 @@ def test_slice_time_no_lower_bound(data):
     exp_edge_feats[1, 2, 2] = data.edge_feats[0]
     torch.testing.assert_close(dg1.edge_feats.to_dense(), exp_edge_feats)
     torch.testing.assert_close(dg.static_node_feats, dg1.static_node_feats)
+
+
+@pytest.mark.gpu
+def test_slice_keeps_device(data):
+    dg = DGraph(data, device='cuda')
+    dg1 = dg.slice_time(5, 10)
+    assert dg1.device == dg.device
 
 
 def test_slice_time_no_cache_refresh(data):
@@ -684,3 +737,16 @@ def test_interleave_slice_time_slice_nodes(data):
 @pytest.mark.skip(reason='TODO: Add test for dg slice events!')
 def test_slice_events():
     pass
+
+
+@pytest.mark.gpu
+def test_device_transfer(data):
+    dg = DGraph(data)
+    dg1 = dg.to('cuda')
+    assert dg.device == torch.device('cpu')
+    assert dg1.device == torch.device('cuda')
+
+    dg2 = dg.to('cpu')
+    assert dg.device == torch.device('cpu')
+    assert dg1.device == torch.device('cuda')
+    assert dg2.device == torch.device('cpu')
