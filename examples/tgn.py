@@ -1,7 +1,7 @@
 import argparse
 import time
 from collections import defaultdict
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -12,7 +12,12 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from opendg.graph import DGBatch, DGraph
-from opendg.hooks import NeighborSamplerHook, RecencyNeighborHook
+from opendg.hooks import (
+    DGHook,
+    NegativeEdgeSamplerHook,
+    NeighborSamplerHook,
+    RecencyNeighborHook,
+)
 from opendg.loader import DGDataLoader
 from opendg.nn import TemporalAttention, Time2Vec
 from opendg.timedelta import TimeDeltaDG
@@ -88,11 +93,10 @@ class TGN(torch.nn.Module):
         return pos_out, neg_out
 
     def _update_memory(self, batch: DGBatch) -> None:
-        # Temporary
-        device = next(self.parameters()).device
+        device = batch.src.device
 
         def _get_raw_msgs(src, dst, time):
-            edge_feats = batch.edge_feats.to(device)  # type: ignore
+            edge_feats = batch.edge_feats
             src_memory = self.memory.get_memory(src)
             dst_memory = self.memory.get_memory(dst)
             time_delta = time.to(device) - self.memory.last_update[src]
@@ -102,13 +106,13 @@ class TGN(torch.nn.Module):
 
             src_msg = torch.cat([src_memory, dst_memory, edge_feats, time_feat], dim=1)
             msgs = defaultdict(list)
-            unique_src = np.unique(src)
+            unique_src = np.unique(src.cpu())
             for i in range(len(src)):
                 msgs[src[i]].append((src_msg[i], time[i]))
             return unique_src, msgs
 
         # Persist the updates to the memory only for sources and destinations
-        pos = torch.cat([batch.src, batch.dst]).numpy()
+        pos = torch.cat([batch.src, batch.dst]).cpu().numpy()
         agg_msgs = self.msg_agg(pos, self.memory.msgs)
         self.memory_updater.update(*agg_msgs)
 
@@ -267,17 +271,14 @@ class GraphAttentionEmbedding(nn.Module):
         # TODO: Go back to recursive embedding for multi-hop
         hop = 0
 
-        # Temporary
-        device = next(self.parameters()).device
-
+        device = batch.src.device
         node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim), device=device)
         nbr_node_feat = torch.zeros(
             (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
         )
         time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop]), device=device))
         nbr_time_feat = self.time_encoder(
-            batch.nbr_times[hop].to(device)
-            - batch.time.unsqueeze(dim=1).repeat(3, 1).to(device)
+            batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
         )
 
         z = self.attn[hop](
@@ -285,8 +286,8 @@ class GraphAttentionEmbedding(nn.Module):
             nbr_node_feat=nbr_node_feat,
             time_feat=time_feat,
             nbr_time_feat=nbr_time_feat,
-            edge_feat=batch.nbr_feats[hop].to(device),
-            nbr_mask=batch.nbr_mask[hop].to(device),
+            edge_feat=batch.nbr_feats[hop],
+            nbr_mask=batch.nbr_mask[hop],
         )
         z_src, z_dst, z_neg = z.chunk(3, dim=0)
         pos_out = self.link_predictor(z_src, z_dst)
@@ -346,33 +347,45 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> dict:
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
-val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='valid')
-test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
+train_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('r'), split='train', device=args.device
+)
+val_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('r'), split='valid', device=args.device
+)
+test_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('r'), split='test', device=args.device
+)
+
+
+def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
+    if sampling_type == 'uniform':
+        nbr_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs])
+    elif sampling_type == 'recency':
+        nbr_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=dg.num_nodes)
+    else:
+        raise ValueError(f'Unknown sampling type: {args.sampling}')
+
+    # Always produce negative edge prior to neighbor sampling for link prediction
+    neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
+    return [neg_hook, nbr_hook]
+
+
+train_loader = DGDataLoader(
+    train_dg, hook=_init_hooks(train_dg, args.sampling), batch_size=args.bsize
+)
+val_loader = DGDataLoader(
+    val_dg, hook=_init_hooks(val_dg, args.sampling), batch_size=args.bsize
+)
+test_loader = DGDataLoader(
+    test_dg, hook=_init_hooks(test_dg, args.sampling), batch_size=args.bsize
+)
 
 # Get global number of nodes for TGN Memory
 num_nodes = DGraph(args.dataset).num_nodes
 
-if args.sampling == 'uniform':
-    train_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs])
-    val_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs])
-    test_hook = NeighborSamplerHook(num_nbrs=[args.num_nbrs])
-elif args.sampling == 'recency':
-    train_hook = RecencyNeighborHook(
-        num_nbrs=[args.n_nbrs], num_nodes=train_dg.num_nodes
-    )
-    val_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=val_dg.num_nodes)
-    test_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=test_dg.num_nodes)
-else:
-    raise ValueError(f'Unknown sampling type: {args.sampling}')
-
-
-train_loader = DGDataLoader(train_dg, hook=train_hook, batch_size=args.bsize)
-val_loader = DGDataLoader(val_dg, hook=val_hook, batch_size=args.bsize)
-test_loader = DGDataLoader(test_dg, hook=test_hook, batch_size=args.bsize)
-
 model = TGN(
-    node_dim=train_dg.node_feats_dim or args.embed_dim,  # TODO: verify
+    node_dim=train_dg.dynamic_node_feats_dim or args.embed_dim,  # TODO: verify
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
