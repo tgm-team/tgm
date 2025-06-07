@@ -34,8 +34,6 @@ class DGDataLoader(torch.utils.data.DataLoader):
     ) -> None:
         if batch_size <= 0:
             raise ValueError(f'batch_size must be > 0 but got {batch_size}')
-        if not len(dg):
-            raise ValueError('Cannot iterate an empty DGraph')
 
         dg_ordered = dg.time_delta.is_ordered
         batch_ordered = batch_unit == 'r'
