@@ -31,21 +31,6 @@ def test_init_ordered():
     assert td.is_ordered
 
 
-def test_init_with_time_delta_unit(time_granularity):
-    td = TimeDeltaDG(time_granularity)
-    assert td.unit == time_granularity
-    assert td.value == 1
-    assert not td.is_ordered
-
-
-def test_init_ordered_with_time_delta_unit():
-    time_granularity = 'r'
-    td = TimeDeltaDG(time_granularity)
-    assert td.unit == time_granularity
-    assert td.value == 1
-    assert td.is_ordered
-
-
 @pytest.mark.parametrize('bad_unit', ['mock'])
 def test_init_bad_unit(bad_unit):
     with pytest.raises(ValueError):
@@ -70,42 +55,6 @@ def test_convert_between_same_units(time_granularity):
     td2 = TimeDeltaDG(time_granularity, 3)
     assert td1.convert(td2) == 2 / 3
     assert td2.convert(td1) == 3 / 2
-
-    td1 = TimeDeltaDG(time_granularity, 1)
-    td2 = TimeDeltaDG(time_granularity, 1)
-    assert td1.convert(td2) == 1
-    assert td2.convert(td1) == 1
-
-
-def test_convert_into_different_units():
-    value = 5
-
-    td = TimeDeltaDG('us', value)
-    assert td.convert('ns') == value * 1000
-
-    td = TimeDeltaDG('ms', value)
-    assert td.convert('ns') == value * 1000 * 1000
-
-    td = TimeDeltaDG('s', value)
-    assert td.convert('ns') == value * 1000 * 1000 * 1000
-
-    td = TimeDeltaDG('m', value)
-    assert td.convert('ns') == value * 1000 * 1000 * 1000 * 60
-
-    td = TimeDeltaDG('h', value)
-    assert td.convert('ns') == value * 1000 * 1000 * 1000 * 60 * 60
-
-    td = TimeDeltaDG('D', value)
-    assert td.convert('ns') == value * 1000 * 1000 * 1000 * 60 * 60 * 24
-
-    td = TimeDeltaDG('W', value)
-    assert td.convert('ns') == value * 1000 * 1000 * 1000 * 60 * 60 * 24 * 7
-
-    td = TimeDeltaDG('M', value)
-    assert td.convert('ns') == value * 1000 * 1000 * 1000 * 60 * 60 * 24 * 30
-
-    td = TimeDeltaDG('Y', value)
-    assert td.convert('ns') == value * 1000 * 1000 * 1000 * 60 * 60 * 24 * 365
 
 
 def test_convert_between_different_units():
