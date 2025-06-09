@@ -92,78 +92,57 @@ class GraphMixer(nn.Module):
         )
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        def _compute_node_temporal_embeddings(
+        def _compute_node_embeddings(
             node_ids: torch.Tensor,
-            node_interact_times: torch.Tensor,
             num_neighbors: int = 20,
         ) -> torch.Tensor:
-            nbr_nodes, nbr_edges, nbr_times = (
-                self.neighbor_sampler.get_historical_neighbors(
-                    node_ids=node_ids,
-                    node_interact_times=node_interact_times,
-                    num_neighbors=num_neighbors,
-                )
-            )
+            hop = 0
+
+            # Temporary
+            device = next(self.parameters()).device
+
+            # Link Encoder
             # (B, num_nbrs, edge_dim)
             edge_feats = self.edge_raw_features[torch.from_numpy(nbr_edges)]
-            nbr_time_feats = self.time_encoder(
-                timestamps=torch.from_numpy(
-                    node_interact_times[:, np.newaxis] - nbr_times
-                )
-                .float()
-                .to(self.device)
-            )  # (B, num_nbrs, time_dim)
 
-            # set the time features to all zeros for the padded timestamp
-            nbr_time_feats[torch.from_numpy(nbr_nodes == 0)] = 0.0
+            nbr_time_feat = self.time_encoder(
+                batch.nbr_times[hop].to(device)
+                - batch.time.unsqueeze(dim=1).repeat(3, 1).to(device)
+            )
 
-            # (B, num_nbrs, edge_dim + time_dim)
-            feats = torch.cat([edge_feats, nbr_time_feats], dim=-1)
-            feats = self.projection_layer(feats)  # (B, num_nbrs, num_channels)
+            z_link = torch.cat([edge_feats, nbr_time_feat], dim=-1)
+            z_link = self.projection_layer(z_link)
             for mlp_mixer in self.mlp_mixers:
-                feats = mlp_mixer(x=feats)  # (B, num_nbrs, num_channels)
-            feats = torch.mean(feats, dim=1)  # (B, num_channels)
+                z_link = mlp_mixer(x=z_link)
+            z_link = torch.mean(z_link, dim=1)
 
-            # get temporal neighbors of nodes, including neighbor ids
+            # Node Encoder
             time_gap_nbr_node_ids, _, _ = (
                 self.neighbor_sampler.get_historical_neighbors(
                     node_ids=node_ids,
-                    node_interact_times=node_interact_times,
+                    node_interact_times=batch.time,
                     num_neighbors=self.time_gap,
                 )
-            )  # (B, time_gap)
-            time_gap_nbr_node_feats = self.node_raw_features[
-                torch.from_numpy(time_gap_nbr_node_ids)
-            ]  # (B, time_gap, node_feat_dim)
-            valid_time_gap_nbr_mask = torch.from_numpy(
-                (time_gap_nbr_node_ids > 0).astype(np.float32)
-            )  # (B, time_gap)
-            valid_time_gap_nbr_mask[valid_time_gap_nbr_mask == 0] = -1e10
-            scores = torch.softmax(valid_time_gap_nbr_mask, dim=1).to(self.device)
-            time_gap_nbr_node_agg_feats = torch.mean(
-                time_gap_nbr_node_feats * scores.unsqueeze(dim=-1), dim=1
-            )  # (B, node_feat_dim), average over the time_gap nbrs
-            output_node_feats = (
-                time_gap_nbr_node_agg_feats
-                + self.node_raw_features[torch.from_numpy(node_ids)]
-            )  # (B, node_feat_dim), add features of nodes in node_ids
+            )
 
-            # (B, node_feat_dim)
-            z = self.output_layer(torch.cat([feats, output_node_feats], dim=1))
+            time_gap_node_feats = self.node_raw_features[
+                torch.from_numpy(time_gap_nbr_node_ids)
+            ]
+            valid_time_gap_mask = torch.from_numpy(
+                (time_gap_nbr_node_ids > 0).astype(np.float32)
+            )
+            valid_time_gap_mask[valid_time_gap_mask == 0] = -1e10
+            scores = torch.softmax(valid_time_gap_mask, dim=1).to(self.device)
+
+            z_node = torch.mean(time_gap_node_feats * scores.unsqueeze(dim=-1), dim=1)
+            z_node = z_node + self.node_raw_features[torch.from_numpy(node_ids)]
+
+            z = self.output_layer(torch.cat([z_link, z_node], dim=1))
             return z
 
-        z_src = _compute_node_temporal_embeddings(
-            node_ids=batch.src,
-            node_interact_times=batch.time,
-        )
-        z_dst = _compute_node_temporal_embeddings(
-            node_ids=batch.dst,
-            node_interact_times=batch.time,
-        )
-        z_neg = _compute_node_temporal_embeddings(
-            node_ids=batch.neg,
-            node_interact_times=batch.time,
-        )
+        z_src = _compute_node_embeddings(node_ids=batch.src)
+        z_dst = _compute_node_embeddings(node_ids=batch.dst)
+        z_neg = _compute_node_embeddings(node_ids=batch.neg)
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
