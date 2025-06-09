@@ -1,0 +1,15 @@
+FROM python:3.10-slim
+
+# System deps
+RUN apt-get update && apt-get install -y curl git
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.cargo/bin:$PATH"
+
+# Work directory
+WORKDIR /app
+COPY . .
+
+# Install project + dependencies
+RUN uv pip install -e .
