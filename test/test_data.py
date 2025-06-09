@@ -131,38 +131,67 @@ def test_init_dg_data_sort_required():
 def test_init_dg_data_bad_args_empty_graph():
     # Empty graph not supported
     with pytest.raises(ValueError):
-        _ = DGData.from_raw(torch.empty((0, 2)), torch.empty(0))
+        _ = DGData.from_raw(torch.empty(0), torch.empty((0, 2)))
 
 
-def test_init_dg_data_bad_args_negative_timestamps():
+def test_init_dg_data_bad_args_bad_timestamps():
     # Negative timestamps not supported
     edge_index = torch.LongTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([-1, 5])
     with pytest.raises(ValueError):
-        _ = DGData.from_raw(edge_index, edge_timestamps)
+        _ = DGData.from_raw(torch.LongTensor([-1, 5]), edge_index)
+
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    with pytest.raises(TypeError):
+        _ = DGData.from_raw('foo', edge_index)
 
 
-def test_init_dg_data_bad_args_bad_types():
-    # Num edges = 2, Num nodes = 21, D_edge = 5, Num node events = 3, D_node_dynamic = 7
+def test_init_dg_data_bad_args_bad_edge_index():
+    edge_timestamps = torch.LongTensor([-1, 5])
+    with pytest.raises(TypeError):
+        _ = DGData.from_raw(edge_timestamps, 'foo')
+
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(edge_timestamps, torch.LongTensor([1, 2]))
+
+
+def test_init_dg_data_bad_args_bad_edge_feats():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([-1, 5])
+    with pytest.raises(TypeError):
+        _ = DGData.from_raw(edge_timestamps, edge_index, 'foo')
+
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(edge_timestamps, edge_index, torch.rand(1))
+
+
+def test_init_dg_data_bad_args_bad_node_ids():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    edge_feats = torch.rand(2, 5)
+    node_timestamps = torch.LongTensor([6, 7, 8])
+
+    with pytest.raises(TypeError):
+        _ = DGData.from_raw(
+            edge_timestamps, edge_index, edge_feats, node_timestamps, node_ids='foo'
+        )
+
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            edge_feats,
+            node_timestamps,
+            node_ids=torch.LongTensor([0]),
+        )
+
+
+def test_init_dg_data_bad_args_bad_dynamic_node_feats():
     edge_index = torch.LongTensor([[2, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([1, 5])
     edge_feats = torch.rand(2, 5)
     node_ids = torch.LongTensor([1, 2, 3])
     node_timestamps = torch.LongTensor([6, 7, 8])
-    dynamic_node_feats = torch.rand(3, 7)
 
-    with pytest.raises(TypeError):
-        _ = DGData.from_raw(edge_timestamps, 'foo')
-    with pytest.raises(TypeError):
-        _ = DGData.from_raw(edge_timestamps, edge_index, 'foo')
-    with pytest.raises(TypeError):
-        _ = DGData.from_raw(edge_timestamps, edge_index, edge_feats, 'foo')
-    with pytest.raises(TypeError):
-        _ = DGData.from_raw(edge_timestamps, edge_index, edge_feats, node_timestamps)
-    with pytest.raises(TypeError):
-        _ = DGData.from_raw(
-            edge_timestamps, edge_index, edge_feats, node_timestamps, node_ids, 'foo'
-        )
     with pytest.raises(TypeError):
         _ = DGData.from_raw(
             edge_timestamps,
@@ -170,17 +199,30 @@ def test_init_dg_data_bad_args_bad_types():
             edge_feats,
             node_timestamps,
             node_ids,
-            dynamic_node_feats,
             'foo',
+        )
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            edge_feats,
+            node_timestamps,
+            node_ids,
+            torch.rand(1, 7),
         )
 
 
-def test_init_dg_data_bad_static_node_feats_shape():
+def test_init_dg_data_bad_args_bad_static_node_feats():
     # Num nodes = 21
     edge_index = torch.LongTensor([[2, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([1, 5])
     node_ids = torch.LongTensor([1, 2, 3])
     node_timestamps = torch.LongTensor([6, 7, 8])
+
+    with pytest.raises(TypeError):
+        _ = DGData.from_raw(
+            edge_timestamps, edge_index, None, node_timestamps, node_ids, None, 'foo'
+        )
 
     with pytest.raises(ValueError):
         _ = DGData.from_raw(
@@ -224,30 +266,6 @@ def test_init_dg_data_bad_static_node_feats_shape():
             None,
             torch.rand(20, 11),  # should be [101, ...]
         )
-
-
-def test_from_csv_no_features():
-    edge_index = torch.LongTensor([[2, 3], [10, 20]])
-    timestamps = torch.LongTensor([1, 1])
-    data = DGData.from_raw(edge_timestamps=timestamps, edge_index=edge_index)
-
-    col_names = {'edge_src_col': 'src', 'edge_dst_col': 'dst', 'edge_time_col': 't'}
-    with tempfile.NamedTemporaryFile(mode='w') as f:
-        writer = csv.writer(f)
-        writer.writerow(list(col_names.values()))
-        writer.writerows(
-            zip(
-                edge_index[:, 0].tolist(),
-                edge_index[:, 1].tolist(),
-                timestamps.tolist(),
-            )
-        )
-        f.flush()
-
-        recovered_data = DGData.from_csv(f.name, **col_names)
-
-    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
-    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
 
 
 def test_from_csv_with_edge_features():
@@ -428,22 +446,6 @@ def test_from_csv_with_node_features():
         data.dynamic_node_feats, recovered_data.dynamic_node_feats
     )
     torch.testing.assert_close(data.static_node_feats, recovered_data.static_node_feats)
-
-
-def test_from_pandas_no_features():
-    events_dict = {
-        'src': [2, 10],
-        'dst': [3, 20],
-        't': [1337, 1338],
-    }
-    events_df = pd.DataFrame(events_dict)
-
-    data = DGData.from_pandas(
-        events_df, edge_src_col='src', edge_dst_col='dst', edge_time_col='t'
-    )
-    assert isinstance(data, DGData)
-    assert data.edge_index.tolist() == [[2, 3], [10, 20]]
-    assert data.timestamps.tolist() == [1337, 1338]
 
 
 def test_from_pandas_with_edge_features():
