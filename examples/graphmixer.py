@@ -1,6 +1,7 @@
 import argparse
 import time
-from typing import Tuple
+from collections import deque
+from typing import List, Tuple
 
 import torch
 import torch.nn as nn
@@ -10,7 +11,7 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from opendg.graph import DGBatch, DGraph
-from opendg.hooks import RecencyNeighborHook
+from opendg.hooks import DGHook, NegativeEdgeSamplerHook, RecencyNeighborHook
 from opendg.loader import DGDataLoader
 from opendg.nn import Time2Vec
 from opendg.timedelta import TimeDeltaDG
@@ -27,6 +28,7 @@ parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of MLP layers')
+parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
 parser.add_argument(
@@ -58,25 +60,28 @@ class GraphMixer(nn.Module):
         time_dim: int,
         embed_dim: int,
         num_tokens: int,
-        num_layers: int = 2,
+        num_layers: int,
+        node_dim: int,
+        edge_dim: int,
         token_dim_expansion: float = 0.5,
         channel_dim_expansion: float = 4.0,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
 
-        node_feat_dim = self.node_raw_features.shape[1]
-        edge_feat_dim = self.edge_raw_features.shape[1]
-
-        # in GraphMixer, the time encoding function is not trainable
         self.link_predictor = LinkPredictor(dim=embed_dim)
-        self.time_encoder = Time2Vec(time_dim=time_dim, parameter_requires_grad=False)
-        self.projection_layer = nn.Linear(edge_feat_dim + time_dim, edge_feat_dim)
+
+        # GraphMixer time encoding function is not trainable
+        self.time_encoder = Time2Vec(time_dim=time_dim)
+        for param in self.time_encoder.parameters():
+            param.requires_grad = False
+
+        self.projection_layer = nn.Linear(edge_dim + time_dim, edge_dim)
         self.mlp_mixers = nn.ModuleList(
             [
                 MLPMixer(
                     num_tokens=num_tokens,
-                    num_channels=edge_feat_dim,
+                    num_channels=edge_dim,
                     token_dim_expansion=token_dim_expansion,
                     channel_dim_expansion=channel_dim_expansion,
                     dropout=dropout,
@@ -85,10 +90,12 @@ class GraphMixer(nn.Module):
             ]
         )
         self.output_layer = nn.Linear(
-            in_features=edge_feat_dim + node_feat_dim, out_features=node_feat_dim
+            in_features=edge_dim + node_dim, out_features=embed_dim
         )
 
-    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, batch: DGBatch, node_feat: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Temporary
         device = next(self.parameters()).device
 
@@ -98,7 +105,6 @@ class GraphMixer(nn.Module):
             batch.nbr_times[0].to(device)
             - batch.time.unsqueeze(dim=1).repeat(3, 1).to(device)
         )
-
         z_link = torch.cat([edge_feat, nbr_time_feat], dim=-1)
         z_link = self.projection_layer(z_link)
         for mlp_mixer in self.mlp_mixers:
@@ -106,17 +112,16 @@ class GraphMixer(nn.Module):
         z_link = torch.mean(z_link, dim=1)
 
         # Node Encoder
-        # TODO: Create a custom hook that gets 1-hop neighbors conditions
-        # on a specific time_gap: N(v_i, t_s, t_e) = nbrs of v_i from [t_s, t_e]
-        # Then we need N(node_ids, t - TIME_GAP, t)
-        time_gap_node_feats = batch.time_gap_nbr_node_feats[node_ids]
-        scores = torch.softmax(time_gap_node_feats, dim=1).to(self.device)
-        z_node = torch.mean(time_gap_node_feats * scores.unsqueeze(dim=-1), dim=1)
-        z_node = z_node + self.node_raw_features[torch.from_numpy(node_ids)]
+        time_gap_node_feat = node_feat[batch.time_gap_node_nids]
+        valid_time_gap_node_feats = time_gap_node_feat
+        valid_time_gap_node_feats[batch.time_gap_node_mask == 0] = -1e10
+        scores = torch.softmax(valid_time_gap_node_feats, dim=1).to(device)
+        z_node = torch.mean(time_gap_node_feat * scores, dim=1)
+        z_node = z_node + node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
 
         # Link Decoder
         z = self.output_layer(torch.cat([z_link, z_node], dim=1))
-        z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
+        z_src, z_dst, z_neg = z.chunk(3, dim=0)
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
@@ -247,22 +252,95 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='train')
-val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='valid')
-test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
+train_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='train', device=args.device
+)
+val_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='valid', device=args.device
+)
+test_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='test', device=args.device
+)
 
-# Graphmixer always uses 1-hop recent neighbors
-train_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=train_dg.num_nodes)
-val_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=val_dg.num_nodes)
-test_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=test_dg.num_nodes)
 
-train_loader = DGDataLoader(train_dg, hook=train_hook, batch_unit=args.time_gran)
-val_loader = DGDataLoader(val_dg, hook=val_hook, batch_unit=args.time_gran)
-test_loader = DGDataLoader(test_dg, hook=test_hook, batch_unit=args.time_gran)
+def _init_hooks(dg: DGraph, time_gap: int) -> List[DGHook]:
+    # Graphmixer always uses 1-hop recent neighbors
+    nbr_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=dg.num_nodes)
 
-# TODO: Create custom hook with time_gap nbrs
-# args.time_gap
-if train_dg.node_feats_dim is not None:
+    # Always produce negative edge prior to neighbor sampling for link prediction
+    neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
+
+    class GraphMixerHook:
+        r"""Custom hook that gets 1-hop neighbors in a specific window.
+
+        If N(v_i, t_s, t_e) = nbrs of v_i from [t_s, t_e], then we materialize
+        N(node_ids, t - TIME_GAP, t) for all seed nodes in a given batch.
+        """
+
+        requires = {'neg'}
+        produces = {'time_gap_node_nids', 'time_gap_node_mask'}
+
+        def __init__(self, time_gap: int, num_nodes: int) -> None:
+            self._time_gap = time_gap
+            self._nbrs = {}
+            for node in range(num_nodes):
+                self._nbrs[node] = deque(maxlen=self._time_gap)
+
+        def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+            device = dg.device
+
+            batch.neg = batch.neg.to(device)
+            seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
+
+            unique, inverse_indices = seed_nodes.unique(return_inverse=True)
+
+            batch_size = len(seed_nodes)
+            nbr_nids = torch.zeros(
+                batch_size, self._time_gap, dtype=torch.long, device=device
+            )
+            nbr_mask = torch.zeros(
+                batch_size,
+                self._time_gap,
+                dtype=torch.long,
+                device=device,
+            )
+            for i, node in enumerate(unique.tolist()):
+                if nn := len(self._nbrs[node]):
+                    mask = inverse_indices == i
+                    nbr_nids[mask, :nn] = torch.tensor(
+                        self._nbrs[node], device=device, dtype=torch.long
+                    )
+                    nbr_mask[mask, :nn] = nn >= self._time_gap
+
+            batch.time_gap_node_nids = nbr_nids
+            batch.time_gap_node_mask = nbr_mask
+
+            self._update(batch)
+            return batch
+
+        def _update(self, batch: DGBatch) -> None:
+            for i in range(batch.src.size(0)):
+                src_nbr = int(batch.src[i].item())
+                dst_nbr = int(batch.dst[i].item())
+                self._nbrs[src_nbr].append(dst_nbr)
+                self._nbrs[dst_nbr].append(src_nbr)
+
+    graph_mixer_hook = GraphMixerHook(time_gap, num_nodes=dg.num_nodes)
+    return [neg_hook, nbr_hook, graph_mixer_hook]
+
+
+train_loader = DGDataLoader(
+    train_dg, hook=_init_hooks(train_dg, args.time_gap), batch_unit=args.time_gran
+)
+val_loader = DGDataLoader(
+    val_dg, hook=_init_hooks(val_dg, args.time_gap), batch_unit=args.time_gran
+)
+test_loader = DGDataLoader(
+    test_dg, hook=_init_hooks(test_dg, args.time_gap), batch_unit=args.time_gran
+)
+
+
+if train_dg.dynamic_node_feats_dim is not None:
     raise ValueError(
         'node features are not supported yet, make sure to incorporate them in the model'
     )
@@ -274,11 +352,13 @@ static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.
 model = GraphMixer(
     embed_dim=args.embed_dim,
     time_dim=args.time_dim,
-    num_tokens=args.num_tokens,
-    num_layers=args.num_layers,
+    num_tokens=args.n_nbrs,
+    num_layers=args.n_layers,
     token_dim_expansion=float(args.token_dim_expansion),
     channel_dim_expansion=float(args.channel_dim_expansion),
     dropout=float(args.dropout),
+    node_dim=args.node_dim,
+    edge_dim=train_dg.edge_feats_dim | args.embed_dim,
 ).to(args.device)
 
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
