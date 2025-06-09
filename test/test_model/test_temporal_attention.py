@@ -10,6 +10,11 @@ def test_temporal_attention_bad_init_shape():
     with pytest.raises(ValueError):
         TemporalAttention(n_heads, node_dim, edge_dim, time_dim, out_dim)
 
+    node_dim = 0
+    n_heads, out_dim = 3, 6
+    with pytest.raises(ValueError):
+        TemporalAttention(n_heads, node_dim, edge_dim, time_dim, out_dim)
+
 
 def test_temporal_attention_forward():
     node_dim, edge_dim, time_dim = 2, 4, 5

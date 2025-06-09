@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from opendg.data import DGData
-from opendg.graph import DGBatch, DGraph
+from opendg.graph import DGraph
 from opendg.hooks import RecencyNeighborHook
 
 
@@ -33,10 +33,17 @@ def test_bad_neighbor_sampler_init():
         RecencyNeighborHook(num_nbrs=[1, 2], num_nodes=2)
 
 
-@pytest.mark.skip('TODO: Add neighbor sampling tests')
-def test_neighbor_sampler_hook(data):
+def test_neighbor_sampler_hook_init(data):
     dg = DGraph(data)
     hook = RecencyNeighborHook(num_nbrs=[2], num_nodes=dg.num_nodes)
-    batch = hook(dg)
-    # TODO: Add logic for testing
-    assert isinstance(batch, DGBatch)
+    assert hook.num_nbrs == [2]
+
+
+@pytest.mark.skip('TODO: Add neighbor sampling tests')
+def test_neighbor_sampler_hook_link_pred(data):
+    pass
+
+
+@pytest.mark.skip('TODO: Add neighbor sampling tests')
+def test_neighbor_sampler_hook_node_pred(data):
+    pass

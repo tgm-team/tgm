@@ -6,6 +6,7 @@ from functools import cached_property
 from typing import Any, List, Optional, Set, Tuple
 
 import pandas as pd
+import torch
 from torch import Tensor
 
 from opendg._storage import DGSliceTracker, DGStorage
@@ -20,6 +21,7 @@ class DGraph:
         self,
         data: DGStorage | DGData | str | pathlib.Path | pd.DataFrame,
         time_delta: TimeDeltaDG | None = None,
+        device: str | torch.device = 'cpu',
         **kwargs: Any,
     ) -> None:
         if time_delta is None:
@@ -39,6 +41,7 @@ class DGraph:
             self._storage = DGStorage(data)
 
         self._slice = DGSliceTracker()
+        self._device = torch.device(device)
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': dynamic_node_feats, node_times, node_ids, 'edge': edge_features}."""
@@ -57,7 +60,7 @@ class DGraph:
         if start_idx is not None and end_idx is not None and start_idx > end_idx:
             raise ValueError(f'start_idx ({start_idx}) must be <= end_idx ({end_idx})')
 
-        dg = DGraph(data=self._storage, time_delta=self.time_delta)
+        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
         dg._slice.start_time = self._slice.start_time
         dg._slice.end_time = self._slice.end_time
         dg._slice.start_idx = self._maybe_max(start_idx, self._slice.start_idx)
@@ -74,7 +77,7 @@ class DGraph:
                 f'start_time ({start_time}) must be <= end_time ({end_time})'
             )
 
-        dg = DGraph(data=self._storage, time_delta=self.time_delta)
+        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
         dg._slice.start_time = self._maybe_max(start_time, self.start_time)
         dg._slice.end_time = self._maybe_min(end_time, self.end_time)
         dg._slice.start_idx = self._slice.start_idx
@@ -84,7 +87,7 @@ class DGraph:
 
     def slice_nodes(self, nodes: List[int]) -> DGraph:
         r"""Create and return a new view by slicing nodes to include."""
-        dg = DGraph(data=self._storage, time_delta=self.time_delta)
+        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
 
         # Take intersection of nodes
         if self._slice.node_slice is None:
@@ -108,7 +111,14 @@ class DGraph:
         return self.num_timestamps
 
     def __str__(self) -> str:
-        return f'DGraph(storage={self._storage.__class__.__name__}, time_delta={self.time_delta})'
+        return f'DGraph(storage={self._storage.__class__.__name__}, time_delta={self.time_delta}, device={self.device})'
+
+    @property
+    def device(self) -> torch.device:
+        return self._device
+
+    def to(self, device: str | torch.device) -> DGraph:
+        return DGraph(data=self._storage, time_delta=self.time_delta, device=device)
 
     @cached_property
     def start_time(self) -> Optional[int]:
@@ -154,12 +164,17 @@ class DGraph:
     @cached_property
     def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
         r"""The src, dst, time tensors over the dynamic graph."""
-        return self._storage.get_edges(self._slice)
+        src, dst, time = self._storage.get_edges(self._slice)
+        src, dst, time = src.to(self.device), dst.to(self.device), time.to(self.device)
+        return src, dst, time
 
     @cached_property
     def static_node_feats(self) -> Optional[Tensor]:
         r"""If static node features exist, returns a dense Tensor(num_nodes x d_node_static)."""
-        return self._storage.get_static_node_feats()
+        feats = self._storage.get_static_node_feats()
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
 
     @cached_property
     def dynamic_node_feats(self) -> Optional[Tensor]:
@@ -167,7 +182,10 @@ class DGraph:
 
         If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
         """
-        return self._storage.get_dynamic_node_feats(self._slice)
+        feats = self._storage.get_dynamic_node_feats(self._slice)
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
 
     @cached_property
     def edge_feats(self) -> Optional[Tensor]:
@@ -175,7 +193,10 @@ class DGraph:
 
         If edge features exist, returns a Tensor.sparse_coo_tensor(T x V x V x d_edge).
         """
-        return self._storage.get_edge_feats(self._slice)
+        feats = self._storage.get_edge_feats(self._slice)
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
 
     @cached_property
     def static_node_feats_dim(self) -> Optional[int]:
