@@ -2,7 +2,6 @@ import argparse
 import time
 from typing import Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -31,7 +30,7 @@ parser.add_argument('--n-layers', type=int, default=2, help='number of MLP layer
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
 parser.add_argument(
-    '--time-slot', type=int, default=2000, help='graphmixer time slot size'
+    '--time-gap', type=int, default=2000, help='graphmixer time slot size'
 )
 parser.add_argument(
     '--token-dim-expansion',
@@ -59,7 +58,6 @@ class GraphMixer(nn.Module):
         time_dim: int,
         embed_dim: int,
         num_tokens: int,
-        time_gap: int = 2000,
         num_layers: int = 2,
         token_dim_expansion: float = 0.5,
         channel_dim_expansion: float = 4.0,
@@ -70,7 +68,6 @@ class GraphMixer(nn.Module):
         node_feat_dim = self.node_raw_features.shape[1]
         edge_feat_dim = self.edge_raw_features.shape[1]
 
-        self.time_gap = time_gap
         # in GraphMixer, the time encoding function is not trainable
         self.link_predictor = LinkPredictor(dim=embed_dim)
         self.time_encoder = Time2Vec(time_dim=time_dim, parameter_requires_grad=False)
@@ -92,57 +89,34 @@ class GraphMixer(nn.Module):
         )
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        def _compute_node_embeddings(
-            node_ids: torch.Tensor,
-            num_neighbors: int = 20,
-        ) -> torch.Tensor:
-            hop = 0
+        # Temporary
+        device = next(self.parameters()).device
 
-            # Temporary
-            device = next(self.parameters()).device
+        # Link Encoder
+        edge_feat = batch.nbr_feats[0].to(device)
+        nbr_time_feat = self.time_encoder(
+            batch.nbr_times[0].to(device)
+            - batch.time.unsqueeze(dim=1).repeat(3, 1).to(device)
+        )
 
-            # Link Encoder
-            # (B, num_nbrs, edge_dim)
-            edge_feats = self.edge_raw_features[torch.from_numpy(nbr_edges)]
+        z_link = torch.cat([edge_feat, nbr_time_feat], dim=-1)
+        z_link = self.projection_layer(z_link)
+        for mlp_mixer in self.mlp_mixers:
+            z_link = mlp_mixer(x=z_link)
+        z_link = torch.mean(z_link, dim=1)
 
-            nbr_time_feat = self.time_encoder(
-                batch.nbr_times[hop].to(device)
-                - batch.time.unsqueeze(dim=1).repeat(3, 1).to(device)
-            )
+        # Node Encoder
+        # TODO: Create a custom hook that gets 1-hop neighbors conditions
+        # on a specific time_gap: N(v_i, t_s, t_e) = nbrs of v_i from [t_s, t_e]
+        # Then we need N(node_ids, t - TIME_GAP, t)
+        time_gap_node_feats = batch.time_gap_nbr_node_feats[node_ids]
+        scores = torch.softmax(time_gap_node_feats, dim=1).to(self.device)
+        z_node = torch.mean(time_gap_node_feats * scores.unsqueeze(dim=-1), dim=1)
+        z_node = z_node + self.node_raw_features[torch.from_numpy(node_ids)]
 
-            z_link = torch.cat([edge_feats, nbr_time_feat], dim=-1)
-            z_link = self.projection_layer(z_link)
-            for mlp_mixer in self.mlp_mixers:
-                z_link = mlp_mixer(x=z_link)
-            z_link = torch.mean(z_link, dim=1)
-
-            # Node Encoder
-            time_gap_nbr_node_ids, _, _ = (
-                self.neighbor_sampler.get_historical_neighbors(
-                    node_ids=node_ids,
-                    node_interact_times=batch.time,
-                    num_neighbors=self.time_gap,
-                )
-            )
-
-            time_gap_node_feats = self.node_raw_features[
-                torch.from_numpy(time_gap_nbr_node_ids)
-            ]
-            valid_time_gap_mask = torch.from_numpy(
-                (time_gap_nbr_node_ids > 0).astype(np.float32)
-            )
-            valid_time_gap_mask[valid_time_gap_mask == 0] = -1e10
-            scores = torch.softmax(valid_time_gap_mask, dim=1).to(self.device)
-
-            z_node = torch.mean(time_gap_node_feats * scores.unsqueeze(dim=-1), dim=1)
-            z_node = z_node + self.node_raw_features[torch.from_numpy(node_ids)]
-
-            z = self.output_layer(torch.cat([z_link, z_node], dim=1))
-            return z
-
-        z_src = _compute_node_embeddings(node_ids=batch.src)
-        z_dst = _compute_node_embeddings(node_ids=batch.dst)
-        z_neg = _compute_node_embeddings(node_ids=batch.neg)
+        # Link Decoder
+        z = self.output_layer(torch.cat([z_link, z_node], dim=1))
+        z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
@@ -286,6 +260,8 @@ train_loader = DGDataLoader(train_dg, hook=train_hook, batch_unit=args.time_gran
 val_loader = DGDataLoader(val_dg, hook=val_hook, batch_unit=args.time_gran)
 test_loader = DGDataLoader(test_dg, hook=test_hook, batch_unit=args.time_gran)
 
+# TODO: Create custom hook with time_gap nbrs
+# args.time_gap
 if train_dg.node_feats_dim is not None:
     raise ValueError(
         'node features are not supported yet, make sure to incorporate them in the model'
@@ -300,7 +276,6 @@ model = GraphMixer(
     time_dim=args.time_dim,
     num_tokens=args.num_tokens,
     num_layers=args.num_layers,
-    time_gap=args.time_gap,
     token_dim_expansion=float(args.token_dim_expansion),
     channel_dim_expansion=float(args.channel_dim_expansion),
     dropout=float(args.dropout),
