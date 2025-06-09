@@ -393,7 +393,7 @@ class DGData:
         else:
             edge_feats = torch.from_numpy(data['edge_feat'][mask])
 
-        node_timestamps, node_ids, dynamic_node_feats = None, None, None  # type: ignore
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if name.startswith('tgbn-'):
             if 'node_label_dict' in data:
                 node_label_dict = data['node_label_dict']
@@ -406,21 +406,21 @@ class DGData:
                 for node_id, label in node_label_dict[t].items():
                     num_node_events += 1
                     node_label_dim = label.shape[0]
-            node_timestamps = np.zeros(num_node_events, dtype=np.int64)
-            node_ids = np.zeros(num_node_events, dtype=np.int64)
-            dynamic_node_feats = np.zeros(
+            temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
+            temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
+            temp_dynamic_node_feats = np.zeros(
                 (num_node_events, node_label_dim), dtype=np.float32
             )
             idx = 0
             for t in node_label_dict:
                 for node_id, label in node_label_dict[t].items():
-                    node_timestamps[idx] = t
-                    node_ids[idx] = node_id
-                    dynamic_node_feats[idx] = label
+                    temp_node_timestamps[idx] = t
+                    temp_node_ids[idx] = node_id
+                    temp_dynamic_node_feats[idx] = label
                     idx += 1
-            node_timestamps = torch.from_numpy(node_timestamps).long()  # type: ignore
-            node_ids = torch.from_numpy(node_ids).long()  # type: ignore
-            dynamic_node_feats = torch.from_numpy(dynamic_node_feats).float()  # type: ignore
+            node_timestamps = torch.from_numpy(temp_node_timestamps).long()
+            node_ids = torch.from_numpy(temp_node_ids).long()
+            dynamic_node_feats = torch.from_numpy(temp_dynamic_node_feats).float()
 
         # Read static node features if they exist
         static_node_feats = None
