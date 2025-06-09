@@ -8,10 +8,9 @@ from typing import Any, List, Optional, Set, Tuple
 import pandas as pd
 from torch import Tensor
 
-from opendg._io import read_events, read_time_delta
 from opendg._storage import DGSliceTracker, DGStorage
-from opendg.events import Event
-from opendg.timedelta import TimeDeltaDG
+from opendg.data import DGData
+from opendg.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
 class DGraph:
@@ -19,38 +18,33 @@ class DGraph:
 
     def __init__(
         self,
-        data: DGStorage | List[Event] | str | pathlib.Path | pd.DataFrame,
+        data: DGStorage | DGData | str | pathlib.Path | pd.DataFrame,
         time_delta: TimeDeltaDG | None = None,
         **kwargs: Any,
     ) -> None:
-        if isinstance(data, DGStorage):
-            self._storage = data
-        else:
-            events = data if isinstance(data, list) else read_events(data, **kwargs)
-            if not len(events):
-                raise ValueError('Tried to initialize a DGraph with empty events list')
-            self._storage = DGStorage(events)
-
         if time_delta is None:
+            self.time_delta = TimeDeltaDG('r')
             if isinstance(data, str) and data.startswith('tgb'):
-                self.time_delta = read_time_delta(data)
-            else:
-                self.time_delta = TimeDeltaDG('r')
+                self.time_delta = TGB_TIME_DELTAS.get(data, self.time_delta)
         elif isinstance(time_delta, TimeDeltaDG):
             self.time_delta = time_delta
         else:
             raise ValueError(f'bad time_delta type: {type(time_delta)}')
 
-        self._slice = DGSliceTracker()
+        if isinstance(data, DGStorage):
+            self._storage = data
+        else:
+            if not isinstance(data, DGData):
+                data = DGData.from_any(data, **kwargs)
+            self._storage = DGStorage(data)
 
-    def to_events(self) -> List[Event]:
-        return self._storage.to_events(self._slice)
+        self._slice = DGSliceTracker()
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""
         batch = DGBatch(*self.edges)
-        if materialize_features and self.node_feats is not None:
-            batch.node_feats = self.node_feats._values()
+        if materialize_features and self.dynamic_node_feats is not None:
+            batch.dynamic_node_feats = self.dynamic_node_feats._values()
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats._values()
         return batch
@@ -162,12 +156,17 @@ class DGraph:
         return self._storage.get_edges(self._slice)
 
     @cached_property
-    def node_feats(self) -> Optional[Tensor]:
-        r"""The aggregated node features over the dynamic graph.
+    def static_node_feats(self) -> Optional[Tensor]:
+        r"""If static node features exist, returns a dense Tensor(num_nodes x d_node_static)."""
+        return self._storage.get_static_node_feats()
 
-        If node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_edge).
+    @cached_property
+    def dynamic_node_feats(self) -> Optional[Tensor]:
+        r"""The aggregated dynamic node features over the dynamic graph.
+
+        If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
         """
-        return self._storage.get_node_feats(self._slice)
+        return self._storage.get_dynamic_node_feats(self._slice)
 
     @cached_property
     def edge_feats(self) -> Optional[Tensor]:
@@ -178,9 +177,14 @@ class DGraph:
         return self._storage.get_edge_feats(self._slice)
 
     @cached_property
-    def node_feats_dim(self) -> Optional[int]:
-        r"""Node feature dimension or None if not Node features on the Graph."""
-        return self._storage.get_node_feats_dim()
+    def static_node_feats_dim(self) -> Optional[int]:
+        r"""Static Node feature dimension or None if not Node features on the Graph."""
+        return self._storage.get_static_node_feats_dim()
+
+    @cached_property
+    def dynamic_node_feats_dim(self) -> Optional[int]:
+        r"""Dynamic Node feature dimension or None if not Node features on the Graph."""
+        return self._storage.get_dynamic_node_feats_dim()
 
     @cached_property
     def edge_feats_dim(self) -> Optional[int]:
@@ -205,5 +209,5 @@ class DGBatch:
     src: Tensor
     dst: Tensor
     time: Tensor
-    node_feats: Optional[Tensor] = None
+    dynamic_node_feats: Optional[Tensor] = None
     edge_feats: Optional[Tensor] = None

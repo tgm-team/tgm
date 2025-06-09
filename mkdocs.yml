@@ -11,7 +11,7 @@ nav:
           - dgraph.md
           - hooks.md
           - timedelta.md
-          - events.md
+          - data.md
           - loader.md
           - nn (Neural Networks): nn.md
           - util: util.md
