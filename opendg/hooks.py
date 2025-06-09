@@ -26,10 +26,9 @@ class HookManager:
         if not all(isinstance(h, DGHook) for h in hooks):
             raise TypeError('All items in hook list must follow DGHook protocol')
 
-        device = 'cpu'  # TODO: Get device from dgraph
-        if device != 'cpu':
+        if dg.device.type != 'cpu':
             hooks.append(PinMemoryHook())
-            hooks.append(DeviceTransferHook(device))
+            hooks.append(DeviceTransferHook(dg.device))
 
         self.hooks = hooks
         self._validate_hook_dependencies()
@@ -85,8 +84,8 @@ class DeviceTransferHook:
 
     r"""Moves all tensors in the DGBatch to the specified device."""
 
-    def __init__(self, device: str) -> None:
-        self.device = device
+    def __init__(self, device: str | torch.device) -> None:
+        self.device = torch.device(device)
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         for k, v in vars(batch).items():
@@ -149,11 +148,14 @@ class NeighborSamplerHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        device = dg.device
         if hasattr(batch, 'neg'):
+            batch.neg = batch.neg.to(device)
             seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
         else:
             seed_nodes = torch.cat([batch.src, batch.dst])
 
+        # TODO: Storage needs to use the right device
         batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
             dg._storage.get_nbrs(
                 seed_nodes=seed_nodes,
@@ -195,7 +197,17 @@ class RecencyNeighborHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        device = dg.device
         if hasattr(batch, 'neg'):
+            # TODO: Because we materialize DGraph on device, this means
+            # batch.src, batch.dst are already on the correct device.
+            # However, batch.neg is not. And we cannot wait until the device
+            # hook runs since the correct device must already be handled here.
+            # This questions whether we should materialize on device, since user
+            # custom hooks will also need to handle this behaviour. Alternatively,
+            # we make the hook manager smart, it 'injects' the device hook in the
+            # list of hooks depending on their 'requires' set.
+            batch.neg = batch.neg.to(device)
             seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
         else:
             seed_nodes = torch.cat([batch.src, batch.dst])
@@ -203,16 +215,36 @@ class RecencyNeighborHook:
         unique, inverse_indices = seed_nodes.unique(return_inverse=True)
 
         batch_size = len(seed_nodes)
-        nbr_nids = torch.empty(batch_size, self._num_nbrs[0], dtype=torch.long)
-        nbr_times = torch.empty(batch_size, self._num_nbrs[0], dtype=torch.long)
-        nbr_feats = torch.zeros(batch_size, self._num_nbrs[0], dg.edge_feats_dim)  # type: ignore
-        nbr_mask = torch.zeros(batch_size, self._num_nbrs[0], dtype=torch.long)
+        nbr_nids = torch.empty(
+            batch_size, self._num_nbrs[0], dtype=torch.long, device=device
+        )
+        nbr_times = torch.empty(
+            batch_size, self._num_nbrs[0], dtype=torch.long, device=device
+        )
+        nbr_feats = torch.zeros(
+            batch_size,
+            self._num_nbrs[0],
+            dg.edge_feats_dim,  # type: ignore
+            device=device,
+        )
+        nbr_mask = torch.zeros(
+            batch_size,
+            self._num_nbrs[0],
+            dtype=torch.long,
+            device=device,
+        )
         for i, node in enumerate(unique.tolist()):
             if nn := len(self._nbrs[node][0]):
                 mask = inverse_indices == i
-                nbr_nids[mask, :nn] = torch.LongTensor(self._nbrs[node][0])
-                nbr_times[mask, :nn] = torch.LongTensor(self._nbrs[node][1])
-                nbr_feats[mask, :nn] = torch.stack(list(self._nbrs[node][2]))  # TODO:
+                nbr_nids[mask, :nn] = torch.tensor(
+                    self._nbrs[node][0], device=device, dtype=torch.long
+                )
+                nbr_times[mask, :nn] = torch.tensor(
+                    self._nbrs[node][1], device=device, dtype=torch.long
+                )
+                nbr_feats[mask, :nn] = (
+                    torch.stack(list(self._nbrs[node][2])).float().to(device)
+                )
                 nbr_mask[mask, :nn] = nn >= self._num_nbrs[0]
 
         batch.nids = [seed_nodes]  # type: ignore
