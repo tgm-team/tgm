@@ -615,7 +615,7 @@ def test_from_tgb_with_static_node_features(
 
 
 @pytest.mark.parametrize(
-    'split',
+    'split,expected_indices',
     [
         ('train', train_indices),
         ('valid', val_indices),
@@ -624,15 +624,15 @@ def test_from_tgb_with_static_node_features(
     ],
 )
 @patch('tgb.nodeproppred.dataset.NodePropPredDataset')
-def test_from_tgb_with_node_events(mock_dataset_cls, split):
-    sources = np.arange(num_events)
-    destinations = np.arange(num_events)
-    timestamps = np.arange(num_events)
+def test_from_tgb_with_node_events(mock_dataset_cls, split, expected_indices):
     node_label_dict = {
         1: {1: np.zeros(10)},
         2: {1: np.zeros(10)},
+        3: {2: np.zeros(10)},
     }
-
+    sources = np.arange(num_events)
+    destinations = np.arange(num_events)
+    timestamps = np.arange(num_events)
     edge_feat = None
 
     train_mask = np.zeros(num_events, dtype=bool)
@@ -645,6 +645,8 @@ def test_from_tgb_with_node_events(mock_dataset_cls, split):
     test_mask[test_indices] = True
 
     mock_dataset = MagicMock()
+    num_nodes = 1 + max(np.max(sources), np.max(destinations))
+    mock_dataset.node_feat = np.random.rand(num_nodes, 10)
     mock_dataset.full_data = {
         'sources': sources,
         'destinations': destinations,
@@ -652,15 +654,22 @@ def test_from_tgb_with_node_events(mock_dataset_cls, split):
         'edge_feat': edge_feat,
         'node_label_dict': node_label_dict,
     }
+
     mock_dataset.train_mask = train_mask
     mock_dataset.val_mask = val_mask
     mock_dataset.test_mask = test_mask
     mock_dataset.num_edges = num_events
 
-    mock_dataset_cls.return_value = mock_dataset
-
     data = DGData.from_tgb(name='tgbn-trade', split=split)
     assert isinstance(data, DGData)
-    data.edge_index.tolist()
-    data.timestamps.tolist()
+    edges_list = data.edge_index.tolist()
+    times_list = data.timestamps.tolist()
+    node_ids_list = data.node_ids.tolist()
+    node_feats_list = data.dynamic_node_feats.tolist()
+
+    for i, idx in enumerate(expected_indices[:5]):  # sample a few for sanity check
+        assert times_list[i] == int(timestamps[idx])
+        assert edges_list[i] == [int(sources[idx]), int(destinations[idx])]
+        assert node_ids_list[i] == int(sources[idx])
+        assert node_feats_list[i] == node_label_dict[1][1].tolist()
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')

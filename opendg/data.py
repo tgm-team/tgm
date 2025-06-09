@@ -393,7 +393,7 @@ class DGData:
         else:
             edge_feats = torch.from_numpy(data['edge_feat'][mask])
 
-        node_timestamps, node_ids, dynamic_node_feats = None, None, None
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None  # type: ignore
         if name.startswith('tgbn-'):
             if 'node_label_dict' in data:
                 node_label_dict = data['node_label_dict']
@@ -435,7 +435,7 @@ class DGData:
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
-        ) 
+        )
 
     @classmethod
     def from_any(

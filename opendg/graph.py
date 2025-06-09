@@ -41,7 +41,7 @@ class DGraph:
         self._slice = DGSliceTracker()
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
-        r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""
+        r"""Materialize dense tensors: src, dst, time, and optionally {'node': dynamic_node_feats, node_times, node_ids, 'edge': edge_features}."""
         batch = DGBatch(*self.edges)
         if materialize_features and self.dynamic_node_feats is not None:
             batch.node_times, batch.node_ids = self.dynamic_node_feats._indices()
@@ -212,6 +212,5 @@ class DGBatch:
     time: Tensor
     dynamic_node_feats: Optional[Tensor] = None
     edge_feats: Optional[Tensor] = None
-    node_feats: Optional[Tensor] = None
-    node_ids: Optional[Tensor] = None
     node_times: Optional[Tensor] = None
+    node_ids: Optional[Tensor] = None
