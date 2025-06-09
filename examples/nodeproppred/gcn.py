@@ -179,9 +179,15 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='train')
-val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='valid')
-test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
+train_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='train', device=args.device
+)
+val_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='valid', device=args.device
+)
+test_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='test', device=args.device
+)
 
 num_nodes = DGraph(args.dataset).num_nodes
 label_dim = train_dg.dynamic_node_feats_dim
