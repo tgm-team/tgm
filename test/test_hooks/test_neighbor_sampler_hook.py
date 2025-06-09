@@ -10,7 +10,8 @@ from opendg.hooks import NeighborSamplerHook
 def data():
     edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
     edge_timestamps = torch.LongTensor([1, 5, 20])
-    return DGData.from_raw(edge_timestamps, edge_index)
+    edge_feats = torch.rand(3, 5)
+    return DGData.from_raw(edge_timestamps, edge_index, edge_feats)
 
 
 def test_hook_dependancies():
@@ -31,21 +32,29 @@ def test_bad_neighbor_sampler_init():
         NeighborSamplerHook(num_nbrs=[1, 0])
 
 
-@pytest.mark.skip('TODO: Add neighbor sampling tests')
-def test_neighbor_sampler_hook(data):
+def test_neighbor_sampler_hook_link_pred(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(num_nbrs=[2])
-    batch = hook(dg)
+    batch = dg.materialize()
+
+    # Link Prediction will add negative edges to seed nodes for sampling
+    batch.neg = torch.LongTensor([0] * len(batch.dst))
+    batch = hook(dg, batch)
     assert isinstance(batch, DGBatch)
+    assert hasattr(batch, 'nids')
+    assert hasattr(batch, 'nbr_nids')
+    assert hasattr(batch, 'nbr_times')
+    assert hasattr(batch, 'nbr_feats')
+    assert hasattr(batch, 'nbr_mask')
 
-    # TODO: Add logic for testing
 
-
-@pytest.mark.skip('TODO: Add neighbor sampling tests')
-def test_neighbor_sampler_hook_full_neighborhood(data):
+def test_neighbor_sampler_hook_node_pred(data):
     dg = DGraph(data)
-    hook = NeighborSamplerHook(num_nbrs=[-1])
-    batch = hook(dg)
+    hook = NeighborSamplerHook(num_nbrs=[2])
+    batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
-
-    # TODO: Add logic for testing
+    assert hasattr(batch, 'nids')
+    assert hasattr(batch, 'nbr_nids')
+    assert hasattr(batch, 'nbr_times')
+    assert hasattr(batch, 'nbr_feats')
+    assert hasattr(batch, 'nbr_mask')

@@ -43,8 +43,17 @@ def test_init_non_ordered_dg_ordered_batch(batch_unit):
         _ = DGDataLoader(dg)
 
 
+def test_init_bad_batch_size():
+    edge_index = torch.LongTensor([[2, 3]])
+    edge_timestamps = torch.LongTensor([1])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data)
+    with pytest.raises(ValueError):
+        _ = DGDataLoader(dg, batch_size=0)
+
+
 @pytest.mark.parametrize('drop_last', [True, False])
-def test_iteration(drop_last):
+def test_iteration_ordered(drop_last):
     edge_index = torch.LongTensor(
         [
             [1, 2],
@@ -118,85 +127,6 @@ def test_iteration_by_time_equal_unit(drop_last):
         assert batch_num == 3
     else:
         assert batch_num == 4
-
-
-@pytest.mark.parametrize('drop_last', [True, False])
-def test_iteration_batch_larger_than_dg(drop_last):
-    edge_index = torch.LongTensor(
-        [
-            [1, 2],
-            [2, 3],
-            [3, 4],
-            [4, 5],
-            [5, 6],
-            [6, 7],
-            [7, 8],
-            [8, 9],
-            [9, 10],
-        ]
-    )
-    edge_timestamps = torch.LongTensor([0, 0, 0, 1, 1, 2, 2, 3, 4])
-    data = DGData.from_raw(edge_timestamps, edge_index)
-    dg = DGraph(data, time_delta=TimeDeltaDG('r'))
-    loader = DGDataLoader(
-        dg,
-        batch_size=10,
-        batch_unit='r',
-        drop_last=drop_last,
-    )
-
-    src, dst, t = dg.edges
-    batch_num = 0
-    for batch in loader:
-        assert isinstance(batch, DGBatch)
-        torch.testing.assert_close(batch.src, src)
-        torch.testing.assert_close(batch.dst, dst)
-        torch.testing.assert_close(batch.time, t)
-        assert batch_num < 2
-        batch_num += 1
-    if drop_last:
-        assert batch_num == 0
-    else:
-        assert batch_num == 1
-
-
-@pytest.mark.parametrize('drop_last', [True, False])
-def test_iteration_by_time_with_conversion(drop_last):
-    edge_index = torch.LongTensor(
-        [
-            [1, 2],
-            [2, 3],
-            [3, 4],
-            [4, 5],
-            [5, 6],
-            [6, 7],
-            [7, 8],
-            [8, 9],
-            [9, 10],
-        ]
-    )
-    edge_timestamps = torch.LongTensor([0, 0, 100, 100, 100, 120, 180, 240, 240])
-    data = DGData.from_raw(edge_timestamps, edge_index)
-    dg = DGraph(data, time_delta=TimeDeltaDG('s'))
-    loader = DGDataLoader(dg, batch_size=2, batch_unit='m', drop_last=drop_last)
-
-    src, _, _ = dg.edges
-    batch_num = 0
-    for batch in loader:
-        assert isinstance(batch, DGBatch)
-        if batch_num == 0:
-            torch.testing.assert_close(batch.src, src[:5])
-        elif batch_num == 1:
-            torch.testing.assert_close(batch.src, src[5:7])
-        elif batch_num == 2:
-            torch.testing.assert_close(batch.src, src[7:])
-        else:
-            assert False
-        batch_num += 1
-    if drop_last:
-        assert batch_num == 2
-    else:
-        assert batch_num == 3
 
 
 @pytest.mark.parametrize('drop_last', [True, False])

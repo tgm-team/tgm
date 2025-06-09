@@ -48,7 +48,7 @@ class GCLSTM_Model(nn.Module):
         h_0: torch.Tensor | None = None,
         c_0: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, ...]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0).to(node_feat.device)
+        edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
         z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
@@ -147,9 +147,15 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='train')
-val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='valid')
-test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
+train_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='train', device=args.device
+)
+val_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='valid', device=args.device
+)
+test_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='test', device=args.device
+)
 
 train_loader = DGDataLoader(
     train_dg,
@@ -167,7 +173,7 @@ test_loader = DGDataLoader(
     batch_unit=args.time_gran,
 )
 
-if train_dg.node_feats_dim is not None:
+if train_dg.dynamic_node_feats is not None:
     raise ValueError(
         'node features are not supported yet, make sure to incorporate them in the model'
     )

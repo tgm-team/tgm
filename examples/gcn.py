@@ -58,7 +58,7 @@ class GCN(nn.Module):
     def forward(
         self, batch: DGBatch, node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0).to(node_feat.device)
+        edge_index = torch.stack([batch.src, batch.dst], dim=0)
         z = self.encoder(node_feat, edge_index)
         z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
         pos_out = self.decoder(z_src, z_dst)
@@ -171,9 +171,15 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='train')
-val_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='valid')
-test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('s'), split='test')
+train_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='train', device=args.device
+)
+val_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='valid', device=args.device
+)
+test_dg = DGraph(
+    args.dataset, time_delta=TimeDeltaDG('s'), split='test', device=args.device
+)
 
 train_loader = DGDataLoader(
     train_dg,
@@ -191,7 +197,7 @@ test_loader = DGDataLoader(
     batch_unit=args.time_gran,
 )
 
-if train_dg.node_feats_dim is not None:
+if train_dg.dynamic_node_feats_dim is not None:
     raise ValueError(
         'node features are not supported yet, make sure to incorporate them in the model'
     )
