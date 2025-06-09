@@ -1,0 +1,27 @@
+name: Docker Image Build
+
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  docker-cpu-build:
+    env:
+      UV_CACHE_DIR: /tmp/.uv-cache
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -f docker/Dockerfile.cpu -t opendg-cpu .
+
+      - name: Smoke test import
+        run: docker run --rm opendg-cpu python -c "import opendg; print(opendg.__version__)"
