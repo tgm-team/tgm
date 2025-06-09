@@ -614,3 +614,23 @@ def test_from_tgb_with_static_node_features(
         )
     else:
         assert data.static_node_feats is None
+
+
+def test_from_any():
+    data = 'tgbl-mock'
+    with patch.object(DGData, 'from_tgb') as mock_tgb:
+        _ = DGData.from_any(data)
+        mock_tgb.assert_called_once_with(name=data)
+
+    data = 'foo.csv'
+    with patch.object(DGData, 'from_csv') as mock_csv:
+        _ = DGData.from_any(data)
+        mock_csv.assert_called_once_with(data)
+
+    data = pd.DataFrame()
+    with patch.object(DGData, 'from_pandas') as mock_pandas:
+        _ = DGData.from_any(data)
+        mock_pandas.assert_called_once_with(data)
+
+    with pytest.raises(ValueError):
+        _ = DGData.from_any('foo')
