@@ -23,14 +23,14 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
+parser.add_argument('--bsize', type=int, default=600, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
-parser.add_argument('--n-layers', type=int, default=2, help='number of MLP layers')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
-parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
+parser.add_argument('--n-nbrs', type=int, default=10, help='num sampled nbrs')
 parser.add_argument(
     '--time-gap', type=int, default=2000, help='graphmixer time slot size'
 )
@@ -46,12 +46,6 @@ parser.add_argument(
     default=0.5,
     help='channel dimension expansion factor in MLP sub-blocks',
 )
-parser.add_argument(
-    '--time-gran',
-    type=str,
-    default='h',
-    help='time granularity to operate on for snapshots',
-)
 
 
 class GraphMixer(nn.Module):
@@ -60,7 +54,6 @@ class GraphMixer(nn.Module):
         time_dim: int,
         embed_dim: int,
         num_tokens: int,
-        num_layers: int,
         node_dim: int,
         edge_dim: int,
         token_dim_expansion: float = 0.5,
@@ -77,17 +70,12 @@ class GraphMixer(nn.Module):
             param.requires_grad = False
 
         self.projection_layer = nn.Linear(edge_dim + time_dim, edge_dim)
-        self.mlp_mixers = nn.ModuleList(
-            [
-                MLPMixer(
-                    num_tokens=num_tokens,
-                    num_channels=edge_dim,
-                    token_dim_expansion=token_dim_expansion,
-                    channel_dim_expansion=channel_dim_expansion,
-                    dropout=dropout,
-                )
-                for _ in range(num_layers)
-            ]
+        self.mlp_mixer = MLPMixer(
+            num_tokens=num_tokens,
+            num_channels=edge_dim,
+            token_dim_expansion=token_dim_expansion,
+            channel_dim_expansion=channel_dim_expansion,
+            dropout=dropout,
         )
         self.output_layer = nn.Linear(
             in_features=edge_dim + node_dim, out_features=embed_dim
@@ -97,7 +85,7 @@ class GraphMixer(nn.Module):
         self, batch: DGBatch, node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Temporary
-        device = next(self.parameters()).device
+        device = batch.src.device
 
         # Link Encoder
         edge_feat = batch.nbr_feats[0].to(device)
@@ -107,8 +95,7 @@ class GraphMixer(nn.Module):
         )
         z_link = torch.cat([edge_feat, nbr_time_feat], dim=-1)
         z_link = self.projection_layer(z_link)
-        for mlp_mixer in self.mlp_mixers:
-            z_link = mlp_mixer(x=z_link)
+        z_link = self.mlp_mixer(x=z_link)
         z_link = torch.mean(z_link, dim=1)
 
         # Node Encoder
@@ -208,14 +195,10 @@ def train(
     model.train()
     total_loss = 0
     for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
-
         opt.zero_grad()
         pos_out, neg_out = model(batch, node_feat)
-        loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
-        loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
+        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
+        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -231,10 +214,6 @@ def eval(
 ) -> dict:
     model.eval()
     for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
-
         pos_out, neg_out = model(batch, node_feat)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = (
@@ -253,13 +232,13 @@ args = parser.parse_args()
 seed_everything(args.seed)
 
 train_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='train', device=args.device
+    args.dataset, time_delta=TimeDeltaDG('r'), split='train', device=args.device
 )
 val_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='valid', device=args.device
+    args.dataset, time_delta=TimeDeltaDG('r'), split='valid', device=args.device
 )
 test_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='test', device=args.device
+    args.dataset, time_delta=TimeDeltaDG('r'), split='test', device=args.device
 )
 
 
@@ -287,28 +266,23 @@ def _init_hooks(dg: DGraph, time_gap: int) -> List[DGHook]:
                 self._nbrs[node] = deque(maxlen=self._time_gap)
 
         def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-            device = dg.device
-
-            batch.neg = batch.neg.to(device)
+            batch.neg = batch.neg.to(dg.device)
             seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
 
             unique, inverse_indices = seed_nodes.unique(return_inverse=True)
 
             batch_size = len(seed_nodes)
             nbr_nids = torch.zeros(
-                batch_size, self._time_gap, dtype=torch.long, device=device
+                batch_size, self._time_gap, dtype=torch.long, device=dg.device
             )
             nbr_mask = torch.zeros(
-                batch_size,
-                self._time_gap,
-                dtype=torch.long,
-                device=device,
+                batch_size, self._time_gap, dtype=torch.long, device=dg.device
             )
             for i, node in enumerate(unique.tolist()):
                 if nn := len(self._nbrs[node]):
                     mask = inverse_indices == i
                     nbr_nids[mask, :nn] = torch.tensor(
-                        self._nbrs[node], device=device, dtype=torch.long
+                        self._nbrs[node], device=dg.device, dtype=torch.long
                     )
                     nbr_mask[mask, :nn] = nn >= self._time_gap
 
@@ -330,13 +304,13 @@ def _init_hooks(dg: DGraph, time_gap: int) -> List[DGHook]:
 
 
 train_loader = DGDataLoader(
-    train_dg, hook=_init_hooks(train_dg, args.time_gap), batch_unit=args.time_gran
+    train_dg, hook=_init_hooks(train_dg, args.time_gap), batch_size=args.bsize
 )
 val_loader = DGDataLoader(
-    val_dg, hook=_init_hooks(val_dg, args.time_gap), batch_unit=args.time_gran
+    val_dg, hook=_init_hooks(val_dg, args.time_gap), batch_size=args.bsize
 )
 test_loader = DGDataLoader(
-    test_dg, hook=_init_hooks(test_dg, args.time_gap), batch_unit=args.time_gran
+    test_dg, hook=_init_hooks(test_dg, args.time_gap), batch_size=args.bsize
 )
 
 
@@ -353,15 +327,14 @@ model = GraphMixer(
     embed_dim=args.embed_dim,
     time_dim=args.time_dim,
     num_tokens=args.n_nbrs,
-    num_layers=args.n_layers,
     token_dim_expansion=float(args.token_dim_expansion),
     channel_dim_expansion=float(args.channel_dim_expansion),
     dropout=float(args.dropout),
     node_dim=args.node_dim,
     edge_dim=train_dg.edge_feats_dim | args.embed_dim,
 ).to(args.device)
-
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
