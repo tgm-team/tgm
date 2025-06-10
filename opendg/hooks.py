@@ -196,7 +196,7 @@ class RecencyNeighborHook:
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # TODO: Consider the case where no edge features exist
-        # TODO: Consdier the case where node features exist
+        # TODO: Consider the case where node features exist
         batch.nids = []  # type: ignore
         batch.nbr_nids = []  # type: ignore
         batch.nbr_times = []  # type: ignore
