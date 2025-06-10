@@ -172,7 +172,7 @@ def eval(
         score = result_dict[eval_metric]
         total_score += score
     metric_dict = {}
-    metric_dict[eval_metric] = total_score / len(loader)
+    metric_dict[eval_metric] = float(total_score) / len(loader)
     return metric_dict
 
 
@@ -235,8 +235,8 @@ for epoch in range(1, args.epochs + 1):
     val_results = eval(val_loader, model, static_node_feats, evaluator)
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
 test_results = eval(test_loader, model, static_node_feats, evaluator)
-print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
