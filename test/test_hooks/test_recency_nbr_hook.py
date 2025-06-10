@@ -39,7 +39,7 @@ def test_neighbor_sampler_hook_init(data):
 
 
 def test_neighbor_sampler_hook_single_hop(data):
-    # 1-10      1-20        1-30      1-40      1-50    | Now create a batch with every single node and node 600, to see the nbrs
+    # 1-10      1-20        1-30      1-40      1-50    | Now create a batch with every node to see nbrs
     #           2-20                  2-40              |
     #                       3-30                        |
     #                                                   |
@@ -56,6 +56,7 @@ def test_neighbor_sampler_hook_single_hop(data):
     time = torch.Tensor([0, 0])
     edge_feats = torch.rand(2, 5)
     batch = DGBatch(src, dst, time, edge_feats=edge_feats)
+
     batch = hook(dg, batch)
 
     exp_nids = [torch.LongTensor([1, 10, 10, 100])]
@@ -278,7 +279,7 @@ def test_neighbor_sampler_hook_single_hop(data):
 
 
 def test_neighbour_sampler_hook_multi_hop(data):
-    # 1-10      1-20        1-30      1-40      1-50    | Now create a batch with every single node and node 600, to see the nbrs
+    # 1-10      1-20        1-30      1-40      1-50    | Now create a batch with every node to see nbrs
     #           2-20                  2-40              |
     #                       3-30                        |
     #                                                   |
@@ -295,10 +296,18 @@ def test_neighbour_sampler_hook_multi_hop(data):
     time = torch.Tensor([0, 0])
     edge_feats = torch.rand(2, 5)
     batch = DGBatch(src, dst, time, edge_feats=edge_feats)
-    batch = hook(dg, batch)
 
-    [torch.LongTensor([1, 10, 10, 100])]
-    [torch.LongTensor([[0, 0], [0, 0], [0, 0], [0, 0]])]
+    batch = hook(dg, batch)
+    print()
+    for k in [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 100, 200, 300, 400, 500]:
+        print(k, hook._nbrs[k][0])
+    print(f'Nids: {batch.nids}')
+    print(f'Nbr nids: {batch.nbr_nids}')
+    print(f'Nbr times: {batch.nbr_times}')
+    print(f'Nbr mask: {batch.nbr_mask}')
+
+    # exp_nids = [torch.LongTensor([1, 10, 10, 100])]
+    # exp_nbr_mask = [torch.LongTensor([[0, 0], [0, 0], [0, 0], [0, 0]])]
     # torch.testing.assert_close(batch.nids, exp_nids)
     # torch.testing.assert_close(batch.nbr_mask, exp_nbr_mask)
     # assert batch.nbr_nids[0].shape == (4, 2)

@@ -235,7 +235,7 @@ class RecencyNeighborHook:
                     nbr_feats[mask, :nn] = (
                         torch.stack(list(self._nbrs[node][2])).float().to(dg.device)
                     )
-                    nbr_mask[mask, :nn] = nn >= self._num_nbrs[0]
+                    nbr_mask[mask, :nn] = nn >= num_nbrs
 
             batch.nids.append(seed_nodes)  # type: ignore
             batch.nbr_nids.append(nbr_nids)  # type: ignore
@@ -259,7 +259,14 @@ class RecencyNeighborHook:
                 else:
                     seed_nodes = torch.cat([batch.src, batch.dst])
             else:
-                seed_nodes = batch.nids[-1]  # type: ignore
+                # TODO: Need to use nbr_nids of last hop as seed nodes for current hop
+                # But also must take into account the nbr mask from the previous hop
+                prev_hop_seed = batch.nids[-1]  # type: ignore
+                prev_hop_nbrs = batch.nbr_nids[-1][batch.nbr_mask[-1].bool()]  # type: ignore
+
+                # TODO: What is the expected behaviour when prev hop nbrs is empty?
+                # Currently this will just produce the same output as the prev hop
+                seed_nodes = torch.cat([prev_hop_seed, prev_hop_nbrs])
 
             recursive_sample(seed_nodes.long(), num_nbrs=hop_num_nbrs)
 
