@@ -123,7 +123,7 @@ def eval(
     node_feat: torch.Tensor,
     h_0: torch.Tensor | None = None,
     c_0: torch.Tensor | None = None,
-) -> dict:
+) -> Tuple[dict, torch.Tensor, torch.Tensor]:
     model.eval()
     for batch in tqdm(loader):
         # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
@@ -141,7 +141,7 @@ def eval(
         )
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute()
+    return metrics.compute(), h_0, c_0
 
 
 args = parser.parse_args()
@@ -195,7 +195,7 @@ for epoch in range(1, args.epochs + 1):
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results = eval(val_loader, model, val_metrics, static_node_feats, h_0, c_0)
+    val_results, h_0, c_0 = eval(val_loader, model, val_metrics, static_node_feats, h_0, c_0)
     val_metrics.reset()
 
     print(
@@ -203,5 +203,5 @@ for epoch in range(1, args.epochs + 1):
         + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
     )
 
-test_results = eval(test_loader, model, test_metrics, static_node_feats)
+test_results, h_0, c_0 = eval(test_loader, model, test_metrics, static_node_feats, h_0, c_0)
 print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
