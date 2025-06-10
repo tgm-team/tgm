@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from opendg.data import DGData
-from opendg.graph import DGraph
+from opendg.graph import DGBatch, DGraph
 from opendg.hooks import RecencyNeighborHook
 
 
@@ -10,7 +10,8 @@ from opendg.hooks import RecencyNeighborHook
 def data():
     edge_index = torch.LongTensor([[1, 10], [1, 11], [1, 12], [1, 13]])
     edge_timestamps = torch.LongTensor([1, 1, 2, 2])
-    return DGData.from_raw(edge_timestamps, edge_index)
+    edge_feats = torch.rand(4, 5)
+    return DGData.from_raw(edge_timestamps, edge_index, edge_feats)
 
 
 def test_hook_dependancies():
@@ -37,11 +38,134 @@ def test_neighbor_sampler_hook_init(data):
     assert hook.num_nbrs == [2]
 
 
+def test_neighbor_sampler_hook_link_pred_single_hop(data):
+    # 1-10      1-20        1-30      1-40      1-50    1-60
+    #           2-20                  2-40
+    #                       3-30
+    #
+    # 10-100    20-200      30-300    40-400    50-500
+
+    dg = DGraph(data)
+    hook = RecencyNeighborHook(num_nbrs=[2], num_nodes=501)
+
+    # Batch 1
+    src = torch.Tensor([1, 10])
+    dst = torch.Tensor([10, 100])
+    time = torch.Tensor([0, 0])
+    edge_feats = torch.rand(2, 5)
+    batch = DGBatch(src, dst, time, edge_feats=edge_feats)
+
+    batch = hook(dg, batch)
+    print()
+    for k in [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 100, 200, 300, 400, 500]:
+        print(k, hook._nbrs[k][0])
+    print(f'Nids: {batch.nids}')
+    print(f'Nbr nids: {batch.nbr_nids}')
+    print(f'Nbr times: {batch.nbr_times}')
+    print(f'Nbr mask: {batch.nbr_mask}')
+
+    # Batch 2
+    src = torch.Tensor([1, 2, 20])
+    dst = torch.Tensor([20, 20, 200])
+    time = torch.Tensor([1, 1, 1])
+    edge_feats = torch.rand(3, 5)
+    batch = DGBatch(src, dst, time, edge_feats=edge_feats)
+
+    batch = hook(dg, batch)
+    print()
+    for k in [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 100, 200, 300, 400, 500]:
+        print(k, hook._nbrs[k][0])
+    print(f'Nids: {batch.nids}')
+    print(f'Nbr nids: {batch.nbr_nids}')
+    print(f'Nbr times: {batch.nbr_times}')
+    print(f'Nbr mask: {batch.nbr_mask}')
+
+    # Batch 3
+    src = torch.Tensor([1, 3, 30])
+    dst = torch.Tensor([30, 30, 300])
+    time = torch.Tensor([2, 2, 2])
+    edge_feats = torch.rand(3, 5)
+    batch = DGBatch(src, dst, time, edge_feats=edge_feats)
+
+    batch = hook(dg, batch)
+    print()
+    for k in [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 100, 200, 300, 400, 500]:
+        print(k, hook._nbrs[k][0])
+    print(f'Nids: {batch.nids}')
+    print(f'Nbr nids: {batch.nbr_nids}')
+    print(f'Nbr times: {batch.nbr_times}')
+    print(f'Nbr mask: {batch.nbr_mask}')
+
+    # Batch 4
+    src = torch.Tensor([1, 2, 40])
+    dst = torch.Tensor([40, 40, 400])
+    time = torch.Tensor([3, 3, 3])
+    edge_feats = torch.rand(3, 5)
+    batch = DGBatch(src, dst, time, edge_feats=edge_feats)
+
+    batch = hook(dg, batch)
+    print()
+    for k in [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 100, 200, 300, 400, 500]:
+        print(k, hook._nbrs[k][0])
+    print(f'Nids: {batch.nids}')
+    print(f'Nbr nids: {batch.nbr_nids}')
+    print(f'Nbr times: {batch.nbr_times}')
+    print(f'Nbr mask: {batch.nbr_mask}')
+
+    # Batch 5
+    src = torch.Tensor([1, 50])
+    dst = torch.Tensor([50, 500])
+    time = torch.Tensor([4, 4])
+    edge_feats = torch.rand(2, 5)
+    batch = DGBatch(src, dst, time, edge_feats=edge_feats)
+
+    batch = hook(dg, batch)
+    print()
+    for k in [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 100, 200, 300, 400, 500]:
+        print(k, hook._nbrs[k][0])
+    print(f'Nids: {batch.nids}')
+    print(f'Nbr nids: {batch.nbr_nids}')
+    print(f'Nbr times: {batch.nbr_times}')
+    print(f'Nbr mask: {batch.nbr_mask}')
+
+    # Batch 6
+    src = torch.Tensor([1])
+    dst = torch.Tensor([60])
+    time = torch.Tensor([5])
+    edge_feats = torch.rand(1, 5)
+    batch = DGBatch(src, dst, time, edge_feats=edge_feats)
+
+    batch = hook(dg, batch)
+    print()
+    for k in [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 100, 200, 300, 400, 500]:
+        print(k, hook._nbrs[k][0])
+    print(f'Nids: {batch.nids}')
+    print(f'Nbr nids: {batch.nbr_nids}')
+    print(f'Nbr times: {batch.nbr_times}')
+    print(f'Nbr mask: {batch.nbr_mask}')
+    input()
+
+    # exp_nids = [torch.LongTensor([1, 3, 3, 2])]
+    # exp_nbr_mask = [torch.LongTensor([[0, 0], [0, 0], [0, 0], [0, 0]])]
+
+    # batch = hook(dg, batch)
+    # torch.testing.assert_close(batch.nids, exp_nids)
+    # torch.testing.assert_close(batch.nbr_mask, exp_nbr_mask)
+    # assert batch.nbr_nids[0].shape == (4, 2)
+    # assert batch.nbr_times[0].shape == (4, 2)
+    # assert batch.nbr_feats[0].shape == (4, 2, 5)
+
+
 @pytest.mark.skip('TODO: Add neighbor sampling tests')
-def test_neighbor_sampler_hook_link_pred(data):
+def test_neighbor_sampler_hook_node_pred_single_hop(data):
     pass
 
 
 @pytest.mark.skip('TODO: Add neighbor sampling tests')
-def test_neighbor_sampler_hook_node_pred(data):
+def test_neighbor_sampler_hook_link_pred_multi_hop(data):
+    pass
+
+
+@pytest.mark.skip('TODO: Add neighbor sampling tests')
+def test_neighbor_sampler_hook_node_pred_multi_hop(data):
     pass

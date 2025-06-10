@@ -195,6 +195,8 @@ class RecencyNeighborHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        # TODO: Consider the case where no edge features exist
+        # TODO: Consdier the case where node features exist
         batch.nids = []  # type: ignore
         batch.nbr_nids = []  # type: ignore
         batch.nbr_times = []  # type: ignore
@@ -259,7 +261,7 @@ class RecencyNeighborHook:
             else:
                 seed_nodes = batch.nids[-1]  # type: ignore
 
-            recursive_sample(seed_nodes, num_nbrs=hop_num_nbrs)
+            recursive_sample(seed_nodes.long(), num_nbrs=hop_num_nbrs)
 
         self._update(batch)
         return batch
