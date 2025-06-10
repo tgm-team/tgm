@@ -73,6 +73,7 @@ class RecurrentGCN(torch.nn.Module):
         h = self.linear(h)
         return h, h_0, c_0
 
+
 class NodePredictor(torch.nn.Module):
     def __init__(self, in_dim, out_dim):
         super().__init__()
@@ -84,6 +85,7 @@ class NodePredictor(torch.nn.Module):
         h = h.relu()
         h = self.out(h)
         return h
+
 
 def train(
     loader: DGDataLoader,
@@ -144,7 +146,7 @@ def eval(
         total_score += score
     metric_dict = {}
     metric_dict[eval_metric] = float(total_score) / len(loader)
-    return metric_dict,  h_0, c_0
+    return metric_dict, h_0, c_0
 
 
 args = parser.parse_args()
@@ -180,7 +182,9 @@ test_loader = DGDataLoader(
 # TODO: add static node features to DGraph
 args.node_dim = args.embed_dim
 static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
-model = GCLSTM_Model(node_dim=args.node_dim, embed_dim=args.embed_dim, num_classes=label_dim).to(args.device)
+model = GCLSTM_Model(
+    node_dim=args.node_dim, embed_dim=args.embed_dim, num_classes=label_dim
+).to(args.device)
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):

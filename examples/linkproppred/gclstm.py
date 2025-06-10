@@ -195,7 +195,9 @@ for epoch in range(1, args.epochs + 1):
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results, h_0, c_0 = eval(val_loader, model, val_metrics, static_node_feats, h_0, c_0)
+    val_results, h_0, c_0 = eval(
+        val_loader, model, val_metrics, static_node_feats, h_0, c_0
+    )
     val_metrics.reset()
 
     print(
@@ -203,5 +205,7 @@ for epoch in range(1, args.epochs + 1):
         + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
     )
 
-test_results, h_0, c_0 = eval(test_loader, model, test_metrics, static_node_feats, h_0, c_0)
+test_results, h_0, c_0 = eval(
+    test_loader, model, test_metrics, static_node_feats, h_0, c_0
+)
 print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
