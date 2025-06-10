@@ -29,8 +29,6 @@ def test_bad_neighbor_sampler_init():
         RecencyNeighborHook(num_nbrs=[0], num_nodes=2)
     with pytest.raises(ValueError):
         RecencyNeighborHook(num_nbrs=[-1], num_nodes=2)
-    with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[1, 2], num_nodes=2)
 
 
 def test_neighbor_sampler_hook_init(data):

@@ -185,73 +185,81 @@ class RecencyNeighborHook:
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
-        if len(num_nbrs) > 1:
-            raise ValueError('RecencyNeighborSamplerHook only supports 1 hop for now')
         self._num_nbrs = num_nbrs
         self._nbrs: Dict[int, List[Deque[Any]]] = {}
         for node in range(num_nodes):
-            self._nbrs[node] = [deque(maxlen=num_nbrs[0]) for _ in range(3)]
+            self._nbrs[node] = [deque(maxlen=max(num_nbrs)) for _ in range(3)]
 
     @property
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        device = dg.device
-        if hasattr(batch, 'neg'):
-            # TODO: Because we materialize DGraph on device, this means
-            # batch.src, batch.dst are already on the correct device.
-            # However, batch.neg is not. And we cannot wait until the device
-            # hook runs since the correct device must already be handled here.
-            # This questions whether we should materialize on device, since user
-            # custom hooks will also need to handle this behaviour. Alternatively,
-            # we make the hook manager smart, it 'injects' the device hook in the
-            # list of hooks depending on their 'requires' set.
-            batch.neg = batch.neg.to(device)
-            seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
-        else:
-            seed_nodes = torch.cat([batch.src, batch.dst])
+        batch.nids = []  # type: ignore
+        batch.nbr_nids = []  # type: ignore
+        batch.nbr_times = []  # type: ignore
+        batch.nbr_feats = []  # type: ignore
+        batch.nbr_mask = []  # type: ignore
 
-        unique, inverse_indices = seed_nodes.unique(return_inverse=True)
+        def recursive_sample(seed_nodes: torch.Tensor, num_nbrs: int) -> None:
+            unique, inverse_indices = seed_nodes.unique(return_inverse=True)
 
-        batch_size = len(seed_nodes)
-        nbr_nids = torch.empty(
-            batch_size, self._num_nbrs[0], dtype=torch.long, device=device
-        )
-        nbr_times = torch.empty(
-            batch_size, self._num_nbrs[0], dtype=torch.long, device=device
-        )
-        nbr_feats = torch.zeros(
-            batch_size,
-            self._num_nbrs[0],
-            dg.edge_feats_dim,  # type: ignore
-            device=device,
-        )
-        nbr_mask = torch.zeros(
-            batch_size,
-            self._num_nbrs[0],
-            dtype=torch.long,
-            device=device,
-        )
-        for i, node in enumerate(unique.tolist()):
-            if nn := len(self._nbrs[node][0]):
-                mask = inverse_indices == i
-                nbr_nids[mask, :nn] = torch.tensor(
-                    self._nbrs[node][0], device=device, dtype=torch.long
-                )
-                nbr_times[mask, :nn] = torch.tensor(
-                    self._nbrs[node][1], device=device, dtype=torch.long
-                )
-                nbr_feats[mask, :nn] = (
-                    torch.stack(list(self._nbrs[node][2])).float().to(device)
-                )
-                nbr_mask[mask, :nn] = nn >= self._num_nbrs[0]
+            batch_size = len(seed_nodes)
+            nbr_nids = torch.empty(
+                batch_size, num_nbrs, dtype=torch.long, device=dg.device
+            )
+            nbr_times = torch.empty(
+                batch_size, num_nbrs, dtype=torch.long, device=dg.device
+            )
+            nbr_feats = torch.zeros(
+                batch_size,
+                num_nbrs,
+                dg.edge_feats_dim,  # type: ignore
+                device=dg.device,
+            )
+            nbr_mask = torch.zeros(
+                batch_size, num_nbrs, dtype=torch.long, device=dg.device
+            )
 
-        batch.nids = [seed_nodes]  # type: ignore
-        batch.nbr_nids = [nbr_nids]  # type: ignore
-        batch.nbr_times = [nbr_times]  # type: ignore
-        batch.nbr_feats = [nbr_feats]  # type: ignore
-        batch.nbr_mask = [nbr_mask]  # type: ignore
+            for i, node in enumerate(unique.tolist()):
+                if nn := len(self._nbrs[node][0]):
+                    mask = inverse_indices == i
+                    nbr_nids[mask, :nn] = torch.tensor(
+                        self._nbrs[node][0], device=dg.device, dtype=torch.long
+                    )
+                    nbr_times[mask, :nn] = torch.tensor(
+                        self._nbrs[node][1], device=dg.device, dtype=torch.long
+                    )
+                    nbr_feats[mask, :nn] = (
+                        torch.stack(list(self._nbrs[node][2])).float().to(dg.device)
+                    )
+                    nbr_mask[mask, :nn] = nn >= self._num_nbrs[0]
+
+            batch.nids.append(seed_nodes)  # type: ignore
+            batch.nbr_nids.append(nbr_nids)  # type: ignore
+            batch.nbr_times.append(nbr_times)  # type: ignore
+            batch.nbr_feats.append(nbr_feats)  # type: ignore
+            batch.nbr_mask.append(nbr_mask)  # type: ignore
+
+        for hop, hop_num_nbrs in enumerate(self.num_nbrs):
+            if hop == 0:
+                if hasattr(batch, 'neg'):
+                    # TODO: Because we materialize DGraph on device, this means
+                    # batch.src, batch.dst are already on the correct device.
+                    # However, batch.neg is not. And we cannot wait until the device
+                    # hook runs since the correct device must already be handled here.
+                    # This questions whether we should materialize on device, since user
+                    # custom hooks will also need to handle this behaviour. Alternatively,
+                    # we make the hook manager smart, it 'injects' the device hook in the
+                    # list of hooks depending on their 'requires' set.
+                    batch.neg = batch.neg.to(dg.device)
+                    seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
+                else:
+                    seed_nodes = torch.cat([batch.src, batch.dst])
+            else:
+                seed_nodes = batch.nids[-1]  # type: ignore
+
+            recursive_sample(seed_nodes, num_nbrs=hop_num_nbrs)
 
         self._update(batch)
         return batch
