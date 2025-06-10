@@ -616,6 +616,73 @@ def test_from_tgb_with_static_node_features(
         assert data.static_node_feats is None
 
 
+@pytest.mark.parametrize(
+    'split,expected_indices',
+    [
+        ('train', train_indices),
+        ('all', np.arange(num_events)),
+    ],
+)
+@patch('tgb.nodeproppred.dataset.NodePropPredDataset')
+def test_from_tgb_with_node_events(mock_dataset_cls, split, expected_indices):
+    node_label_dict = {
+        0: {0: np.zeros(10)},
+        1: {1: np.zeros(10)},
+        2: {2: np.zeros(10)},
+        3: {3: np.zeros(10)},
+        4: {4: np.zeros(10)},
+    }
+    sources = np.arange(num_events)
+    destinations = np.arange(num_events)
+    timestamps = np.arange(num_events)
+    edge_feat = None
+
+    train_mask = np.zeros(num_events, dtype=bool)
+    train_mask[train_indices] = True
+
+    val_mask = np.zeros(num_events, dtype=bool)
+    val_mask[val_indices] = True
+
+    test_mask = np.zeros(num_events, dtype=bool)
+    test_mask[test_indices] = True
+
+    mock_dataset = MagicMock()
+    if split == 'train':
+        mask = train_mask
+    elif split == 'valid':
+        mask = val_mask
+    elif split == 'test':
+        mask = test_mask
+    else:
+        mask = np.ones(num_events, dtype=bool)
+    num_nodes = 1 + max(np.max(sources[mask]), np.max(destinations[mask]))
+    mock_dataset.node_feat = np.random.rand(num_nodes, 10)
+    mock_dataset.full_data = {
+        'sources': sources,
+        'destinations': destinations,
+        'timestamps': timestamps,
+        'edge_feat': edge_feat,
+        'node_label_dict': node_label_dict,
+    }
+
+    mock_dataset.train_mask = train_mask
+    mock_dataset.val_mask = val_mask
+    mock_dataset.test_mask = test_mask
+    mock_dataset.num_edges = num_events
+
+    mock_dataset_cls.return_value = mock_dataset
+
+    data = DGData.from_tgb(name='tgbn-trade', split=split)
+    assert isinstance(data, DGData)
+    node_ids_list = data.node_ids.tolist()
+    node_feats_list = data.dynamic_node_feats.tolist()
+
+    for i, idx in enumerate(expected_indices[:5]):  # sample a few for sanity check
+        assert node_ids_list[i] == list(node_label_dict[i].keys())[0]
+        assert node_feats_list[i] == node_label_dict[idx][idx].tolist()
+    mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
+
+
 def test_from_any():
     data = 'tgbl-mock'
     with patch.object(DGData, 'from_tgb') as mock_tgb:

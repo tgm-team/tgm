@@ -139,6 +139,8 @@ def test_materialize(data):
         exp_t,
         dg.dynamic_node_feats._values(),
         dg.edge_feats._values(),
+        dg.dynamic_node_feats._indices()[0],
+        dg.dynamic_node_feats._indices()[1],
     )
     torch.testing.assert_close(asdict(dg.materialize()), asdict(exp))
 
