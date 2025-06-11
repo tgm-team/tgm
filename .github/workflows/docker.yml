@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -f docker/Dockerfile.cpu -t opendg-cpu .
+        run: docker build -f docker/Dockerfile.cpu -t tgm-cpu .
 
       - name: Smoke test import
-        run: docker run --rm opendg-cpu python -c "import opendg; print(opendg.__version__)"
+        run: docker run --rm tgm-cpu python -c "import tgm; print(tgm.__version__)"

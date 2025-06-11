@@ -1,6 +1,6 @@
 ## DGHooks
 
-::: opendg.hooks.DGHook
-::: opendg.hooks.NeighborSamplerHook
-::: opendg.hooks.NegativeEdgeSamplerHook
-::: opendg.hooks.RecencyNeighborHook
+::: tgm.hooks.DGHook
+::: tgm.hooks.NeighborSamplerHook
+::: tgm.hooks.NegativeEdgeSamplerHook
+::: tgm.hooks.RecencyNeighborHook

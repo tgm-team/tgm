@@ -4,9 +4,9 @@ from typing import Any, List
 
 import torch
 
-from opendg.graph import DGBatch, DGraph
-from opendg.hooks import DGHook, HookManager
-from opendg.timedelta import TimeDeltaDG
+from tgm.graph import DGBatch, DGraph
+from tgm.hooks import DGHook, HookManager
+from tgm.timedelta import TimeDeltaDG
 
 
 class DGDataLoader(torch.utils.data.DataLoader):

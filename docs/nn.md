@@ -1,8 +1,8 @@
 ## Layers
 
-::: opendg.nn.attention
-::: opendg.nn.time_encoding
+::: tgm.nn.attention
+::: tgm.nn.time_encoding
 
 ## Memory
 
-::: opendg.nn.memory.edgebank
+::: tgm.nn.memory.edgebank

@@ -1,9 +1,9 @@
 import pytest
 import torch
 
-from opendg.data import DGData
-from opendg.graph import DGraph
-from opendg.hooks import DeviceTransferHook
+from tgm.data import DGData
+from tgm.graph import DGraph
+from tgm.hooks import DeviceTransferHook
 
 
 @pytest.fixture

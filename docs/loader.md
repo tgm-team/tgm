@@ -1,3 +1,3 @@
 ## DGDataLoader
 
-::: opendg.loader
+::: tgm.loader
