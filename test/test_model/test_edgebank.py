@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from opendg.nn import EdgeBankPredictor
+from tgm.nn import EdgeBankPredictor
 
 
 @pytest.mark.parametrize('pos_prob', [0.7, 1.0])

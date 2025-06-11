@@ -9,9 +9,9 @@ import pandas as pd
 import torch
 from torch import Tensor
 
-from opendg._storage import DGSliceTracker, DGStorage
-from opendg.data import DGData
-from opendg.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
+from tgm._storage import DGSliceTracker, DGStorage
+from tgm.data import DGData
+from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
 class DGraph:

@@ -1,27 +1,27 @@
 <a id="readme-top"></a>
 
 <div align="center">
-<h1> OpenDG </h1>
-<h3 style="font-size: 22px">Efficient and modular training on dynamic graphs</h3>
-<a href="https://opendg.readthedocs.io/en/latest"/><strong style="font-size: 18px;">Read Our Docs»</strong></a>
-<a href="https://github.com/shenyangHuang/opendg"/><strong style="font-size: 18px;">Read Our Paper»</strong></a>
+<h1> TGM </h1>
+<h3 style="font-size: 22px">Efficient and Modular ML on Dynamic Graphs</h3>
+<a href="https://tgm.readthedocs.io/en/latest"/><strong style="font-size: 18px;">Read Our Docs»</strong></a>
+<a href="https://github.com/tgm-team/tgm"/><strong style="font-size: 18px;">Read Our Paper»</strong></a>
 <br/>
 <br/>
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/shenyangHuang/opendg)](https://github.com/shenyangHuang/opendg/stargazers)
-[![Unit Tests](https://github.com/shenyangHuang/opendg/actions/workflows/testing.yml/badge.svg)](https://github.com/shenyangHuang/opendg/actions/workflows/testing.yml)
-[![Linting](https://github.com/shenyangHuang/opendg/actions/workflows/ruff.yml/badge.svg)](https://github.com/shenuangHuang/opendg/actions/workflows/ruff.yml)
+[![GitHub Repo stars](https://img.shields.io/github/stars/tgm-team/tgm)](https://github.com/tgm-team/tgm/stargazers)
+[![Unit Tests](https://github.com/tgm-team/tgm/actions/workflows/testing.yml/badge.svg)](https://github.com/tgm-team/tgm/actions/workflows/testing.yml)
+[![Linting](https://github.com/tgm-team/tgm/actions/workflows/ruff.yml/badge.svg)](https://github.com/tgm-team/tgm/actions/workflows/ruff.yml)
 
 </div>
 
 ## About The Project
 
-OpenDG is a research library designed to accelerate training workloads over dynamic graphs and facilitate prototyping of temporal graph learning methods.
+TGM is a research library designed to accelerate training workloads over dynamic graphs and facilitate prototyping of temporal graph learning methods.
 
 Our main goal is to provide an efficient abstraction over dynamic graphs to enable new practitioners to quickly contribute to research in the field. We natively support both discrete and continuous-time graphs.
 
 > \[!NOTE\]
-> OpenDG is still alpha software, and may introduce breaking changes.
+> TGM is still alpha software, and may introduce breaking changes.
 
 ### Library Highlights
 
@@ -33,7 +33,7 @@ Our main goal is to provide an efficient abstraction over dynamic graphs to enab
 
 ## Installation
 
-The current recommended way to install OpenDG is from source.
+The current recommended way to install TGM is from source.
 
 #### Using [uv](https://docs.astral.sh/uv/) (recommended)
 
@@ -42,10 +42,10 @@ The current recommended way to install OpenDG is from source.
 uv venv my_venv --python 3.10 && source my_venv/bin/activate
 
 # Install the wheels into the venv
-uv pip install git+https://github.com/shenyangHuang/opendg.git
+uv pip install git+https://github.com/tgm-team/tgm.git
 
 # Test the install
-python -c 'import opendg; print(opendg.__version__)'
+python -c 'import tgm; print(tgm.__version__)'
 ```
 
 #### Using [pip](https://pip.pypa.io/en/stable/installation/)
@@ -55,19 +55,19 @@ python -c 'import opendg; print(opendg.__version__)'
 python3.10 -m venv my_venv && source my_venv/bin/activate
 
 # Install the wheels into the venv
-pip install git+https://github.com/shenyangHuang/opendg.git
+pip install git+https://github.com/tgm-team/tgm.git
 
 # Test the install
-python -c 'import opendg; print(opendg.__version__)'
+python -c 'import tgm; print(tgm.__version__)'
 ```
 
 ## Documentation
 
-Documentation along with a quick start guide can be found on the [docs website](https://opendg.readthedocs.io/).
+Documentation along with a quick start guide can be found on the [docs website](https://tgm.readthedocs.io/).
 
 ## Citation
 
-Please cite [our paper](https://github.com/shenyangHuang/opendg) if your use this code in your own work:
+Please cite [our paper](https://github.com/tgm-team/tgm) if your use this code in your own work:
 
 ```
 @article{TODO,
@@ -81,8 +81,8 @@ Please cite [our paper](https://github.com/shenyangHuang/opendg) if your use thi
 
 ## Contributing
 
-If you notice anything unexpected, or would like to propose a new feature, please open an [issue](https://github.com/shenyangHuang/opendg/issues) and feel free [to discuss them with us](https://github.com/shenyangHuang/opendg/discussions).
+If you notice anything unexpected, or would like to propose a new feature, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
 
-To learn more about making a contribution to OpenDG see our [contribution guide](./.github/CONTRIBUTING.md).
+To learn more about making a contribution to TGM see our [contribution guide](./.github/CONTRIBUTING.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

@@ -3,14 +3,14 @@ import random
 import pytest
 import torch
 
-from opendg._storage import (
+from tgm._storage import (
     DGSliceTracker,
     DGStorageBackends,
     get_dg_storage_backend,
     set_dg_storage_backend,
 )
-from opendg._storage.backends import DGStorageArrayBackend
-from opendg.data import DGData
+from tgm._storage.backends import DGStorageArrayBackend
+from tgm.data import DGData
 
 
 @pytest.fixture(autouse=True)

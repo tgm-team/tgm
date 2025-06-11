@@ -3,7 +3,7 @@ import random
 import numpy as np
 import torch
 
-from opendg.util.seed import seed_everything
+from tgm.util.seed import seed_everything
 
 
 def test_seed_everything():

@@ -9,12 +9,12 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from opendg.graph import DGBatch, DGraph
-from opendg.hooks import NegativeEdgeSamplerHook
-from opendg.loader import DGDataLoader
-from opendg.nn.recurrent import GCLSTM
-from opendg.timedelta import TimeDeltaDG
-from opendg.util.seed import seed_everything
+from tgm.graph import DGBatch, DGraph
+from tgm.hooks import NegativeEdgeSamplerHook
+from tgm.loader import DGDataLoader
+from tgm.nn.recurrent import GCLSTM
+from tgm.timedelta import TimeDeltaDG
+from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
     description='GCLSTM Example',

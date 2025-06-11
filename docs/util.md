@@ -1,3 +1,3 @@
 ## Utilities
 
-::: opendg.util.seed
+::: tgm.util.seed

@@ -3,9 +3,9 @@ from typing import Set
 import pytest
 import torch
 
-from opendg.data import DGData
-from opendg.graph import DGBatch, DGraph
-from opendg.hooks import HookManager
+from tgm.data import DGData
+from tgm.graph import DGBatch, DGraph
+from tgm.hooks import HookManager
 
 
 class MockHook:

@@ -1,10 +1,10 @@
-# OpenDG Documentation
+# TGM Documentation
 
 ## Installing from source:
 
 ### Prerequisites
 
-OpenDG uses [uv](https://docs.astral.sh/uv/) to manage and lock project dependencies for a consistent and reproducible environment.
+TGM uses [uv](https://docs.astral.sh/uv/) to manage and lock project dependencies for a consistent and reproducible environment.
 If you do not have `uv` installed on your system, visit [this page](https://docs.astral.sh/uv/getting-started/installation/) for installation instructions.
 
 **Note**: If you have `pip` installed globally you can just invoke:
@@ -16,8 +16,8 @@ pip install uv
 ### Clone the repository
 
 ```bash
-git clone https://github.com/shenyangHuang/openDG.git
-cd openDG
+git clone https://github.com/tgm-team/tgm.git
+cd tgm
 uv sync
 ```
 
