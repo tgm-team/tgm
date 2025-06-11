@@ -10,12 +10,12 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from opendg.graph import DGBatch, DGraph
-from opendg.hooks import DGHook, NegativeEdgeSamplerHook, RecencyNeighborHook
-from opendg.loader import DGDataLoader
-from opendg.nn import Time2Vec
-from opendg.timedelta import TimeDeltaDG
-from opendg.util.seed import seed_everything
+from tgm.graph import DGBatch, DGraph
+from tgm.hooks import DGHook, NegativeEdgeSamplerHook, RecencyNeighborHook
+from tgm.loader import DGDataLoader
+from tgm.nn import Time2Vec
+from tgm.timedelta import TimeDeltaDG
+from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
     description='GraphMixer Example',
@@ -56,6 +56,7 @@ class GraphMixer(nn.Module):
         num_tokens: int,
         node_dim: int,
         edge_dim: int,
+        num_layers: int = 2,
         token_dim_expansion: float = 0.5,
         channel_dim_expansion: float = 4.0,
         dropout: float = 0.1,
@@ -70,12 +71,17 @@ class GraphMixer(nn.Module):
             param.requires_grad = False
 
         self.projection_layer = nn.Linear(edge_dim + time_dim, edge_dim)
-        self.mlp_mixer = MLPMixer(
-            num_tokens=num_tokens,
-            num_channels=edge_dim,
-            token_dim_expansion=token_dim_expansion,
-            channel_dim_expansion=channel_dim_expansion,
-            dropout=dropout,
+        self.mlp_mixers = nn.ModuleList(
+            [
+                MLPMixer(
+                    num_tokens=num_tokens,
+                    num_channels=edge_dim,
+                    token_dim_expansion=token_dim_expansion,
+                    channel_dim_expansion=channel_dim_expansion,
+                    dropout=dropout,
+                )
+            ]
+            for _ in range(num_layers)
         )
         self.output_layer = nn.Linear(
             in_features=edge_dim + node_dim, out_features=embed_dim
@@ -84,32 +90,25 @@ class GraphMixer(nn.Module):
     def forward(
         self, batch: DGBatch, node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Temporary
-        device = batch.src.device
-
         # Link Encoder
-        edge_feat = batch.nbr_feats[0].to(device)
+        hop = 0
+        edge_feat = batch.nbr_feats[hop]
         nbr_time_feat = self.time_encoder(
-            batch.nbr_times[0].to(device)
-            - batch.time.unsqueeze(dim=1).repeat(3, 1).to(device)
+            batch.time.unsqueeze(dim=1).repeat(3, 1) - batch.nbr_times[hop]
         )
         z_link = torch.cat([edge_feat, nbr_time_feat], dim=-1)
-        print(z_link.shape)
         z_link = self.projection_layer(z_link)
-        print(z_link.shape)
-        z_link = self.mlp_mixer(x=z_link)
-        print(z_link.shape)
+        for mixer in self.mlp_mixers:
+            z_link = mixer(x=z_link)
         z_link = torch.mean(z_link, dim=1)
-        print(z_link.shape)
-        input()
 
         # Node Encoder
         time_gap_node_feat = node_feat[batch.time_gap_node_nids]
         valid_time_gap_node_feats = time_gap_node_feat
         valid_time_gap_node_feats[batch.time_gap_node_mask == 0] = -1e10
-        scores = torch.softmax(valid_time_gap_node_feats, dim=1).to(device)
+        scores = torch.softmax(valid_time_gap_node_feats, dim=1)
         z_node = torch.mean(time_gap_node_feat * scores, dim=1)
-        z_node = z_node + node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
+        z_node += node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
 
         # Link Decoder
         z = self.output_layer(torch.cat([z_link, z_node], dim=1))
@@ -145,14 +144,14 @@ class FeedForwardNet(nn.Module):
 class MLPMixer(nn.Module):
     def __init__(
         self,
-        num_tokens: int,  # per_graph_size
-        num_channels: int,  # dims
+        num_tokens: int,
+        num_channels: int,
         token_dim_expansion: float = 0.5,
         channel_dim_expansion: float = 4.0,
         dropout: float = 0.0,
     ) -> None:
         super().__init__()
-        self.token_norm = nn.LayerNorm(num_channels)
+        self.token_norm = nn.LayerNorm(num_tokens)
         self.token_ff = FeedForwardNet(
             input_dim=num_tokens,
             dim_expansion_factor=token_dim_expansion,
@@ -172,8 +171,8 @@ class MLPMixer(nn.Module):
         out = z + x
 
         # mix channels
-        z = self.channel_norm(out)  # (B, num_tokens, num_channels)
-        z = self.channel_ff(z)  # (B, num_tokens, num_channels)
+        z = self.channel_norm(out)
+        z = self.channel_ff(z)
         out = z + out
         return out
 
@@ -359,132 +358,3 @@ for epoch in range(1, args.epochs + 1):
 
 test_results = eval(test_loader, model, test_metrics, static_node_feats)
 print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
-
-
-# The below is not integrated code from the original authors' reference  implemenation
-# class FeatEncode(nn.Module):
-#    def __init__(self, time_dims, feat_dims, out_dims):
-#        super().__init__()
-#
-#        self.time_encoder = TimeEncode(time_dims)
-#        self.feat_encoder = nn.Linear(time_dims + feat_dims, out_dims)
-#        self.reset_parameters()
-#
-#    def reset_parameters(self):
-#        self.time_encoder.reset_parameters()
-#        self.feat_encoder.reset_parameters()
-#
-#    def forward(self, edge_feats, edge_ts):
-#        edge_time_feats = self.time_encoder(edge_ts)
-#        x = torch.cat([edge_feats, edge_time_feats], dim=1)
-#        return self.feat_encoder(x)
-#
-#
-# class MLPMixer2(nn.Module):
-#    def __init__(
-#        self,
-#        per_graph_size,
-#        time_channels,
-#        input_channels,
-#        hidden_channels,
-#        out_channels,
-#        num_layers=2,
-#        dropout=0.5,
-#        token_expansion_factor=0.5,
-#        channel_expansion_factor=4,
-#    ):
-#        super().__init__()
-#        self.per_graph_size = per_graph_size
-#        self.num_layers = num_layers
-#
-#        # input & output classifer
-#        self.feat_encoder = FeatEncode(time_channels, input_channels, hidden_channels)
-#        self.layernorm = nn.LayerNorm(hidden_channels)
-#        self.mlp_head = nn.Linear(hidden_channels, out_channels)
-#
-#        # inner layers
-#        self.mixer_blocks = torch.nn.ModuleList()
-#        for _ in range(num_layers):
-#            self.mixer_blocks.append(
-#                MLPMixer(
-#                    per_graph_size,
-#                    hidden_channels,
-#                    token_expansion_factor,
-#                    channel_expansion_factor,
-#                    dropout,
-#                )
-#            )
-#
-#    def forward(self, edge_feats, edge_ts, batch_size, inds):
-#        # x :     [ batch_size, graph_size, edge_dims+time_dims]
-#        edge_time_feats = self.feat_encoder(edge_feats, edge_ts)
-#        x = torch.zeros((batch_size * self.per_graph_size, edge_time_feats.size(1))).to(
-#            edge_feats.device
-#        )
-#        x[inds] = x[inds] + edge_time_feats
-#        x = torch.split(x, self.per_graph_size)
-#        x = torch.stack(x)
-#
-#        # apply to original feats
-#        for i in range(self.num_layers):
-#            # apply to channel + feat dim
-#            x = self.mixer_blocks[i](x)
-#        x = self.layernorm(x)
-#        x = torch.mean(x, dim=1)
-#        x = self.mlp_head(x)
-#        return x
-#
-#
-# class EdgePredictor_per_node(torch.nn.Module):
-#    def __init__(self, dim_in_time, dim_in_node):
-#        super().__init__()
-#
-#        self.dim_in_time = dim_in_time
-#        self.dim_in_node = dim_in_node
-#
-#        self.src_fc = torch.nn.Linear(dim_in_time + dim_in_node, 100)
-#        self.dst_fc = torch.nn.Linear(dim_in_time + dim_in_node, 100)
-#        self.out_fc = torch.nn.Linear(100, 1)
-#
-#    def forward(self, h, neg_samples=1):
-#        num_edge = h.shape[0] // (neg_samples + 2)
-#        h_src = self.src_fc(h[:num_edge])
-#        h_pos_dst = self.dst_fc(h[num_edge : 2 * num_edge])
-#        h_neg_dst = self.dst_fc(h[2 * num_edge :])
-#        h_pos_edge = torch.nn.functional.relu(h_src + h_pos_dst)
-#        h_neg_edge = torch.nn.functional.relu(h_src.tile(neg_samples, 1) + h_neg_dst)
-#        return self.out_fc(h_pos_edge), self.out_fc(h_neg_edge)
-#
-#
-# class Mixer_per_node(nn.Module):
-#    def __init__(self, mlp_mixer_configs, edge_predictor_configs):
-#        super().__init__()
-#
-#        self.node_feats_dim = edge_predictor_configs['dim_in_node']
-#        self.base_model = MLPMixer2(**mlp_mixer_configs)
-#        self.edge_predictor = EdgePredictor_per_node(**edge_predictor_configs)
-#
-#    def forward(self, model_inputs, has_temporal_neighbors, neg_samples, node_feats):
-#        x = self.base_model(*model_inputs)
-#        if self.node_feats_dim > 0:
-#            x = torch.cat([x, node_feats], dim=1)
-#
-#        pred_pos, pred_neg = self.edge_predictor(x, neg_samples=neg_samples)
-#        pos_mask, neg_mask = self.pos_neg_mask(has_temporal_neighbors, neg_samples)
-#        loss = F.binary_cross_entropy_with_logits(pred_pos, torch.ones_like(pred_pos))[
-#            pos_mask
-#        ].mean()
-#        loss += F.binary_cross_entropy_with_logits(
-#            pred_neg, torch.zeros_like(pred_neg)
-#        )[neg_mask].mean()
-#        return loss
-#
-#    def pos_neg_mask(self, mask, neg_samples):
-#        num_edge = len(mask) // (neg_samples + 2)
-#        src_mask = mask[:num_edge]
-#        pos_dst_mask = mask[num_edge : 2 * num_edge]
-#        neg_dst_mask = mask[2 * num_edge :]
-#
-#        pos_mask = [(i and j) for i, j in zip(src_mask, pos_dst_mask)]
-#        neg_mask = [(i and j) for i, j in zip(src_mask * neg_samples, neg_dst_mask)]
-#        return pos_mask, neg_mask
