@@ -80,8 +80,8 @@ class GraphMixer(nn.Module):
                     channel_dim_expansion=channel_dim_expansion,
                     dropout=dropout,
                 )
+                for _ in range(num_layers)
             ]
-            for _ in range(num_layers)
         )
         self.output_layer = nn.Linear(
             in_features=edge_dim + node_dim, out_features=embed_dim
@@ -104,10 +104,14 @@ class GraphMixer(nn.Module):
 
         # Node Encoder
         time_gap_node_feat = node_feat[batch.time_gap_node_nids]
-        valid_time_gap_node_feats = time_gap_node_feat
-        valid_time_gap_node_feats[batch.time_gap_node_mask == 0] = -1e10
-        scores = torch.softmax(valid_time_gap_node_feats, dim=1)
-        z_node = torch.mean(time_gap_node_feat * scores, dim=1)
+        masked_feat = time_gap_node_feat.masked_fill(
+            batch.time_gap_node_mask.unsqueeze(-1) == 0, -1e10
+        )
+        scores = torch.softmax(masked_feat, dim=1)
+
+        # Handle rows with no valid neighbors
+        scores[batch.time_gap_node_mask.sum(dim=1) == 0] = 0
+        z_node = torch.sum(time_gap_node_feat * scores, dim=1)
         z_node += node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
 
         # Link Decoder
