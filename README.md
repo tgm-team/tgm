@@ -1,7 +1,7 @@
 <a id="readme-top"></a>
 
 <div align="center">
-<h1> OpenDG </h1>
+<h1> TGM </h1>
 <h3 style="font-size: 22px">Efficient and Modular Training on Dynamic Graphs</h3>
 <a href="https://tgm.readthedocs.io/en/latest"/><strong style="font-size: 18px;">Read Our Docs»</strong></a>
 <a href="https://github.com/tgm-team/tgm"/><strong style="font-size: 18px;">Read Our Paper»</strong></a>
