@@ -26,7 +26,7 @@ echo "===================="
 
 case "$METHOD" in
     edgebank)
-        python "$ROOT_DIR/examples/edgebank.py" \
+        python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
             --seed $SEED \
             --dataset $DATASET \
             --bsize 200 \
@@ -36,7 +36,7 @@ case "$METHOD" in
         ;;
 
     tgat)
-        python "$ROOT_DIR/examples/tgat.py" \
+        python "$ROOT_DIR/examples/linkproppred/tgat.py" \
             --seed $SEED \
             --dataset $DATASET \
             --bsize 200 \
@@ -52,7 +52,7 @@ case "$METHOD" in
         ;;
 
     tgn)
-        python "$ROOT_DIR/examples/tgn.py" \
+        python "$ROOT_DIR/examples/linkproppred/tgn.py" \
             --seed $SEED \
             --dataset $DATASET \
             --bsize 200 \
@@ -68,7 +68,7 @@ case "$METHOD" in
         ;;
 
     gcn)
-        python "$ROOT_DIR/examples/gcn.py" \
+        python "$ROOT_DIR/examples/linkproppred/gcn.py" \
             --seed $SEED \
             --dataset $DATASET \
             --device cuda \
@@ -81,7 +81,7 @@ case "$METHOD" in
         ;;
 
     gclstm)
-        python "$ROOT_DIR/examples/gclstm.py" \
+        python "$ROOT_DIR/examples/linkproppred/gclstm.py" \
             --seed $SEED \
             --dataset $DATASET \
             --device cuda \

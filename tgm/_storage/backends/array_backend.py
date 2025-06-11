@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import torch
 from torch import Tensor
 
-from opendg.data import DGData
+from tgm.data import DGData
 
 from ..base import DGSliceTracker, DGStorageBase
 

@@ -1,4 +1,4 @@
 ## DGraph
 
-::: opendg.graph.DGraph
-::: opendg.graph.DGBatch
+::: tgm.graph.DGraph
+::: tgm.graph.DGBatch

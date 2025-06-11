@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 import torch
 
-from opendg.data import DGData
+from tgm.data import DGData
 
 
 def test_init_dg_data_no_node_events():

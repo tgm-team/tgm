@@ -4,7 +4,7 @@ from typing import List, Optional, Set, Tuple
 
 from torch import Tensor
 
-from opendg.data import DGData
+from tgm.data import DGData
 
 
 @dataclass(slots=True)

@@ -1,6 +1,6 @@
 import pytest
 
-from opendg.timedelta import TimeDeltaDG
+from tgm.timedelta import TimeDeltaDG
 
 
 @pytest.fixture(params=['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])

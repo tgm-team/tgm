@@ -1,3 +1,3 @@
 ## Data
 
-::: opendg.data
+::: tgm.data

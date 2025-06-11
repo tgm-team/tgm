@@ -3,14 +3,14 @@ requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "opendg"
-version = "0.1.0"
-description = "An Open Library for Temporal Graph Learning"
+name = "tgm"
+version = "0.0.1-alpha"
+description = "Efficient and Modular Training on Dynamic Graphs"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name="Shenyang Huang", email="shenyang.huang@mail.mcgill.ca"},
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
+    {name="Shenyang Huang", email="shenyang.huang@mail.mcgill.ca"},
 ]
 dependencies = [
     "numpy>=2.2.6",
@@ -39,7 +39,7 @@ examples = [
 ]
 
 [tool.mypy]
-files = ["opendg"]
+files = ["tgm"]
 install_types = true
 non_interactive = true
 ignore_missing_imports = true
@@ -56,7 +56,7 @@ include_trailing_comma = true
 skip = [".gitignore", "__init__.py"]
 
 [tool.ruff]
-src = ["opendg"]
+src = ["tgm"]
 line-length = 88
 indent-width = 4
 target-version = "py39"
@@ -94,7 +94,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["opendg"]
+source = ["tgm"]
 
 [tool.coverage.report]
 exclude_lines = [

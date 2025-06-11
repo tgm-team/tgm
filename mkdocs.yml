@@ -1,7 +1,7 @@
 ---
-site_name: opendg Docs
-site_url: https://opendg.readthedocs.io/en/latest/
-repo_url: https://github.com/shenyangHuang/openDG
+site_name: TGM Docs
+site_url: https://tgm.readthedocs.io/en/latest/
+repo_url: https://github.com/tgm-team/tgm
 
 nav:
   - Home:
@@ -55,7 +55,7 @@ plugins:
         python:
           import:
             - https://docs.python.org/3/objects.inv
-          paths: [opendg]
+          paths: [tgm]
           options:
             docstring_options:
               ignore_init_summary: true

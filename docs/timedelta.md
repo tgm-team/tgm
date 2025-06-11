@@ -1,3 +1,3 @@
 ## TimeDeltaDG
 
-::: opendg.timedelta
+::: tgm.timedelta

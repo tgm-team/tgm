@@ -4,8 +4,8 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from opendg.data import DGData
-from opendg.graph import DGBatch, DGraph
+from tgm.data import DGData
+from tgm.graph import DGBatch, DGraph
 
 
 @pytest.fixture
@@ -116,7 +116,7 @@ def test_init_get_tgb_time_delta(data):
     _data = 'tgbl-foo'
     mock_td = {'tgbl-foo': 'bar'}
     with (
-        patch.dict('opendg.timedelta.TGB_TIME_DELTAS', mock_td),
+        patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td),
         patch.object(DGData, 'from_any', return_value=data),
     ):
         dg = DGraph(_data)

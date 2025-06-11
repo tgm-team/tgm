@@ -1,4 +1,4 @@
-# Contributing to OpenDG
+# Contributing to TGM
 
 ## Prerequisites
 
@@ -14,7 +14,7 @@ pip install uv
 
 #### Background
 
-_uv_ manages a lockfile which maintains a consistent and fixed dependency graph for all _OpenDG_ dependencies. These dependencies are bundled in a python virtual environment stored in a hidden `.venv` folder in the root project directory. The virtual environment is generated on the fly based on the lockfile and is created upon calling `uv sync`.
+_uv_ manages a lockfile which maintains a consistent and fixed dependency graph for all _TGM_ dependencies. These dependencies are bundled in a python virtual environment stored in a hidden `.venv` folder in the root project directory. The virtual environment is generated on the fly based on the lockfile and is created upon calling `uv sync`.
 
 #### Running commands
 
@@ -38,7 +38,7 @@ uv add numpy
 
 **Note**: this will automatically update the [pyproject.toml](../pyproject.toml) and [uv lock file](../uv.lock) with the new package which will be reflected in version control.
 
-In order to facilitate modularity and avoid burdening users with dependencies they don't need, it's recommended to minimize core dependencies to those that **all** users will require for **every** release. To support this, _uv_ has the notion of _dependency groups_, which facilitate auxilary dependencies. For instance, the _dev_ group is the set of dependencies required for openDG development, but is not necessarily shipped to end-users of the library.
+In order to facilitate modularity and avoid burdening users with dependencies they don't need, it's recommended to minimize core dependencies to those that **all** users will require for **every** release. To support this, _uv_ has the notion of _dependency groups_, which facilitate auxilary dependencies. For instance, the _dev_ group is the set of dependencies required for TGM development, but is not necessarily shipped to end-users of the library.
 
 To add or remove a package from a dependency group, issue `uv add --<group> <package>` and `uv remove --<group> <package>`, respectively. For instance, to add `hypothesis` as a `dev` dependancy, we would issue:
 
@@ -64,14 +64,14 @@ to activate the environment.
 
 ## Dev Installation
 
-### Install openDG
+### Install TGM
 
 #### From Source
 
 ```sh
 # Clone the repo
-git clone https://github.com/shenyangHuang/openDG.git
-cd openDG
+git clone https://github.com/tgm-team/tgm.git
+cd tgm
 
 # Install core dependencies into an isolated environment
 uv sync
@@ -79,7 +79,7 @@ uv sync
 
 ### Install pre-commit hooks:
 
-OpenDG ships with a set of [pre-commit hooks](../.pre-commit-config.yaml) that automatically apply code formatting, linting, static type analysis, and more.
+TGM ships with a set of [pre-commit hooks](../.pre-commit-config.yaml) that automatically apply code formatting, linting, static type analysis, and more.
 
 The hooks can be installed by issuing:
 
@@ -91,7 +91,7 @@ It is recommended to use these hooks when commiting code remotely but they can a
 
 ## Unit Testing
 
-The openDG test suite is located uner `test/`.
+The TGM test suite is located uner `test/`.
 Run the entire test suite with
 
 ```sh
@@ -100,9 +100,9 @@ uv run pytest
 
 ## Continuous Integration
 
-OpenDG uses [Github Actions](https://github.com/shenyangHuang/openDG/tree/main/.github/workflows) for continuous integration.
+TGM uses [Github Actions](https://github.com/tgm-team/tgm/tree/main/.github/workflows) for continuous integration.
 
-Everytime you send a Pull Request, your commit will be built and checked against the openDG guidelines:
+Everytime you send a Pull Request, your commit will be built and checked against the TGM guidelines:
 
 1. Ensure that your code is formatted correctly. We use the [`Ruff-Formatter`](https://docs.astral.sh/ruff/formatter/).
 
@@ -122,7 +122,7 @@ Everytime you send a Pull Request, your commit will be built and checked against
 
 To build the documentation:
 
-1. [Build and install](#Installation) openDG from source.
+1. [Build and install](#Installation) TGM from source.
 1. Generate the documentation via:
    ```sh
    uv sync --group docs

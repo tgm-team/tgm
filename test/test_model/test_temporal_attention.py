@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from opendg.nn.attention import TemporalAttention
+from tgm.nn.attention import TemporalAttention
 
 
 def test_temporal_attention_bad_init_shape():
