@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "tgm"
 version = "0.0.1-alpha"
-description = "Efficient and Modular Training on Dynamic Graphs"
+description = "Efficient and Modular ML on Dynamic Graphs"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [

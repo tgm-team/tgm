@@ -1,4 +1,4 @@
-"""TGM: Efficient and Modular Training on Dynamic Graphs."""
+"""TGM: Efficient and Modular ML on Dynamic Graphs."""
 
 __version__ = '0.0.1-alpha'
 
