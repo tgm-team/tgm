@@ -3,7 +3,7 @@ from __future__ import annotations
 import pathlib
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, List, Optional, Set, Tuple
+from typing import Any, Optional, Set, Tuple
 
 import pandas as pd
 import torch
@@ -65,7 +65,6 @@ class DGraph:
         dg._slice.end_time = self._slice.end_time
         dg._slice.start_idx = self._maybe_max(start_idx, self._slice.start_idx)
         dg._slice.end_idx = self._maybe_min(end_idx, self._slice.end_idx)
-        dg._slice.node_slice = self._slice.node_slice
         return dg
 
     def slice_time(
@@ -80,28 +79,6 @@ class DGraph:
         dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
         dg._slice.start_time = self._maybe_max(start_time, self.start_time)
         dg._slice.end_time = self._maybe_min(end_time, self.end_time)
-        dg._slice.start_idx = self._slice.start_idx
-        dg._slice.end_idx = self._slice.end_idx
-        dg._slice.node_slice = self._slice.node_slice
-        return dg
-
-    def slice_nodes(self, nodes: List[int]) -> DGraph:
-        r"""Create and return a new view by slicing nodes to include."""
-        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
-
-        # Take intersection of nodes
-        if self._slice.node_slice is None:
-            self._slice.node_slice = set(range(self.num_nodes))
-        dg._slice.node_slice = self._slice.node_slice & set(nodes)
-
-        # Update start time
-        new_start_time = self._storage.get_start_time(dg._slice)
-        dg._slice.start_time = self._maybe_max(new_start_time, self.start_time)
-
-        # Update end time
-        new_end_time = self._storage.get_end_time(dg._slice)
-        dg._slice.end_time = self._maybe_min(new_end_time, self.end_time)
-
         dg._slice.start_idx = self._slice.start_idx
         dg._slice.end_idx = self._slice.end_idx
         return dg
@@ -137,8 +114,8 @@ class DGraph:
     @cached_property
     def num_nodes(self) -> int:
         r"""The total number of unique nodes encountered over the dynamic graph."""
-        self._slice.node_slice = self._storage.get_nodes(self._slice)
-        return max(self._slice.node_slice) + 1 if len(self._slice.node_slice) else 0
+        nodes = self._storage.get_nodes(self._slice)
+        return max(nodes) + 1 if len(nodes) else 0
 
     @cached_property
     def num_edges(self) -> int:

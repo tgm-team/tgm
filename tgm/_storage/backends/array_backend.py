@@ -31,57 +31,47 @@ class DGStorageArrayBackend(DGStorageBase):
 
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
         for i in range(*self._binary_search(slice)):
-            nodes = self._nodes_in_event(i)
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                return int(self._data.timestamps[i].item())
+            return int(self._data.timestamps[i].item())
         return None
 
     def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
         for i in range(ub_idx - 1, lb_idx - 1, -1):
-            nodes = self._nodes_in_event(i)
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                return int(self._data.timestamps[i].item())
+            return int(self._data.timestamps[i].item())
         return None
 
     def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         all_nodes: Set[int] = set()
         for i in range(*self._binary_search(slice)):
             nodes = self._nodes_in_event(i)
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                all_nodes.update(nodes)
+            all_nodes.update(nodes)
         return all_nodes
 
     def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
-        src, dst, time = [], [], []
+        srcs, dsts, times = [], [], []
         for i in range(*self._binary_search(slice)):
             if i not in self._edge_idx_map:
                 continue
-            nodes = self._nodes_in_event(i)
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                src.append(nodes[0])
-                dst.append(nodes[1])
-                time.append(self._data.timestamps[i].item())
+            src, dst = self._nodes_in_event(i)
+            srcs.append(src)
+            dsts.append(dst)
+            times.append(self._data.timestamps[i].item())
 
-        src_tensor = torch.LongTensor(src)
-        dst_tensor = torch.LongTensor(dst)
-        time_tensor = torch.LongTensor(time)
+        src_tensor = torch.LongTensor(srcs)
+        dst_tensor = torch.LongTensor(dsts)
+        time_tensor = torch.LongTensor(times)
         return src_tensor, dst_tensor, time_tensor
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         timestamps = set()
         for i in range(*self._binary_search(slice)):
-            nodes = self._nodes_in_event(i)
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                timestamps.add(self._data.timestamps[i].item())
+            timestamps.add(self._data.timestamps[i].item())
         return len(timestamps)
 
     def get_num_events(self, slice: DGSliceTracker) -> int:
         num_events = 0
-        for i in range(*self._binary_search(slice)):
-            nodes = self._nodes_in_event(i)
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                num_events += 1
+        for _ in range(*self._binary_search(slice)):
+            num_events += 1
         return num_events
 
     def get_nbrs(
@@ -101,14 +91,12 @@ class DGStorageArrayBackend(DGStorageBase):
         for i in range(*self._binary_search(slice)):
             if i not in self._edge_idx_map:
                 continue
-            nodes = self._nodes_in_event(i)
-            if slice.node_slice is None or all(x in slice.node_slice for x in nodes):
-                # Use 0/1 flag to denote dst/src neighbor, respectively
-                src, dst = nodes
-                if src in seed_nodes_set:
-                    nbrs[src].add((i, 1))
-                if dst in seed_nodes_set:
-                    nbrs[dst].add((i, 0))
+            src, dst = self._nodes_in_event(i)
+            # Use 0/1 flag to denote dst/src neighbor, respectively
+            if src in seed_nodes_set:
+                nbrs[src].add((i, 1))
+            if dst in seed_nodes_set:
+                nbrs[dst].add((i, 0))
 
         # TODO: Node feats
         batch_size = len(seed_nodes)
@@ -149,13 +137,12 @@ class DGStorageArrayBackend(DGStorageBase):
         indices, values = [], []
         for i in range(*self._binary_search(slice)):
             nodes = self._nodes_in_event(i)
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                time = int(self._data.timestamps[i].item())
-                max_time = max(max_time, time)
-                max_node_id = max(max_node_id, *nodes)
-                if i not in self._edge_idx_map:
-                    indices.append([time, nodes[0]])
-                    values.append(self._data.dynamic_node_feats[self._node_idx_map[i]])  # type: ignore
+            time = int(self._data.timestamps[i].item())
+            max_time = max(max_time, time)
+            max_node_id = max(max_node_id, *nodes)
+            if i not in self._edge_idx_map:
+                indices.append([time, nodes[0]])
+                values.append(self._data.dynamic_node_feats[self._node_idx_map[i]])  # type: ignore
 
         if not len(values):
             return None
@@ -180,13 +167,12 @@ class DGStorageArrayBackend(DGStorageBase):
         indices, values = [], []
         for i in range(*self._binary_search(slice)):
             nodes = self._nodes_in_event(i)
-            if slice.node_slice is None or any(x in slice.node_slice for x in nodes):
-                time = int(self._data.timestamps[i].item())
-                max_time = max(max_time, time)
-                max_node_id = max(max_node_id, *nodes)
-                if i in self._edge_idx_map:
-                    indices.append([time, nodes[0], nodes[1]])
-                    values.append(self._data.edge_feats[self._edge_idx_map[i]])
+            time = int(self._data.timestamps[i].item())
+            max_time = max(max_time, time)
+            max_node_id = max(max_node_id, *nodes)
+            if i in self._edge_idx_map:
+                indices.append([time, nodes[0], nodes[1]])
+                values.append(self._data.edge_feats[self._edge_idx_map[i]])
 
         if not len(values):
             return None

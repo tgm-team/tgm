@@ -13,7 +13,6 @@ class DGSliceTracker:
     end_time: Optional[int] = None
     start_idx: Optional[int] = None
     end_idx: Optional[int] = None
-    node_slice: Optional[Set[int]] = None
 
 
 class DGStorageBase(ABC):
