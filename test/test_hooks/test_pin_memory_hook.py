@@ -1,9 +1,9 @@
 import pytest
 import torch
 
-from opendg.data import DGData
-from opendg.graph import DGraph
-from opendg.hooks import PinMemoryHook
+from tgm.data import DGData
+from tgm.graph import DGraph
+from tgm.hooks import PinMemoryHook
 
 
 @pytest.fixture

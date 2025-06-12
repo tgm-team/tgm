@@ -5,23 +5,21 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tgb.nodeproppred.evaluate import Evaluator
 from torch_geometric.nn import GCNConv
-from torchmetrics import Metric, MetricCollection
-from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from opendg.graph import DGBatch, DGraph
-from opendg.hooks import NegativeEdgeSamplerHook
-from opendg.loader import DGDataLoader
-from opendg.timedelta import TimeDeltaDG
-from opendg.util.seed import seed_everything
+from tgm.graph import DGBatch, DGraph
+from tgm.loader import DGDataLoader
+from tgm.timedelta import TimeDeltaDG
+from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
     description='GCN Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
+parser.add_argument('--dataset', type=str, default='tgbn-genre', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
@@ -31,7 +29,7 @@ parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimens
 parser.add_argument(
     '--time-gran',
     type=str,
-    default='h',
+    default='D',
     help='time granularity to operate on for snapshots',
 )
 
@@ -43,6 +41,7 @@ class GCN(nn.Module):
         embed_dim: int,
         num_layers: int,
         dropout: float,
+        num_classes: int = 1,
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -53,17 +52,16 @@ class GCN(nn.Module):
             num_layers=num_layers,
             dropout=dropout,
         )
-        self.decoder = LinkPredictor(dim=embed_dim)
+        self.decoder = NodePredictor(in_dim=embed_dim, out_dim=num_classes)
 
     def forward(
         self, batch: DGBatch, node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.src, batch.dst], dim=0).to(node_feat.device)
         z = self.encoder(node_feat, edge_index)
-        z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
-        pos_out = self.decoder(z_src, z_dst)
-        neg_out = self.decoder(z_src, z_neg)
-        return pos_out, neg_out
+        z_node = z[batch.node_ids]
+        pred = self.decoder(z_node)
+        return pred
 
 
 class GCNEncoder(torch.nn.Module):
@@ -105,17 +103,17 @@ class GCNEncoder(torch.nn.Module):
         return x
 
 
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
+class NodePredictor(torch.nn.Module):
+    def __init__(self, in_dim, out_dim):
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.lin_node = nn.Linear(in_dim, in_dim)
+        self.out = nn.Linear(in_dim, out_dim)
 
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+    def forward(self, node_embed):
+        h = self.lin_node(node_embed)
         h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        h = self.out(h)
+        return h
 
 
 def train(
@@ -126,15 +124,17 @@ def train(
 ) -> float:
     model.train()
     total_loss = 0
+    criterion = torch.nn.CrossEntropyLoss()
     for batch in tqdm(loader):
         # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
         if not len(batch.src):
             continue
-
         opt.zero_grad()
-        pos_out, neg_out = model(batch, node_feat)
-        loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
-        loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
+        label = batch.dynamic_node_feats
+        if label is None:
+            continue
+        pred = model(batch, node_feat)
+        loss = criterion(pred, label)
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -145,27 +145,35 @@ def train(
 def eval(
     loader: DGDataLoader,
     model: nn.Module,
-    metrics: Metric,
     node_feat: torch.Tensor,
+    evaluator: Evaluator,
 ) -> dict:
     model.eval()
+    eval_metric = 'ndcg'
+    total_score = 0
     for batch in tqdm(loader):
         # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
         if not len(batch.src):
             continue
+        label = batch.dynamic_node_feats
+        if label is None:
+            continue
+        pred = model(batch, node_feat)
 
-        pos_out, neg_out = model(batch, node_feat)
-        y_pred = torch.cat([pos_out, neg_out], dim=0).float()
-        y_true = (
-            torch.cat(
-                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-            )
-            .long()
-            .to(y_pred.device)
-        )
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
-        metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute()
+        np_pred = pred.cpu().detach().numpy()
+        np_true = label.cpu().detach().numpy()
+
+        input_dict = {
+            'y_true': np_true,
+            'y_pred': np_pred,
+            'eval_metric': [eval_metric],
+        }
+        result_dict = evaluator.eval(input_dict)
+        score = result_dict[eval_metric]
+        total_score += score
+    metric_dict = {}
+    metric_dict[eval_metric] = total_score / len(loader)
+    return metric_dict
 
 
 args = parser.parse_args()
@@ -181,23 +189,25 @@ test_dg = DGraph(
     args.dataset, time_delta=TimeDeltaDG('s'), split='test', device=args.device
 )
 
+num_nodes = DGraph(args.dataset).num_nodes
+label_dim = train_dg.dynamic_node_feats_dim
+evaluator = Evaluator(name=args.dataset)
+
+
 train_loader = DGDataLoader(
     train_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes),
     batch_unit=args.time_gran,
 )
 val_loader = DGDataLoader(
     val_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
     batch_unit=args.time_gran,
 )
 test_loader = DGDataLoader(
     test_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
     batch_unit=args.time_gran,
 )
 
-if train_dg.dynamic_node_feats_dim is not None:
+if train_dg.static_node_feats is not None:
     raise ValueError(
         'node features are not supported yet, make sure to incorporate them in the model'
     )
@@ -211,12 +221,10 @@ model = GCN(
     embed_dim=args.embed_dim,
     num_layers=args.n_layers,
     dropout=float(args.dropout),
+    num_classes=label_dim,
 ).to(args.device)
 
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
-metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-val_metrics = MetricCollection(metrics, prefix='Validation')
-test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
     start_time = time.perf_counter()
@@ -224,12 +232,11 @@ for epoch in range(1, args.epochs + 1):
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results = eval(val_loader, model, val_metrics, static_node_feats)
-    val_metrics.reset()
+    val_results = eval(val_loader, model, static_node_feats, evaluator)
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
     )
 
-test_results = eval(test_loader, model, test_metrics, static_node_feats)
+test_results = eval(test_loader, model, static_node_feats, evaluator)
 print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

@@ -1,9 +1,9 @@
 import pytest
 import torch
 
-from opendg.data import DGData
-from opendg.graph import DGBatch, DGraph
-from opendg.hooks import RecencyNeighborHook
+from tgm.data import DGData
+from tgm.graph import DGBatch, DGraph
+from tgm.hooks import RecencyNeighborHook
 
 
 @pytest.fixture

@@ -1,11 +1,11 @@
 import pytest
 import torch
 
-from opendg.data import DGData
-from opendg.graph import DGBatch, DGraph
-from opendg.loader import DGDataLoader
-from opendg.timedelta import TimeDeltaDG
-from opendg.util.seed import seed_everything
+from tgm.data import DGData
+from tgm.graph import DGBatch, DGraph
+from tgm.loader import DGDataLoader
+from tgm.timedelta import TimeDeltaDG
+from tgm.util.seed import seed_everything
 
 
 @pytest.fixture(autouse=True)

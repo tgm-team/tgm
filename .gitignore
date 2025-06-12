@@ -9,6 +9,8 @@
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 
+*.DS_Store
+
 # IPython
 profile_default/
 ipython_config.py

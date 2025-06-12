@@ -5,12 +5,12 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from opendg.graph import DGraph
-from opendg.hooks import NegativeEdgeSamplerHook
-from opendg.loader import DGDataLoader
-from opendg.nn import EdgeBankPredictor
-from opendg.timedelta import TimeDeltaDG
-from opendg.util.seed import seed_everything
+from tgm.graph import DGraph
+from tgm.hooks import NegativeEdgeSamplerHook
+from tgm.loader import DGDataLoader
+from tgm.nn import EdgeBankPredictor
+from tgm.timedelta import TimeDeltaDG
+from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
     description='EdgeBank Example',

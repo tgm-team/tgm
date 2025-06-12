@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from opendg.nn import Time2Vec
+from tgm.nn import Time2Vec
 
 
 @pytest.mark.parametrize('time_dim', [4, 32])

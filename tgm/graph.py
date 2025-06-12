@@ -9,9 +9,9 @@ import pandas as pd
 import torch
 from torch import Tensor
 
-from opendg._storage import DGSliceTracker, DGStorage
-from opendg.data import DGData
-from opendg.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
+from tgm._storage import DGSliceTracker, DGStorage
+from tgm.data import DGData
+from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
 class DGraph:
@@ -44,9 +44,10 @@ class DGraph:
         self._device = torch.device(device)
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
-        r"""Materialize dense tensors: src, dst, time, and optionally {'node': node_features, 'edge': edge_features}."""
+        r"""Materialize dense tensors: src, dst, time, and optionally {'node': dynamic_node_feats, node_times, node_ids, 'edge': edge_features}."""
         batch = DGBatch(*self.edges)
         if materialize_features and self.dynamic_node_feats is not None:
+            batch.node_times, batch.node_ids = self.dynamic_node_feats._indices()
             batch.dynamic_node_feats = self.dynamic_node_feats._values()
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats._values()
@@ -232,3 +233,5 @@ class DGBatch:
     time: Tensor
     dynamic_node_feats: Optional[Tensor] = None
     edge_feats: Optional[Tensor] = None
+    node_times: Optional[Tensor] = None
+    node_ids: Optional[Tensor] = None

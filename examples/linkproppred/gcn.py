@@ -5,26 +5,27 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch_geometric.nn import GCNConv
 from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from opendg.graph import DGBatch, DGraph
-from opendg.hooks import NegativeEdgeSamplerHook
-from opendg.loader import DGDataLoader
-from opendg.nn.recurrent import GCLSTM
-from opendg.timedelta import TimeDeltaDG
-from opendg.util.seed import seed_everything
+from tgm.graph import DGBatch, DGraph
+from tgm.hooks import NegativeEdgeSamplerHook
+from tgm.loader import DGDataLoader
+from tgm.timedelta import TimeDeltaDG
+from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='GCLSTM Example',
+    description='GCN Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
@@ -35,46 +36,73 @@ parser.add_argument(
 )
 
 
-class GCLSTM_Model(nn.Module):
-    def __init__(self, node_dim: int, embed_dim: int) -> None:
+class GCN(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        embed_dim: int,
+        num_layers: int,
+        dropout: float,
+    ) -> None:
         super().__init__()
-        self.encoder = RecurrentGCN(node_dim=node_dim, embed_dim=embed_dim, K=1)
-        self.decoder = LinkPredictor(embed_dim)
+        self.in_channels = in_channels
+        self.encoder = GCNEncoder(
+            in_channels=in_channels,
+            embed_dim=embed_dim,
+            out_channels=embed_dim,
+            num_layers=num_layers,
+            dropout=dropout,
+        )
+        self.decoder = LinkPredictor(dim=embed_dim)
 
     def forward(
-        self,
-        batch: DGBatch,
-        node_feat: torch.Tensor,
-        h_0: torch.Tensor | None = None,
-        c_0: torch.Tensor | None = None,
-    ) -> Tuple[torch.Tensor, ...]:
+        self, batch: DGBatch, node_feat: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
-        edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
-        z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
+        z = self.encoder(node_feat, edge_index)
         z_src, z_dst, z_neg = z[batch.src], z[batch.dst], z[batch.neg]  # type: ignore
         pos_out = self.decoder(z_src, z_dst)
         neg_out = self.decoder(z_src, z_neg)
-        return pos_out, neg_out, h_0, c_0
+        return pos_out, neg_out
 
 
-class RecurrentGCN(torch.nn.Module):
-    def __init__(self, node_dim: int, embed_dim: int, K=1) -> None:
-        super().__init__()
-        self.recurrent = GCLSTM(in_channels=node_dim, out_channels=embed_dim, K=K)
-        self.linear = nn.Linear(embed_dim, embed_dim)
-
-    def forward(
+class GCNEncoder(torch.nn.Module):
+    def __init__(
         self,
-        x: torch.Tensor,
-        edge_index: torch.Tensor,
-        edge_weight: torch.Tensor,
-        h: torch.Tensor | None,
-        c: torch.Tensor | None,
-    ) -> Tuple[torch.Tensor, ...]:
-        h_0, c_0 = self.recurrent(x, edge_index, edge_weight, h, c)
-        h = F.relu(h_0)
-        h = self.linear(h)
-        return h, h_0, c_0
+        in_channels: int,
+        embed_dim: int,
+        out_channels: int,
+        num_layers: int,
+        dropout: float,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.dropout = dropout
+        self.convs = torch.nn.ModuleList()
+        self.bns = torch.nn.ModuleList()
+
+        self.convs.append(GCNConv(in_channels, embed_dim, cached=True))
+        self.bns.append(torch.nn.BatchNorm1d(embed_dim))
+
+        for _ in range(num_layers - 2):
+            self.convs.append(GCNConv(embed_dim, embed_dim, cached=True))
+            self.bns.append(torch.nn.BatchNorm1d(embed_dim))
+        self.convs.append(GCNConv(embed_dim, out_channels, cached=True))
+
+    def reset_parameters(self) -> None:
+        for conv in self.convs:
+            conv.reset_parameters()
+        for bn in self.bns:
+            bn.reset_parameters()
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+        for i, conv in enumerate(self.convs[:-1]):
+            x = conv(x, edge_index)
+            x = self.bns[i](x)
+            x = F.relu(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.convs[-1](x, edge_index)
+        return x
 
 
 class LinkPredictor(nn.Module):
@@ -95,24 +123,22 @@ def train(
     model: nn.Module,
     opt: torch.optim.Optimizer,
     node_feat: torch.Tensor,
-) -> Tuple[float, torch.Tensor, torch.Tensor]:
+) -> float:
     model.train()
     total_loss = 0
-    h_0, c_0 = None, None
     for batch in tqdm(loader):
         # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
         if not len(batch.src):
             continue
 
         opt.zero_grad()
-        pos_out, neg_out, h_0, c_0 = model(batch, node_feat, h_0, c_0)
+        pos_out, neg_out = model(batch, node_feat)
         loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
         loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
-        h_0, c_0 = h_0.detach(), c_0.detach()
-    return total_loss, h_0, c_0
+    return total_loss
 
 
 @torch.no_grad()
@@ -121,8 +147,6 @@ def eval(
     model: nn.Module,
     metrics: Metric,
     node_feat: torch.Tensor,
-    h_0: torch.Tensor | None = None,
-    c_0: torch.Tensor | None = None,
 ) -> dict:
     model.eval()
     for batch in tqdm(loader):
@@ -130,7 +154,7 @@ def eval(
         if not len(batch.src):
             continue
 
-        pos_out, neg_out, h_0, c_0 = model(batch, node_feat, h_0, c_0)
+        pos_out, neg_out = model(batch, node_feat)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = (
             torch.cat(
@@ -173,7 +197,7 @@ test_loader = DGDataLoader(
     batch_unit=args.time_gran,
 )
 
-if train_dg.dynamic_node_feats is not None:
+if train_dg.dynamic_node_feats_dim is not None:
     raise ValueError(
         'node features are not supported yet, make sure to incorporate them in the model'
     )
@@ -182,7 +206,12 @@ if train_dg.dynamic_node_feats is not None:
 args.node_dim = args.embed_dim
 static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
 
-model = GCLSTM_Model(node_dim=args.node_dim, embed_dim=args.embed_dim).to(args.device)
+model = GCN(
+    in_channels=args.embed_dim,
+    embed_dim=args.embed_dim,
+    num_layers=args.n_layers,
+    dropout=float(args.dropout),
+).to(args.device)
 
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
@@ -191,13 +220,12 @@ test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
     start_time = time.perf_counter()
-    loss, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
+    loss = train(train_loader, model, opt, static_node_feats)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results = eval(val_loader, model, val_metrics, static_node_feats, h_0, c_0)
+    val_results = eval(val_loader, model, val_metrics, static_node_feats)
     val_metrics.reset()
-
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())

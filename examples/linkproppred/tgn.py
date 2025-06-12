@@ -11,17 +11,17 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from opendg.graph import DGBatch, DGraph
-from opendg.hooks import (
+from tgm.graph import DGBatch, DGraph
+from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
     RecencyNeighborHook,
 )
-from opendg.loader import DGDataLoader
-from opendg.nn import TemporalAttention, Time2Vec
-from opendg.timedelta import TimeDeltaDG
-from opendg.util.seed import seed_everything
+from tgm.loader import DGDataLoader
+from tgm.nn import TemporalAttention, Time2Vec
+from tgm.timedelta import TimeDeltaDG
+from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
     description='TGN Example',
