@@ -134,48 +134,48 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_dynamic_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.dynamic_node_feats is None:
             return None
+        assert self._data.node_event_idx is not None  # for mypy
+        assert self._data.node_ids is not None  # for mypy
 
-        max_time, max_node_id = -1, -1  # Assuming these are both non-negative
-        indices, values = [], []
-        for i in range(*self._binary_search(slice)):
-            nodes = self._nodes_in_event(i)
-            time = int(self._data.timestamps[i].item())
-            max_time = max(max_time, time)
-            max_node_id = max(max_node_id, *nodes)
-            if i not in self._edge_idx_map:
-                indices.append([time, nodes[0]])
-                values.append(self._data.dynamic_node_feats[self._node_idx_map[i]])  # type: ignore
-
-        if not len(values):
+        lb_idx, ub_idx = self._binary_search(slice)
+        node_mask = (self._data.node_event_idx >= lb_idx) & (
+            self._data.node_event_idx < ub_idx
+        )
+        if node_mask.sum() == 0:
             return None
 
-        # If the end_time is given, then it determines the dimension of the temporal axis
-        # even if there are no events at the end time (could be the case after calling slice_time)
-        max_time = slice.end_time or max_time
-        node_feats_dim = self.get_dynamic_node_feats_dim()
-        assert node_feats_dim is not None
+        time = self._data.timestamps[self._data.node_event_idx[node_mask]]
+        nodes = self._data.node_ids[node_mask]
+        indices = torch.stack([time, nodes], dim=0)
+        values = self._data.dynamic_node_feats[node_mask]
 
-        # https://pytorch.org/docs/stable/sparse.html#construction
-        values_tensor = torch.stack(values)
-        indices_tensor = torch.tensor(indices).t()
+        max_node_id = nodes.max()
+        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
+            self._data.edge_event_idx < ub_idx
+        )
+        if edge_mask.sum() != 0:
+            max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())  # type: ignore
+
+        max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
+        node_feats_dim = self.get_dynamic_node_feats_dim()
         shape = (max_time + 1, max_node_id + 1, node_feats_dim)
-        return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
+        return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
 
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.edge_feats is None:
             return None
 
-        lb_idx, ub_idx = self._binary_search(slice)  # indices in timestamps
-        mask = (self._data.edge_event_idx >= lb_idx) & (
+        lb_idx, ub_idx = self._binary_search(slice)
+        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
             self._data.edge_event_idx < ub_idx
         )
-        if mask.sum() == 0:
+        if edge_mask.sum() == 0:
             return None
 
-        time = self._data.timestamps[self._data.edge_event_idx[mask]]
-        edges = self._data.edge_index[mask]
+        time = self._data.timestamps[self._data.edge_event_idx[edge_mask]]
+        edges = self._data.edge_index[edge_mask]
         indices = torch.stack([time, edges[:, 0], edges[:, 1]], dim=0)
-        values = self._data.edge_feats[mask]
+        values = self._data.edge_feats[edge_mask]
 
         max_node_id = edges.max()
         if self._data.node_event_idx is not None:
@@ -184,7 +184,7 @@ class DGStorageArrayBackend(DGStorageBase):
             )
             max_node_id = max(max_node_id, self._data.node_ids[node_mask].max())  # type: ignore
 
-        max_time = slice.end_time or time.max()
+        max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
         edge_feats_dim = self.get_edge_feats_dim()
         shape = (max_time + 1, max_node_id + 1, max_node_id + 1, edge_feats_dim)
         return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
