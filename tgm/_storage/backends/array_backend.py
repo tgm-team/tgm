@@ -43,29 +43,35 @@ class DGStorageArrayBackend(DGStorageBase):
 
     def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         all_nodes: Set[int] = set()
-        for i in range(*self._binary_search(slice)):
-            all_nodes.update(self._nodes_in_event(i))
+        lb_idx, ub_idx = self._binary_search(slice)
+
+        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
+            self._data.edge_event_idx < ub_idx
+        )
+        edge_event_nodes = self._data.edge_index[edge_mask].unique().tolist()
+        all_nodes.update(edge_event_nodes)
+
+        if self._data.node_event_idx is not None:
+            node_mask = (self._data.node_event_idx >= lb_idx) & (
+                self._data.node_event_idx < ub_idx
+            )
+            node_event_nodes = self._data.node_ids[node_mask].unique().tolist()  # type: ignore
+            all_nodes.update(node_event_nodes)
         return all_nodes
 
     def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
-        srcs, dsts, times = [], [], []
-        for i in range(*self._binary_search(slice)):
-            if i in self._edge_idx_map:
-                src, dst = self._nodes_in_event(i)
-                srcs.append(src)
-                dsts.append(dst)
-                times.append(self._data.timestamps[i].item())
-
-        src_tensor = torch.LongTensor(srcs)
-        dst_tensor = torch.LongTensor(dsts)
-        time_tensor = torch.LongTensor(times)
-        return src_tensor, dst_tensor, time_tensor
+        lb_idx, ub_idx = self._binary_search(slice)
+        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
+            self._data.edge_event_idx < ub_idx
+        )
+        edges = self._data.edge_index[edge_mask]
+        src, dst = edges[:, 0], edges[:, 1]
+        time = self._data.timestamps[self._data.edge_event_idx[edge_mask]]
+        return src, dst, time
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
-        timestamps = set()
-        for i in range(*self._binary_search(slice)):
-            timestamps.add(self._data.timestamps[i].item())
-        return len(timestamps)
+        lb_idx, ub_idx = self._binary_search(slice)
+        return len(self._data.timestamps[lb_idx:ub_idx].unique())
 
     def get_num_events(self, slice: DGSliceTracker) -> int:
         lb_idx, ub_idx = self._binary_search(slice)
