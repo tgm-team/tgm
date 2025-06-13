@@ -90,15 +90,21 @@ class DGStorageArrayBackend(DGStorageBase):
         unique, inverse_indices = seed_nodes.unique(return_inverse=True)
         seed_nodes_set = set(unique.tolist())
 
+        lb_idx, ub_idx = self._binary_search(slice)
+        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
+            self._data.edge_event_idx < ub_idx
+        )
+        edges = self._data.edge_index[edge_mask]
+        event_ids = self._data.edge_event_idx[edge_mask]
+
         nbrs: Dict[int, Set[Tuple[int, int]]] = {node: set() for node in seed_nodes_set}
-        for i in range(*self._binary_search(slice)):
-            if i in self._edge_idx_map:
-                src, dst = self._nodes_in_event(i)
-                # Use 0/1 flag to denote dst/src neighbor, respectively
-                if src in seed_nodes_set:
-                    nbrs[src].add((i, 1))
-                if dst in seed_nodes_set:
-                    nbrs[dst].add((i, 0))
+        for edge, i in zip(edges, event_ids):
+            src, dst = edge
+            # Use 0/1 flag to denote dst/src neighbor, respectively
+            if src in seed_nodes_set:
+                nbrs[src.item()].add((i, 1))
+            if dst in seed_nodes_set:
+                nbrs[dst.item()].add((i, 0))
 
         # TODO: Node feats
         batch_size = len(seed_nodes)
@@ -203,12 +209,6 @@ class DGStorageArrayBackend(DGStorageBase):
         if self._data.edge_feats is None:
             return None
         return self._data.edge_feats.shape[1]
-
-    def _nodes_in_event(self, i: int) -> Tuple[int, ...]:
-        if i in self._edge_idx_map:
-            return tuple(self._data.edge_index[self._edge_idx_map[i]].tolist())
-        else:
-            return (int(self._data.node_ids[self._node_idx_map[i]].item()),)  # type: ignore
 
     def _binary_search(self, slice: DGSliceTracker) -> Tuple[int, int]:
         ts = self._data.timestamps
