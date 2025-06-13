@@ -165,31 +165,29 @@ class DGStorageArrayBackend(DGStorageBase):
         if self._data.edge_feats is None:
             return None
 
-        max_time, max_node_id = -1, -1  # Assuming these are both non-negative
-        indices, values = [], []
-        for i in range(*self._binary_search(slice)):
-            nodes = self._nodes_in_event(i)
-            time = int(self._data.timestamps[i].item())
-            max_time = max(max_time, time)
-            max_node_id = max(max_node_id, *nodes)
-            if i in self._edge_idx_map:
-                indices.append([time, nodes[0], nodes[1]])
-                values.append(self._data.edge_feats[self._edge_idx_map[i]])
-
-        if not len(values):
+        lb_idx, ub_idx = self._binary_search(slice)  # indices in timestamps
+        mask = (self._data.edge_event_idx >= lb_idx) & (
+            self._data.edge_event_idx < ub_idx
+        )
+        if mask.sum() == 0:
             return None
 
-        # If the end_time is given, then it determines the dimension of the temporal axis
-        # even if there are no events at the end time (could be the case after calling slice_time)
-        max_time = slice.end_time or max_time
-        edge_feats_dim = self.get_edge_feats_dim()
-        assert edge_feats_dim is not None
+        time = self._data.timestamps[self._data.edge_event_idx[mask]]
+        edges = self._data.edge_index[mask]
+        indices = torch.stack([time, edges[:, 0], edges[:, 1]], dim=0)
+        values = self._data.edge_feats[mask]
 
-        # https://pytorch.org/docs/stable/sparse.html#construction
-        values_tensor = torch.stack(values)
-        indices_tensor = torch.tensor(indices).t()
+        max_node_id = edges.max()
+        if self._data.node_event_idx is not None:
+            node_mask = (self._data.node_event_idx >= lb_idx) & (
+                self._data.node_event_idx < ub_idx
+            )
+            max_node_id = max(max_node_id, self._data.node_ids[node_mask].max())  # type: ignore
+
+        max_time = slice.end_time or time.max()
+        edge_feats_dim = self.get_edge_feats_dim()
         shape = (max_time + 1, max_node_id + 1, max_node_id + 1, edge_feats_dim)
-        return torch.sparse_coo_tensor(indices_tensor, values_tensor, shape)
+        return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
 
     def get_static_node_feats_dim(self) -> Optional[int]:
         if self._data.static_node_feats is None:
