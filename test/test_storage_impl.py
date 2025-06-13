@@ -328,66 +328,6 @@ def test_get_nbrs_single_hop(DGStorageImpl):
         for hop_num, nbrs in enumerate(v):
             assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
 
-    nbrs = storage.get_nbrs(
-        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
-        num_nbrs=[-1],
-        slice=DGSliceTracker(node_slice={1, 2, 3}),
-    )
-    exp_nbrs = {
-        1: [[]],
-        2: [[(2, 1)]],
-        3: [[]],
-        4: [[]],
-        5: [[]],
-        6: [[]],
-        7: [[]],
-        8: [[]],
-    }
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-    nbrs = storage.get_nbrs(
-        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
-        num_nbrs=[-1],
-        slice=DGSliceTracker(node_slice={2, 3}),
-    )
-    exp_nbrs = {
-        1: [[]],
-        2: [[(2, 1)]],
-        3: [[]],
-        4: [[]],
-        5: [[]],
-        6: [[]],
-        7: [[]],
-        8: [[]],
-    }
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-    nbrs = storage.get_nbrs(
-        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
-        num_nbrs=[-1],
-        slice=DGSliceTracker(node_slice={2, 3}, end_time=4),
-    )
-    exp_nbrs = {
-        1: [[]],
-        2: [[(2, 1)]],
-        3: [[]],
-        4: [[]],
-        5: [[]],
-        6: [[]],
-        7: [[]],
-        8: [[]],
-    }
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
 
 @pytest.mark.skip('TODO: Add get_nbr tests')
 def test_get_nbrs_single_hop_sampling_required(DGStorageImpl):

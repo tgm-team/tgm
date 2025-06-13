@@ -30,32 +30,31 @@ class DGStorageArrayBackend(DGStorageBase):
         self._ub_cache: Dict[Optional[int], int] = {}
 
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
-        for i in range(*self._binary_search(slice)):
-            return int(self._data.timestamps[i].item())
-        return None
+        lb_idx, ub_idx = self._binary_search(slice)
+        if lb_idx >= ub_idx:
+            return None
+        return int(self._data.timestamps[lb_idx].item())
 
     def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
-        for i in range(ub_idx - 1, lb_idx - 1, -1):
-            return int(self._data.timestamps[i].item())
-        return None
+        if lb_idx >= ub_idx:
+            return None
+        return int(self._data.timestamps[ub_idx - 1].item())
 
     def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         all_nodes: Set[int] = set()
         for i in range(*self._binary_search(slice)):
-            nodes = self._nodes_in_event(i)
-            all_nodes.update(nodes)
+            all_nodes.update(self._nodes_in_event(i))
         return all_nodes
 
     def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
         srcs, dsts, times = [], [], []
         for i in range(*self._binary_search(slice)):
-            if i not in self._edge_idx_map:
-                continue
-            src, dst = self._nodes_in_event(i)
-            srcs.append(src)
-            dsts.append(dst)
-            times.append(self._data.timestamps[i].item())
+            if i in self._edge_idx_map:
+                src, dst = self._nodes_in_event(i)
+                srcs.append(src)
+                dsts.append(dst)
+                times.append(self._data.timestamps[i].item())
 
         src_tensor = torch.LongTensor(srcs)
         dst_tensor = torch.LongTensor(dsts)
@@ -69,10 +68,8 @@ class DGStorageArrayBackend(DGStorageBase):
         return len(timestamps)
 
     def get_num_events(self, slice: DGSliceTracker) -> int:
-        num_events = 0
-        for _ in range(*self._binary_search(slice)):
-            num_events += 1
-        return num_events
+        lb_idx, ub_idx = self._binary_search(slice)
+        return ub_idx - lb_idx
 
     def get_nbrs(
         self,
@@ -89,14 +86,13 @@ class DGStorageArrayBackend(DGStorageBase):
 
         nbrs: Dict[int, Set[Tuple[int, int]]] = {node: set() for node in seed_nodes_set}
         for i in range(*self._binary_search(slice)):
-            if i not in self._edge_idx_map:
-                continue
-            src, dst = self._nodes_in_event(i)
-            # Use 0/1 flag to denote dst/src neighbor, respectively
-            if src in seed_nodes_set:
-                nbrs[src].add((i, 1))
-            if dst in seed_nodes_set:
-                nbrs[dst].add((i, 0))
+            if i in self._edge_idx_map:
+                src, dst = self._nodes_in_event(i)
+                # Use 0/1 flag to denote dst/src neighbor, respectively
+                if src in seed_nodes_set:
+                    nbrs[src].add((i, 1))
+                if dst in seed_nodes_set:
+                    nbrs[dst].add((i, 0))
 
         # TODO: Node feats
         batch_size = len(seed_nodes)
