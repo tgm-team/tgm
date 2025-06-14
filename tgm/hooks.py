@@ -4,7 +4,7 @@ from collections import deque
 from typing import Any, Deque, Dict, List, Protocol, Set, runtime_checkable
 
 import torch
-
+import numpy as np
 from tgm._storage import DGSliceTracker
 from tgm.graph import DGBatch, DGraph
 
@@ -122,6 +122,42 @@ class NegativeEdgeSamplerHook:
         batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
         return batch
 
+
+class TGBNegativeEdgeSamplerHook:
+    requires: Set[str] = set()
+    produces = {'neg'}
+    r"""Load data from DGraph using pre-generated TGB negative samples.
+    Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
+    Args:
+        neg_sampler (object): The negative sampler object to use for sampling.
+
+    Raises:
+        ValueError: If neg_sampler is not provided.
+    """
+    def __init__(self, neg_sampler: object, split_mode: str) -> None:
+        if neg_sampler is None:
+            raise ValueError('neg_sampler must be provided')
+        if split_mode not in ['val', 'test']:
+            raise ValueError('split_mode must be one of val, test')
+        if neg_sampler.eval_set[split_mode] is None:
+            raise ValueError(
+                f'please run load_{split_mode}_ns() before using this hook'
+            )
+
+        self.neg_sampler = neg_sampler
+        self.split_mode = split_mode
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        neg_batch_list = self.neg_sampler.query_batch(
+            batch.src, batch.dst, batch.time, split_mode=self.split_mode
+        )
+        batch.neg_batch_list = neg_batch_list
+        queries = []
+        for idx, neg_batch in enumerate(neg_batch_list):
+            queries.append(neg_batch)
+        unique_neg = np.unique(np.concatenate(queries))
+        batch.neg = torch.tensor(unique_neg, dtype=torch.long)  # type: ignore
+        return batch
 
 class NeighborSamplerHook:
     requires: Set[str] = set()
