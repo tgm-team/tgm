@@ -373,7 +373,7 @@ class DGData:
 
         split_masks = {
             'train': dataset.train_mask,
-            'valid': dataset.val_mask,
+            'val': dataset.val_mask,
             'test': dataset.test_mask,
         }
 

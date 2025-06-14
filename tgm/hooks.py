@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections import deque
 from typing import Any, Deque, Dict, List, Protocol, Set, runtime_checkable
 
-import torch
 import numpy as np
+import torch
+
 from tgm._storage import DGSliceTracker
 from tgm.graph import DGBatch, DGraph
 
@@ -125,21 +126,23 @@ class NegativeEdgeSamplerHook:
 
 class TGBNegativeEdgeSamplerHook:
     requires: Set[str] = set()
-    produces = {'neg'}
+    produces = {'neg', 'neg_batch_list'}
     r"""Load data from DGraph using pre-generated TGB negative samples.
     Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
     Args:
         neg_sampler (object): The negative sampler object to use for sampling.
+        split_mode (str): The split mode to use for sampling, either 'val' or 'test'.
 
     Raises:
         ValueError: If neg_sampler is not provided.
     """
+
     def __init__(self, neg_sampler: object, split_mode: str) -> None:
         if neg_sampler is None:
             raise ValueError('neg_sampler must be provided')
         if split_mode not in ['val', 'test']:
             raise ValueError('split_mode must be one of val, test')
-        if neg_sampler.eval_set[split_mode] is None:
+        if neg_sampler.eval_set[split_mode] is None:  # type: ignore
             raise ValueError(
                 f'please run load_{split_mode}_ns() before using this hook'
             )
@@ -148,16 +151,20 @@ class TGBNegativeEdgeSamplerHook:
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        neg_batch_list = self.neg_sampler.query_batch(
+        # this might complain if the edge is not found in the negative sampler, which could happen if the user is not using the correct version of dataset
+        neg_batch_list = self.neg_sampler.query_batch(  # type: ignore
             batch.src, batch.dst, batch.time, split_mode=self.split_mode
         )
-        batch.neg_batch_list = neg_batch_list
         queries = []
-        for idx, neg_batch in enumerate(neg_batch_list):
+        tensor_batch_list = []
+        for _, neg_batch in enumerate(neg_batch_list):
             queries.append(neg_batch)
+            tensor_batch_list.append(torch.tensor(neg_batch, dtype=torch.long))
         unique_neg = np.unique(np.concatenate(queries))
         batch.neg = torch.tensor(unique_neg, dtype=torch.long)  # type: ignore
+        batch.neg_batch_list = tensor_batch_list  # type: ignore
         return batch
+
 
 class NeighborSamplerHook:
     requires: Set[str] = set()
