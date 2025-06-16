@@ -15,16 +15,6 @@ class DGStorageArrayBackend(DGStorageBase):
     def __init__(self, data: DGData) -> None:
         self._data = data
 
-        # Pre-compute edge event indices
-        self._edge_idx_map = {
-            idx.item(): i for i, idx in enumerate(self._data.edge_event_idx)
-        }
-        self._node_idx_map = (
-            {idx.item(): i for i, idx in enumerate(self._data.node_event_idx)}
-            if self._data.node_event_idx is not None
-            else None
-        )
-
         # Binary search caches for finding timestamps in event array
         self._lb_cache: Dict[Optional[int], int] = {}
         self._ub_cache: Dict[Optional[int], int] = {}
@@ -224,7 +214,7 @@ class DGStorageArrayBackend(DGStorageBase):
         ub = self._ub_cache[slice.end_time]
 
         # Additional clamping on possible index constraints
-        clamp = lambda x, lo, hi: lo if x < lo else hi if x > hi else x
+        clamp = lambda x, lo, hi: max(lo, min(hi, x))
         lb = clamp(lb, slice.start_idx or 0, slice.end_idx or len(ts))
         ub = clamp(ub, slice.start_idx or 0, slice.end_idx or len(ts))
         return lb, ub

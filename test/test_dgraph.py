@@ -201,7 +201,7 @@ def test_slice_time_no_upper_bound(data):
 def test_slice_time_at_end_time(data):
     dg = DGraph(data)
 
-    dg1 = dg.slice_time(1, 19)
+    dg1 = dg.slice_time(1, 20)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
@@ -245,7 +245,7 @@ def test_slice_time_to_empty(data):
     dg = DGraph(data)
 
     # Slice Number 1
-    dg1 = dg.slice_time(1, 14)
+    dg1 = dg.slice_time(1, 15)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
@@ -275,7 +275,7 @@ def test_slice_time_to_empty(data):
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
     # Slice Number 2
-    dg2 = dg1.slice_time(5, 14)
+    dg2 = dg1.slice_time(5, 15)
     assert id(dg2._storage) == id(dg._storage)
 
     assert len(dg2) == 2
@@ -303,7 +303,7 @@ def test_slice_time_to_empty(data):
     assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
 
     # Slice number 3
-    dg3 = dg2.slice_time(7, 10)
+    dg3 = dg2.slice_time(7, 11)
     assert id(dg3._storage) == id(dg._storage)
 
     assert len(dg3) == 1
@@ -324,7 +324,7 @@ def test_slice_time_to_empty(data):
     assert dg3.edge_feats is None
 
     # Slice number 4 (to empty)
-    dg4 = dg3.slice_time(0, 7)
+    dg4 = dg3.slice_time(0, 8)
     assert id(dg4._storage) == id(dg._storage)
 
     assert len(dg4) == 0

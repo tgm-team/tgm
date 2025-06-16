@@ -56,7 +56,7 @@ class DGraph:
     def slice_events(
         self, start_idx: Optional[int] = None, end_idx: Optional[int] = None
     ) -> DGraph:
-        r"""Create and return a new view by slicing events (end_idx inclusive)."""
+        r"""Create and return a new view by slicing events (end_idx exclusive)."""
         if start_idx is not None and end_idx is not None and start_idx > end_idx:
             raise ValueError(f'start_idx ({start_idx}) must be <= end_idx ({end_idx})')
 
@@ -70,11 +70,13 @@ class DGraph:
     def slice_time(
         self, start_time: Optional[int] = None, end_time: Optional[int] = None
     ) -> DGraph:
-        r"""Create and return a new view by slicing temporally (end_time inclusive)."""
+        r"""Create and return a new view by slicing temporally (end_time exclusive)."""
         if start_time is not None and end_time is not None and start_time > end_time:
             raise ValueError(
                 f'start_time ({start_time}) must be <= end_time ({end_time})'
             )
+        if end_time is not None:
+            end_time -= 1
 
         dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
         dg._slice.start_time = self._maybe_max(start_time, self.start_time)
