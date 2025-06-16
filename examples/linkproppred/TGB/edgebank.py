@@ -63,7 +63,6 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-# * setting up tgb neg sampler
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
 eval_metric = dataset.eval_metric
 neg_sampler = dataset.negative_sampler
