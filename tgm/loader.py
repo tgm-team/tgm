@@ -63,7 +63,7 @@ class DGDataLoader(torch.utils.data.DataLoader):
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
 
         start_idx = 0 if batch_ordered else dg.start_time
-        stop_idx = dg.num_events + 1 if batch_ordered else dg.end_time + 1
+        stop_idx = dg.num_events if batch_ordered else dg.end_time + 1
 
         if kwargs.get('drop_last', False):
             slice_start = range(start_idx, stop_idx - batch_size, batch_size)
