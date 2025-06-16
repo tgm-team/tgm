@@ -27,6 +27,9 @@ class HookManager:
         if not all(isinstance(h, DGHook) for h in hooks):
             raise TypeError('All items in hook list must follow DGHook protocol')
 
+        # Implicitly add dedup hook after all user-defined hooks and before device transfer
+        hooks.append(DeduplicationHook())
+
         if dg.device.type != 'cpu':
             hooks.append(PinMemoryHook())
             hooks.append(DeviceTransferHook(dg.device))
@@ -95,6 +98,50 @@ class DeviceTransferHook:
         return batch
 
 
+class DeduplicationHook:
+    requires: Set[str] = set()
+    produces = {
+        'unique_nids',
+        'nid_to_idx',
+        'src_idx',
+        'dst_idx',
+        'neg_idx',
+        'nbr_nids_idx',
+    }
+
+    r"""Deduplicate node IDs from batch fields and create index mappings to unique node embeddings.
+
+    Note: Supports batches with or without negative samples and multi-hop neighbors.
+    """
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        device = batch.src.device
+
+        nids = [batch.src, batch.dst]
+        if hasattr(batch, 'neg'):
+            nids.append(batch.neg)
+        if hasattr(batch, 'nbr_nids'):
+            for hop_nids in batch.nbr_nids:
+                nids.append(hop_nids.flatten())
+
+        all_nids = torch.cat(nids, dim=0)
+        unique_nids = torch.unique(all_nids)
+        max_nid = int(unique_nids.max().item())
+        nid_to_idx = torch.full((max_nid + 1,), -1, dtype=torch.long, device=device)
+        nid_to_idx[unique_nids] = torch.arange(len(unique_nids), device=device)
+
+        batch.unique_nids = unique_nids  # type: ignore
+        batch.nid_to_idx = nid_to_idx  # type: ignore
+        batch.src_idx = nid_to_idx[batch.src]  # type: ignore
+        batch.dst_idx = nid_to_idx[batch.dst]  # type: ignore
+        if hasattr(batch, 'neg'):
+            batch.neg_idx = nid_to_idx[batch.neg]  # type: ignore
+        if hasattr(batch, 'nbr_nids'):
+            batch.nbr_nids_idx = [nid_to_idx[hop_nids] for hop_nids in batch.nbr_nids]  # type: ignore
+
+        return batch
+
+
 class NegativeEdgeSamplerHook:
     requires: Set[str] = set()
     produces = {'neg'}
@@ -129,7 +176,7 @@ class TGBNegativeEdgeSamplerHook:
     produces = {'neg', 'neg_batch_list'}
     r"""Load data from DGraph using pre-generated TGB negative samples.
     Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
-    
+
     Args:
         neg_sampler (object): The negative sampler object to use for sampling.
         split_mode (str): The split mode to use for sampling, either 'val' or 'test'.
