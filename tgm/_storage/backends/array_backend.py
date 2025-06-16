@@ -206,7 +206,7 @@ class DGStorageArrayBackend(DGStorageBase):
             t = ts[0] if slice.start_time is None else slice.start_time
             self._lb_cache[slice.start_time] = int(torch.searchsorted(ts, t))
         if slice.end_time not in self._ub_cache:
-            t = ts[-1] + 1 if slice.end_time is None else slice.end_time - 1
+            t = ts[-1] if slice.end_time is None else slice.end_time - 1
             self._ub_cache[slice.end_time] = int(
                 torch.searchsorted(ts, t, side='right')
             )
