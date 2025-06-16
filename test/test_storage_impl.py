@@ -75,7 +75,7 @@ def test_get_end_time_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
     storage = DGStorageImpl(data)
 
-    assert storage.get_end_time(DGSliceTracker()) == data.timestamps[-1]
+    assert storage.get_end_time(DGSliceTracker()) == data.timestamps[-1] + 1
 
 
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])

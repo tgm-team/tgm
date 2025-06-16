@@ -15,16 +15,6 @@ class DGStorageArrayBackend(DGStorageBase):
     def __init__(self, data: DGData) -> None:
         self._data = data
 
-        # Pre-compute edge event indices
-        self._edge_idx_map = {
-            idx.item(): i for i, idx in enumerate(self._data.edge_event_idx)
-        }
-        self._node_idx_map = (
-            {idx.item(): i for i, idx in enumerate(self._data.node_event_idx)}
-            if self._data.node_event_idx is not None
-            else None
-        )
-
         # Binary search caches for finding timestamps in event array
         self._lb_cache: Dict[Optional[int], int] = {}
         self._ub_cache: Dict[Optional[int], int] = {}
@@ -39,7 +29,7 @@ class DGStorageArrayBackend(DGStorageBase):
         lb_idx, ub_idx = self._binary_search(slice)
         if lb_idx >= ub_idx:
             return None
-        return int(self._data.timestamps[ub_idx - 1].item())
+        return int(self._data.timestamps[ub_idx - 1].item()) + 1
 
     def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         all_nodes: Set[int] = set()
@@ -216,7 +206,7 @@ class DGStorageArrayBackend(DGStorageBase):
             t = ts[0] if slice.start_time is None else slice.start_time
             self._lb_cache[slice.start_time] = int(torch.searchsorted(ts, t))
         if slice.end_time not in self._ub_cache:
-            t = ts[-1] if slice.end_time is None else slice.end_time
+            t = ts[-1] + 1 if slice.end_time is None else slice.end_time - 1
             self._ub_cache[slice.end_time] = int(
                 torch.searchsorted(ts, t, side='right')
             )
@@ -224,7 +214,7 @@ class DGStorageArrayBackend(DGStorageBase):
         ub = self._ub_cache[slice.end_time]
 
         # Additional clamping on possible index constraints
-        clamp = lambda x, lo, hi: lo if x < lo else hi if x > hi else x
+        clamp = lambda x, lo, hi: max(lo, min(hi, x))
         lb = clamp(lb, slice.start_idx or 0, slice.end_idx or len(ts))
         ub = clamp(ub, slice.start_idx or 0, slice.end_idx or len(ts))
         return lb, ub
