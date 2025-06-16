@@ -75,6 +75,8 @@ class DGraph:
             raise ValueError(
                 f'start_time ({start_time}) must be <= end_time ({end_time})'
             )
+        if end_time is not None:
+            end_time -= 1
 
         dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
         dg._slice.start_time = self._maybe_max(start_time, self.start_time)
@@ -106,7 +108,7 @@ class DGraph:
 
     @cached_property
     def end_time(self) -> Optional[int]:
-        r"""The end time (exclusive) of the dynamic graph. None, if the graph is empty."""
+        r"""The end time of the dynamic graph. None, if the graph is empty."""
         if self._slice.end_time is None:
             self._slice.end_time = self._storage.get_end_time(self._slice)
         return self._slice.end_time
