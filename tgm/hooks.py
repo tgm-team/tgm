@@ -158,7 +158,7 @@ class TGBNegativeEdgeSamplerHook:
         )
         queries = []
         tensor_batch_list = []
-        for _, neg_batch in enumerate(neg_batch_list):
+        for neg_batch in neg_batch_list:
             queries.append(neg_batch)
             tensor_batch_list.append(torch.tensor(neg_batch, dtype=torch.long))
         unique_neg = np.unique(np.concatenate(queries))
