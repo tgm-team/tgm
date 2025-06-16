@@ -129,6 +129,7 @@ class TGBNegativeEdgeSamplerHook:
     produces = {'neg', 'neg_batch_list'}
     r"""Load data from DGraph using pre-generated TGB negative samples.
     Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
+    
     Args:
         neg_sampler (object): The negative sampler object to use for sampling.
         split_mode (str): The split mode to use for sampling, either 'val' or 'test'.
