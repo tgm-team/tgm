@@ -1,6 +1,6 @@
-"""python -u gcn.py --dataset tgbn-trade --time-gran r --batch-time-gran r
+r"""python -u gcn.py --dataset tgbn-trade --time-gran r --batch-time-gran r
 python -u gcn.py --dataset tgbn-genre --time-gran s --batch-time-gran D
-.
+example commands to run this script.
 """
 
 import argparse
@@ -211,11 +211,8 @@ test_dg = DGraph(
 
 dgraph = DGraph(args.dataset)
 num_nodes = dgraph.num_nodes
-print(dgraph.start_time, dgraph.end_time, num_nodes)
 label_dim = train_dg.dynamic_node_feats_dim
 evaluator = Evaluator(name=args.dataset)
-
-
 train_loader = DGDataLoader(
     train_dg,
     batch_unit=args.batch_time_gran,

@@ -402,10 +402,12 @@ class DGData:
 
             num_node_events = 0
             node_label_dim = 0
+            split_start, split_end = timestamps[0], timestamps[-1]
             for t in node_label_dict:
-                for node_id, label in node_label_dict[t].items():
-                    num_node_events += 1
-                    node_label_dim = label.shape[0]
+                if (t >= split_start) and (t < split_end):
+                    for node_id, label in node_label_dict[t].items():
+                        num_node_events += 1
+                        node_label_dim = label.shape[0]
             temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
             temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
             temp_dynamic_node_feats = np.zeros(
@@ -413,11 +415,12 @@ class DGData:
             )
             idx = 0
             for t in node_label_dict:
-                for node_id, label in node_label_dict[t].items():
-                    temp_node_timestamps[idx] = t
-                    temp_node_ids[idx] = node_id
-                    temp_dynamic_node_feats[idx] = label
-                    idx += 1
+                if (t >= split_start) and (t < split_end):
+                    for node_id, label in node_label_dict[t].items():
+                        temp_node_timestamps[idx] = t
+                        temp_node_ids[idx] = node_id
+                        temp_dynamic_node_feats[idx] = label
+                        idx += 1
             node_timestamps = torch.from_numpy(temp_node_timestamps).long()
             node_ids = torch.from_numpy(temp_node_ids).long()
             dynamic_node_feats = torch.from_numpy(temp_dynamic_node_feats).float()

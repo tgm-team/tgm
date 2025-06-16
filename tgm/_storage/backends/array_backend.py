@@ -159,7 +159,7 @@ class DGStorageArrayBackend(DGStorageBase):
         edge_mask = (self._data.edge_event_idx >= lb_idx) & (
             self._data.edge_event_idx < ub_idx
         )
-        if edge_mask.sum() != 0:
+        if edge_mask.sum() != 0 and self._data.edge_index[edge_mask].numel() > 0:
             max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())  # type: ignore
 
         max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
@@ -188,7 +188,8 @@ class DGStorageArrayBackend(DGStorageBase):
             node_mask = (self._data.node_event_idx >= lb_idx) & (
                 self._data.node_event_idx < ub_idx
             )
-            max_node_id = max(max_node_id, self._data.node_ids[node_mask].max())  # type: ignore
+            if self._data.node_ids[node_mask].numel() > 0:  # type: ignore
+                max_node_id = max(max_node_id, self._data.node_ids[node_mask].max())  # type: ignore
 
         max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
         edge_feats_dim = self.get_edge_feats_dim()

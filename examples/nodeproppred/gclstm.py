@@ -1,3 +1,8 @@
+r"""python -u gclstm.py --dataset tgbn-trade --time-gran r --batch-time-gran r
+python -u gclstm.py --dataset tgbn-genre --time-gran s --batch-time-gran D\
+example commands to run this script.
+"""
+
 import argparse
 import time
 from typing import Tuple
