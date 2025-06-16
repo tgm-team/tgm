@@ -57,6 +57,7 @@ class TGAT(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
+        self.num_layers = num_layers
         self.embed_dim = embed_dim
         self.link_predictor = LinkPredictor(dim=embed_dim)
         self.time_encoder = Time2Vec(time_dim=time_dim)
@@ -75,27 +76,39 @@ class TGAT(nn.Module):
         )
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO: Go back to recursive embedding for multi-hop
-        hop = 0
-
         device = batch.src.device
-        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim), device=device)
-        nbr_node_feat = torch.zeros(
-            (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
-        )
-        time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop]), device=device))
-        nbr_time_feat = self.time_encoder(
-            batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
-        )
 
-        z = self.attn[hop](
-            node_feat=node_feat,
-            nbr_node_feat=nbr_node_feat,
-            time_feat=time_feat,
-            nbr_time_feat=nbr_time_feat,
-            edge_feat=batch.nbr_feats[hop],
-            nbr_mask=batch.nbr_mask[hop],
-        )
+        # TODO: Needs to be paramaterized by node ids
+        def _recursive_forward(hop: int):
+            if hop == 0:
+                return torch.zeros(
+                    (*batch.nids[hop].shape, self.embed_dim), device=device
+                )
+            node_feat = _recursive_forward(hop - 1, batch.nids[hop])
+            nbr_node_feat = _recursive_forward(hop - 1, batch.nbr_nids[hop])
+
+            time_feat = self.time_encoder(
+                torch.zeros(len(batch.nids[hop]), device=device)
+            )
+            nbr_time_feat = self.time_encoder(
+                batch.time.unsqueeze(dim=1).repeat(3, 1) - batch.nbr_times[hop]
+            )
+            edge_feat = batch.nbr_feats[hop]
+            nbr_mask = batch.nbr_mask[hop]
+
+            z = self.attn[hop - 1](
+                node_feat=node_feat,
+                nbr_node_feat=nbr_node_feat,
+                time_feat=time_feat,
+                nbr_time_feat=nbr_time_feat,
+                edge_feat=edge_feat,
+                nbr_mask=nbr_mask,
+            )
+
+            # TODO: Merge layers to combine attention results and node original features
+            return z
+
+        z = _recursive_forward(hop=self.num_layers)
         z_src, z_dst, z_neg = z.chunk(3, dim=0)
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)

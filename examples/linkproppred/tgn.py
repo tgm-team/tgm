@@ -278,7 +278,7 @@ class GraphAttentionEmbedding(nn.Module):
         )
         time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop]), device=device))
         nbr_time_feat = self.time_encoder(
-            batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
+            batch.time.unsqueeze(dim=1).repeat(3, 1) - batch.nbr_times[hop]
         )
 
         z = self.attn[hop](
