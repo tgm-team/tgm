@@ -65,6 +65,7 @@ def test_dedup_with_nbrs(dg):
         torch.LongTensor([1, 5]),  # First hop
         torch.LongTensor([10]),  # Second hop
     ]
+    batch.nbr_mask = [torch.LongTensor([1, 1]), torch.LongTensor([1])]
 
     processed_batch = hook(dg, batch)
     torch.testing.assert_close(

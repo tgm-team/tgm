@@ -121,8 +121,9 @@ class DeduplicationHook:
         if hasattr(batch, 'neg'):
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
-            for hop_nids in batch.nbr_nids:
-                nids.append(hop_nids.flatten())
+            for hop in range(len(batch.nbr_nids)):
+                hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
+                nids.append(hop_nids[hop_mask])
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids)
@@ -137,7 +138,14 @@ class DeduplicationHook:
         if hasattr(batch, 'neg'):
             batch.neg_idx = nid_to_idx[batch.neg]  # type: ignore
         if hasattr(batch, 'nbr_nids'):
+            # TODO: Account for nbr masks
             batch.nbr_nids_idx = [nid_to_idx[hop_nids] for hop_nids in batch.nbr_nids]  # type: ignore
+            # batch.nbr_nids_idx = [
+            #    torch.where(
+            #        hop_mask.bool(), nid_to_idx[hop_nids], torch.full_like(hop_nids, -1)
+            #    )
+            #    for hop_nids, hop_mask in zip(batch.nbr_nids, batch.nbr_mask)
+            # ]
 
         return batch
 
