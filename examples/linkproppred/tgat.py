@@ -81,23 +81,30 @@ class TGAT(nn.Module):
         def _recursive_forward(
             hop: int, node_ids: torch.Tensor, node_times: torch.Tensor
         ) -> torch.Tensor:
+            # TODO: This should be using the (static?) node features as the base case (if they exist)
+            node_feat = torch.zeros((*node_ids.shape, self.embed_dim), device=device)
+
             if hop == 0:
-                # TODO: This should be using the (static?) node features as the base case (if they exist)
-                return torch.zeros((node_ids, self.embed_dim), device=device)
+                return node_feat
 
             z_node_prev = _recursive_forward(hop - 1, node_ids, node_times)
-
-            B, K = batch.nbr_nids[hop - 1].shape
             z_nbr_prev = _recursive_forward(
                 hop - 1,
-                batch.nbr_nids[hop - 1].reshape(-1),
-                batch.nbr_times[hop - 1].reshape(-1),
-            ).view(B, K, -1)
-
-            time_feat = self.time_encoder(node_times)
-            nbr_time_feat = self.time_encoder(
-                node_times.unsqueeze(1) - batch.nbr_times[hop - 1]
+                batch.nbr_nids[hop - 1].flatten(),
+                batch.nbr_times[hop - 1].flatten(),
             )
+
+            B, K = batch.nbr_nids[hop - 1].shape
+            z_nbr_prev = z_nbr_prev.reshape(B, K, -1)
+
+            # This reshape won't work in general
+            node_times = node_times.unsqueeze(dim=1).repeat(3, 1)
+            time_feat = self.time_encoder(
+                torch.zeros(node_times.shape, device=device)
+            ).squeeze(1)
+
+            nbr_delta_times = node_times - batch.nbr_times[hop - 1]
+            nbr_time_feat = self.time_encoder(nbr_delta_times)
 
             z = self.attn[hop - 1](
                 node_feat=z_node_prev,
@@ -115,8 +122,8 @@ class TGAT(nn.Module):
 
         z = _recursive_forward(
             hop=self.num_layers,
-            node_ids=batch.nids[self.num_layers - 1],
-            node_times=batch.nbr_times[self.num_layers - 1].reshape(-1),
+            node_ids=batch.nids[0],
+            node_times=batch.time,
         )
         z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
         pos_out = self.link_predictor(z_src, z_dst)
