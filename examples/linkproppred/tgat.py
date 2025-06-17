@@ -96,7 +96,7 @@ class TGAT(nn.Module):
             edge_feat=batch.nbr_feats[hop],
             nbr_mask=batch.nbr_mask[hop],
         )
-        z_src, z_dst, z_neg = z.chunk(3, dim=0)
+        z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out

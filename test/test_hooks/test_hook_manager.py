@@ -5,7 +5,7 @@ import torch
 
 from tgm.data import DGData
 from tgm.graph import DGBatch, DGraph
-from tgm.hooks import HookManager
+from tgm.hooks import DeduplicationHook, HookManager
 
 
 class MockHook:
@@ -51,7 +51,7 @@ def test_hook_manager_init_gpu_empty(dg):
     dg = dg.to('cuda')
 
     hook = HookManager(dg, hooks=[])
-    assert len(hook.hooks) == 2
+    assert len(hook.hooks) == 3
 
     exp_batch = dg.materialize()
     batch = hook(dg)
@@ -65,7 +65,7 @@ def test_hook_manager_init_gpu_non_empty(dg):
     dg = dg.to('cuda')
 
     hook = HookManager(dg, hooks=[MockHook()])
-    assert len(hook.hooks) == 3
+    assert len(hook.hooks) == 4
 
     exp_batch = dg.materialize()
     exp_batch.time *= 2
@@ -89,7 +89,8 @@ def test_hook_manager_bad_hook_dependancies(dg):
 
 def test_hook_manager_from_any_none(dg):
     hook = HookManager.from_any(dg, None)
-    assert hook.hooks == []
+    assert len(hook.hooks) == 1
+    assert isinstance(hook.hooks[0], DeduplicationHook)
 
 
 def test_hook_manager_from_manager(dg):
@@ -100,12 +101,12 @@ def test_hook_manager_from_manager(dg):
 
 def test_hook_manager_from_single_hook(dg):
     hook = HookManager.from_any(dg, MockHook())
-    assert len(hook.hooks) == 1
+    assert len(hook.hooks) == 2
 
 
 def test_hook_manager_from_hook_list(dg):
     hook = HookManager.from_any(dg, [MockHook()])
-    assert len(hook.hooks) == 1
+    assert len(hook.hooks) == 2
 
 
 def test_hook_manager_from_bad_hook_type(dg):

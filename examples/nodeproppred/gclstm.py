@@ -60,7 +60,7 @@ class GCLSTM_Model(nn.Module):
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
-        z_node = z[batch.node_ids]
+        z_node = z[batch.nid_to_idx[batch.node_ids]]  # type: ignore
         pred = self.decoder(z_node)
         return pred, h_0, c_0
 

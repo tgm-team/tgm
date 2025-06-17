@@ -70,7 +70,7 @@ class GCN(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         edge_index = torch.stack([batch.src, batch.dst], dim=0).to(node_feat.device)
         z = self.encoder(node_feat, edge_index)
-        z_node = z[batch.node_ids]
+        z_node = z[batch.nid_to_idx[batch.node_ids]]  # type: ignore
         pred = self.decoder(z_node)
         return pred
 
