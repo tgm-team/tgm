@@ -188,7 +188,7 @@ class DGStorageArrayBackend(DGStorageBase):
             node_mask = (self._data.node_event_idx >= lb_idx) & (
                 self._data.node_event_idx < ub_idx
             )
-            if self._data.node_ids[node_mask].numel() > 0:  # type: ignore
+            if len(self._data.node_ids[node_mask]):  # type: ignore
                 max_node_id = max(max_node_id, self._data.node_ids[node_mask].max())  # type: ignore
 
         max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
