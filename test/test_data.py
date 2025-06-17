@@ -545,11 +545,11 @@ test_indices = np.arange(num_train + num_val, num_events)
     'split,expected_indices,with_node_features',
     [
         ('train', train_indices, False),
-        ('valid', val_indices, False),
+        ('val', val_indices, False),
         ('test', test_indices, False),
         ('all', np.arange(num_events), False),
         ('train', train_indices, True),
-        ('valid', val_indices, True),
+        ('val', val_indices, True),
         ('test', test_indices, True),
         ('all', np.arange(num_events), True),
     ],
@@ -649,7 +649,7 @@ def test_from_tgb_with_node_events(mock_dataset_cls, split, expected_indices):
     mock_dataset = MagicMock()
     if split == 'train':
         mask = train_mask
-    elif split == 'valid':
+    elif split == 'val':
         mask = val_mask
     elif split == 'test':
         mask = test_mask

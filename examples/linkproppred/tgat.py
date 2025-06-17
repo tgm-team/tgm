@@ -167,7 +167,7 @@ train_dg = DGraph(
     args.dataset, time_delta=TimeDeltaDG('r'), split='train', device=args.device
 )
 val_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='valid', device=args.device
+    args.dataset, time_delta=TimeDeltaDG('r'), split='val', device=args.device
 )
 test_dg = DGraph(
     args.dataset, time_delta=TimeDeltaDG('r'), split='test', device=args.device

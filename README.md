@@ -49,6 +49,12 @@ uv pip install git+https://github.com/tgm-team/tgm.git
 python -c 'import tgm; print(tgm.__version__)'
 ```
 
+running examples
+
+```
+uv sync --group examples
+```
+
 #### Using [pip](https://pip.pypa.io/en/stable/installation/)
 
 ```sh

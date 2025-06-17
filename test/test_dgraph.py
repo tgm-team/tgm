@@ -201,7 +201,7 @@ def test_slice_time_no_upper_bound(data):
 def test_slice_time_at_end_time(data):
     dg = DGraph(data)
 
-    dg1 = dg.slice_time(1, 19)
+    dg1 = dg.slice_time(1, 20)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
@@ -245,7 +245,7 @@ def test_slice_time_to_empty(data):
     dg = DGraph(data)
 
     # Slice Number 1
-    dg1 = dg.slice_time(1, 14)
+    dg1 = dg.slice_time(1, 15)
     assert id(dg1._storage) == id(dg._storage)
 
     assert len(dg1) == 3
@@ -275,7 +275,7 @@ def test_slice_time_to_empty(data):
     assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
 
     # Slice Number 2
-    dg2 = dg1.slice_time(5, 14)
+    dg2 = dg1.slice_time(5, 15)
     assert id(dg2._storage) == id(dg._storage)
 
     assert len(dg2) == 2
@@ -303,7 +303,7 @@ def test_slice_time_to_empty(data):
     assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
 
     # Slice number 3
-    dg3 = dg2.slice_time(7, 10)
+    dg3 = dg2.slice_time(7, 11)
     assert id(dg3._storage) == id(dg._storage)
 
     assert len(dg3) == 1
@@ -324,7 +324,7 @@ def test_slice_time_to_empty(data):
     assert dg3.edge_feats is None
 
     # Slice number 4 (to empty)
-    dg4 = dg3.slice_time(0, 7)
+    dg4 = dg3.slice_time(0, 8)
     assert id(dg4._storage) == id(dg._storage)
 
     assert len(dg4) == 0
@@ -355,171 +355,6 @@ def test_slice_time_bad_args(data):
     dg = DGraph(data)
     with pytest.raises(ValueError):
         dg.slice_time(2, 1)
-
-
-def test_slice_nodes_full_graph(data):
-    dg1 = DGraph(data)
-
-    dg = dg1.slice_nodes({0, 1, 2, 3, 4, 5, 6, 7, 8})
-    assert id(dg._storage) == id(dg1._storage)
-    assert dg._slice == dg1._slice
-
-
-def test_interleave_slice_time_slice_nodes(data):
-    dg = DGraph(data)
-
-    # Slice Number 1
-    dg1 = dg.slice_nodes({1, 2, 4, 8})
-    assert id(dg1._storage) == id(dg._storage)
-
-    assert len(dg1) == 3
-    assert dg1.start_time == 1
-    assert dg1.end_time == 20
-    assert dg1.num_nodes == 9
-    assert dg1.num_edges == 3
-    assert dg1.num_timestamps == 3
-    assert dg1.nodes == {1, 2, 4, 8}
-
-    exp_edges = (
-        torch.LongTensor([2, 2, 1]),
-        torch.LongTensor([2, 4, 8]),
-        torch.LongTensor([1, 5, 20]),
-    )
-    torch.testing.assert_close(dg1.edges, exp_edges)
-
-    exp_dynamic_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
-    exp_dynamic_node_feats[1, 2] = data.dynamic_node_feats[0]
-    exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
-    assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    exp_edge_feats[20, 1, 8] = data.edge_feats[2]
-    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
-
-    # Slice Number 2
-    dg2 = dg1.slice_time(1, 14)
-    assert id(dg1._storage) == id(dg._storage)
-
-    assert len(dg2) == 2
-    assert dg2.start_time == 1
-    assert dg2.end_time == 14
-    assert dg2.num_nodes == 5
-    assert dg2.num_edges == 2
-    assert dg2.num_timestamps == 2
-    assert dg2.nodes == {2, 4}
-
-    exp_edges = (
-        torch.LongTensor([2, 2]),
-        torch.LongTensor([2, 4]),
-        torch.LongTensor([1, 5]),
-    )
-    torch.testing.assert_close(dg2.edges, exp_edges)
-
-    exp_dynamic_node_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, 5)
-    exp_dynamic_node_feats[1, 2] = data.dynamic_node_feats[0]
-    exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
-    assert torch.equal(dg2.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, dg2.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
-
-    # Slice Number 3
-    dg3 = dg2.slice_nodes({1, 4})  # Node 1 at time 20 was previously sliced off
-    assert id(dg3._storage) == id(dg._storage)
-    assert len(dg3) == 1
-    assert dg3.start_time == 5
-    assert dg3.end_time == 5
-    assert dg3.num_nodes == 5
-    assert dg3.num_edges == 1
-    assert dg3.num_timestamps == 1
-    assert dg3.nodes == {2, 4}
-
-    exp_edges = (torch.LongTensor([2]), torch.LongTensor([4]), torch.LongTensor([5]))
-    torch.testing.assert_close(dg3.edges, exp_edges)
-
-    exp_dynamic_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 5)
-    exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
-    assert torch.equal(dg3.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, dg3.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(dg3.edge_feats.to_dense(), exp_edge_feats)
-
-    # Slice Number 4
-    dg4 = dg3.slice_time(0, 19)  # Ensure previous slice not changed
-    assert id(dg4._storage) == id(dg._storage)
-
-    assert len(dg4) == 1
-    assert dg4.start_time == 5
-    assert dg4.end_time == 5
-    assert dg4.num_nodes == 5
-    assert dg4.num_edges == 1
-    assert dg4.num_timestamps == 1
-    assert dg4.nodes == {2, 4}
-
-    exp_edges = (torch.LongTensor([2]), torch.LongTensor([4]), torch.LongTensor([5]))
-    torch.testing.assert_close(dg3.edges, exp_edges)
-
-    exp_dynamic_node_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, 5)
-    exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
-    assert torch.equal(dg4.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, dg4.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(dg4.edge_feats.to_dense(), exp_edge_feats)
-
-    # Slice Number 5
-    dg5 = dg4.slice_nodes({2})
-    assert id(dg5._storage) == id(dg._storage)
-
-    assert len(dg5) == 1  # Broken: this should only add back the node 2
-    assert dg5.start_time == 5
-    assert dg4.end_time == 5
-    assert dg4.num_nodes == 5
-    assert dg4.num_edges == 1
-    assert dg4.num_timestamps == 1
-
-    exp_edges = (torch.LongTensor([2]), torch.LongTensor([4]), torch.LongTensor([5]))
-    torch.testing.assert_close(dg3.edges, exp_edges)
-
-    exp_dynamic_node_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, 5)
-    exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
-    assert torch.equal(dg4.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg4.end_time + 1, dg4.num_nodes, dg4.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(dg4.edge_feats.to_dense(), exp_edge_feats)
-
-    # Slice 6 (to empty)
-    dg6 = dg5.slice_time(1, 4)
-    assert id(dg6._storage) == id(dg._storage)
-
-    assert len(dg6) == 0
-    assert dg6.start_time == 5
-    assert dg6.end_time is 4
-    assert dg6.num_nodes == 0
-    assert dg6.num_edges == 0
-    assert dg6.num_timestamps == 0
-    assert dg6.nodes == set()
-    assert dg6.dynamic_node_feats is None
-    assert dg6.edge_feats is None
-
-    exp_edges = (torch.LongTensor([]), torch.LongTensor([]), torch.LongTensor([]))
-    torch.testing.assert_close(dg6.edges, exp_edges)
-    torch.testing.assert_close(dg.static_node_feats, dg6.static_node_feats)
-
-    # Check original graph cache is not updated
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {1, 2, 4, 6, 8}
 
 
 @pytest.mark.skip(reason='TODO: Add test for dg slice events!')

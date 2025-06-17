@@ -1,3 +1,8 @@
+r"""python -u gcn.py --dataset tgbn-trade --time-gran r --batch-time-gran r
+python -u gcn.py --dataset tgbn-genre --time-gran s --batch-time-gran D
+example commands to run this script.
+"""
+
 import argparse
 import time
 from typing import Tuple
@@ -28,6 +33,12 @@ parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layer
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
     '--time-gran',
+    type=str,
+    default='s',
+    help='raw time granularity for dataset',
+)
+parser.add_argument(
+    '--batch-time-gran',
     type=str,
     default='D',
     help='time granularity to operate on for snapshots',
@@ -172,7 +183,7 @@ def eval(
         score = result_dict[eval_metric]
         total_score += score
     metric_dict = {}
-    metric_dict[eval_metric] = total_score / len(loader)
+    metric_dict[eval_metric] = float(total_score) / len(loader)
     return metric_dict
 
 
@@ -180,31 +191,39 @@ args = parser.parse_args()
 seed_everything(args.seed)
 
 train_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='train', device=args.device
+    args.dataset,
+    time_delta=TimeDeltaDG(args.time_gran),
+    split='train',
+    device=args.device,
 )
 val_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='valid', device=args.device
+    args.dataset,
+    time_delta=TimeDeltaDG(args.time_gran),
+    split='val',
+    device=args.device,
 )
 test_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='test', device=args.device
+    args.dataset,
+    time_delta=TimeDeltaDG(args.time_gran),
+    split='test',
+    device=args.device,
 )
 
-num_nodes = DGraph(args.dataset).num_nodes
+dgraph = DGraph(args.dataset)
+num_nodes = dgraph.num_nodes
 label_dim = train_dg.dynamic_node_feats_dim
 evaluator = Evaluator(name=args.dataset)
-
-
 train_loader = DGDataLoader(
     train_dg,
-    batch_unit=args.time_gran,
+    batch_unit=args.batch_time_gran,
 )
 val_loader = DGDataLoader(
     val_dg,
-    batch_unit=args.time_gran,
+    batch_unit=args.batch_time_gran,
 )
 test_loader = DGDataLoader(
     test_dg,
-    batch_unit=args.time_gran,
+    batch_unit=args.batch_time_gran,
 )
 
 if train_dg.static_node_feats is not None:
@@ -235,8 +254,8 @@ for epoch in range(1, args.epochs + 1):
     val_results = eval(val_loader, model, static_node_feats, evaluator)
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
 test_results = eval(test_loader, model, static_node_feats, evaluator)
-print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

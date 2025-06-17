@@ -373,7 +373,7 @@ class DGData:
 
         split_masks = {
             'train': dataset.train_mask,
-            'valid': dataset.val_mask,
+            'val': dataset.val_mask,
             'test': dataset.test_mask,
         }
 
@@ -396,7 +396,11 @@ class DGData:
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if name.startswith('tgbn-'):
             if 'node_label_dict' in data:
-                node_label_dict = data['node_label_dict']
+                node_label_dict = {
+                    t: v
+                    for t, v in data['node_label_dict'].items()
+                    if timestamps[0] <= t < timestamps[-1]
+                }
             else:
                 raise ValueError('please update your tgb package or install by source')
 

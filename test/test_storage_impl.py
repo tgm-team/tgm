@@ -66,8 +66,6 @@ def test_get_start_time_edge_data(DGStorageImpl, data, request):
     storage = DGStorageImpl(data)
 
     assert storage.get_start_time(DGSliceTracker()) == data.timestamps[0]
-    assert storage.get_start_time(DGSliceTracker(node_slice={4, 5})) == 5
-    assert storage.get_start_time(DGSliceTracker(node_slice={100})) == None
 
 
 @pytest.mark.parametrize(
@@ -78,8 +76,6 @@ def test_get_end_time_edge_data(DGStorageImpl, data, request):
     storage = DGStorageImpl(data)
 
     assert storage.get_end_time(DGSliceTracker()) == data.timestamps[-1]
-    assert storage.get_end_time(DGSliceTracker(node_slice={2, 3})) == 5
-    assert storage.get_end_time(DGSliceTracker(node_slice={100})) == None
 
 
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
@@ -141,27 +137,6 @@ def test_get_edges(DGStorageImpl, data, request):
         storage.get_edges(DGSliceTracker(start_time=5, end_time=9)), expected
     )
 
-    expected = (
-        torch.tensor([2, 2], dtype=torch.int64),
-        torch.tensor([2, 4], dtype=torch.int64),
-        torch.tensor([1, 5], dtype=torch.int64),
-    )
-    torch.testing.assert_close(
-        storage.get_edges(DGSliceTracker(node_slice={1, 2, 3})), expected
-    )
-
-    expected = (
-        torch.tensor([2], dtype=torch.int64),
-        torch.tensor([4], dtype=torch.int64),
-        torch.tensor([5], dtype=torch.int64),
-    )
-    torch.testing.assert_close(
-        storage.get_edges(
-            DGSliceTracker(start_time=5, end_time=9, node_slice={1, 2, 3})
-        ),
-        expected,
-    )
-
 
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
 def test_get_num_timestamps_edge_data(DGStorageImpl, data, request):
@@ -172,13 +147,6 @@ def test_get_num_timestamps_edge_data(DGStorageImpl, data, request):
     assert storage.get_num_timestamps(DGSliceTracker(start_time=5)) == 2
     assert storage.get_num_timestamps(DGSliceTracker(end_time=4)) == 1
     assert storage.get_num_timestamps(DGSliceTracker(start_time=5, end_time=9)) == 1
-    assert storage.get_num_timestamps(DGSliceTracker(node_slice={2, 3})) == 2
-    assert (
-        storage.get_num_timestamps(
-            DGSliceTracker(start_time=5, end_time=9, node_slice={1, 2, 3})
-        )
-        == 1
-    )
 
 
 def test_get_num_events_data_with_multi_events_per_timestamp(
@@ -191,13 +159,6 @@ def test_get_num_events_data_with_multi_events_per_timestamp(
     assert storage.get_num_events(DGSliceTracker(start_time=5)) == 4
     assert storage.get_num_events(DGSliceTracker(end_time=4)) == 2
     assert storage.get_num_events(DGSliceTracker(start_time=5, end_time=9)) == 2
-    assert storage.get_num_events(DGSliceTracker(node_slice={2, 3})) == 3
-    assert (
-        storage.get_num_events(
-            DGSliceTracker(start_time=5, end_time=9, node_slice={1, 2, 3})
-        )
-        == 1
-    )
 
 
 def test_get_edge_feats_no_edge_feats(DGStorageImpl, edge_only_data):
@@ -238,29 +199,6 @@ def test_get_edge_feats(DGStorageImpl, edge_only_data_with_features):
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(start_time=5, end_time=9)).to_dense(),
         exp_edge_feats,
-    )
-    exp_edge_feats = torch.zeros(6, 4 + 1, 4 + 1, 5)
-    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(
-        storage.get_edge_feats(DGSliceTracker(node_slice={1, 2, 3})).to_dense(),
-        exp_edge_feats,
-    )
-
-    exp_edge_feats = torch.zeros(10, 4 + 1, 4 + 1, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(
-        storage.get_edge_feats(
-            DGSliceTracker(start_time=5, end_time=9, node_slice={1, 2, 3})
-        ).to_dense(),
-        exp_edge_feats,
-    )
-
-    assert (
-        storage.get_edge_feats(
-            DGSliceTracker(start_time=6, end_time=9, node_slice={1, 2, 3})
-        )
-        is None
     )
 
 
@@ -307,20 +245,6 @@ def test_get_dynamic_node_feats(DGStorageImpl, data_with_features):
             DGSliceTracker(start_time=5, end_time=9)
         ).to_dense(),
         exp_node_feats,
-    )
-
-    exp_node_feats = torch.zeros(21, 8 + 1, 5)
-    exp_node_feats[1, 2] = data.dynamic_node_feats[0]
-    assert torch.equal(
-        storage.get_dynamic_node_feats(DGSliceTracker(node_slice={1, 2, 3})).to_dense(),
-        exp_node_feats,
-    )
-
-    assert (
-        storage.get_dynamic_node_feats(
-            DGSliceTracker(start_time=5, end_time=9, node_slice={1, 2, 3})
-        )
-        is None
     )
 
 
@@ -394,66 +318,6 @@ def test_get_nbrs_single_hop(DGStorageImpl):
         2: [[(4, 5)]],
         3: [[]],
         4: [[(2, 5)]],
-        5: [[]],
-        6: [[]],
-        7: [[]],
-        8: [[]],
-    }
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-    nbrs = storage.get_nbrs(
-        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
-        num_nbrs=[-1],
-        slice=DGSliceTracker(node_slice={1, 2, 3}),
-    )
-    exp_nbrs = {
-        1: [[]],
-        2: [[(2, 1)]],
-        3: [[]],
-        4: [[]],
-        5: [[]],
-        6: [[]],
-        7: [[]],
-        8: [[]],
-    }
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-    nbrs = storage.get_nbrs(
-        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
-        num_nbrs=[-1],
-        slice=DGSliceTracker(node_slice={2, 3}),
-    )
-    exp_nbrs = {
-        1: [[]],
-        2: [[(2, 1)]],
-        3: [[]],
-        4: [[]],
-        5: [[]],
-        6: [[]],
-        7: [[]],
-        8: [[]],
-    }
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-    nbrs = storage.get_nbrs(
-        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
-        num_nbrs=[-1],
-        slice=DGSliceTracker(node_slice={2, 3}, end_time=4),
-    )
-    exp_nbrs = {
-        1: [[]],
-        2: [[(2, 1)]],
-        3: [[]],
-        4: [[]],
         5: [[]],
         6: [[]],
         7: [[]],

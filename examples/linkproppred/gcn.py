@@ -31,6 +31,12 @@ parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimens
 parser.add_argument(
     '--time-gran',
     type=str,
+    default='s',
+    help='raw time granularity for dataset',
+)
+parser.add_argument(
+    '--batch-time-gran',
+    type=str,
     default='h',
     help='time granularity to operate on for snapshots',
 )
@@ -172,29 +178,38 @@ args = parser.parse_args()
 seed_everything(args.seed)
 
 train_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='train', device=args.device
+    args.dataset,
+    time_delta=TimeDeltaDG(args.time_gran),
+    split='train',
+    device=args.device,
 )
 val_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='valid', device=args.device
+    args.dataset,
+    time_delta=TimeDeltaDG(args.time_gran),
+    split='val',
+    device=args.device,
 )
 test_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='test', device=args.device
+    args.dataset,
+    time_delta=TimeDeltaDG(args.time_gran),
+    split='test',
+    device=args.device,
 )
 
 train_loader = DGDataLoader(
     train_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes),
-    batch_unit=args.time_gran,
+    batch_unit=args.batch_time_gran,
 )
 val_loader = DGDataLoader(
     val_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
-    batch_unit=args.time_gran,
+    batch_unit=args.batch_time_gran,
 )
 test_loader = DGDataLoader(
     test_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
-    batch_unit=args.time_gran,
+    batch_unit=args.batch_time_gran,
 )
 
 if train_dg.dynamic_node_feats_dim is not None:
