@@ -406,7 +406,6 @@ class DGData:
 
             num_node_events = 0
             node_label_dim = 0
-            split_start, split_end = timestamps[0], timestamps[-1]
             for t in node_label_dict:
                 for node_id, label in node_label_dict[t].items():
                     num_node_events += 1
