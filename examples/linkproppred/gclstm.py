@@ -29,6 +29,12 @@ parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimens
 parser.add_argument(
     '--time-gran',
     type=str,
+    default='s',
+    help='raw time granularity for dataset',
+)
+parser.add_argument(
+    '--batch-time-gran',
+    type=str,
     default='h',
     help='time granularity to operate on for snapshots',
 )
@@ -122,7 +128,7 @@ def eval(
     node_feat: torch.Tensor,
     h_0: torch.Tensor | None = None,
     c_0: torch.Tensor | None = None,
-) -> dict:
+) -> Tuple[dict, torch.Tensor, torch.Tensor]:
     model.eval()
     for batch in tqdm(loader):
         # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
@@ -140,36 +146,45 @@ def eval(
         )
         indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
         metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute()
+    return metrics.compute(), h_0, c_0
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
 train_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='train', device=args.device
+    args.dataset,
+    time_delta=TimeDeltaDG(args.time_gran),
+    split='train',
+    device=args.device,
 )
 val_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='val', device=args.device
+    args.dataset,
+    time_delta=TimeDeltaDG(args.time_gran),
+    split='val',
+    device=args.device,
 )
 test_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('s'), split='test', device=args.device
+    args.dataset,
+    time_delta=TimeDeltaDG(args.time_gran),
+    split='test',
+    device=args.device,
 )
 
 train_loader = DGDataLoader(
     train_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes),
-    batch_unit=args.time_gran,
+    batch_unit=args.batch_time_gran,
 )
 val_loader = DGDataLoader(
     val_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
-    batch_unit=args.time_gran,
+    batch_unit=args.batch_time_gran,
 )
 test_loader = DGDataLoader(
     test_dg,
     hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
-    batch_unit=args.time_gran,
+    batch_unit=args.batch_time_gran,
 )
 
 if train_dg.dynamic_node_feats is not None:
@@ -194,7 +209,9 @@ for epoch in range(1, args.epochs + 1):
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results = eval(val_loader, model, val_metrics, static_node_feats, h_0, c_0)
+    val_results, h_0, c_0 = eval(
+        val_loader, model, val_metrics, static_node_feats, h_0, c_0
+    )
     val_metrics.reset()
 
     print(
@@ -202,5 +219,5 @@ for epoch in range(1, args.epochs + 1):
         + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
     )
 
-test_results = eval(test_loader, model, test_metrics, static_node_feats)
+test_results, h_0, c_0 = eval(test_loader, model, test_metrics, static_node_feats)
 print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
