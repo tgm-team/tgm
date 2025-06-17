@@ -78,38 +78,47 @@ class TGAT(nn.Module):
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
 
-        # TODO: Needs to be paramaterized by node ids
-        def _recursive_forward(hop: int):
+        def _recursive_forward(
+            hop: int, node_ids: torch.Tensor, node_times: torch.Tensor
+        ) -> torch.Tensor:
             if hop == 0:
-                return torch.zeros(
-                    (*batch.nids[hop].shape, self.embed_dim), device=device
-                )
-            node_feat = _recursive_forward(hop - 1, batch.nids[hop])
-            nbr_node_feat = _recursive_forward(hop - 1, batch.nbr_nids[hop])
+                # TODO: This should be using the (static?) node features as the base case (if they exist)
+                return torch.zeros((node_ids, self.embed_dim), device=device)
 
-            time_feat = self.time_encoder(
-                torch.zeros(len(batch.nids[hop]), device=device)
-            )
+            z_node_prev = _recursive_forward(hop - 1, node_ids, node_times)
+
+            B, K = batch.nbr_nids[hop - 1].shape
+            z_nbr_prev = _recursive_forward(
+                hop - 1,
+                batch.nbr_nids[hop - 1].reshape(-1),
+                batch.nbr_times[hop - 1].reshape(-1),
+            ).view(B, K, -1)
+
+            time_feat = self.time_encoder(node_times)
             nbr_time_feat = self.time_encoder(
-                batch.time.unsqueeze(dim=1).repeat(3, 1) - batch.nbr_times[hop]
+                node_times.unsqueeze(1) - batch.nbr_times[hop - 1]
             )
-            edge_feat = batch.nbr_feats[hop]
-            nbr_mask = batch.nbr_mask[hop]
 
             z = self.attn[hop - 1](
-                node_feat=node_feat,
-                nbr_node_feat=nbr_node_feat,
+                node_feat=z_node_prev,
+                nbr_node_feat=z_nbr_prev,
                 time_feat=time_feat,
                 nbr_time_feat=nbr_time_feat,
-                edge_feat=edge_feat,
-                nbr_mask=nbr_mask,
+                edge_feat=batch.nbr_feats[hop - 1],
+                nbr_mask=batch.nbr_mask[hop - 1],
             )
 
             # TODO: Merge layers to combine attention results and node original features
+            # node_raw_feat = torch.zeros((node_ids, self.embed_dim), device=device)
+            # z = self.merge_layers[hop - 1](z, node_raw_feat)
             return z
 
-        z = _recursive_forward(hop=self.num_layers)
-        z_src, z_dst, z_neg = z.chunk(3, dim=0)
+        z = _recursive_forward(
+            hop=self.num_layers,
+            node_ids=batch.nids[self.num_layers - 1],
+            node_times=batch.nbr_times[self.num_layers - 1].reshape(-1),
+        )
+        z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
