@@ -86,7 +86,7 @@ class RecurrentGCN(torch.nn.Module):
 
 
 class NodePredictor(torch.nn.Module):
-    def __init__(self, in_dim, out_dim):
+    def __init__(self, in_dim: int, out_dim: int) -> None:
         super().__init__()
         self.lin_node = nn.Linear(in_dim, in_dim)
         self.out = nn.Linear(in_dim, out_dim)
