@@ -97,14 +97,14 @@ class TGAT(nn.Module):
             B, K = batch.nbr_nids[hop - 1].shape
             z_nbr_prev = z_nbr_prev.reshape(B, K, -1)
 
-            # This reshape won't work in general
-            node_times = node_times.unsqueeze(dim=1).repeat(3, 1)
-            time_feat = self.time_encoder(
-                torch.zeros(node_times.shape, device=device)
-            ).squeeze(1)
+            time_feat = self.time_encoder(torch.zeros(node_times.shape, device=device))
 
-            nbr_delta_times = node_times - batch.nbr_times[hop - 1]
+            print(node_times.unsqueeze(1).shape, batch.nbr_times[hop - 1].shape)
+            input()
+            nbr_delta_times = node_times.unsqueeze(1) - batch.nbr_times[hop - 1]
             nbr_time_feat = self.time_encoder(nbr_delta_times)
+            print(nbr_time_feat.shape)
+            input()
 
             z = self.attn[hop - 1](
                 node_feat=z_node_prev,
@@ -123,7 +123,7 @@ class TGAT(nn.Module):
         z = _recursive_forward(
             hop=self.num_layers,
             node_ids=batch.nids[0],
-            node_times=batch.time,
+            node_times=batch.time.repeat(3),  # Won't work in general
         )
         z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
         pos_out = self.link_predictor(z_src, z_dst)
@@ -192,9 +192,11 @@ test_dg = DGraph(
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     if sampling_type == 'uniform':
-        nbr_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs])
+        nbr_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs, args.n_nbrs])
     elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=dg.num_nodes)
+        nbr_hook = RecencyNeighborHook(
+            num_nbrs=[args.n_nbrs, args.n_nbrs], num_nodes=dg.num_nodes
+        )
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -218,7 +220,7 @@ model = TGAT(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
-    num_layers=1,
+    num_layers=2,
     n_heads=args.n_heads,
     dropout=float(args.dropout),
 ).to(args.device)
