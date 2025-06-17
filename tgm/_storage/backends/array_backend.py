@@ -159,7 +159,7 @@ class DGStorageArrayBackend(DGStorageBase):
         edge_mask = (self._data.edge_event_idx >= lb_idx) & (
             self._data.edge_event_idx < ub_idx
         )
-        if edge_mask.sum() != 0 and self._data.edge_index[edge_mask].numel() > 0:
+        if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
             max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())  # type: ignore
 
         max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
