@@ -82,38 +82,40 @@ class TGAT(nn.Module):
         print('Unique batch ids: ', batch.unique_nids)
         z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
 
+        print('--------- TGAT FORWARD -----------')
         for hop in reversed(range(self.num_layers)):
-            print('---------------')
-            print('Hop: ', hop)
+            print('\tHop: ', hop)
             if batch.nids[hop].numel() == 0:
-                print('No nodes found at hop: ', hop)
+                print('\tNo nodes found at hop: ', hop)
                 continue
 
             # TODO: Check and read static node features
             node_feat = torch.zeros(
                 (*batch.nids[hop].shape, self.embed_dim), device=device
             )
-            print('Node feat: ', node_feat.shape)
+            print('\tNode feat: ', node_feat.shape)
             node_time_feat = self.time_encoder(torch.zeros_like(batch.nids[hop]))
-            print('Node time feat: ', node_time_feat.shape)
+            print('\tNode time feat: ', node_time_feat.shape)
 
             # If next next hops embeddings exist, use them instead of raw features
             if hop < self.num_layers - 1:
-                print('inverse nbr nids index: ', batch.nbr_nids_idx[hop])
-                input()
+                print(
+                    'We get next hop embeddings for nbrs, using those instead of raw features'
+                )
+                print('\tinverse nbr nids index: ', batch.nbr_nids_idx[hop].shape)
                 nbr_feat = z[batch.nbr_nids_idx[hop]]
             else:
+                print('Using raw features for nbrs, means we are on the deepest hop')
                 nbr_feat = torch.zeros(
                     (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
                 )
 
             print('Nbr feat: ', nbr_feat.shape)
-            input()
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
-            print('delta time: ', delta_time)
+            print('delta time: ', delta_time.shape)
             nbr_time_feat = self.time_encoder(delta_time)
-            print('nbr time feat ', nbr_time_feat)
+            print('nbr time feat ', nbr_time_feat.shape)
 
             out = self.attn[hop](
                 node_feat=node_feat,
@@ -125,7 +127,6 @@ class TGAT(nn.Module):
             )
             print('COMPUTED ATTN ', out.shape)
             print('setting: ', batch.nids[hop])
-            print('inverse map: ', batch.nid_to_idx)
             print('@: ', batch.nid_to_idx[batch.nids[hop]])
 
             z[batch.nid_to_idx[batch.nids[hop]]] = out

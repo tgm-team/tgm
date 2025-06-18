@@ -301,6 +301,8 @@ class RecencyNeighborHook:
         batch.nbr_feats = []  # type: ignore
         batch.nbr_mask = []  # type: ignore
 
+        prev_nbr_nids, prev_nbr_times = None, None
+        print('------------ SAMPLER ---------------')
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
                 if hasattr(batch, 'neg'):
@@ -361,8 +363,8 @@ class RecencyNeighborHook:
             batch.nbr_feats.append(nbr_feats)  # type: ignore
             batch.nbr_mask.append(nbr_mask)  # type: ignore
 
-            nbr_nids[nbr_mask.bool()].flatten()
-            nbr_times[nbr_mask.bool()].flatten()
+            prev_nbr_nids = nbr_nids[nbr_mask.bool()].flatten()
+            prev_nbr_times = nbr_times[nbr_mask.bool()].flatten()
 
         self._update(batch)
         return batch
