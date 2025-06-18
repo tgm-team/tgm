@@ -302,7 +302,6 @@ class RecencyNeighborHook:
         batch.nbr_mask = []  # type: ignore
 
         prev_nbr_nids, prev_nbr_times = None, None
-        print('------------ SAMPLER ---------------')
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
                 if hasattr(batch, 'neg'):
@@ -314,10 +313,6 @@ class RecencyNeighborHook:
             else:
                 seed_nodes = prev_nbr_nids
                 seed_times = prev_nbr_times
-
-            print(
-                f'Sampler Hop: {hop}, seed nodes: {seed_nodes.shape}, seed_times: {seed_times.shape}'
-            )
 
             batch_size = len(seed_nodes)
             nbr_nids = torch.empty(

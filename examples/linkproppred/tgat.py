@@ -27,7 +27,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
-parser.add_argument('--bsize', type=int, default=3, help='batch size')
+parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
@@ -77,44 +77,28 @@ class TGAT(nn.Module):
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
-
-        print('Unique batch ids: ', batch.unique_nids)
         z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
 
-        print('--------- TGAT FORWARD -----------')
         for hop in reversed(range(self.num_layers)):
-            print('Hop: ', hop)
             if batch.nids[hop].numel() == 0:
-                print('\tNo nodes found at hop: ', hop)
                 continue
 
             # TODO: Check and read static node features
             node_feat = torch.zeros(
                 (*batch.nids[hop].shape, self.embed_dim), device=device
             )
-            print('\tNode feat: ', node_feat.shape)
             node_time_feat = self.time_encoder(torch.zeros_like(batch.nids[hop]))
-            print('\tNode time feat: ', node_time_feat.shape)
 
             # If next next hops embeddings exist, use them instead of raw features
             if hop < self.num_layers - 1:
-                print(
-                    '\tWe got next hop embeddings for nbrs, looking those up with inverse map'
-                )
-                print('\tinverse nbr nids index: ', batch.nbr_nids_idx[hop].shape)
                 nbr_feat = z[batch.nbr_nids_idx[hop]]
             else:
-                print('\tUsing raw features for nbrs, means we are on the deepest hop')
                 nbr_feat = torch.zeros(
                     (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
                 )
 
-            print('\tNbr feat: ', nbr_feat.shape)
-
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
-            print('\tdelta time: ', delta_time.shape)
             nbr_time_feat = self.time_encoder(delta_time)
-            print('\tnbr time feat ', nbr_time_feat.shape)
 
             out = self.attn[hop](
                 node_feat=node_feat,
@@ -124,16 +108,10 @@ class TGAT(nn.Module):
                 nbr_time_feat=nbr_time_feat,
                 nbr_mask=batch.nbr_mask[hop],
             )
-            print('\tCOMPUTED ATTN ', out.shape)
-            print('\tsetting: ', batch.nids[hop])
-            print('\t@: ', batch.nid_to_idx[batch.nids[hop]])
-
             z[batch.nid_to_idx[batch.nids[hop]]] = out
-            print('\tUpdated emebeddings!')
-            input()
+
             # TODO: Merge layers to combine attention results and node original features
-            # node_raw_feat = torch.zeros((node_ids, self.embed_dim), device=device)
-            # z = self.merge_layers[hop - 1](z, node_raw_feat)
+            # z = self.merge_layers[hop](out, node_feat)
 
         z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
         pos_out = self.link_predictor(z_src, z_dst)
