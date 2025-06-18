@@ -1,5 +1,5 @@
-r"""python -u gclstm.py --dataset tgbn-trade --time-gran r --batch-time-gran r
-python -u gclstm.py --dataset tgbn-genre --time-gran s --batch-time-gran D\
+r"""python -u gclstm.py --dataset tgbn-trade --time-gran Y --batch-time-gran Y
+python -u gclstm.py --dataset tgbn-genre --time-gran s --batch-time-gran D
 example commands to run this script.
 """
 
