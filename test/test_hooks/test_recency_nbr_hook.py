@@ -22,6 +22,7 @@ def test_hook_dependancies():
         'nbr_times',
         'nbr_feats',
         'nbr_mask',
+        'times',
     }
 
 
@@ -45,8 +46,8 @@ def test_neighbour_sampler_hook(data):
     # TODO: Verify features here as well
 
     # Batch 1
-    src = torch.Tensor([1])
-    dst = torch.Tensor([10])
+    src = torch.LongTensor([1])
+    dst = torch.LongTensor([10])
     time = torch.Tensor([0])
     edge_feats = torch.rand(1, 5)
     batch = DGBatch(src, dst, time, edge_feats=edge_feats)
@@ -406,14 +407,14 @@ def test_neighbor_sampler_hook_neg_edges(data):
     hook = RecencyNeighborHook(num_nbrs=[2], num_nodes=51)
 
     # Batch 1
-    src = torch.Tensor([1])
-    dst = torch.Tensor([10])
+    src = torch.LongTensor([1])
+    dst = torch.LongTensor([10])
     time = torch.Tensor([0])
     edge_feats = torch.rand(1, 5)
     batch = DGBatch(src, dst, time, edge_feats=edge_feats)
 
     # Add negative edges
-    batch.neg = torch.Tensor([7, 8])
+    batch.neg = torch.LongTensor([7, 8])
     batch = hook(dg, batch)
 
     # And ensure they are part of the seed nodes on the first hop

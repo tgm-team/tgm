@@ -293,7 +293,8 @@ class RecencyNeighborHook:
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # TODO: Consider the case where no edge features exist
-        # TODO: Consider the case where node features exist
+        device = dg.device
+
         batch.nids = []  # type: ignore
         batch.times = []  # type: ignore
         batch.nbr_nids = []  # type: ignore
@@ -301,65 +302,41 @@ class RecencyNeighborHook:
         batch.nbr_feats = []  # type: ignore
         batch.nbr_mask = []  # type: ignore
 
-        prev_nbr_nids, prev_nbr_times = None, None
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
+                seed = [batch.src, batch.dst]
                 if hasattr(batch, 'neg'):
-                    batch.neg = batch.neg.to(dg.device)
-                    seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
-                else:
-                    seed_nodes = torch.cat([batch.src, batch.dst])
-                seed_times = batch.time.repeat(3)
+                    batch.neg = batch.neg.to(device)  # type: ignore
+                    seed.append(batch.neg)
+                seed_nodes = torch.cat(seed)
+                seed_times = batch.time.repeat(3)  # TODO: Won't work for tgb
             else:
-                seed_nodes = prev_nbr_nids
-                seed_times = prev_nbr_times
+                mask = batch.nbr_mask[hop - 1].bool()
+                seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()
+                seed_times = batch.nbr_times[hop - 1][mask].flatten()
 
-            batch_size = len(seed_nodes)
-            nbr_nids = torch.empty(
-                batch_size, num_nbrs, dtype=torch.long, device=dg.device
-            )
-            nbr_times = torch.empty(
-                batch_size, num_nbrs, dtype=torch.long, device=dg.device
-            )
-            nbr_feats = torch.zeros(
-                batch_size,
-                num_nbrs,
-                dg.edge_feats_dim,  # type: ignore
-                device=dg.device,
-            )
-            nbr_mask = torch.zeros(
-                batch_size, num_nbrs, dtype=torch.long, device=dg.device
-            )
+            B = len(seed_nodes)
+            nbr_nids = torch.empty(B, num_nbrs, dtype=torch.long, device=device)
+            nbr_times = torch.empty(B, num_nbrs, dtype=torch.long, device=device)
+            nbr_feats = torch.zeros(B, num_nbrs, dg.edge_feats_dim, device=device)  # type: ignore
+            nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
 
-            unique, inverse_indices = seed_nodes.unique(return_inverse=True)
-
+            unique, inv_idx = seed_nodes.unique(return_inverse=True)
             for i, node in enumerate(unique.tolist()):
-                node_q = self._nbrs[node][0]
-                time_q = self._nbrs[node][1]
-                edge_feat_q = self._nbrs[node][2]
-
+                node_q, time_q, feat_q = self._nbrs[node]
                 if nn := len(node_q):
-                    mask = inverse_indices == i
-                    nbr_nids[mask, :nn] = torch.tensor(
-                        node_q, device=dg.device, dtype=torch.long
-                    )
-                    nbr_times[mask, :nn] = torch.tensor(
-                        time_q, device=dg.device, dtype=torch.long
-                    )
-                    nbr_feats[mask, :nn] = (
-                        torch.stack(list(edge_feat_q)).float().to(dg.device)
-                    )
+                    mask = inv_idx == i
+                    nbr_nids[mask, :nn] = torch.tensor(node_q, device=device)
+                    nbr_times[mask, :nn] = torch.tensor(time_q, device=device)
+                    nbr_feats[mask, :nn] = torch.stack(list(feat_q)).float().to(device)
                     nbr_mask[mask, :nn] = 1
 
-            batch.nids.append(seed_nodes)  # type: ignore
-            batch.times.append(seed_times)  # type: ignore
-            batch.nbr_nids.append(nbr_nids)  # type: ignore
-            batch.nbr_times.append(nbr_times)  # type: ignore
-            batch.nbr_feats.append(nbr_feats)  # type: ignore
-            batch.nbr_mask.append(nbr_mask)  # type: ignore
-
-            prev_nbr_nids = nbr_nids[nbr_mask.bool()].flatten()
-            prev_nbr_times = nbr_times[nbr_mask.bool()].flatten()
+                batch.nids.append(seed_nodes)  # type: ignore
+                batch.times.append(seed_times)  # type: ignore
+                batch.nbr_nids.append(nbr_nids)  # type: ignore
+                batch.nbr_times.append(nbr_times)  # type: ignore
+                batch.nbr_feats.append(nbr_feats)  # type: ignore
+                batch.nbr_mask.append(nbr_mask)  # type: ignore
 
         self._update(batch)
         return batch
