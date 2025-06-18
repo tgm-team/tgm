@@ -57,6 +57,7 @@ class TGAT(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
+        self.num_layers = num_layers
         self.embed_dim = embed_dim
         self.link_predictor = LinkPredictor(dim=embed_dim)
         self.time_encoder = Time2Vec(time_dim=time_dim)
@@ -75,28 +76,60 @@ class TGAT(nn.Module):
         )
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO: Go back to recursive embedding for multi-hop
-        hop = 0
-
         device = batch.src.device
-        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim), device=device)
-        nbr_node_feat = torch.zeros(
-            (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
-        )
-        time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop]), device=device))
-        nbr_time_feat = self.time_encoder(
-            batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
+
+        def _recursive_forward(
+            hop: int, node_ids: torch.Tensor, node_times: torch.Tensor
+        ) -> torch.Tensor:
+            # TODO: This should be using the (static?) node features as the base case (if they exist)
+            node_feat = torch.zeros((*node_ids.shape, self.embed_dim), device=device)
+
+            if hop == 0:
+                return node_feat
+
+            z_node_prev = _recursive_forward(hop - 1, node_ids, node_times)
+            z_nbr_prev = _recursive_forward(
+                hop - 1,
+                batch.nbr_nids[hop - 1].flatten(),
+                batch.nbr_times[hop - 1].flatten(),
+            )
+
+            B, K = batch.nbr_nids[hop - 1].shape
+            z_nbr_prev = z_nbr_prev.reshape(B, K, -1)
+
+            # This reshape won't work in general
+            node_times = node_times.unsqueeze(dim=1).repeat(3, 1)
+            time_feat = self.time_encoder(
+                torch.zeros(node_times.shape, device=device)
+            ).squeeze(1)
+
+            nbr_delta_times = node_times - batch.nbr_times[hop - 1]
+            nbr_time_feat = self.time_encoder(nbr_delta_times)
+
+            z = self.attn[hop - 1](
+                node_feat=z_node_prev,
+                nbr_node_feat=z_nbr_prev,
+                time_feat=time_feat,
+                nbr_time_feat=nbr_time_feat,
+                edge_feat=batch.nbr_feats[hop - 1],
+                nbr_mask=batch.nbr_mask[hop - 1],
+            )
+
+            # TODO: Merge layers to combine attention results and node original features
+            # node_raw_feat = torch.zeros((node_ids, self.embed_dim), device=device)
+            # z = self.merge_layers[hop - 1](z, node_raw_feat)
+            return z
+
+        z = _recursive_forward(
+            hop=self.num_layers,
+            node_ids=batch.nids[0],
+            node_times=batch.time,
         )
 
-        z = self.attn[hop](
-            node_feat=node_feat,
-            nbr_node_feat=nbr_node_feat,
-            time_feat=time_feat,
-            nbr_time_feat=nbr_time_feat,
-            edge_feat=batch.nbr_feats[hop],
-            nbr_mask=batch.nbr_mask[hop],
-        )
-        z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
+        # TODO: if we want to use the dedup index, then we need to forward pass on unique nodes
+        z_src = z[batch.src_idx]
+        z_dst = z[batch.dst_idx]
+        z_neg = z[batch.neg_idx]  # type: ignore
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
