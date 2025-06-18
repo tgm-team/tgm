@@ -27,7 +27,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
-parser.add_argument('--bsize', type=int, default=200, help='batch size')
+parser.add_argument('--bsize', type=int, default=3, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
@@ -78,53 +78,63 @@ class TGAT(nn.Module):
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
 
-        def _recursive_forward(
-            hop: int, node_ids: torch.Tensor, node_times: torch.Tensor
-        ) -> torch.Tensor:
-            # TODO: This should be using the (static?) node features as the base case (if they exist)
-            node_feat = torch.zeros((*node_ids.shape, self.embed_dim), device=device)
+        # TODO: Hook up unique batch nodes
+        print('Unique batch ids: ', batch.unique_nids)
+        z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
 
-            if hop == 0:
-                return node_feat
+        for hop in reversed(range(self.num_layers)):
+            print('---------------')
+            print('Hop: ', hop)
+            if batch.nids[hop].numel() == 0:
+                print('No nodes found at hop: ', hop)
+                continue
 
-            z_node_prev = _recursive_forward(hop - 1, node_ids, node_times)
-            z_nbr_prev = _recursive_forward(
-                hop - 1,
-                batch.nbr_nids[hop - 1].flatten(),
-                batch.nbr_times[hop - 1].flatten(),
+            # TODO: Check and read static node features
+            node_feat = torch.zeros(
+                (*batch.nids[hop].shape, self.embed_dim), device=device
             )
+            print('Node feat: ', node_feat.shape)
+            node_time_feat = self.time_encoder(torch.zeros_like(batch.nids[hop]))
+            print('Node time feat: ', node_time_feat.shape)
 
-            B, K = batch.nbr_nids[hop - 1].shape
-            z_nbr_prev = z_nbr_prev.reshape(B, K, -1)
+            # If next next hops embeddings exist, use them instead of raw features
+            if hop < self.num_layers - 1:
+                print('inverse nbr nids index: ', batch.nbr_nids_idx[hop])
+                input()
+                nbr_feat = z[batch.nbr_nids_idx[hop]]
+            else:
+                nbr_feat = torch.zeros(
+                    (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
+                )
 
-            time_feat = self.time_encoder(torch.zeros(node_times.shape, device=device))
-
-            print(node_times.unsqueeze(1).shape, batch.nbr_times[hop - 1].shape)
+            print('Nbr feat: ', nbr_feat.shape)
             input()
-            nbr_delta_times = node_times.unsqueeze(1) - batch.nbr_times[hop - 1]
-            nbr_time_feat = self.time_encoder(nbr_delta_times)
-            print(nbr_time_feat.shape)
-            input()
 
-            z = self.attn[hop - 1](
-                node_feat=z_node_prev,
-                nbr_node_feat=z_nbr_prev,
-                time_feat=time_feat,
+            delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
+            print('delta time: ', delta_time)
+            nbr_time_feat = self.time_encoder(delta_time)
+            print('nbr time feat ', nbr_time_feat)
+
+            out = self.attn[hop](
+                node_feat=node_feat,
+                time_feat=node_time_feat,
+                edge_feat=batch.nbr_feats[hop],
+                nbr_node_feat=nbr_feat,
                 nbr_time_feat=nbr_time_feat,
-                edge_feat=batch.nbr_feats[hop - 1],
-                nbr_mask=batch.nbr_mask[hop - 1],
+                nbr_mask=batch.nbr_mask[hop],
             )
+            print('COMPUTED ATTN ', out.shape)
+            print('setting: ', batch.nids[hop])
+            print('inverse map: ', batch.nid_to_idx)
+            print('@: ', batch.nid_to_idx[batch.nids[hop]])
 
+            z[batch.nid_to_idx[batch.nids[hop]]] = out
+            print('Updated emebeddings!')
+            input()
             # TODO: Merge layers to combine attention results and node original features
             # node_raw_feat = torch.zeros((node_ids, self.embed_dim), device=device)
             # z = self.merge_layers[hop - 1](z, node_raw_feat)
-            return z
 
-        z = _recursive_forward(
-            hop=self.num_layers,
-            node_ids=batch.nids[0],
-            node_times=batch.time.repeat(3),  # Won't work in general
-        )
         z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
