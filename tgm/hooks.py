@@ -309,7 +309,18 @@ class RecencyNeighborHook:
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
                 seed_nodes = torch.cat(seed)
-                seed_times = batch.time.repeat(3)  # TODO: Won't work for tgb
+                seed_times_real = batch.time.repeat(2)
+                if hasattr(batch, 'neg'):
+                    seed_times_fake = torch.randint(
+                        batch.time.min().item(),
+                        batch.time.max().item(),
+                        (batch.neg.size(0),),
+                        device=device,
+                    )
+                    seed_times = torch.cat([seed_times_real, seed_times_fake])
+                else:
+                    seed_times = seed_times_real
+
             else:
                 mask = batch.nbr_mask[hop - 1].bool()  # type: ignore
                 seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
