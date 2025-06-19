@@ -312,8 +312,8 @@ class RecencyNeighborHook:
                 seed_times_real = batch.time.repeat(2)
                 if hasattr(batch, 'neg'):
                     seed_times_fake = torch.randint(
-                        batch.time.min().item(),
-                        batch.time.max().item(),
+                        batch.time.min().item(),  # type: ignore
+                        batch.time.max().item(),  # type: ignore
                         (batch.neg.size(0),),
                         device=device,
                     )

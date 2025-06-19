@@ -211,7 +211,7 @@ test_dg = DGraph(
 
 
 def _init_hooks(
-    num_nodes:int , sampling_type: str, neg_sampler: object, split_mode: str
+    num_nodes: int, sampling_type: str, neg_sampler: object, split_mode: str
 ) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
