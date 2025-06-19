@@ -30,24 +30,23 @@ Our main goal is to provide an efficient abstraction over dynamic graphs to enab
 - :hourglass_flowing_sand: Native support for discrete and continuous-time graphs
 - :wrench: Direct integration with [TGB datasets](https://tgb.complexdatalab.com/) and MRR-based link prediction evaluation
 - :sparkles: Simple and modular front-end API to prototype new models
-- :chart_with_upwards_trend: Performance tracking tool to identify bottlenecks
 - :white_check_mark: Validated implementations of widely used TG methods
 
 ## Supported Methods
 
 We aim to support the following temporal graph learning methods. If you are interested in contributing a new method, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
 
-- [x] [EdgeBank](https://arxiv.org/abs/2207.10128)
-- [x] [GCN](https://arxiv.org/abs/1609.02907)
-- [x] [GC-LSTM](https://arxiv.org/abs/1812.04206)
-- [x] [GraphMixer](https://arxiv.org/abs/2302.11636)
-- [x] [TGAT](https://arxiv.org/abs/2002.07962)
-- [x] [TGN](https://arxiv.org/abs/2006.10637)
-- \[\] [DygFormer](https://arxiv.org/abs/2303.13047)
-- \[\] [TNCN](https://arxiv.org/abs/2406.07926)
-- \[\] [DyGMamba](https://arxiv.org/abs/2408.04713)
-- \[\] [NLB](https://arxiv.org/abs/2402.01964)
-- \[\] [NAT](https://arxiv.org/abs/2209.01084)
+- :white_check_mark: [EdgeBank](https://arxiv.org/abs/2207.10128)
+- :white_check_mark: [GCN](https://arxiv.org/abs/1609.02907)
+- :white_check_mark: [GC-LSTM](https://arxiv.org/abs/1812.04206)
+- :white_check_mark: [GraphMixer](https://arxiv.org/abs/2302.11636)
+- :white_check_mark: [TGAT](https://arxiv.org/abs/2002.07962)
+- :white_check_mark: [TGN](https://arxiv.org/abs/2006.10637)
+- :white_large_square: [DygFormer](https://arxiv.org/abs/2303.13047)
+- :white_large_square: [TNCN](https://arxiv.org/abs/2406.07926)
+- :white_large_square: [DyGMamba](https://arxiv.org/abs/2408.04713)
+- :white_large_square: [NLB](https://arxiv.org/abs/2402.01964)
+- :white_large_square: [NAT](https://arxiv.org/abs/2209.01084)
 
 ### Architecture Overview
 
