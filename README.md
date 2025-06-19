@@ -123,7 +123,6 @@ Documentation along with a quick start guide can be found on the [docs website](
 Please cite [our paper](https://github.com/tgm-team/tgm) if your use this code in your own work:
 
 ```
-
 @article{TODO,
 title   = "TODO",
 author  = "TODO"
@@ -131,7 +130,6 @@ journal = "TODO",
 url     = "TODO"
 year    = "2025",
 }
-
 ```
 
 ## Contributing
