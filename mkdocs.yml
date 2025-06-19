@@ -7,6 +7,8 @@ nav:
   - Home:
       - index.md
       - Quickstart: quickstart.md
+      - Architecture: architecture.md
+      - Bencmarks: benchmarks.md
       - API Reference:
           - dgraph.md
           - hooks.md

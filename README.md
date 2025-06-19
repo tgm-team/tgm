@@ -26,9 +26,36 @@ Our main goal is to provide an efficient abstraction over dynamic graphs to enab
 
 ### Library Highlights
 
+- :zap: It's not that fast yet but it will be soon :)
+- :hourglass_flowing_sand: Native support for discrete and continuous-time graphs
+- :wrench: Direct integration with [TGB datasets](https://tgb.complexdatalab.com/) and MRR-based link prediction evaluation
+- :sparkles: Simple and modular front-end API to prototype new models
+- :chart_with_upwards_trend: Performance tracking tool to identify bottlenecks
+- :white_check_mark: Validated implementations of widely used TG methods
+
 ## Supported Methods
 
+We aim to support the following temporal graph learning methods. If you are interested in contributing a new method, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
+
+- [x] [EdgeBank](https://arxiv.org/abs/2207.10128)
+- [x] [GCN](https://arxiv.org/abs/1609.02907)
+- [x] [GC-LSTM](https://arxiv.org/abs/1812.04206)
+- [x] [GraphMixer](https://arxiv.org/abs/2302.11636)
+- [x] [TGAT](https://arxiv.org/abs/2002.07962)
+- [x] [TGN](https://arxiv.org/abs/2006.10637)
+- \[\] [DygFormer](https://arxiv.org/abs/2303.13047)
+- \[\] [TNCN](https://arxiv.org/abs/2406.07926)
+- \[\] [DyGMamba](https://arxiv.org/abs/2408.04713)
+- \[\] [NLB](https://arxiv.org/abs/2402.01964)
+- \[\] [NAT](https://arxiv.org/abs/2209.01084)
+
 ### Architecture Overview
+
+![image](./docs/img/architecture.svg)
+
+### Performance Benchmarks
+
+Work in progress.
 
 ## Quick Tour for New Users
 
