@@ -48,11 +48,6 @@ We aim to support the following temporal graph learning methods. If you are inte
 - :white_large_square: [NLB](https://arxiv.org/abs/2402.01964)
 - :white_large_square: [NAT](https://arxiv.org/abs/2209.01084)
 
-### Architecture Overview
-
-![image](./docs/img/architecture-dark.svg#gh-dark-mode-only)
-![image](./docs/img/architecture-light.svg#gh-light-mode-only)
-
 ### Performance Benchmarks
 
 Work in progress.
@@ -88,6 +83,9 @@ python -c 'import tgm; print(tgm.__version__)'
 ```
 
 ## Quick Tour for New Users
+
+![image](./docs/img/architecture-dark.svg#gh-dark-mode-only)
+![image](./docs/img/architecture-light.svg#gh-light-mode-only)
 
 ### Running Pre-packaged Examples
 
