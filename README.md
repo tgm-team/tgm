@@ -50,7 +50,7 @@ We aim to support the following temporal graph learning methods. If you are inte
 
 ### Architecture Overview
 
-![image](./docs/img/architecture-dark2.svg#gh-dark-mode-only)
+![image](./docs/img/architecture-dark.svg#gh-dark-mode-only)
 ![image](./docs/img/architecture-light.svg#gh-light-mode-only)
 
 ### Performance Benchmarks
