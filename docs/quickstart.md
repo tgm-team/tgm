@@ -20,9 +20,6 @@ python examples/linkproppred/tgat.py \
   --sampling recency
 ```
 
-> \[!TIP\]
-> Refer to our [our docs](https://tgm.readthedocs.io/) for more information and TG example recipes.
-
 ### Creating a new model
 
 Work in progress.
