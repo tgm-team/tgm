@@ -179,8 +179,8 @@ def eval(
             )
             # compute MRR
             input_dict = {
-                'y_pred_pos': np.array([y_pred[0]]),
-                'y_pred_neg': np.array(y_pred[1:]),
+                'y_pred_pos': np.array([y_pred[0].detach().cpu()]),
+                'y_pred_neg': np.array(y_pred[1:].detach().cpu()),
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
