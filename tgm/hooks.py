@@ -318,7 +318,7 @@ class RecencyNeighborHook:
             B = len(seed_nodes)
             nbr_nids = torch.empty(B, num_nbrs, dtype=torch.long, device=device)
             nbr_times = torch.empty(B, num_nbrs, dtype=torch.long, device=device)
-            nbr_feats = torch.zeros(B, num_nbrs, dg.edge_feats_dim, device=device)  # type: ignore
+            nbr_feats = torch.empty(B, num_nbrs, dg.edge_feats_dim, device=device)  # type: ignore
             nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
 
             unique, inv_idx = seed_nodes.unique(return_inverse=True)
