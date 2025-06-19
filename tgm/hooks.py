@@ -306,14 +306,14 @@ class RecencyNeighborHook:
             if hop == 0:
                 seed = [batch.src, batch.dst]
                 if hasattr(batch, 'neg'):
-                    batch.neg = batch.neg.to(device)  # type: ignore
+                    batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
                 seed_nodes = torch.cat(seed)
                 seed_times = batch.time.repeat(3)  # TODO: Won't work for tgb
             else:
-                mask = batch.nbr_mask[hop - 1].bool()
-                seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()
-                seed_times = batch.nbr_times[hop - 1][mask].flatten()
+                mask = batch.nbr_mask[hop - 1].bool()  # type: ignore
+                seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
+                seed_times = batch.nbr_times[hop - 1][mask].flatten()  # type: ignore
 
             B = len(seed_nodes)
             nbr_nids = torch.empty(B, num_nbrs, dtype=torch.long, device=device)

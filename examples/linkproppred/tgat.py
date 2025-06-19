@@ -33,7 +33,13 @@ parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
-parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
+parser.add_argument(
+    '--n-nbrs',
+    type=int,
+    nargs='+',
+    default=[20, 20],
+    help='num sampled nbrs at each hop',
+)
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
 parser.add_argument(
@@ -180,11 +186,9 @@ test_dg = DGraph(
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     if sampling_type == 'uniform':
-        nbr_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs, args.n_nbrs])
+        nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(
-            num_nbrs=[args.n_nbrs, args.n_nbrs], num_nodes=dg.num_nodes
-        )
+        nbr_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=dg.num_nodes)
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -208,7 +212,7 @@ model = TGAT(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
-    num_layers=2,
+    num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
 ).to(args.device)

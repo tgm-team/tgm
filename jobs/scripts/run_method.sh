@@ -45,7 +45,7 @@ case "$METHOD" in
             --lr 0.0001 \
             --dropout 0.1 \
             --n-heads 2 \
-            --n-nbrs 20 \
+            --n-nbrs 20 20 \
             --time-dim 100 \
             --embed-dim 100 \
             --sampling recency
