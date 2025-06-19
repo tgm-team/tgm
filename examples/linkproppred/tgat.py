@@ -33,7 +33,13 @@ parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
-parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
+parser.add_argument(
+    '--n-nbrs',
+    type=int,
+    nargs='+',
+    default=[20, 20],
+    help='num sampled nbrs at each hop',
+)
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
 parser.add_argument(
@@ -57,6 +63,7 @@ class TGAT(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
+        self.num_layers = num_layers
         self.embed_dim = embed_dim
         self.link_predictor = LinkPredictor(dim=embed_dim)
         self.time_encoder = Time2Vec(time_dim=time_dim)
@@ -75,27 +82,43 @@ class TGAT(nn.Module):
         )
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO: Go back to recursive embedding for multi-hop
-        hop = 0
-
         device = batch.src.device
-        node_feat = torch.zeros((*batch.nids[hop].shape, self.embed_dim), device=device)
-        nbr_node_feat = torch.zeros(
-            (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
-        )
-        time_feat = self.time_encoder(torch.zeros(len(batch.nids[hop]), device=device))
-        nbr_time_feat = self.time_encoder(
-            batch.nbr_times[hop] - batch.time.unsqueeze(dim=1).repeat(3, 1)
-        )
+        z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
 
-        z = self.attn[hop](
-            node_feat=node_feat,
-            nbr_node_feat=nbr_node_feat,
-            time_feat=time_feat,
-            nbr_time_feat=nbr_time_feat,
-            edge_feat=batch.nbr_feats[hop],
-            nbr_mask=batch.nbr_mask[hop],
-        )
+        for hop in reversed(range(self.num_layers)):
+            if batch.nids[hop].numel() == 0:
+                continue
+
+            # TODO: Check and read static node features
+            node_feat = torch.zeros(
+                (*batch.nids[hop].shape, self.embed_dim), device=device
+            )
+            node_time_feat = self.time_encoder(torch.zeros_like(batch.nids[hop]))
+
+            # If next next hops embeddings exist, use them instead of raw features
+            if hop < self.num_layers - 1:
+                nbr_feat = z[batch.nbr_nids_idx[hop]]
+            else:
+                nbr_feat = torch.zeros(
+                    (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
+                )
+
+            delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
+            nbr_time_feat = self.time_encoder(delta_time)
+
+            out = self.attn[hop](
+                node_feat=node_feat,
+                time_feat=node_time_feat,
+                edge_feat=batch.nbr_feats[hop],
+                nbr_node_feat=nbr_feat,
+                nbr_time_feat=nbr_time_feat,
+                nbr_mask=batch.nbr_mask[hop],
+            )
+            z[batch.nid_to_idx[batch.nids[hop]]] = out
+
+            # TODO: Merge layers to combine attention results and node original features
+            # z = self.merge_layers[hop](out, node_feat)
+
         z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
@@ -163,9 +186,9 @@ test_dg = DGraph(
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     if sampling_type == 'uniform':
-        nbr_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs])
+        nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=dg.num_nodes)
+        nbr_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=dg.num_nodes)
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -189,7 +212,7 @@ model = TGAT(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
-    num_layers=1,
+    num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
 ).to(args.device)
