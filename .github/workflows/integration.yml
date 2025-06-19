@@ -1,0 +1,52 @@
+name: Integration Test
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Commit hash to test'
+        required: false
+        default: ''
+      branch:
+        description: 'Branch (default: main)'
+        required: false
+        default: 'main'
+      pr_number:
+        description: 'PR number (optional)'
+        required: false
+        default: ''
+
+jobs:
+  trigger-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set environment variables
+        run: |
+          echo "PR_NUMBER=${{ github.event.inputs.pr_number }}" >> $GITHUB_ENV
+          echo "COMMIT_SHA=${{ github.event.inputs.commit }}" >> $GITHUB_ENV
+          echo "BRANCH=${{ github.event.inputs.branch }}" >> $GITHUB_ENV
+
+      - name: Print inputs
+        run: |
+          echo "PR_NUMBER=$PR_NUMBER"
+          echo "COMMIT_SHA=$COMMIT_SHA"
+          echo "BRANCH=$BRANCH"
+
+      - name: Trigger cluster listener
+        env:
+          CLUSTER_TOKEN: ${{ secrets.CLUSTER_CI_TOKEN }}
+          CI_LISTENER_URL: ${{ secrets.CLUSTER_CI_URL }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          COMMIT_SHA: ${{ env.COMMIT_SHA }}
+          BRANCH: ${{ env.BRANCH }}
+        run: |
+          RESPONSE=$(curl -s -X POST "$CI_LISTENER_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $CLUSTER_TOKEN" \
+            -d "$(jq -n \
+                  --arg commit "$COMMIT_SHA" \
+                  --arg branch "$BRANCH" \
+                  --arg pr_number "$PR_NUMBER" \
+                  '{commit: $commit, branch: $branch, pr_number: $pr_number}')")
+          echo "Listener response: $RESPONSE"

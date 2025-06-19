@@ -38,6 +38,12 @@ examples = [
     "torchmetrics>=1.7.0",
     "tqdm>=4.67.1",
 ]
+ci = [
+    "fastapi>=0.115.13",
+    "pydantic>=2.11.7",
+    "python-dotenv>=1.1.0",
+    "uvicorn[standard]>=0.34.3",
+]
 
 [tool.mypy]
 files = ["tgm"]

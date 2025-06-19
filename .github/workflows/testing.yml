@@ -41,7 +41,7 @@ jobs:
         run: uv sync --all-extras --dev --frozen
 
       - name: Test non-gpu tests with pytest
-        run: uv run pytest test -m "not gpu" --cov=tgm
+        run: uv run pytest test/unit -m "not gpu" --cov=tgm
 
       - name: Minimize uv cache
         run: uv cache prune --ci

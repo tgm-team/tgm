@@ -95,7 +95,7 @@ The TGM test suite is located uner `test/`.
 Run the entire test suite with
 
 ```sh
-uv run pytest
+uv run pytest test/unit --cov=tgm
 ```
 
 ## Continuous Integration
@@ -115,7 +115,7 @@ Everytime you send a Pull Request, your commit will be built and checked against
 1. Ensure that the entire test suite passes and that code coverage roughly stays the same.
 
    ```bash
-   uv run pytest --cov
+   uv run pytest test/unit --cov=tgm
    ```
 
 ## Building Documentation
