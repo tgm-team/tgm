@@ -32,7 +32,7 @@ Our main goal is to provide an efficient abstraction over dynamic graphs to enab
 - :sparkles: Simple and modular front-end API to prototype new models
 - :heavy_check_mark: Validated implementations of widely used TG methods
 
-## Supported Methods
+### Supported Methods
 
 We aim to support the following temporal graph learning methods. If you are interested in contributing a new method, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
 
