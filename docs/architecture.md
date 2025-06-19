@@ -1,4 +1,4 @@
-![image](./img/architecture-light.svg)
+![image](./img/architecture-dark.svg)
 
 **High-Level Design and Architecture of TGM**
 
