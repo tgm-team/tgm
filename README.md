@@ -36,12 +36,12 @@ Our main goal is to provide an efficient abstraction over dynamic graphs to enab
 
 We aim to support the following temporal graph learning methods. If you are interested in contributing a new method, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
 
-- :white_check_mark: [EdgeBank](https://arxiv.org/abs/2207.10128)
-- :white_check_mark: [GCN](https://arxiv.org/abs/1609.02907)
-- :white_check_mark: [GC-LSTM](https://arxiv.org/abs/1812.04206)
-- :white_check_mark: [GraphMixer](https://arxiv.org/abs/2302.11636)
-- :white_check_mark: [TGAT](https://arxiv.org/abs/2002.07962)
-- :white_check_mark: [TGN](https://arxiv.org/abs/2006.10637)
+- :heavy_check_mark: [EdgeBank](https://arxiv.org/abs/2207.10128)
+- :heavy_check_mark: [GCN](https://arxiv.org/abs/1609.02907)
+- :heavy_check_mark: [GC-LSTM](https://arxiv.org/abs/1812.04206)
+- :heavy_check_mark: [GraphMixer](https://arxiv.org/abs/2302.11636)
+- :heavy_check_mark: [TGAT](https://arxiv.org/abs/2002.07962)
+- :heavy_check_mark: [TGN](https://arxiv.org/abs/2006.10637)
 - :white_large_square: [DygFormer](https://arxiv.org/abs/2303.13047)
 - :white_large_square: [TNCN](https://arxiv.org/abs/2406.07926)
 - :white_large_square: [DyGMamba](https://arxiv.org/abs/2408.04713)
