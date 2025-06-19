@@ -59,6 +59,33 @@ Work in progress.
 
 ## Quick Tour for New Users
 
+### Running Pre-packaged Examples
+
+Start by syncing additional dependencies in our example scripts:
+
+```sh
+uv sync --group examples
+```
+
+For this example, we'll run [TGAT](https://arxiv.org/abs/2002.07962) dynamic link-prediction on [tgbl-wiki](https://tgb.complexdatalab.com/docs/leader_linkprop/#tgbl-wiki-v2). We'll use standard parameters on run on GPU. We show some explicit arguments for clarity:
+
+```
+python examples/linkproppred/tgat.py \
+  --dataset tgbl-wiki \
+  --bsize 200 \
+  --device cuda \
+  --epochs 1 \
+  --n-nbrs 20 20 \
+  --sampling recency
+```
+
+> \[!TIP\]
+> Refer to our [our docs](https://tgm.readthedocs.io/) for more information and TG example recipes.
+
+### Creating a new model
+
+Work in progress.
+
 ## Installation
 
 The current recommended way to install TGM is from source.
@@ -87,31 +114,6 @@ pip install git+https://github.com/tgm-team/tgm.git
 
 # Test the install
 python -c 'import tgm; print(tgm.__version__)'
-```
-
-## Running Pre-packaged Examples
-
-Start by syncing additional dependencies in our example scripts:
-
-```sh
-uv sync --group examples
-```
-
-For this example, we'll run [TGAT](https://arxiv.org/abs/2002.07962) dynamic link-prediction on [tgbl-wiki](https://tgb.complexdatalab.com/docs/leader_linkprop/#tgbl-wiki-v2). We'll use standard parameters on run on GPU. We show some explicit arguments for clarity:
-
-```
-python examples/linkproppred/tgat.py \
-  --dataset tgbl-wiki \
-  --bsize 200 \
-  --device cuda \
-  --epochs 1 \
-  --n-nbrs 20 20 \
-  --sampling recency
-;;
-```
-
-> \[!TIP\]
-> Refer to our [our docs](https://tgm.readthedocs.io/) for more information and TG example recipes.
 
 ## Documentation
 
@@ -122,13 +124,15 @@ Documentation along with a quick start guide can be found on the [docs website](
 Please cite [our paper](https://github.com/tgm-team/tgm) if your use this code in your own work:
 
 ```
+
 @article{TODO,
-  title   = "TODO",
-  author  = "TODO"
-  journal = "TODO",
-  url     = "TODO"
-  year    = "2025",
+title   = "TODO",
+author  = "TODO"
+journal = "TODO",
+url     = "TODO"
+year    = "2025",
 }
+
 ```
 
 ## Contributing
@@ -138,3 +142,4 @@ If you notice anything unexpected, or would like to propose a new feature, pleas
 To learn more about making a contribution to TGM see our [contribution guide](./.github/CONTRIBUTING.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+```
