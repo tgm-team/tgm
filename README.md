@@ -27,14 +27,15 @@ Our main goal is to provide an efficient abstraction over dynamic graphs to enab
 ### Library Highlights
 
 - :zap: It's not that fast yet but it will be soon :)
-- :hourglass_flowing_sand: Native support for discrete and continuous-time graphs
-- :wrench: Direct integration with [TGB datasets](https://tgb.complexdatalab.com/) and MRR-based link prediction evaluation
-- :sparkles: Simple and modular front-end API to prototype new models
-- :heavy_check_mark: Validated implementations of widely used TG methods
+- :hourglass_flowing_sand: First library to support both discrete and continuous-time graphs
+- :wrench: Built-in support for [TGB datasets](https://tgb.complexdatalab.com/), MRR-based link prediction, and Node Property Prediction
+- :sparkles: Modular, intuitive API for rapid model prototyping
+- :atom: Efficient dataloading with edge and time-based batching
+- :heavy_check_mark: Validated implementations of popular TG methods
 
 ### Supported Methods
 
-We aim to support the following temporal graph learning methods. If you are interested in contributing a new method, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
+We aim to support the following temporal graph learning methods. If you want us to prioritize a new method, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
 
 - :white_check_mark: [EdgeBank](https://arxiv.org/abs/2207.10128)
 - :white_check_mark: [GCN](https://arxiv.org/abs/1609.02907)
