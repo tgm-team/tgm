@@ -1,6 +1,7 @@
 import pytest
 
 
+@pytest.mark.slow
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
@@ -27,6 +28,7 @@ def test_edgebank(slurm_job_runner):
     # TODO: Get perf and latency as artifact to upload in CI
 
 
+@pytest.mark.slow
 def test_edgebank_tgb(slurm_job_runner):
     cmd = """
         python "$ROOT_DIR/examples/linkproppred/TGB/edgebank.py" \

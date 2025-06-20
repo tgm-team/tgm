@@ -1,6 +1,7 @@
 import pytest
 
 
+@pytest.mark.slow
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
