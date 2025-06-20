@@ -41,7 +41,14 @@ jobs:
         run: uv sync --all-extras --dev --frozen
 
       - name: Test non-gpu tests with pytest
-        run: uv run pytest test -m "not gpu" --cov=tgm
+        run: uv run pytest test -m "not gpu" --cov=tgm --cov-report=xml --cov-append -vvv
+
+      - name: Upload coverage report as an artifact (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-pr${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.ref }}-${{ github.sha }}
+          path: ./coverage.xml
 
       - name: Minimize uv cache
         run: uv cache prune --ci
