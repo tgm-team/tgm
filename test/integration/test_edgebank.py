@@ -2,6 +2,7 @@ import pytest
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize('dataset', ['tgbl-wiki'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
@@ -10,16 +11,10 @@ import pytest
         '--time=0:10:00',
     ]
 )
-def test_edgebank(slurm_job_runner):
-    cmd = """
-        python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
-            --seed $SEED \
-            --dataset $DATASET \
-            --bsize 200 \
-            --window_ratio 0.15 \
-            --pos_prob 1.0 \
-            --memory_mode unlimited
-    """
+def test_edgebank(slurm_job_runner, dataset):
+    cmd = f"""
+python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
+    --dataset {dataset}"""
     state, output = slurm_job_runner(
         cmd,
     )
@@ -29,16 +24,19 @@ def test_edgebank(slurm_job_runner):
 
 
 @pytest.mark.slow
-def test_edgebank_tgb(slurm_job_runner):
-    cmd = """
-        python "$ROOT_DIR/examples/linkproppred/TGB/edgebank.py" \
-            --seed $SEED \
-            --dataset $DATASET \
-            --bsize 200 \
-            --window_ratio 0.15 \
-            --pos_prob 1.0 \
-            --memory_mode unlimited
-    """
+@pytest.mark.parametrize('dataset', ['tgbl-wiki'])
+@pytest.mark.slurm(
+    resources=[
+        '--partition=main',
+        '--cpus-per-task=2',
+        '--mem=4G',
+        '--time=0:10:00',
+    ]
+)
+def test_edgebank_tgb(slurm_job_runner, dataset):
+    cmd = f"""
+python "$ROOT_DIR/examples/linkproppred/TGB/edgebank.py" \
+    --dataset {dataset}"""
     state, output = slurm_job_runner(
         cmd,
     )

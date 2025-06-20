@@ -1,7 +1,7 @@
 import subprocess
 import tempfile
 import time
-import uuid
+from datetime import datetime as dt
 from pathlib import Path
 
 import pytest
@@ -14,29 +14,64 @@ def pytest_configure(config):
 
 
 @pytest.fixture
-def slurm_job_runner(tmp_path: Path):
-    def run(cmd, slurm_args=None):
-        slurm_args = slurm_args or []
-        job_id = str(uuid.uuid4())[:8]
-        slurm_out = tmp_path / f'slurm-{job_id}.out'
-        slurm_err = tmp_path / f'slurm-{job_id}.err'
-
+def slurm_job_runner(request):
+    def run(cmd):
         job_script = f"""#!/bin/bash
+set -euo pipefail
 
-        #SBATCH --job-name=pytest-{job_id}
-        #SBATCH --output={slurm_out}
-        #SBATCH --error={slurm_err}
-        {chr(10).join(slurm_args)}
-        {cmd}
-        """
+# The following assumes we are two directories deep from the root
+# directory, and the root directory contains the .env file.
+ROOT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")/../.." && pwd)"
 
+source "$ROOT_DIR/.env"
+
+echo "===== JOB INFO ====="
+echo "Job ID: $SLURM_JOB_ID"
+echo "Job Name: $SLURM_JOB_NAME"
+echo "Node List: $SLURM_NODELIST"
+echo "Num CPUs: $SLURM_CPUS_PER_TASK"
+echo "GPU(s): ${{CUDA_VISIBLE_DEVICES:-None}}"
+echo "Memory: ${{SLURM_MEM_PER_NODE:-N/A}}"
+echo "Start Time: $(date)"
+echo "===================="
+
+{cmd}
+"""
         with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.sh') as f:
             f.write(job_script)
             script_path = f.name
 
-        output = subprocess.check_output(['sbatch', script_path]).decode()
+        caller = request.node
+        marker = caller.get_closest_marker('slurm')
+        slurm_resources = marker.kwargs.get('resources', []) if marker else []
+
+        def get_commit_hash() -> str:
+            return subprocess.check_output(
+                ['git', 'rev-parse', '--short', 'HEAD'], text=True
+            ).strip()
+
+        ci_log_dir = f'{dt.now().strftime("%Y-%m-%d-%H-%M")}_{get_commit_hash()}'
+        log_dir = Path.home() / 'tgm_ci' / ci_log_dir
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        job_name = caller.name.replace('[', '_').replace(']', '').replace(':', '_')
+        timestamp = dt.now().strftime('%Y-%m-%d-%H:%M:%S')
+        slurm_out = log_dir / f'{job_name}_{timestamp}.out'
+        slurm_err = log_dir / f'{job_name}_{timestamp}.err'
+
+        sbatch_cmd = [
+            'sbatch',
+            f'--job-name={job_name}',
+            f'--output={slurm_out}',
+            f'--error={slurm_err}',
+            *slurm_resources,
+            script_path,
+        ]
+
+        output = subprocess.check_output(sbatch_cmd, text=True)
         job_number = output.strip().split()[-1]
 
+        # Poll slurm for job completion status
         while True:
             result = subprocess.run(
                 ['sacct', '-j', job_number, '--format=State', '--noheader'],
@@ -52,111 +87,3 @@ def slurm_job_runner(tmp_path: Path):
         return state, output_text
 
     return run
-
-
-"""
-#!/bin/bash
-set -euo pipefail
-
-# The following assumes we are two directories deep from the root
-# directory, and the root directory contains the .env file.
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DATASETS=$(cat "$ROOT_DIR/jobs/configs/datasets.txt")
-METHODS=$(cat "$ROOT_DIR/jobs/configs/methods.txt")
-SEEDS="0 1 2 3 4"
-
-mkdir -p "$ROOT_DIR/jobs/logs"
-
-get_slurm_resources() {
-    local method=$1
-    case "$method" in
-        edgebank)
-            echo "--partition=main --cpus-per-task=2 --mem=4G --time=0:10:00"
-            ;;
-        tgat)
-            echo "--partition=main --cpus-per-task=2 --mem=8G --time=3:00:00 --gres=gpu:a100l:1"
-            ;;
-        *)
-            echo "--partition=main --cpus-per-task=2 --mem=4G --time=1:00:00"
-            ;;
-    esac
-}
-
-for METHOD in $METHODS; do
-    for DATASET in $DATASETS; do
-        for SEED in $SEEDS; do
-            RESOURCES=$(get_slurm_resources "$METHOD")
-            JOB_NAME="${METHOD}_${DATASET}_${SEED}"
-            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-
-            echo "Submitting: $JOB_NAME"
-            sbatch  --job-name="${JOB_NAME}" \
-                --output="$ROOT_DIR/jobs/logs/${JOB_NAME}_${TIMESTAMP}.out" \
-                --error="$ROOT_DIR/jobs/logs/${JOB_NAME}_${TIMESTAMP}.err" \
-                $RESOURCES \
-                --wrap="bash $ROOT_DIR/jobs/scripts/run_method.sh $METHOD $DATASET $SEED"
-        done
-    done
-done
-"""
-
-"""
-#!/bin/bash
-set -euo pipefail
-
-# The following assumes we are two directories deep from the root
-# directory, and the root directory contains the .env file.
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-
-source "$ROOT_DIR/.env"
-
-METHOD=$1
-DATASET=$2
-SEED=$3
-
-echo "===== JOB INFO ====="
-echo "Job ID: $SLURM_JOB_ID"
-echo "Job Name: $SLURM_JOB_NAME"
-echo "Node List: $SLURM_NODELIST"
-echo "Num CPUs: $SLURM_CPUS_PER_TASK"
-echo "GPU(s): ${CUDA_VISIBLE_DEVICES:-None}"
-echo "Memory: ${SLURM_MEM_PER_NODE:-N/A}"
-echo "Start Time: $(date)"
-echo "Method: $METHOD"
-echo "Dataset: $DATASET"
-echo "Seed: $SEED"
-echo "===================="
-
-case "$METHOD" in
-    edgebank)
-        python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
-            --seed $SEED \
-            --dataset $DATASET \
-            --bsize 200 \
-            --window_ratio 0.15 \
-            --pos_prob 1.0 \
-            --memory_mode unlimited
-        ;;
-
-    tgat)
-        python "$ROOT_DIR/examples/linkproppred/tgat.py" \
-            --seed $SEED \
-            --dataset $DATASET \
-            --bsize 200 \
-            --device cuda \
-            --epochs 10 \
-            --lr 0.0001 \
-            --dropout 0.1 \
-            --n-heads 2 \
-            --n-nbrs 20 20 \
-            --time-dim 100 \
-            --embed-dim 100 \
-            --sampling recency
-        ;;
-
-    *)
-        echo "Error: Unknown method '$METHOD'"
-        exit 1
-        ;;
-esac
-"""

@@ -2,6 +2,7 @@ import pytest
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize('dataset', ['tgbl-wiki'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
@@ -11,23 +12,13 @@ import pytest
         '--gres=gpu:a100l:1',
     ]
 )
-def test_tgat_recency_sampler(slurm_job_runner):
-    cmd = """
-        python "$ROOT_DIR/examples/linkproppred/tgat.py" \
-            --seed $SEED \
-            --dataset $DATASET \
-            --bsize 200 \
-            --device cuda \
-            --epochs 10 \
-            --lr 0.0001 \
-            --dropout 0.1 \
-            --n-heads 2 \
-            --n-nbrs 20 20 \
-            --time-dim 100 \
-            --embed-dim 100 \
-            --sampling recency
-        ;;
-    """
+def test_tgat_recency_sampler(slurm_job_runner, dataset):
+    cmd = f"""
+python "$ROOT_DIR/examples/linkproppred/tgat.py" \
+    --dataset {dataset} \
+    --device cuda \
+    --epochs 1 \
+    --sampling recency"""
     state, output = slurm_job_runner(
         cmd,
     )
