@@ -1,0 +1,312 @@
+import argparse
+import time
+from typing import Tuple
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
+from tgb.linkproppred.evaluate import Evaluator
+from torch_geometric.nn import GCNConv
+from tqdm import tqdm
+
+from tgm.graph import DGBatch, DGraph
+from tgm.hooks import NegativeEdgeSamplerHook, TGBNegativeEdgeSamplerHook
+from tgm.loader import DGDataLoader
+from tgm.timedelta import TimeDeltaDG
+from tgm.util.seed import seed_everything
+
+parser = argparse.ArgumentParser(
+    description='GCN TGB Example',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
+parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
+parser.add_argument('--device', type=str, default='cpu', help='torch device')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
+parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
+parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument('--bsize', type=int, default=200, help='batch size')
+
+
+class GCN(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        embed_dim: int,
+        num_layers: int,
+        dropout: float,
+    ) -> None:
+        super().__init__()
+        self.in_channels = in_channels
+        self.encoder = GCNEncoder(
+            in_channels=in_channels,
+            embed_dim=embed_dim,
+            out_channels=embed_dim,
+            num_layers=num_layers,
+            dropout=dropout,
+        )
+
+    def forward(
+        self, batch: DGBatch, node_feat: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        z = self.encoder(node_feat, edge_index)
+        return z
+
+
+class GCNEncoder(torch.nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        embed_dim: int,
+        out_channels: int,
+        num_layers: int,
+        dropout: float,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.dropout = dropout
+        self.convs = torch.nn.ModuleList()
+        self.bns = torch.nn.ModuleList()
+
+        self.convs.append(GCNConv(in_channels, embed_dim, cached=True))
+        self.bns.append(torch.nn.BatchNorm1d(embed_dim))
+
+        for _ in range(num_layers - 2):
+            self.convs.append(GCNConv(embed_dim, embed_dim, cached=True))
+            self.bns.append(torch.nn.BatchNorm1d(embed_dim))
+        self.convs.append(GCNConv(embed_dim, out_channels, cached=True))
+
+    def reset_parameters(self) -> None:
+        for conv in self.convs:
+            conv.reset_parameters()
+        for bn in self.bns:
+            bn.reset_parameters()
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+        for i, conv in enumerate(self.convs[:-1]):
+            x = conv(x, edge_index)
+            x = self.bns[i](x)
+            x = F.relu(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.convs[-1](x, edge_index)
+        return x
+
+
+class LinkPredictor(nn.Module):
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.lin_src = nn.Linear(dim, dim)
+        self.lin_dst = nn.Linear(dim, dim)
+        self.lin_out = nn.Linear(dim, 1)
+
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = h.relu()
+        return self.lin_out(h).sigmoid().view(-1)
+
+
+def train(
+    loader: DGDataLoader,
+    snapshots_loader: DGDataLoader,
+    encoder: nn.Module,
+    decoder: nn.Module,
+    opt: torch.optim.Optimizer,
+    static_node_feat: torch.Tensor,
+) -> float:
+    encoder.train()
+    decoder.train()
+    total_loss = 0
+    iter_loader = iter(snapshots_loader)
+    snapshot_batch = next(iter_loader)
+    criterion = torch.nn.MSELoss()
+    z = None
+    for batch in tqdm(loader):
+        opt.zero_grad()
+        if (
+            batch.time[-1] > snapshot_batch.time[-1]
+        ):  # if batch timestamps greater than snapshot, process the snapshot
+            snapshot_batch = next(iter_loader)
+        z = encoder(snapshot_batch, static_node_feat)
+        z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
+        pos_out = decoder(z_src, z_dst)
+        neg_out = decoder(z_src, z_neg)
+        loss = criterion(pos_out, torch.ones_like(pos_out))
+        loss += criterion(neg_out, torch.zeros_like(neg_out))
+        loss.backward()
+        opt.step()
+        total_loss += float(loss)
+    z = z.detach()
+    return total_loss, z
+
+
+@torch.no_grad()
+def eval(
+    loader: DGDataLoader,
+    snapshots_loader: DGDataLoader,
+    encoder: nn.Module,
+    decoder: nn.Module,
+    eval_metric: str,
+    evaluator: Evaluator,
+    static_node_feat: torch.Tensor,
+    z: torch.Tensor,
+) -> dict:
+    encoder.eval()
+    decoder.eval()
+    perf_list = []
+    iter_loader = iter(snapshots_loader)
+    snapshot_batch = next(iter_loader)
+    for batch in tqdm(loader):
+        if (
+            batch.time[-1] > snapshot_batch.time[-1]
+        ):  # if batch timestamps greater than snapshot, process the snapshot
+            z = encoder(snapshot_batch, static_node_feat).detach()
+            snapshot_batch = next(iter_loader)
+        neg_batch_list = batch.neg_batch_list
+        for idx, neg_batch in enumerate(neg_batch_list):
+            query_src = torch.tensor(
+                [batch.src[idx] for _ in range(len(neg_batch) + 1)]
+            )
+            query_dst = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+            y_pred = decoder(z[query_src], z[query_dst])
+            # compute MRR
+            input_dict = {
+                'y_pred_pos': np.array([y_pred[0]]),
+                'y_pred_neg': np.array(y_pred[1:]),
+                'eval_metric': [eval_metric],
+            }
+            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+    metric_dict = {}
+    metric_dict[eval_metric] = float(np.mean(perf_list))
+    return metric_dict
+
+
+args = parser.parse_args()
+seed_everything(args.seed)
+
+dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
+eval_metric = dataset.eval_metric
+neg_sampler = dataset.negative_sampler
+evaluator = Evaluator(name=args.dataset)
+dataset.load_val_ns()
+dataset.load_test_ns()
+
+train_dg = DGraph(
+    args.dataset,
+    time_delta=TimeDeltaDG('r'),
+    split='train',
+    device=args.device,
+)
+
+train_snapshots = DGraph(
+    args.dataset,
+    time_delta=TimeDeltaDG('s'),
+    split='train',
+    device=args.device,
+)
+
+val_dg = DGraph(
+    args.dataset,
+    time_delta=TimeDeltaDG('r'),
+    split='val',
+    device=args.device,
+)
+
+val_snapshots = DGraph(
+    args.dataset,
+    time_delta=TimeDeltaDG('s'),
+    split='val',
+    device=args.device,
+)
+
+test_dg = DGraph(
+    args.dataset,
+    time_delta=TimeDeltaDG('r'),
+    split='test',
+    device=args.device,
+)
+
+test_snapshots = DGraph(
+    args.dataset,
+    time_delta=TimeDeltaDG('s'),
+    split='test',
+    device=args.device,
+)
+
+train_loader = DGDataLoader(
+    train_dg,
+    hook=[NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes)],
+    batch_size=args.bsize,
+)
+train_snapshots_loader = DGDataLoader(
+    train_snapshots,
+    hook=[],
+    batch_unit='h',
+)
+
+
+val_loader = DGDataLoader(
+    val_dg,
+    hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')],
+    batch_size=args.bsize,
+)
+val_snapshots_loader = DGDataLoader(
+    val_snapshots,
+    hook=[],
+    batch_unit='h',
+)
+
+test_loader = DGDataLoader(
+    test_dg,
+    hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')],
+    batch_size=args.bsize,
+)
+test_snapshots_loader = DGDataLoader(
+    test_snapshots,
+    hook=[],
+    batch_unit='h',
+)
+
+if train_dg.dynamic_node_feats_dim is not None:
+    raise ValueError(
+        'node features are not supported yet, make sure to incorporate them in the model'
+    )
+
+# TODO: add static node features to DGraph
+args.node_dim = args.embed_dim
+static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
+
+encoder = GCN(
+    in_channels=args.embed_dim,
+    embed_dim=args.embed_dim,
+    num_layers=args.n_layers,
+    dropout=float(args.dropout),
+).to(args.device)
+
+decoder = LinkPredictor(dim=args.embed_dim).to(args.device)
+opt = torch.optim.Adam(
+    set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
+)
+
+
+for epoch in range(1, args.epochs + 1):
+    start_time = time.perf_counter()
+    loss, z = train(
+        train_loader, train_snapshots_loader, encoder, decoder, opt, static_node_feats
+    )
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+    print(f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f}')
+
+    # val_results = eval(val_loader, val_snapshots_loader, encoder, decoder, eval_metric, evaluator, static_node_feats, z)
+    # print(
+    #     f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+    #     + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+    # )
+
+# test_results = eval(test_loader, model, test_metrics, static_node_feats)
+# print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
