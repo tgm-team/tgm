@@ -47,7 +47,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-pr${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.ref }}-${{ github.sha }}
+          name: coverage-pr${{ github.event.pull_request.number }}
           path: ./coverage.xml
 
       - name: Minimize uv cache
