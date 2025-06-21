@@ -17,6 +17,7 @@ jobs:
     name: Integration testing on a SLURM cluster
     runs-on: self-hosted
     timeout-minutes: 60
+    if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang'
 
     steps:
       - name: Checkout repository
