@@ -16,6 +16,7 @@ jobs:
   integration-tests-slurm:
     name: Integration testing on a SLURM cluster
     runs-on: [self-hosted, mila]
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -43,8 +44,6 @@ jobs:
 
       - name: Run Integration Tests
         run: uv run pytest test -m "slow" -vvv
-        with:
-          timeout-minutes: 60
 
       - name: Upload logs
         if: always()
