@@ -15,7 +15,7 @@ concurrency:
 jobs:
   integration-tests-slurm:
     name: Integration testing on a SLURM cluster
-    runs-on: [self-hosted, mila]
+    runs-on: self-hosted
     timeout-minutes: 60
 
     steps:
