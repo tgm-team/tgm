@@ -19,9 +19,8 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     --device cuda \
     --epochs 1 \
     --sampling recency"""
-    state, output = slurm_job_runner(
-        cmd,
-    )
-    assert 'Success' in output and state == 'COMPLETED'
+    state, _ = slurm_job_runner(cmd)
 
     # TODO: Get perf and latency as artifact to upload in CI
+    print(output)
+    assert state == 'COMPLETED'

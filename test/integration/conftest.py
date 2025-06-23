@@ -21,13 +21,9 @@ def slurm_job_runner(request):
         job_script = f"""#!/bin/bash
 set -euo pipefail
 
-# The following assumes we are two directories deep from the root
-# directory, and the root directory contains the .env file.
 ROOT_DIR="{project_root}"
-echo "Project root is: $ROOT_DIR"
-
-
-source "$ROOT_DIR/.env"
+module load python/3.10
+module load cudatoolkit/11.7
 
 echo "===== JOB INFO ====="
 echo "Job ID: $SLURM_JOB_ID"
