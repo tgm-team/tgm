@@ -16,7 +16,7 @@ def test_tgat_recency_sampler(slurm_job_runner, dataset):
     cmd = f"""
 
 echo "Downloading dataset: {dataset}"
-echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset({dataset})"
+echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('{dataset}')"
 echo "Ok."
 
 python "$ROOT_DIR/examples/linkproppred/tgat.py" \
