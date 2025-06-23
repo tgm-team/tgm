@@ -41,7 +41,7 @@ jobs:
             uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
             uv-${{ runner.os }}
       - name: Install dependencies
-        run: uv sync --all-extras --dev --frozen
+        run: uv sync --group examples
 
       - name: Run Integration Tests
         run: uv run pytest test -m "slow" -vvv
