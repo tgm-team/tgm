@@ -37,6 +37,8 @@ echo "Start Time: $(date)"
 echo "===================="
 
 {cmd}
+
+sync # Attempting to force flush file io across the cluster
 """
         with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.sh') as f:
             f.write(job_script)
