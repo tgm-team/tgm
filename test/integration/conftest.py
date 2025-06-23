@@ -55,7 +55,9 @@ sync # Attempting to force flush file io across the cluster
 
         ci_run_dir = f'{dt.now().strftime("%Y-%m-%d-%H-%M")}_{get_commit_hash()}'
         log_base = Path(
-            os.path.expanduser(os.environ.get('TGM_CI_LOG_BASE', '~/tgm_ci'))
+            os.path.expanduser(
+                os.environ.get('TGM_CI_LOG_BASE', str(Path.home() / 'tgm_ci'))
+            )
         )
         log_dir = log_base / ci_run_dir
         log_dir.mkdir(parents=True, exist_ok=True)
