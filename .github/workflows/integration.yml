@@ -55,6 +55,8 @@ jobs:
           read -r LOG_PATH CI_RUN_DIR < "$TGM_CI_LOG_BASE/latest_path.txt"
           echo "log_path=$LOG_PATH" >> $GITHUB_OUTPUT
           echo "ci_run_dir=$CI_RUN_DIR" >> $GITHUB_OUTPUT
+          echo "Resolved log path: $LOG_PATH"
+          echo "Resolved run dir: $CI_RUN_DIR"
 
       - name: Upload logs
         if: always()
