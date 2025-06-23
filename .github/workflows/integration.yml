@@ -67,9 +67,5 @@ jobs:
                 ${{ steps.get-log-dir.outputs.log_path }}/*.out
                 ${{ steps.get-log-dir.outputs.log_path }}/*.err
 
-      - name: Clean up Latest CI Run Log Path
-        if: always()
-        run: rm -f "$TGM_CI_LOG_BASE/latest_path.txt"
-
       - name: Minimize uv cache
         run: uv cache prune --ci

@@ -62,8 +62,9 @@ sync # Attempting to force flush file io across the cluster
 
         # Save the log directory path for easy parsing in the Github action
         latest_path_file = log_base / 'latest_path.txt'
-        if not latest_path_file.exists():
-            latest_path_file.write_text(f'{log_dir}\n{ci_run_dir}')
+        with open(latest_path_file, 'w') as f:
+            f.write(f'{log_dir}\n{ci_run_dir}')
+            f.flush()
 
         job_name = caller.name.replace('[', '_').replace(']', '').replace(':', '_')
         slurm_out = log_dir / f'{job_name}.out'
