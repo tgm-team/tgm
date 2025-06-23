@@ -80,7 +80,6 @@ echo "===================="
                 capture_output=True,
                 text=True,
             )
-            print(result.stdout.strip())
             state = result.stdout.strip().split()[0]
             if state in ['COMPLETED', 'FAILED', 'CANCELLED']:
                 break
