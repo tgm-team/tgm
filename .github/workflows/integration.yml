@@ -18,6 +18,8 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 60
     if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang'
+    env:
+      TGM_CI_LOG_BASE: ~/tgm_ci
 
     steps:
       - name: Checkout repository
@@ -50,22 +52,22 @@ jobs:
         id: get-log-dir
         run: |
           # Parse path + ID written by the test runner (2 lines in ~/tgm_ci/latest_path.txt)
-          read -r LOG_PATH CI_LOG_DIR < ~/tgm_ci/latest_path.txt
+          read -r LOG_PATH CI_RUN_DIR < ~/tgm_ci/latest_path.txt
           echo "log_path=$LOG_PATH" >> $GITHUB_OUTPUT
-          echo "ci_log_dir=$CI_LOG_DIR" >> $GITHUB_OUTPUT
+          echo "ci_run_dir=$CI_RUN_DIR" >> $GITHUB_OUTPUT
 
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.get-log-dir.outputs.ci_log_dir }}
+          name: ${{ steps.get-log-dir.outputs.ci_run_dir }}
           path: |
                 ${{ steps.get-log-dir.outputs.log_path }}/*.out
                 ${{ steps.get-log-dir.outputs.log_path }}/*.err
 
       - name: Clean up Latest CI Run Log Path
         if: always()
-        run: rm -f ~/tgm_ci/latest_path.txt
+        run: rm -f "$TGM_CI_LOG_BASE/latest_path.txt"
 
       - name: Minimize uv cache
         run: uv cache prune --ci

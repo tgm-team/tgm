@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import time
@@ -50,14 +51,15 @@ echo "===================="
                 ['git', 'rev-parse', '--short', 'HEAD'], text=True
             ).strip()
 
-        ci_log_dir = f'{dt.now().strftime("%Y-%m-%d-%H-%M")}_{get_commit_hash()}'
-        log_dir = Path.home() / 'tgm_ci' / ci_log_dir
+        ci_run_dir = f'{dt.now().strftime("%Y-%m-%d-%H-%M")}_{get_commit_hash()}'
+        log_base = Path(os.environ.get('TGM_CI_LOG_BASE', Path.home() / 'tgm_ci'))
+        log_dir = log_base / ci_run_dir
         log_dir.mkdir(parents=True, exist_ok=True)
 
         # Save the log directory path for easy parsing in the Github action
-        latest_path_file = Path.home() / 'tgm_ci' / 'latest_path.txt'
+        latest_path_file = log_base / 'latest_path.txt'
         if not latest_path_file.exists():
-            latest_path_file.write_text(f'{log_dir}\n{ci_log_dir}')
+            latest_path_file.write_text(f'{log_dir}\n{ci_run_dir}')
 
         job_name = caller.name.replace('[', '_').replace(']', '').replace(':', '_')
         slurm_out = log_dir / f'{job_name}.out'
