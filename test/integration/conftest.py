@@ -54,6 +54,11 @@ echo "===================="
         log_dir = Path.home() / 'tgm_ci' / ci_log_dir
         log_dir.mkdir(parents=True, exist_ok=True)
 
+        # Save the log directory path for easy parsing in the Github action
+        latest_path_file = Path.home() / 'tgm_ci' / 'latest_path.txt'
+        if not latest_path_file.exists():
+            latest_path_file.write_text(f'{log_dir}\n{ci_log_dir}')
+
         job_name = caller.name.replace('[', '_').replace(']', '').replace(':', '_')
         slurm_out = log_dir / f'{job_name}.out'
         slurm_err = log_dir / f'{job_name}.err'
