@@ -18,7 +18,5 @@ echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; 
 
 python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
     --dataset {dataset}"""
-    state, _ = slurm_job_runner(cmd)
-
-    # TODO: Get perf and latency as artifact to upload in CI
+    state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'

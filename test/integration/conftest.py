@@ -33,12 +33,8 @@ def ci_run_context():
 
     # Save the log directory path for easy parsing in the Github action
     latest_path_file = log_base / 'latest_path.txt'
-    with open(latest_path_file, 'w') as f:
-        f.write(f'{log_dir}\n{ci_run_dir}')
-        f.flush()
-        os.fsync(f.fileno())
+    latest_path_file.write_text(f'{log_dir}\n{ci_run_dir}')
 
-    # TODO: See if we can force download and cache TGB data here
     return {
         'log_dir': log_dir,
         'project_root': Path(__file__).resolve().parents[2],
@@ -66,8 +62,6 @@ echo "Start Time: $(date)"
 echo "===================="
 
 {cmd}
-
-sync # Attempting to force flush file io across the cluster
 """
         with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.sh') as f:
             f.write(job_script)
@@ -107,15 +101,6 @@ sync # Attempting to force flush file io across the cluster
             if state in ['COMPLETED', 'FAILED', 'CANCELLED']:
                 break
 
-        # Wait some time for slurm file to persist on the Github Runner node
-        waited = 0
-        while not slurm_out.exists():
-            time.sleep(1)
-            waited += 1
-            if waited > 30:
-                raise RuntimeError(f'Time out waiting for {slurm_out}')
-
-        output_text = slurm_out.read_text()
-        return state, output_text
+        return state
 
     return run
