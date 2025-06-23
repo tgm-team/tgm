@@ -52,9 +52,12 @@ jobs:
         id: get-log-dir
         run: |
           # Parse path + ID written by the test runner (2 lines in ~/tgm_ci/latest_path.txt)
-          read -r LOG_PATH CI_RUN_DIR < "$TGM_CI_LOG_BASE/latest_path.txt"
-          echo "log_path=$LOG_PATH" >> $GITHUB_OUTPUT
-          echo "ci_run_dir=$CI_RUN_DIR" >> $GITHUB_OUTPUT
+          mapfile -t lines < "$TGM_CI_LOG_BASE/latest_path.txt"
+          LOG_PATH="${lines[0]}"
+          CI_RUN_DIR="${lines[1]}"
+
+          echo "log_path=$LOG_PATH" >> "$GITHUB_OUTPUT"
+          echo "ci_run_dir=$CI_RUN_DIR" >> "$GITHUB_OUTPUT"
           echo "Resolved log path: $LOG_PATH"
           echo "Resolved run dir: $CI_RUN_DIR"
 
