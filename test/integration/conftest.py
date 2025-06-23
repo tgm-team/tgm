@@ -65,6 +65,7 @@ sync # Attempting to force flush file io across the cluster
         with open(latest_path_file, 'w') as f:
             f.write(f'{log_dir}\n{ci_run_dir}')
             f.flush()
+            os.fsync(f.fileno())
 
         job_name = caller.name.replace('[', '_').replace(']', '').replace(':', '_')
         slurm_out = log_dir / f'{job_name}.out'
