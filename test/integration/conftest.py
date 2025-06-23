@@ -91,6 +91,7 @@ echo "===================="
                 break
 
         output_text = slurm_out.read_text() if slurm_out.exists() else ''
+        print('OUTPUT: ', output_text)
         return state, output_text
 
     return run
