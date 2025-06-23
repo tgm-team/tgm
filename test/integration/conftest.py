@@ -94,8 +94,15 @@ sync # Attempting to force flush file io across the cluster
             if state in ['COMPLETED', 'FAILED', 'CANCELLED']:
                 break
 
-        output_text = slurm_out.read_text() if slurm_out.exists() else ''
-        print('OUTPUT: ', output_text)
+        # Wait some time for slurm file to persist on the Github Runner node
+        waited = 0
+        while not slurm_out.exists():
+            time.sleep(1)
+            waited += 1
+            if waited > 30:
+                raise RuntimeError(f'Time out waiting for {slurm_out}')
+
+        output_text = slurm_out.read_text()
         return state, output_text
 
     return run
