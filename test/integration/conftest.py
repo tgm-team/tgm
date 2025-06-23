@@ -15,15 +15,19 @@ def pytest_configure(config):
 
 @pytest.fixture
 def slurm_job_runner(request):
+    project_root = Path(__file__).resolve().parents[2]
+
     def run(cmd):
         job_script = f"""#!/bin/bash
 set -euo pipefail
 
-ROOT_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
+# The following assumes we are two directories deep from the root
+# directory, and the root directory contains the .env file.
+ROOT_DIR="{project_root}"
 echo "Project root is: $ROOT_DIR"
 
-module load python/3.10
-module load cudatoolkit/11.7
+
+source "$ROOT_DIR/.env"
 
 echo "===== JOB INFO ====="
 echo "Job ID: $SLURM_JOB_ID"
