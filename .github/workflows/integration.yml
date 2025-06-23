@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 60
     if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang'
     env:
-      TGM_CI_LOG_BASE: ~/tgm_ci
+      TGM_CI_LOG_BASE: $HOME/tgm_ci
 
     steps:
       - name: Checkout repository
