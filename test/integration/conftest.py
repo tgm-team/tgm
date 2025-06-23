@@ -36,6 +36,7 @@ echo "Memory: ${{SLURM_MEM_PER_NODE:-N/A}}"
 echo "Start Time: $(date)"
 echo "===================="
 
+{cmd}
 """
         with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.sh') as f:
             f.write(job_script)
@@ -51,7 +52,9 @@ echo "===================="
             ).strip()
 
         ci_run_dir = f'{dt.now().strftime("%Y-%m-%d-%H-%M")}_{get_commit_hash()}'
-        log_base = Path(os.environ.get('TGM_CI_LOG_BASE', Path.home() / 'tgm_ci'))
+        log_base = Path(
+            os.path.expanduser(os.environ.get('TGM_CI_LOG_BASE', '~/tgm_ci'))
+        )
         log_dir = log_base / ci_run_dir
         log_dir.mkdir(parents=True, exist_ok=True)
 
