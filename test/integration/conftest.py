@@ -14,15 +14,44 @@ def pytest_configure(config):
     )
 
 
-@pytest.fixture
-def slurm_job_runner(request):
-    project_root = Path(__file__).resolve().parents[2]
+@pytest.fixture(scope='session', autouse=True)
+def ci_run_context():
+    # File-io work that should be shared across all integration tests in a single run
+    def get_commit_hash() -> str:
+        return subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'], text=True
+        ).strip()
 
+    ci_run_dir = f'{dt.now().strftime("%Y-%m-%d-%H-%M")}_{get_commit_hash()}'
+    log_base = Path(
+        os.path.expanduser(
+            os.environ.get('TGM_CI_LOG_BASE', str(Path.home() / 'tgm_ci'))
+        )
+    )
+    log_dir = log_base / ci_run_dir
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save the log directory path for easy parsing in the Github action
+    latest_path_file = log_base / 'latest_path.txt'
+    with open(latest_path_file, 'w') as f:
+        f.write(f'{log_dir}\n{ci_run_dir}')
+        f.flush()
+        os.fsync(f.fileno())
+
+    # TODO: See if we can force download and cache TGB data here
+    return {
+        'log_dir': log_dir,
+        'project_root': Path(__file__).resolve().parents[2],
+    }
+
+
+@pytest.fixture
+def slurm_job_runner(ci_run_context, request):
     def run(cmd):
         job_script = f"""#!/bin/bash
 set -euo pipefail
 
-ROOT_DIR="{project_root}"
+ROOT_DIR="{ci_run_context['project_root']}"
 module load python/3.10
 module load cudatoolkit/11.7
 
@@ -48,27 +77,7 @@ sync # Attempting to force flush file io across the cluster
         marker = caller.get_closest_marker('slurm')
         slurm_resources = marker.kwargs.get('resources', []) if marker else []
 
-        def get_commit_hash() -> str:
-            return subprocess.check_output(
-                ['git', 'rev-parse', '--short', 'HEAD'], text=True
-            ).strip()
-
-        ci_run_dir = f'{dt.now().strftime("%Y-%m-%d-%H-%M")}_{get_commit_hash()}'
-        log_base = Path(
-            os.path.expanduser(
-                os.environ.get('TGM_CI_LOG_BASE', str(Path.home() / 'tgm_ci'))
-            )
-        )
-        log_dir = log_base / ci_run_dir
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save the log directory path for easy parsing in the Github action
-        latest_path_file = log_base / 'latest_path.txt'
-        with open(latest_path_file, 'w') as f:
-            f.write(f'{log_dir}\n{ci_run_dir}')
-            f.flush()
-            os.fsync(f.fileno())
-
+        log_dir = ci_run_context['log_dir']
         job_name = caller.name.replace('[', '_').replace(']', '').replace(':', '_')
         slurm_out = log_dir / f'{job_name}.out'
         slurm_err = log_dir / f'{job_name}.err'
