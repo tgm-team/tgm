@@ -51,7 +51,7 @@ echo "===================="
             ).strip()
 
         ci_log_dir = f'{dt.now().strftime("%Y-%m-%d-%H-%M")}_{get_commit_hash()}'
-        log_dir = Path('/tmp') / 'tgm_ci' / ci_log_dir
+        log_dir = Path.home() / 'tgm_ci' / ci_log_dir
         log_dir.mkdir(parents=True, exist_ok=True)
 
         job_name = caller.name.replace('[', '_').replace(']', '').replace(':', '_')

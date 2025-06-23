@@ -52,8 +52,8 @@ jobs:
         with:
           name: slurm-job-logs
           path: |
-            /tmp/tgm_ci/**/*.out
-            /tmp/tgm_ci/**/*.err
+            ~/tgm_ci/**/*.out
+            ~/tgm_ci/**/*.err
 
       - name: Minimize uv cache
         run: uv cache prune --ci
