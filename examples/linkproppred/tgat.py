@@ -149,7 +149,6 @@ def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) ->
         loss.backward()
         opt.step()
         total_loss += float(loss)
-        break  # TMP!
     return total_loss
 
 

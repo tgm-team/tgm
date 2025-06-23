@@ -1,7 +1,6 @@
 import pytest
 
 
-@pytest.mark.skip('TODO')
 @pytest.mark.slow
 @pytest.mark.parametrize('dataset', ['tgbl-wiki'])
 @pytest.mark.slurm(
