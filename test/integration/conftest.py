@@ -36,7 +36,6 @@ echo "Memory: ${{SLURM_MEM_PER_NODE:-N/A}}"
 echo "Start Time: $(date)"
 echo "===================="
 
-{cmd}
 """
         with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.sh') as f:
             f.write(job_script)
