@@ -305,11 +305,24 @@ class RecencyNeighborHook:
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
                 seed = [batch.src, batch.dst]
+                times = [batch.time.repeat(2)]  # Real link times
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
+
+                    # This is a heuristic. For our fake (negative) link times,
+                    # we pick random time stamps within temporal window of the batch.
+                    # Using random times on the whole graph will likely produce information
+                    # leakage, making the prediction easier than it should be.
+                    fake_times = torch.randint(
+                        batch.time.min().item(),
+                        batch.time.max().item(),
+                        (batch.neg.size(0),),
+                        device=device,
+                    )
+                    times.append(fake_times)
                 seed_nodes = torch.cat(seed)
-                seed_times = batch.time.repeat(3)  # TODO: Won't work for tgb
+                seed_times = torch.cat(times)
             else:
                 mask = batch.nbr_mask[hop - 1].bool()  # type: ignore
                 seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
