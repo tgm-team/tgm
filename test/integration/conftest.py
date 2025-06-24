@@ -95,12 +95,13 @@ echo "===================="
     return run
 
 
-def slurm_job_finish(session, _):
+def pytest_sessionfinish(session, exitstatus):
     log_base = Path(os.environ.get('TGM_CI_LOG_BASE', str(Path.home() / 'tgm_ci')))
     latest_path_file = log_base / 'latest_path.txt'
     log_dir = Path(latest_path_file.read_text().splitlines()[0])
 
     job_files = list(log_dir.glob('*.job'))
+    print(f'[SLURM FINISH] Found {len(job_files)} .job files')
     for job_file in job_files:
         job_id = job_file.read_text()
 
