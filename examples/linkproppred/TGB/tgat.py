@@ -168,19 +168,18 @@ def eval(
     perf_list = []
     for batch in tqdm(loader):
         z = encoder(batch)
-        neg_batch_list = batch.neg_batch_list
-        for idx, neg_batch in enumerate(neg_batch_list):
-            query_src = torch.tensor(
-                [batch.src[idx] for _ in range(len(neg_batch) + 1)]
-            )
-            query_dst = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
-            y_pred = decoder(
-                z[batch.nid_to_idx[query_src]], z[batch.nid_to_idx[query_dst]]
-            )
-            # compute MRR
+
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
+            dst_ids = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+            src_ids = batch.src[idx].repeat(len(dst_ids))
+
+            z_src = z[batch.nid_to_idx[src_ids]]
+            z_dst = z[batch.nid_to_idx[dst_ids]]
+            y_pred = decoder(z_src, z_dst)
+
             input_dict = {
-                'y_pred_pos': np.array([y_pred[0].detach().cpu()]),
-                'y_pred_neg': np.array(y_pred[1:].detach().cpu()),
+                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
+                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
