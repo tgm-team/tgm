@@ -46,7 +46,7 @@ jobs:
         run: uv sync --group examples
 
       - name: Run Integration Tests
-        run: uv run pytest test -m "slow" -vvv
+        run: uv run pytest -m "integration" -n auto -vvv
 
       - name: Get Latest CI Run Log Path
         if: always()

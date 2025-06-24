@@ -1,7 +1,7 @@
 import pytest
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 @pytest.mark.parametrize('dataset', ['tgbl-wiki'])
 @pytest.mark.slurm(
     resources=[
