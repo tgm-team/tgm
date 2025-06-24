@@ -117,15 +117,10 @@ class DeduplicationHook:
                 nids.append(hop_nids[hop_mask])
 
         all_nids = torch.cat(nids, dim=0)
-        unique_nids = torch.unique(all_nids)
-        nid_to_idx = {nid.item(): i for i, nid in enumerate(unique_nids)}
+        unique_nids = torch.unique(all_nids, sorted=True)
 
         batch.unique_nids = unique_nids  # type: ignore
-        batch.global_to_local = lambda x: torch.tensor(  # type: ignore
-            [nid_to_idx[nid.item()] for nid in x.flatten()],
-            device=x.device,
-            dtype=torch.long,
-        ).view_as(x)
+        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
 
         return batch
 
