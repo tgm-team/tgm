@@ -16,14 +16,7 @@ def dg():
 
 def test_hook_dependancies():
     assert DeduplicationHook.requires == set()
-    assert DeduplicationHook.produces == {
-        'unique_nids',
-        'nid_to_idx',
-        'src_idx',
-        'dst_idx',
-        'neg_idx',
-        'nbr_nids_idx',
-    }
+    assert DeduplicationHook.produces == {'unique_nids', 'global_to_local'}
 
 
 def test_dedup(dg):
