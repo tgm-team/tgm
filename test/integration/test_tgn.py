@@ -24,5 +24,4 @@ python "$ROOT_DIR/examples/linkproppred/tgn.py" \
     --sampling recency \
     --n-nbrs 20
     """
-    state = slurm_job_runner(cmd)
-    assert state == 'completed'
+    slurm_job_runner(cmd)

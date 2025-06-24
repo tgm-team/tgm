@@ -86,14 +86,29 @@ echo "===================="
         ]
 
         output = subprocess.check_output(sbatch_cmd, text=True)
-        job_number = output.strip().split()[-1]
+        job_id = output.strip().split()[-1]
+
+        # Save job id as metadata for post-scheduling collecction in slurm_job_finish
+        job_record_file = log_dir / f'{job_name}.job'
+        job_record_file.write_text(job_id)
+
+    return run
+
+
+def slurm_job_finish(session, _):
+    log_base = Path(os.environ.get('TGM_CI_LOG_BASE', str(Path.home() / 'tgm_ci')))
+    latest_path_file = log_base / 'latest_path.txt'
+    log_dir = Path(latest_path_file.read_text().splitlines()[0])
+
+    job_files = list(log_dir.glob('*.job'))
+    for job_file in job_files:
+        job_id = job_file.read_text()
 
         # Poll slurm for job completion status
         while True:
             time.sleep(10)
-
             result = subprocess.run(
-                ['sacct', '-j', job_number, '--format=State', '--noheader'],
+                ['sacct', '-j', job_id, '--format=State', '--noheader'],
                 capture_output=True,
                 text=True,
             )
@@ -101,6 +116,5 @@ echo "===================="
             if state in ['COMPLETED', 'FAILED', 'CANCELLED']:
                 break
 
-        return state
-
-    return run
+        if state != 'COMPLETED':
+            session.exitstatus = 1  # Mark pytest as failed
