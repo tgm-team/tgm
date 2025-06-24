@@ -49,6 +49,7 @@ jobs:
         run: uv run pytest test -m "slow" -vvv
 
       - name: Get Latest CI Run Log Path
+        if: always()
         id: get-log-dir
         run: |
           # Parse path + ID written by the test runner (2 lines in ~/tgm_ci/latest_path.txt)

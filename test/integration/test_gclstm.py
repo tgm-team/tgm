@@ -17,7 +17,7 @@ def test_gclstm_linkprop_pred(slurm_job_runner, dataset):
 echo "Downloading dataset: {dataset}"
 echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('{dataset}')"
 
-python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
+python "$ROOT_DIR/examples/linkproppred/gclstm.py" \
     --dataset {dataset} \
     --device cuda \
     --epochs 1
@@ -27,7 +27,7 @@ python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('dataset', ['tgbl-genre'])
+@pytest.mark.parametrize('dataset', ['tgbn-genre'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
