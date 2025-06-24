@@ -27,7 +27,7 @@ python "$ROOT_DIR/examples/linkproppred/gcn.py" \
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('dataset', ['tgbn-genre'])
+@pytest.mark.parametrize('dataset', ['tgbn-trade'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
