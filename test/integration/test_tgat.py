@@ -24,4 +24,5 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     --sampling recency \
     --n-nbrs 20 20
     """
-    slurm_job_runner(cmd)
+    state = slurm_job_runner(cmd)
+    assert state == 'completed'

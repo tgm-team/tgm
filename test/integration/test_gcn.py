@@ -22,7 +22,8 @@ python "$ROOT_DIR/examples/linkproppred/gcn.py" \
     --device cuda \
     --epochs 1
     """
-    slurm_job_runner(cmd)
+    state = slurm_job_runner(cmd)
+    assert state == 'COMPLETED'
 
 
 @pytest.mark.slow
@@ -46,4 +47,5 @@ python "$ROOT_DIR/examples/nodeproppred/gcn.py" \
     --device cuda \
     --epochs 1
     """
-    slurm_job_runner(cmd)
+    state = slurm_job_runner(cmd)
+    assert state == 'COMPLETED'

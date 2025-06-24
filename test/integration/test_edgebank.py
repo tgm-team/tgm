@@ -18,8 +18,8 @@ echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; 
 
 python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
     --dataset {dataset}"""
-
-    slurm_job_runner(cmd)
+    state = slurm_job_runner(cmd)
+    assert state == 'COMPLETED'
 
 
 @pytest.mark.slow
@@ -39,4 +39,5 @@ echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; 
 
 python "$ROOT_DIR/examples/linkproppred/TGB/edgebank.py" \
     --dataset {dataset}"""
-    slurm_job_runner(cmd)
+    state = slurm_job_runner(cmd)
+    assert state == 'COMPLETED'
