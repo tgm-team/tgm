@@ -315,8 +315,8 @@ class RecencyNeighborHook:
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
                     fake_times = torch.randint(
-                        batch.time.min().item(),
-                        batch.time.max().item(),
+                        int(batch.time.min().item()),
+                        int(batch.time.max().item()),
                         (batch.neg.size(0),),
                         device=device,
                     )
