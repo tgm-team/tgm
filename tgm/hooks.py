@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections import deque
-from typing import Any, Deque, Dict, List, Protocol, Set, runtime_checkable
+from typing import List, Protocol, Set, runtime_checkable
 
 import numpy as np
 import torch
@@ -100,14 +99,7 @@ class DeviceTransferHook:
 
 class DeduplicationHook:
     requires: Set[str] = set()
-    produces = {
-        'unique_nids',
-        'nid_to_idx',
-        'src_idx',
-        'dst_idx',
-        'neg_idx',
-        'nbr_nids_idx',
-    }
+    produces = {'unique_nids', 'global_to_local'}
 
     r"""Deduplicate node IDs from batch fields and create index mappings to unique node embeddings.
 
@@ -115,8 +107,6 @@ class DeduplicationHook:
     """
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        device = batch.src.device
-
         nids = [batch.src, batch.dst]
         if hasattr(batch, 'neg'):
             nids.append(batch.neg)
@@ -126,24 +116,10 @@ class DeduplicationHook:
                 nids.append(hop_nids[hop_mask])
 
         all_nids = torch.cat(nids, dim=0)
-        unique_nids = torch.unique(all_nids)
-        max_nid = int(unique_nids.max().item())
-        nid_to_idx = torch.full((max_nid + 1,), -1, dtype=torch.long, device=device)
-        nid_to_idx[unique_nids] = torch.arange(len(unique_nids), device=device)
+        unique_nids = torch.unique(all_nids, sorted=True)
 
         batch.unique_nids = unique_nids  # type: ignore
-        batch.nid_to_idx = nid_to_idx  # type: ignore
-        batch.src_idx = nid_to_idx[batch.src]  # type: ignore
-        batch.dst_idx = nid_to_idx[batch.dst]  # type: ignore
-        if hasattr(batch, 'neg'):
-            batch.neg_idx = nid_to_idx[batch.neg]  # type: ignore
-        if hasattr(batch, 'nbr_nids'):
-            batch.nbr_nids_idx = []  # type: ignore
-            for hop in range(len(batch.nbr_nids)):
-                hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
-                nbr_nids_idx = torch.full_like(hop_nids, -1)
-                nbr_nids_idx[hop_mask] = nid_to_idx[hop_nids[hop_mask]]
-                batch.nbr_nids_idx.append(nbr_nids_idx)  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
 
         return batch
 
@@ -272,20 +248,32 @@ class RecencyNeighborHook:
     Args:
         num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
+        edge_feats_dim (Optional[int])
 
     Raises:
         ValueError: If the num_nbrs list is empty.
     """
 
-    def __init__(self, num_nodes: int, num_nbrs: List[int]) -> None:
+    def __init__(
+        self, num_nodes: int, num_nbrs: List[int], edge_feats_dim: int
+    ) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
+
         self._num_nbrs = num_nbrs
-        self._nbrs: Dict[int, List[Deque[Any]]] = {}
-        for node in range(num_nodes):
-            self._nbrs[node] = [deque(maxlen=max(num_nbrs)) for _ in range(3)]
+        self._max_nbrs = max(num_nbrs)
+
+        self._nbr_nids = torch.full((num_nodes, self._max_nbrs), -1, dtype=torch.long)
+        self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
+        self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
+        self._nbr_mask = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.bool)
+
+        # Circular buffer ptr
+        self._nbr_ptr = torch.zeros(num_nodes, dtype=torch.long)
+
+        self._device = torch.device('cpu')
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -294,63 +282,73 @@ class RecencyNeighborHook:
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # TODO: Consider the case where no edge features exist
         device = dg.device
+        self._move_queues_to_device_if_needed(device)  # No-op after first batch
 
-        batch.nids = []  # type: ignore
-        batch.times = []  # type: ignore
-        batch.nbr_nids = []  # type: ignore
-        batch.nbr_times = []  # type: ignore
-        batch.nbr_feats = []  # type: ignore
-        batch.nbr_mask = []  # type: ignore
+        batch.nids, batch.times = [], []  # type: ignore
+        batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
+        batch.nbr_feats, batch.nbr_mask = [], []  # type: ignore
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
                 seed = [batch.src, batch.dst]
+                times = [batch.time.repeat(2)]  # Real link times
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
+
+                    # This is a heuristic. For our fake (negative) link times,
+                    # we pick random time stamps within temporal window of the batch.
+                    # Using random times on the whole graph will likely produce information
+                    # leakage, making the prediction easier than it should be.
+                    fake_times = torch.randint(
+                        int(batch.time.min().item()),
+                        int(batch.time.max().item()),
+                        (batch.neg.size(0),),
+                        device=device,
+                    )
+                    times.append(fake_times)
                 seed_nodes = torch.cat(seed)
-                seed_times = batch.time.repeat(3)  # TODO: Won't work for tgb
+                seed_times = torch.cat(times)
             else:
                 mask = batch.nbr_mask[hop - 1].bool()  # type: ignore
                 seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1][mask].flatten()  # type: ignore
 
-            B = len(seed_nodes)
-            nbr_nids = torch.empty(B, num_nbrs, dtype=torch.long, device=device)
-            nbr_times = torch.empty(B, num_nbrs, dtype=torch.long, device=device)
-            nbr_feats = torch.empty(B, num_nbrs, dg.edge_feats_dim, device=device)  # type: ignore
-            nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
+            nbr_nids = self._nbr_nids[seed_nodes, :num_nbrs]
+            nbr_times = self._nbr_times[seed_nodes, :num_nbrs]
+            nbr_feats = self._nbr_feats[seed_nodes, :num_nbrs]
+            nbr_mask = self._nbr_mask[seed_nodes, :num_nbrs]
 
-            unique, inv_idx = seed_nodes.unique(return_inverse=True)
-            for i, node in enumerate(unique.tolist()):
-                node_q, time_q, feat_q = self._nbrs[node]
-                if nn := len(node_q):
-                    mask = inv_idx == i
-                    nbr_nids[mask, :nn] = torch.tensor(node_q, device=device)
-                    nbr_times[mask, :nn] = torch.tensor(time_q, device=device)
-                    nbr_feats[mask, :nn] = torch.stack(list(feat_q)).float().to(device)
-                    nbr_mask[mask, :nn] = 1
-
-                batch.nids.append(seed_nodes)  # type: ignore
-                batch.times.append(seed_times)  # type: ignore
-                batch.nbr_nids.append(nbr_nids)  # type: ignore
-                batch.nbr_times.append(nbr_times)  # type: ignore
-                batch.nbr_feats.append(nbr_feats)  # type: ignore
-                batch.nbr_mask.append(nbr_mask)  # type: ignore
+            batch.nids.append(seed_nodes)  # type: ignore
+            batch.times.append(seed_times)  # type: ignore
+            batch.nbr_nids.append(nbr_nids)  # type: ignore
+            batch.nbr_times.append(nbr_times)  # type: ignore
+            batch.nbr_feats.append(nbr_feats)  # type: ignore
+            batch.nbr_mask.append(nbr_mask)  # type: ignore
 
         self._update(batch)
         return batch
 
     def _update(self, batch: DGBatch) -> None:
-        for i in range(batch.src.size(0)):
-            src_nbr = int(batch.src[i].item())
-            dst_nbr = int(batch.dst[i].item())
-            time = batch.time[i].item()
+        src, dst, time = batch.src, batch.dst, batch.time
+        for i in range(src.size(0)):
+            s, d, t = int(src[i].item()), int(dst[i].item()), int(time[i].item())
+            for u, v in [(s, d), (d, s)]:
+                ptr = int(self._nbr_ptr[u].item())
+                self._nbr_nids[u, ptr] = v
+                self._nbr_times[u, ptr] = t
+                self._nbr_mask[u, ptr] = True
+                if batch.edge_feats is not None:
+                    self._nbr_feats[u, ptr] = batch.edge_feats[i]
 
-            self._nbrs[src_nbr][0].append(dst_nbr)
-            self._nbrs[src_nbr][1].append(time)
-            self._nbrs[dst_nbr][0].append(src_nbr)
-            self._nbrs[dst_nbr][1].append(time)
-            if batch.edge_feats is not None:
-                self._nbrs[src_nbr][2].append(batch.edge_feats[i])
-                self._nbrs[dst_nbr][2].append(batch.edge_feats[i])
+                self._nbr_ptr[u] = (ptr + 1) % self._max_nbrs
+
+    def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
+        if device != self._device:
+            self._nbr_nids = self._nbr_nids.to(device)
+            self._nbr_times = self._nbr_times.to(device)
+            self._nbr_feats = self._nbr_feats.to(device)
+            self._nbr_mask = self._nbr_mask.to(device)
+            self._nbr_ptr = self._nbr_ptr.to(device)
+
+            self._device = device
