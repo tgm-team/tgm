@@ -41,7 +41,7 @@ jobs:
         run: uv sync --all-extras --dev --frozen
 
       - name: Test non-gpu tests with pytest
-        run: uv run pytest test -m "not gpu and not integration" --cov=tgm --cov-report=xml --cov-append -vvv
+        run: uv run pytest test -m "not gpu and not integration and not benchmark" --cov=tgm --cov-report=xml --cov-append -vvv
 
       - name: Upload coverage to Codecov
         if: github.event_name == 'pull_request'
