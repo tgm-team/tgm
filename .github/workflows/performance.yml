@@ -43,10 +43,51 @@ jobs:
             uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
             uv-${{ runner.os }}
       - name: Install dependencies
-        run: uv sync --group examples
+        run: uv sync --group dev
 
       - name: Run Performance Benchmarks
-        run: uv run pytest -m --benchmark-only --benchmark-json=$TGM_CI_PERF_LOG_BASE/benchmarks.json
+        run: |
+          LOG_BASE=${TGM_CI_PERF_LOG_BASE:-$HOME/tgm_ci_perf}
+          SCRIPT_PATH=$(mktemp)
+          cat > "$SCRIPT_PATH" <<'EOF'
+          #!/bin/bash
+          #SBATCH --job-name=tgm_benchmarks
+          #SBATCH --output=$HOME/tgm_ci_perf/benchmarks.out
+          #SBATCH --error=$HOME/tgm_ci_perf/benchmarks.err
+          #SBATCH --cpus-per-task=4
+          #SBATCH --mem=16G
+          #SBATCH --gres=gpu:a100l:1
+          #SBATCH --time=00:30:00
+
+          set -euo pipefail
+
+          module load python/3.10
+          module load cudatoolkit/11.7
+
+          echo "===== JOB INFO ====="
+          echo "Job ID: $SLURM_JOB_ID"
+          echo "Job Name: $SLURM_JOB_NAME"
+          echo "Node List: $SLURM_NODELIST"
+          echo "Num CPUs: $SLURM_CPUS_PER_TASK"
+          echo "GPU(s): ${{CUDA_VISIBLE_DEVICES:-None}}"
+          echo "Memory: ${{SLURM_MEM_PER_NODE:-N/A}}"
+          echo "Start Time: $(date)"
+          echo "===================="
+
+          cd "$GITHUB_WORKSPACE"
+
+          export TGM_CI_PERF_LOG_BASE=${TGM_CI_PERF_LOG_BASE:-$HOME/tgm_ci_perf}
+          uv run pytest -m --benchmark-only --benchmark-json=$TGM_CI_PERF_LOG_BASE/benchmarks.json
+          EOF
+
+          chmod +x "$SCRIPT_PATH"
+          sbatch "$SCRIPT_PATH"
+
+
+      - name: Wait for benchmarks to finish
+        run: |
+          echo "Waiting for job to finish..."
+          sleep 60  # TODO: Add polling here
 
       - name: Get Latest CI Run Log Path
         if: always()
