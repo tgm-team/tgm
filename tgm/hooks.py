@@ -265,14 +265,15 @@ class RecencyNeighborHook:
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
 
-        # TODO: We could easily keep this all on-device
         self._nbr_nids = torch.full((num_nodes, self._max_nbrs), -1, dtype=torch.long)
         self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
-        self._nbr_mask = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.bool)
         self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
+        self._nbr_mask = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.bool)
 
         # Circular buffer ptr
         self._nbr_ptr = torch.zeros(num_nodes, dtype=torch.long)
+
+        self._device = torch.device('cpu')
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -281,6 +282,7 @@ class RecencyNeighborHook:
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # TODO: Consider the case where no edge features exist
         device = dg.device
+        self._move_queues_to_device_if_needed(device)  # No-op after first batch
 
         batch.nids, batch.times = [], []  # type: ignore
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
@@ -312,12 +314,10 @@ class RecencyNeighborHook:
                 seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1][mask].flatten()  # type: ignore
 
-            seed_nodes = seed_nodes.to(device)
-
-            nbr_nids = self._nbr_nids[seed_nodes, :num_nbrs].to(device)
-            nbr_times = self._nbr_times[seed_nodes, :num_nbrs].to(device)
-            nbr_feats = self._nbr_feats[seed_nodes, :num_nbrs].to(device)
-            nbr_mask = self._nbr_mask[seed_nodes, :num_nbrs].to(device)
+            nbr_nids = self._nbr_nids[seed_nodes, :num_nbrs]
+            nbr_times = self._nbr_times[seed_nodes, :num_nbrs]
+            nbr_feats = self._nbr_feats[seed_nodes, :num_nbrs]
+            nbr_mask = self._nbr_mask[seed_nodes, :num_nbrs]
 
             batch.nids.append(seed_nodes)  # type: ignore
             batch.times.append(seed_times)  # type: ignore
@@ -342,3 +342,13 @@ class RecencyNeighborHook:
                     self._nbr_feats[u, ptr] = batch.edge_feats[i]
 
                 self._nbr_ptr[u] = (ptr + 1) % self._max_nbrs
+
+    def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
+        if device != self._device:
+            self._nbr_nids = self._nbr_nids.to(device)
+            self._nbr_times = self._nbr_times.to(device)
+            self._nbr_feats = self._nbr_feats.to(device)
+            self._nbr_mask = self._nbr_mask.to(device)
+            self._nbr_ptr = self._nbr_ptr.to(device)
+
+            self._device = device
