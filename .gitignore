@@ -161,3 +161,6 @@ cython_debug/
 *.out
 *.err
 submitit*
+
+# Benchmarks
+.benchmarks
