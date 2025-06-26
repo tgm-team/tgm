@@ -20,18 +20,27 @@ class DGraph:
     def __init__(
         self,
         data: DGStorage | DGData | str | pathlib.Path | pd.DataFrame,
-        time_delta: TimeDeltaDG | None = None,
+        time_delta: TimeDeltaDG = TimeDeltaDG('r'),
         device: str | torch.device = 'cpu',
         **kwargs: Any,
     ) -> None:
-        if time_delta is None:
-            self.time_delta = TimeDeltaDG('r')
+        self.time_delta = time_delta
+        if not self.time_delta.is_ordered:
             if isinstance(data, str) and data.startswith('tgb'):
-                self.time_delta = TGB_TIME_DELTAS.get(data, self.time_delta)
-        elif isinstance(time_delta, TimeDeltaDG):
-            self.time_delta = time_delta
-        else:
-            raise ValueError(f'bad time_delta type: {type(time_delta)}')
+                # TODO: Coarsen TGB_TIME_DELTA against self.time_delta. Unless there is
+                # a way to coarsen directly on load (in TGB), then we might as well
+                # allocate our storage up fron and then coarsen it (fall into second branch)
+
+                # I suppose missing key should be raised here if the data is not valid
+                _ = TGB_TIME_DELTAS[data]
+            elif isinstance(data, DGStorage):
+                # TODO: May need to coarsen our pre-allocated storage against self.time_delta.
+                pass
+            else:
+                # TODO:: Nothing allocated yet, using custom dataset. Can't really coarsen
+                # unless there is a natively defined time granularity on the user's data that
+                # we can reference.
+                pass
 
         if isinstance(data, DGStorage):
             self._storage = data
@@ -42,6 +51,27 @@ class DGraph:
 
         self._slice = DGSliceTracker()
         self._device = torch.device(device)
+
+    def discretize(self, time_granularity: TimeDeltaDG | str) -> DGraph:
+        r"""Temporally discretize the time granularity on the graph according to time_granularity.
+
+        If time_granularity is coarser than the graph, we lose information, and aggregate events.
+        If the graph is coarser than time_granularity, we simply re-assign timestamps.
+
+        Note: Produces a deep-copy of the storage, making this an expensive operation.
+        """
+        # TODO: Take in an aggregation function.
+        if isinstance(time_granularity, str):
+            time_granularity = TimeDeltaDG(time_granularity)
+
+        # Note: If we simply return a new storage this will 2x our peak memory since the GC
+        # won't be able to clean up the current graph storage while `self` is alive.
+
+        # TODO: Will need a backend method for this (unless we want to maintain this at the DGraph level).
+        # But that seems like a bad idea, since, a big coarsening could signaficantly reduce graph size
+        # so it makes little sense to keep the huge graph in memory (unless there is a clear use case)
+        # reeturn self._storage.discretize(time_granularity)
+        return self  # Temporary
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': dynamic_node_feats, node_times, node_ids, 'edge': edge_features}."""
