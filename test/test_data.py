@@ -683,6 +683,11 @@ def test_from_tgb_with_node_events(mock_dataset_cls, split, expected_indices):
         assert node_feats_list[i] == node_label_dict[idx][idx].tolist()
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
 
+    times_list = data.timestamps.tolist()
+    exp_timestamps = [0, 0, 1, 1, 2]
+    for i in range(5):  # sample a few for sanity check
+        assert times_list[i] == exp_timestamps[i]
+
 
 @pytest.mark.parametrize(
     'split,expected_indices',
@@ -820,7 +825,11 @@ def test_from_tgb_timestamp_remap_required_finer(
         assert node_feats_list[i] == node_label_dict[idx][idx].tolist()
     mock_dataset_cls.assert_called_once_with(name='tgbn-foo')
 
-    # TODO: Assert timestamps
+    time_factor = int(mock_td['tgbn-foo'].convert(custom_td))
+    times_list = data.timestamps.tolist()
+    exp_timestamps = [0, 0, 1, 1, 2]
+    for i in range(5):  # sample a few for sanity check
+        assert times_list[i] == time_factor * exp_timestamps[i]
 
 
 def test_from_any():
