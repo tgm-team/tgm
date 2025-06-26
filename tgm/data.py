@@ -440,14 +440,19 @@ class DGData:
             static_node_feats = torch.from_numpy(dataset.node_feat)
 
         # Remap timestamps if a custom non-ordered time delta was supplied
-        if time_delta is not None:
+        if time_delta is not None and not time_delta.is_ordered:
             tgb_time_delta = TGB_TIME_DELTAS[name]
 
-            # TODO:
-            print(time_delta, tgb_time_delta)
-            print(time_delta.convert(tgb_time_delta))
-            print(tgb_time_delta.convert(time_delta))
-            input()
+            if time_delta.is_coarser_than(tgb_time_delta):
+                raise ValueError(
+                    f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity or use an ordered time_delta ('r')"
+                )
+
+            # TODO: int conversion may need some thought
+            time_factor = int(tgb_time_delta.convert(time_delta))
+            timestamps *= time_factor
+            if node_timestamps is not None:
+                node_timestamps *= time_factor
 
         return cls.from_raw(
             edge_timestamps=timestamps,

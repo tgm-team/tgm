@@ -24,6 +24,8 @@ class DGraph:
         device: str | torch.device = 'cpu',
         **kwargs: Any,
     ) -> None:
+        if not isinstance(time_delta, TimeDeltaDG):
+            raise ValueError(f'Bad time_delta type: {type(time_delta)}')
         if isinstance(data, DGStorage):
             self._storage = data
         else:
