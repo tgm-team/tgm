@@ -11,7 +11,7 @@ from torch import Tensor
 
 from tgm._storage import DGSliceTracker, DGStorage
 from tgm.data import DGData
-from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
+from tgm.timedelta import TimeDeltaDG
 
 
 class DGraph:
@@ -20,28 +20,20 @@ class DGraph:
     def __init__(
         self,
         data: DGStorage | DGData | str | pathlib.Path | pd.DataFrame,
-        time_delta: TimeDeltaDG | None = None,
+        time_delta: TimeDeltaDG = TimeDeltaDG('r'),
         device: str | torch.device = 'cpu',
         **kwargs: Any,
     ) -> None:
-        if time_delta is None:
-            self.time_delta = TimeDeltaDG('r')
-            if isinstance(data, str) and data.startswith('tgb'):
-                self.time_delta = TGB_TIME_DELTAS.get(data, self.time_delta)
-        elif isinstance(time_delta, TimeDeltaDG):
-            self.time_delta = time_delta
-        else:
-            raise ValueError(f'bad time_delta type: {type(time_delta)}')
-
         if isinstance(data, DGStorage):
             self._storage = data
         else:
             if not isinstance(data, DGData):
-                data = DGData.from_any(data, **kwargs)
+                data = DGData.from_any(data, time_delta, **kwargs)
             self._storage = DGStorage(data)
 
-        self._slice = DGSliceTracker()
+        self._time_delta = time_delta
         self._device = torch.device(device)
+        self._slice = DGSliceTracker()
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': dynamic_node_feats, node_times, node_ids, 'edge': edge_features}."""
@@ -95,6 +87,10 @@ class DGraph:
     @property
     def device(self) -> torch.device:
         return self._device
+
+    @property
+    def time_delta(self) -> TimeDeltaDG:
+        return self._time_delta
 
     def to(self, device: str | torch.device) -> DGraph:
         return DGraph(data=self._storage, time_delta=self.time_delta, device=device)

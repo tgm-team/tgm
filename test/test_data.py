@@ -128,6 +128,16 @@ def test_init_dg_data_sort_required():
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
 
 
+@pytest.mark.skip('TODO')
+def test_init_dg_tgb_timestamp_remap_required_coarser():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_init_dg_tgb_timestamp_remap_required_finer():
+    pass
+
+
 def test_init_dg_data_bad_args_empty_graph():
     # Empty graph not supported
     with pytest.raises(ValueError):
