@@ -1,6 +1,6 @@
 import pytest
 
-from tgm.timedelta import TimeDeltaDG
+from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
 @pytest.fixture(params=['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
@@ -168,3 +168,20 @@ def test_time_delta_is_coarser_try_compare_ordered():
 
     with pytest.raises(ValueError):
         td1.is_coarser_than('r')
+
+
+def test_tgb_native_time_deltas():
+    exp_dict = {
+        'tgbl-wiki': TimeDeltaDG('s'),
+        'tgbl-subreddit': TimeDeltaDG('s'),
+        'tgbl-lastfm': TimeDeltaDG('s'),
+        'tgbl-review': TimeDeltaDG('s'),
+        'tgbl-coin': TimeDeltaDG('s'),
+        'tgbl-flight': TimeDeltaDG('s'),
+        'tgbl-comment': TimeDeltaDG('s'),
+        'tgbn-trade': TimeDeltaDG('Y'),
+        'tgbn-genre': TimeDeltaDG('s'),
+        'tgbn-reddit': TimeDeltaDG('s'),
+        'tgbn-token': TimeDeltaDG('s'),
+    }
+    assert TGB_TIME_DELTAS == exp_dict
