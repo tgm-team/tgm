@@ -646,34 +646,42 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
             mask = getattr(dataset, f'{split}_mask')
             edge_times = times[mask]
 
+        # Node times get integrated into the global timestamp array
         node_times = list(dataset.full_data['node_label_dict'].keys())
         node_times = [t for t in node_times if edge_times.min() <= t < edge_times.max()]
-        return edge_times, node_times
+        exp_times = np.concatenate([edge_times, node_times])
+        exp_times.sort()
+        return exp_times
 
     data = DGData.from_tgb(name='tgbn-trade', split=split)
     assert isinstance(data, DGData)
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
+    np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
 
-    edge_times, node_times = _get_exp_times()
-    exp_times = np.concatenate([edge_times, node_times])
-    exp_times.sort()
-    np.testing.assert_allclose(data.timestamps.numpy(), exp_times)
+    # Assert valid node-centric data
+    times = dataset.full_data['timestamps']
+    if split == 'all':
+        edge_times = times
+    else:
+        mask = getattr(dataset, f'{split}_mask')
+        edge_times = times[mask]
 
+    full_node_dict = dataset.full_data['node_label_dict']
     split_node_dict = {
-        t: v
-        for t, v in dataset.full_data['node_label_dict'].items()
-        if edge_times.min() <= t < edge_times.max()
+        t: v for t, v in full_node_dict.items() if edge_times[0] <= t < edge_times[-1]
     }
     if not len(split_node_dict):
         assert data.node_ids is None
         assert data.dynamic_node_feats is None
     else:
-        valid_node_ids, valid_node_feats = [], []
-        for v in split_node_dict.values():
-            valid_node_ids.append(list(v.keys())[0])
-            valid_node_feats.append(list(v.values())[0].tolist())
-        assert data.node_ids.tolist() == valid_node_ids
-        assert data.dynamic_node_feats.tolist() == valid_node_feats
+        exp_node_ids, exp_node_feats = [], []
+        for node_dict in split_node_dict.values():
+            nodes = list(node_dict.keys())[0]
+            feats = list(node_dict.values())[0].tolist()
+            exp_node_ids.append(nodes)
+            exp_node_feats.append(feats)
+        assert data.node_ids.tolist() == exp_node_ids
+        assert data.dynamic_node_feats.tolist() == exp_node_feats
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
@@ -696,9 +704,8 @@ def test_from_tgb_time_remap_required_finer(mock_dataset_cls, tgb_dataset_factor
     dataset = tgb_dataset_factory()
     mock_dataset_cls.return_value = dataset
 
-    # Save raw (unmapped timestamps) from the original dataset
-    # We do a copy since the TGB constructor modifies timestamp info
-    # on the underlying tgb array
+    # Save raw (unmapped timestamps) from the original dataset. We do a copy since
+    # TGB constructor modifies timestamp info on the underlying tgb array
     raw_times = dataset.full_data['timestamps'].copy()
 
     custom_td = TimeDeltaDG('s')
