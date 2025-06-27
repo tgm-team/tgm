@@ -6,7 +6,7 @@ from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm.graph import DGraph
+from tgm import DGraph
 from tgm.hooks import TGBNegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor

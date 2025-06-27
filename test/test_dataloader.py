@@ -1,8 +1,8 @@
 import pytest
 import torch
 
+from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.graph import DGBatch, DGraph
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything

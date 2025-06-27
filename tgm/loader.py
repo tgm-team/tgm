@@ -4,7 +4,7 @@ from typing import Any, List
 
 import torch
 
-from tgm.graph import DGBatch, DGraph
+from tgm import DGBatch, DGraph
 from tgm.hooks import DGHook, HookManager
 from tgm.timedelta import TimeDeltaDG
 

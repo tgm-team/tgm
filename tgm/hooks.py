@@ -6,8 +6,8 @@ from typing import Any, Deque, Dict, List, Protocol, Set, runtime_checkable
 import numpy as np
 import torch
 
+from tgm import DGBatch, DGraph
 from tgm._storage import DGSliceTracker
-from tgm.graph import DGBatch, DGraph
 
 
 @runtime_checkable
