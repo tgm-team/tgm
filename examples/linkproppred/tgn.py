@@ -11,7 +11,7 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
+from tgm import DGBatch, DGraph
 from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,

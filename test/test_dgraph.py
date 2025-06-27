@@ -4,8 +4,8 @@ from unittest.mock import patch
 import pytest
 import torch
 
+from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.graph import DGBatch, DGraph
 
 
 @pytest.fixture
