@@ -13,7 +13,6 @@ from tqdm import tqdm
 from tgm.graph import DGBatch, DGraph
 from tgm.hooks import NegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -179,19 +178,19 @@ seed_everything(args.seed)
 
 train_dg = DGraph(
     args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
+    time_delta=args.time_gran,
     split='train',
     device=args.device,
 )
 val_dg = DGraph(
     args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
+    time_delta=args.time_gran,
     split='val',
     device=args.device,
 )
 test_dg = DGraph(
     args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
+    time_delta=args.time_gran,
     split='test',
     device=args.device,
 )

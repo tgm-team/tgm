@@ -9,7 +9,6 @@ from tgm.graph import DGraph
 from tgm.hooks import NegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -47,8 +46,8 @@ def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> dic
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='train')
-test_dg = DGraph(args.dataset, time_delta=TimeDeltaDG('r'), split='test')
+train_dg = DGraph(args.dataset, split='train')
+test_dg = DGraph(args.dataset, split='test')
 
 train_data = train_dg.materialize(materialize_features=False)
 test_loader = DGDataLoader(
