@@ -20,10 +20,12 @@ class DGraph:
     def __init__(
         self,
         data: DGStorage | DGData | str | pathlib.Path | pd.DataFrame,
-        time_delta: TimeDeltaDG = TimeDeltaDG('r'),
+        time_delta: TimeDeltaDG | str = 'r',
         device: str | torch.device = 'cpu',
         **kwargs: Any,
     ) -> None:
+        if isinstance(time_delta, str):
+            time_delta = TimeDeltaDG(time_delta)
         if not isinstance(time_delta, TimeDeltaDG):
             raise ValueError(f'Bad time_delta type: {type(time_delta)}')
         if isinstance(data, DGStorage):
