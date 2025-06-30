@@ -41,7 +41,16 @@ jobs:
         run: uv sync --all-extras --dev --frozen
 
       - name: Test non-gpu tests with pytest
-        run: uv run pytest test -m "not gpu" --cov=tgm
+        run: uv run pytest test -m "not gpu and not slow" --cov=tgm --cov-report=xml --cov-append -vvv
+
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'pull_request'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: non-gpu
+          name: codecov-pr-${{ github.event.pull_request.number }}
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Minimize uv cache
         run: uv cache prune --ci

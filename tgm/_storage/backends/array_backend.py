@@ -98,8 +98,8 @@ class DGStorageArrayBackend(DGStorageBase):
 
         # TODO: Node feats
         batch_size = len(seed_nodes)
-        nbr_nids = torch.empty(batch_size, n_nbrs, dtype=torch.long)
-        nbr_times = torch.empty(batch_size, n_nbrs, dtype=torch.long)
+        nbr_nids = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
+        nbr_times = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
         nbr_feats = torch.zeros(batch_size, n_nbrs, self.get_edge_feats_dim())  # type: ignore
         nbr_mask = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
         for i, nbrs_set in enumerate(nbrs.values()):
