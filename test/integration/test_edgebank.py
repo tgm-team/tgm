@@ -1,7 +1,7 @@
 import pytest
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 @pytest.mark.parametrize('dataset', ['tgbl-wiki'])
 @pytest.mark.slurm(
     resources=[
@@ -22,7 +22,7 @@ python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
     assert state == 'COMPLETED'
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 @pytest.mark.parametrize('dataset', ['tgbl-wiki'])
 @pytest.mark.slurm(
     resources=[

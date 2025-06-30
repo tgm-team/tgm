@@ -1,7 +1,7 @@
 import pytest
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 @pytest.mark.parametrize('dataset', ['tgbl-wiki'])
 @pytest.mark.slurm(
     resources=[
@@ -25,4 +25,4 @@ python "$ROOT_DIR/examples/linkproppred/tgn.py" \
     --n-nbrs 20
     """
     state = slurm_job_runner(cmd)
-    assert state == 'completed'
+    assert state == 'COMPLETED'
