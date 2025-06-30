@@ -119,6 +119,7 @@ class DeduplicationHook:
 
         nids = [batch.src, batch.dst]
         if hasattr(batch, 'neg'):
+            batch.neg = batch.neg.to(device)
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
