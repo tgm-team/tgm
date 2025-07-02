@@ -1,4 +1,5 @@
 import csv
+import os
 import tempfile
 from unittest.mock import MagicMock, patch
 
@@ -279,30 +280,40 @@ def test_from_csv_with_edge_features():
 
     edge_feats_col = [f'dim_{i}' for i in range(5)]
     col_names = {'edge_src_col': 'src', 'edge_dst_col': 'dst', 'edge_time_col': 't'}
-    with tempfile.NamedTemporaryFile(mode='w') as f:
-        writer = csv.writer(f)
-        writer.writerow(list(col_names.values()) + edge_feats_col)
-        writer.writerows(
-            zip(
-                edge_index[:, 0].tolist(),
-                edge_index[:, 1].tolist(),
-                timestamps.tolist(),
-                edge_feats[:, 0].tolist(),
-                edge_feats[:, 1].tolist(),
-                edge_feats[:, 2].tolist(),
-                edge_feats[:, 3].tolist(),
-                edge_feats[:, 4].tolist(),
+
+    tmp = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name = tmp.name
+    tmp.close()
+
+    try:
+        with open(tmp_name, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(list(col_names.values()) + edge_feats_col)
+            writer.writerows(
+                zip(
+                    edge_index[:, 0].tolist(),
+                    edge_index[:, 1].tolist(),
+                    timestamps.tolist(),
+                    edge_feats[:, 0].tolist(),
+                    edge_feats[:, 1].tolist(),
+                    edge_feats[:, 2].tolist(),
+                    edge_feats[:, 3].tolist(),
+                    edge_feats[:, 4].tolist(),
+                )
             )
-        )
-        f.flush()
+            f.flush()
 
         recovered_data = DGData.from_csv(
             f.name, edge_feats_col=edge_feats_col, **col_names
         )
 
-    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
-    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
-    torch.testing.assert_close(data.edge_feats, recovered_data.edge_feats)
+        torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+        torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+        torch.testing.assert_close(data.edge_feats, recovered_data.edge_feats)
+    except Exception as e:
+        raise e
+    finally:
+        os.remove(tmp_name)
 
 
 def test_from_csv_with_node_events():
@@ -323,30 +334,38 @@ def test_from_csv_with_node_events():
         'edge_time_col': 't',
     }
     node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
-    with (
-        tempfile.NamedTemporaryFile(mode='w') as edge_file,
-        tempfile.NamedTemporaryFile(mode='w') as node_file,
-    ):
-        writer = csv.writer(edge_file)
-        writer.writerow(list(edge_col_names.values()))
-        writer.writerows(
-            zip(
-                edge_index[:, 0].tolist(),
-                edge_index[:, 1].tolist(),
-                edge_timestamps.tolist(),
-            )
-        )
-        edge_file.flush()
 
-        writer = csv.writer(node_file)
-        writer.writerow(list(node_col_names.values()))
-        writer.writerows(
-            zip(
-                node_ids.tolist(),
-                node_timestamps.tolist(),
+    tmp_edge = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_edge = tmp_edge.name
+    tmp_edge.close()
+
+    tmp_node = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_node = tmp_node.name
+    tmp_node.close()
+
+    try:
+        with open(tmp_name_edge, 'w', newline='') as edge_file:
+            writer = csv.writer(edge_file)
+            writer.writerow(list(edge_col_names.values()))
+            writer.writerows(
+                zip(
+                    edge_index[:, 0].tolist(),
+                    edge_index[:, 1].tolist(),
+                    edge_timestamps.tolist(),
+                )
             )
-        )
-        node_file.flush()
+            edge_file.flush()
+
+        with open(tmp_name_node, 'w', newline='') as node_file:
+            writer = csv.writer(node_file)
+            writer.writerow(list(node_col_names.values()))
+            writer.writerows(
+                zip(
+                    node_ids.tolist(),
+                    node_timestamps.tolist(),
+                )
+            )
+            node_file.flush()
 
         recovered_data = DGData.from_csv(
             edge_file_path=edge_file.name,
@@ -355,12 +374,17 @@ def test_from_csv_with_node_events():
             **node_col_names,
         )
 
-    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
-    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
-    torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
-    torch.testing.assert_close(
-        data.dynamic_node_feats, recovered_data.dynamic_node_feats
-    )
+        torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+        torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+        torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
+        torch.testing.assert_close(
+            data.dynamic_node_feats, recovered_data.dynamic_node_feats
+        )
+    except Exception as e:
+        raise e
+    finally:
+        os.remove(tmp_name_edge)
+        os.remove(tmp_name_node)
 
 
 def test_from_csv_with_node_features():
@@ -388,47 +412,59 @@ def test_from_csv_with_node_features():
     node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
     node_feats_col = [f'dim_{i}' for i in range(5)]
     static_node_feats_col = [f'sdim_{i}' for i in range(3)]
-    with (
-        tempfile.NamedTemporaryFile(mode='w') as edge_file,
-        tempfile.NamedTemporaryFile(mode='w') as node_file,
-        tempfile.NamedTemporaryFile(mode='w') as static_node_file,
-    ):
-        writer = csv.writer(edge_file)
-        writer.writerow(list(edge_col_names.values()))
-        writer.writerows(
-            zip(
-                edge_index[:, 0].tolist(),
-                edge_index[:, 1].tolist(),
-                edge_timestamps.tolist(),
-            )
-        )
-        edge_file.flush()
 
-        writer = csv.writer(node_file)
-        writer.writerow(list(node_col_names.values()) + node_feats_col)
-        writer.writerows(
-            zip(
-                node_ids.tolist(),
-                node_timestamps.tolist(),
-                dynamic_node_feats[:, 0].tolist(),
-                dynamic_node_feats[:, 1].tolist(),
-                dynamic_node_feats[:, 2].tolist(),
-                dynamic_node_feats[:, 3].tolist(),
-                dynamic_node_feats[:, 4].tolist(),
-            )
-        )
-        node_file.flush()
+    tmp_edge = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_edge = tmp_edge.name
+    tmp_edge.close()
 
-        writer = csv.writer(static_node_file)
-        writer.writerow(static_node_feats_col)
-        writer.writerows(
-            zip(
-                static_node_feats[:, 0].tolist(),
-                static_node_feats[:, 1].tolist(),
-                static_node_feats[:, 2].tolist(),
+    tmp_node = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_node = tmp_node.name
+    tmp_node.close()
+
+    tmp_static_node = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_static_node = tmp_static_node.name
+    tmp_static_node.close()
+
+    try:
+        with open(tmp_name_edge, 'w', newline='') as edge_file:
+            writer = csv.writer(edge_file)
+            writer.writerow(list(edge_col_names.values()))
+            writer.writerows(
+                zip(
+                    edge_index[:, 0].tolist(),
+                    edge_index[:, 1].tolist(),
+                    edge_timestamps.tolist(),
+                )
             )
-        )
-        static_node_file.flush()
+            edge_file.flush()
+
+        with open(tmp_name_node, 'w', newline='') as node_file:
+            writer = csv.writer(node_file)
+            writer.writerow(list(node_col_names.values()) + node_feats_col)
+            writer.writerows(
+                zip(
+                    node_ids.tolist(),
+                    node_timestamps.tolist(),
+                    dynamic_node_feats[:, 0].tolist(),
+                    dynamic_node_feats[:, 1].tolist(),
+                    dynamic_node_feats[:, 2].tolist(),
+                    dynamic_node_feats[:, 3].tolist(),
+                    dynamic_node_feats[:, 4].tolist(),
+                )
+            )
+            node_file.flush()
+
+        with open(tmp_name_static_node, 'w', newline='') as static_node_file:
+            writer = csv.writer(static_node_file)
+            writer.writerow(static_node_feats_col)
+            writer.writerows(
+                zip(
+                    static_node_feats[:, 0].tolist(),
+                    static_node_feats[:, 1].tolist(),
+                    static_node_feats[:, 2].tolist(),
+                )
+            )
+            static_node_file.flush()
 
         recovered_data = DGData.from_csv(
             edge_file_path=edge_file.name,
@@ -440,13 +476,21 @@ def test_from_csv_with_node_features():
             **node_col_names,
         )
 
-    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
-    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
-    torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
-    torch.testing.assert_close(
-        data.dynamic_node_feats, recovered_data.dynamic_node_feats
-    )
-    torch.testing.assert_close(data.static_node_feats, recovered_data.static_node_feats)
+        torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+        torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+        torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
+        torch.testing.assert_close(
+            data.dynamic_node_feats, recovered_data.dynamic_node_feats
+        )
+        torch.testing.assert_close(
+            data.static_node_feats, recovered_data.static_node_feats
+        )
+    except Exception as e:
+        raise e
+    finally:
+        os.remove(tmp_name_edge)
+        os.remove(tmp_name_node)
+        os.remove(tmp_name_static_node)
 
 
 def test_from_pandas_with_edge_features():

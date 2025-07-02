@@ -11,7 +11,7 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
+from tgm import DGBatch, DGraph
 from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,
@@ -279,22 +279,61 @@ class GraphAttentionEmbedding(nn.Module):
         z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
 
         for hop in reversed(range(self.num_layers)):
-            if batch.nids[hop].numel() == 0:
+            seed_nodes = batch.nids[hop]
+            nbrs = batch.nbr_nids[hop]
+            if seed_nodes.numel() == 0:
                 continue
 
             # TODO: Check and read static node features
-            node_feat = torch.zeros(
-                (*batch.nids[hop].shape, self.embed_dim), device=device
-            )
-            node_time_feat = self.time_encoder(torch.zeros_like(batch.nids[hop]))
+            node_feat = torch.zeros((*seed_nodes.shape, self.embed_dim), device=device)
+            node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
             if hop < self.num_layers - 1:
-                nbr_feat = z[batch.nbr_nids_idx[hop]]
+                nbr_feat = z[batch.global_to_local(nbrs)]
             else:
-                nbr_feat = torch.zeros(
-                    (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
-                )
+                nbr_feat = torch.zeros((*nbrs.shape, self.embed_dim), device=device)
+
+            delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
+            nbr_time_feat = self.time_encoder(delta_time)
+
+            out = self.attn[hop](
+                node_feat=node_feat + memory[seed_nodes],
+                time_feat=node_time_feat,
+                edge_feat=batch.nbr_feats[hop],
+                nbr_node_feat=nbr_feat,
+                nbr_time_feat=nbr_time_feat,
+                nbr_mask=batch.nbr_mask[hop],
+            )
+            z[batch.global_to_local(seed_nodes)] = out
+
+        z_src = z[batch.global_to_local(batch.src)]
+        z_dst = z[batch.global_to_local(batch.dst)]
+        z_neg = z[batch.global_to_local(batch.neg)]
+        pos_out = self.link_predictor(z_src, z_dst)
+        neg_out = self.link_predictor(z_src, z_neg)
+        return pos_out, neg_out
+
+    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+        device = batch.src.device
+        z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
+
+        for hop in reversed(range(self.num_layers)):
+            seed_nodes = batch.nids[hop]
+            nbrs = batch.nbr_nids[hop]
+            nbr_mask = batch.nbr_mask[hop]
+            if seed_nodes.numel() == 0:
+                continue
+
+            # TODO: Check and read static node features
+            node_feat = torch.zeros((*seed_nodes.shape, self.embed_dim), device=device)
+            node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
+
+            # If next next hops embeddings exist, use them instead of raw features
+            nbr_feat = torch.zeros((*nbrs.shape, self.embed_dim), device=device)
+            if hop < self.num_layers - 1:
+                valid_nbrs = nbrs[nbr_mask.bool()]
+                nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
             nbr_time_feat = self.time_encoder(delta_time)
@@ -305,14 +344,13 @@ class GraphAttentionEmbedding(nn.Module):
                 edge_feat=batch.nbr_feats[hop],
                 nbr_node_feat=nbr_feat,
                 nbr_time_feat=nbr_time_feat,
-                nbr_mask=batch.nbr_mask[hop],
+                nbr_mask=nbr_mask,
             )
-            z[batch.nid_to_idx[batch.nids[hop]]] = out
+            z[batch.global_to_local(seed_nodes)] = out
 
-            # TODO: Merge layers to combine attention results and node original features
-            # z = self.merge_layers[hop](out, node_feat)
-
-        z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
+        z_src = z[batch.global_to_local(batch.src)]
+        z_dst = z[batch.global_to_local(batch.dst)]
+        z_neg = z[batch.global_to_local(batch.neg)]
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
@@ -383,9 +421,9 @@ test_dg = DGraph(
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     if sampling_type == 'uniform':
-        nbr_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs])
+        nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=dg.num_nodes)
+        nbr_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=dg.num_nodes)
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 

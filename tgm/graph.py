@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Optional, Set, Tuple
 
-import pandas as pd
 import torch
 from torch import Tensor
 
@@ -19,7 +18,7 @@ class DGraph:
 
     def __init__(
         self,
-        data: DGStorage | DGData | str | pathlib.Path | pd.DataFrame,
+        data: DGStorage | DGData | str | pathlib.Path | 'pd.DataFrame',  # type: ignore
         time_delta: TimeDeltaDG = TimeDeltaDG('r'),
         device: str | torch.device = 'cpu',
         **kwargs: Any,
