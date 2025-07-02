@@ -223,20 +223,54 @@ class NeighborSamplerHook:
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         device = dg.device
-        if hasattr(batch, 'neg'):
-            batch.neg = batch.neg.to(device)
-            seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
-        else:
-            seed_nodes = torch.cat([batch.src, batch.dst])
 
-        # TODO: Storage needs to use the right device
-        batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
-            dg._storage.get_nbrs(
-                seed_nodes=seed_nodes,
-                num_nbrs=self.num_nbrs,
-                slice=DGSliceTracker(end_idx=dg._slice.end_idx),
+        batch.nids, batch.times = [], []  # type: ignore
+        batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
+        batch.nbr_feats, batch.nbr_mask = [], []  # type: ignore
+
+        for hop, num_nbrs in enumerate(self.num_nbrs):
+            if hop == 0:
+                seed = [batch.src, batch.dst]
+                times = [batch.time.repeat(2)]  # Real link times
+                if hasattr(batch, 'neg'):
+                    batch.neg = batch.neg.to(device)
+                    seed.append(batch.neg)
+
+                    # This is a heuristic. For our fake (negative) link times,
+                    # we pick random time stamps within temporal window of the batch.
+                    # Using random times on the whole graph will likely produce information
+                    # leakage, making the prediction easier than it should be.
+                    fake_times = torch.randint(
+                        int(batch.time.min().item()),
+                        int(batch.time.max().item()),
+                        (batch.neg.size(0),),
+                        device=device,
+                    )
+                    times.append(fake_times)
+                seed_nodes = torch.cat(seed)
+                seed_times = torch.cat(times)
+            else:
+                mask = batch.nbr_mask[hop - 1].bool()  # type: ignore
+                seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
+                seed_times = batch.nbr_times[hop - 1][mask].flatten()  # type: ignore
+
+            # TODO: Storage needs to use the right device
+
+            # We slice on batch.start_time so that we only consider neighbor events
+            # that occured strictly before this batch
+            nbr_nids, nbr_times, nbr_feats, nbr_mask = dg._storage.get_nbrs(
+                seed_nodes,
+                num_nbrs=num_nbrs,
+                slice=DGSliceTracker(end_time=dg._slice.start_time),
             )
-        )
+
+            batch.nids.append(seed_nodes)  # type: ignore
+            batch.times.append(seed_times)  # type: ignore
+            batch.nbr_nids.append(nbr_nids)  # type: ignore
+            batch.nbr_times.append(nbr_times)  # type: ignore
+            batch.nbr_feats.append(nbr_feats)  # type: ignore
+            batch.nbr_mask.append(nbr_mask)  # type: ignore
+
         return batch
 
 
