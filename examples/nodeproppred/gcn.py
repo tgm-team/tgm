@@ -14,7 +14,7 @@ from tgb.nodeproppred.evaluate import Evaluator
 from torch_geometric.nn import GCNConv
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
+from tgm import DGBatch, DGraph
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
@@ -70,7 +70,7 @@ class GCN(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         edge_index = torch.stack([batch.src, batch.dst], dim=0).to(node_feat.device)
         z = self.encoder(node_feat, edge_index)
-        z_node = z[batch.node_ids]
+        z_node = z[batch.global_to_local(batch.node_ids)]  # type: ignore
         pred = self.decoder(z_node)
         return pred
 

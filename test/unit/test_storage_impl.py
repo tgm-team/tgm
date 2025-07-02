@@ -58,24 +58,35 @@ def data_with_features():
     )
 
 
-@pytest.mark.parametrize(
-    'data', ['edge_only_data', 'edge_only_data_with_features', 'data_with_features']
-)
+@pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
 def test_get_start_time_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
     storage = DGStorageImpl(data)
 
     assert storage.get_start_time(DGSliceTracker()) == data.timestamps[0]
+    assert storage.get_start_time(DGSliceTracker(start_time=5)) == 5
+    assert storage.get_start_time(DGSliceTracker(end_time=4)) == 1
+    assert storage.get_start_time(DGSliceTracker(start_time=5, end_time=9)) == 5
+    assert storage.get_start_time(DGSliceTracker(start_idx=2, end_idx=5)) == 10
+    assert (
+        storage.get_start_time(DGSliceTracker(start_idx=2, end_idx=5, end_time=6))
+        is None
+    )
 
 
-@pytest.mark.parametrize(
-    'data', ['edge_only_data', 'edge_only_data_with_features', 'data_with_features']
-)
+@pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
 def test_get_end_time_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
     storage = DGStorageImpl(data)
 
     assert storage.get_end_time(DGSliceTracker()) == data.timestamps[-1]
+    assert storage.get_end_time(DGSliceTracker(start_time=5)) == 10
+    assert storage.get_end_time(DGSliceTracker(end_time=4)) == 1
+    assert storage.get_end_time(DGSliceTracker(start_time=5, end_time=9)) == 5
+    assert storage.get_end_time(DGSliceTracker(start_idx=2, end_idx=5)) == 10
+    assert (
+        storage.get_end_time(DGSliceTracker(start_idx=2, end_idx=5, end_time=6)) is None
+    )
 
 
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
@@ -86,6 +97,10 @@ def test_get_nodes_edge_data(DGStorageImpl, data, request):
     assert storage.get_nodes(DGSliceTracker(start_time=5)) == set([2, 4, 6, 8])
     assert storage.get_nodes(DGSliceTracker(end_time=4)) == set([2])
     assert storage.get_nodes(DGSliceTracker(start_time=5, end_time=9)) == set([2, 4])
+    assert storage.get_nodes(DGSliceTracker(start_idx=2, end_idx=5)) == set([6, 8])
+    assert (
+        storage.get_nodes(DGSliceTracker(start_idx=2, end_idx=5, end_time=6)) == set()
+    )
 
 
 def test_get_nodes_data_with_multi_events_per_timestamp(
@@ -98,6 +113,10 @@ def test_get_nodes_data_with_multi_events_per_timestamp(
     assert storage.get_nodes(DGSliceTracker(start_time=5)) == set([1, 2, 4, 6, 8])
     assert storage.get_nodes(DGSliceTracker(end_time=4)) == set([2])
     assert storage.get_nodes(DGSliceTracker(start_time=5, end_time=9)) == set([2, 4])
+    assert storage.get_nodes(DGSliceTracker(start_idx=2, end_idx=5)) == set([2, 4, 6])
+    assert storage.get_nodes(DGSliceTracker(start_idx=2, end_idx=5, end_time=6)) == set(
+        [2, 4]
+    )
 
 
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
@@ -137,6 +156,25 @@ def test_get_edges(DGStorageImpl, data, request):
         storage.get_edges(DGSliceTracker(start_time=5, end_time=9)), expected
     )
 
+    expected = (
+        torch.tensor([6], dtype=torch.int64),
+        torch.tensor([8], dtype=torch.int64),
+        torch.tensor([10], dtype=torch.int64),
+    )
+
+    torch.testing.assert_close(
+        storage.get_edges(DGSliceTracker(start_idx=2, end_idx=5)), expected
+    )
+
+    expected = (
+        torch.tensor([], dtype=torch.int64),
+        torch.tensor([], dtype=torch.int64),
+        torch.tensor([], dtype=torch.int64),
+    )
+    torch.testing.assert_close(
+        storage.get_edges(DGSliceTracker(start_idx=2, end_idx=5, end_time=6)), expected
+    )
+
 
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
 def test_get_num_timestamps_edge_data(DGStorageImpl, data, request):
@@ -147,6 +185,11 @@ def test_get_num_timestamps_edge_data(DGStorageImpl, data, request):
     assert storage.get_num_timestamps(DGSliceTracker(start_time=5)) == 2
     assert storage.get_num_timestamps(DGSliceTracker(end_time=4)) == 1
     assert storage.get_num_timestamps(DGSliceTracker(start_time=5, end_time=9)) == 1
+    assert storage.get_num_timestamps(DGSliceTracker(start_idx=2, end_idx=5)) == 1
+    assert (
+        storage.get_num_timestamps(DGSliceTracker(start_idx=2, end_idx=5, end_time=6))
+        == 0
+    )
 
 
 def test_get_num_events_data_with_multi_events_per_timestamp(
@@ -159,6 +202,10 @@ def test_get_num_events_data_with_multi_events_per_timestamp(
     assert storage.get_num_events(DGSliceTracker(start_time=5)) == 4
     assert storage.get_num_events(DGSliceTracker(end_time=4)) == 2
     assert storage.get_num_events(DGSliceTracker(start_time=5, end_time=9)) == 2
+    assert storage.get_num_events(DGSliceTracker(start_idx=2, end_idx=5)) == 3
+    assert (
+        storage.get_num_events(DGSliceTracker(start_idx=2, end_idx=5, end_time=6)) == 2
+    )
 
 
 def test_get_edge_feats_no_edge_feats(DGStorageImpl, edge_only_data):
@@ -199,6 +246,18 @@ def test_get_edge_feats(DGStorageImpl, edge_only_data_with_features):
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(start_time=5, end_time=9)).to_dense(),
         exp_edge_feats,
+    )
+
+    exp_edge_feats = torch.zeros(11, 8 + 1, 8 + 1, 5)
+    exp_edge_feats[10, 6, 8] = data.edge_feats[2]
+    assert torch.equal(
+        storage.get_edge_feats(DGSliceTracker(start_idx=2, end_idx=5)).to_dense(),
+        exp_edge_feats,
+    )
+
+    assert (
+        storage.get_edge_feats(DGSliceTracker(start_idx=2, end_idx=5, end_time=6))
+        is None
     )
 
 
@@ -243,6 +302,25 @@ def test_get_dynamic_node_feats(DGStorageImpl, data_with_features):
     assert torch.equal(
         storage.get_dynamic_node_feats(
             DGSliceTracker(start_time=5, end_time=9)
+        ).to_dense(),
+        exp_node_feats,
+    )
+
+    exp_node_feats = torch.zeros(11, 6 + 1, 5)
+    exp_node_feats[5, 4] = data.dynamic_node_feats[1]
+    exp_node_feats[10, 6] = data.dynamic_node_feats[2]
+    assert torch.equal(
+        storage.get_dynamic_node_feats(
+            DGSliceTracker(start_idx=2, end_idx=5)
+        ).to_dense(),
+        exp_node_feats,
+    )
+
+    exp_node_feats = torch.zeros(7, 4 + 1, 5)
+    exp_node_feats[5, 4] = data.dynamic_node_feats[1]
+    assert torch.equal(
+        storage.get_dynamic_node_feats(
+            DGSliceTracker(start_idx=2, end_idx=5, end_time=6)
         ).to_dense(),
         exp_node_feats,
     )
@@ -361,11 +439,6 @@ def test_get_nbrs_single_hop_sampling_required(DGStorageImpl):
 
 @pytest.mark.skip(reason='Multi-hop get_nbrs not implemented')
 def test_get_nbrs_multiple_hops(DGStorageImpl):
-    pass
-
-
-@pytest.mark.skip(reason='TODO: Add test with event idx constraints!')
-def test_dg_storage_with_event_contraints(DGStorageImpl):
     pass
 
 

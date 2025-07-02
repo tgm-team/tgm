@@ -4,8 +4,8 @@ from unittest.mock import patch
 import pytest
 import torch
 
+from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.graph import DGBatch, DGraph
 
 
 @pytest.fixture
@@ -357,6 +357,78 @@ def test_slice_time_bad_args(data):
         dg.slice_time(2, 1)
 
 
-@pytest.mark.skip(reason='TODO: Add test for dg slice events!')
-def test_slice_events():
-    pass
+def test_slice_events(data):
+    dg = DGraph(data)
+
+    dg1 = dg.slice_events(2, 5)
+    assert id(dg1._storage) == id(dg._storage)
+
+    assert len(dg1) == 2
+    assert dg1.start_time == 5
+    assert dg1.end_time == 10
+    assert dg1.num_nodes == 7
+    assert dg1.num_edges == 1
+    assert dg1.num_timestamps == 2
+    assert dg1.nodes == {2, 4, 6}
+
+    exp_edges = (
+        torch.LongTensor([2]),
+        torch.LongTensor([4]),
+        torch.LongTensor([5]),
+    )
+    torch.testing.assert_close(dg1.edges, exp_edges)
+
+    exp_dynamic_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
+    exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
+    exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
+    assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
+
+    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
+    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
+    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
+
+    # Check original graph cache is not updated
+    assert len(dg) == 4
+    assert dg.start_time == 1
+    assert dg.end_time == 20
+    assert dg.num_nodes == 9
+    assert dg.num_edges == 3
+    assert dg.num_timestamps == 4
+    assert dg.num_events == 6
+    assert dg.nodes == {1, 2, 4, 6, 8}
+
+
+def test_slice_events_bad_args(data):
+    dg = DGraph(data)
+    with pytest.raises(ValueError):
+        dg.slice_events(2, 1)
+
+
+def test_slice_events_slice_time_combination(data):
+    dg = DGraph(data)
+
+    dg1 = dg.slice_events(2, 5).slice_time(5, 7)
+    assert id(dg1._storage) == id(dg._storage)
+
+    assert len(dg1) == 1
+    assert dg1.start_time == 5
+    assert dg1.end_time == 6
+    assert dg1.num_nodes == 5
+    assert dg1.num_edges == 1
+    assert dg1.num_timestamps == 1
+    assert dg1.nodes == {2, 4}
+
+    exp_edges = (
+        torch.LongTensor([2]),
+        torch.LongTensor([4]),
+        torch.LongTensor([5]),
+    )
+    torch.testing.assert_close(dg1.edges, exp_edges)
+
+    exp_dynamic_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
+    exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
+    assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
+
+    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
+    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
+    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
