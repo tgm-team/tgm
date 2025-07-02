@@ -1,4 +1,5 @@
 import csv
+import os
 import tempfile
 from unittest.mock import MagicMock, patch
 
@@ -279,30 +280,40 @@ def test_from_csv_with_edge_features():
 
     edge_feats_col = [f'dim_{i}' for i in range(5)]
     col_names = {'edge_src_col': 'src', 'edge_dst_col': 'dst', 'edge_time_col': 't'}
-    with tempfile.NamedTemporaryFile(mode='w') as f:
-        writer = csv.writer(f)
-        writer.writerow(list(col_names.values()) + edge_feats_col)
-        writer.writerows(
-            zip(
-                edge_index[:, 0].tolist(),
-                edge_index[:, 1].tolist(),
-                timestamps.tolist(),
-                edge_feats[:, 0].tolist(),
-                edge_feats[:, 1].tolist(),
-                edge_feats[:, 2].tolist(),
-                edge_feats[:, 3].tolist(),
-                edge_feats[:, 4].tolist(),
+
+    tmp = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name = tmp.name
+    tmp.close()
+
+    try:
+        with open(tmp_name, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(list(col_names.values()) + edge_feats_col)
+            writer.writerows(
+                zip(
+                    edge_index[:, 0].tolist(),
+                    edge_index[:, 1].tolist(),
+                    timestamps.tolist(),
+                    edge_feats[:, 0].tolist(),
+                    edge_feats[:, 1].tolist(),
+                    edge_feats[:, 2].tolist(),
+                    edge_feats[:, 3].tolist(),
+                    edge_feats[:, 4].tolist(),
+                )
             )
-        )
-        f.flush()
+            f.flush()
 
         recovered_data = DGData.from_csv(
             f.name, edge_feats_col=edge_feats_col, **col_names
         )
 
-    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
-    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
-    torch.testing.assert_close(data.edge_feats, recovered_data.edge_feats)
+        torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+        torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+        torch.testing.assert_close(data.edge_feats, recovered_data.edge_feats)
+    except Exception as e:
+        raise e
+    finally:
+        os.remove(tmp_name)
 
 
 def test_from_csv_with_node_events():
@@ -323,30 +334,38 @@ def test_from_csv_with_node_events():
         'edge_time_col': 't',
     }
     node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
-    with (
-        tempfile.NamedTemporaryFile(mode='w') as edge_file,
-        tempfile.NamedTemporaryFile(mode='w') as node_file,
-    ):
-        writer = csv.writer(edge_file)
-        writer.writerow(list(edge_col_names.values()))
-        writer.writerows(
-            zip(
-                edge_index[:, 0].tolist(),
-                edge_index[:, 1].tolist(),
-                edge_timestamps.tolist(),
-            )
-        )
-        edge_file.flush()
 
-        writer = csv.writer(node_file)
-        writer.writerow(list(node_col_names.values()))
-        writer.writerows(
-            zip(
-                node_ids.tolist(),
-                node_timestamps.tolist(),
+    tmp_edge = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_edge = tmp_edge.name
+    tmp_edge.close()
+
+    tmp_node = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_node = tmp_node.name
+    tmp_node.close()
+
+    try:
+        with open(tmp_name_edge, 'w', newline='') as edge_file:
+            writer = csv.writer(edge_file)
+            writer.writerow(list(edge_col_names.values()))
+            writer.writerows(
+                zip(
+                    edge_index[:, 0].tolist(),
+                    edge_index[:, 1].tolist(),
+                    edge_timestamps.tolist(),
+                )
             )
-        )
-        node_file.flush()
+            edge_file.flush()
+
+        with open(tmp_name_node, 'w', newline='') as node_file:
+            writer = csv.writer(node_file)
+            writer.writerow(list(node_col_names.values()))
+            writer.writerows(
+                zip(
+                    node_ids.tolist(),
+                    node_timestamps.tolist(),
+                )
+            )
+            node_file.flush()
 
         recovered_data = DGData.from_csv(
             edge_file_path=edge_file.name,
@@ -355,12 +374,17 @@ def test_from_csv_with_node_events():
             **node_col_names,
         )
 
-    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
-    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
-    torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
-    torch.testing.assert_close(
-        data.dynamic_node_feats, recovered_data.dynamic_node_feats
-    )
+        torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+        torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+        torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
+        torch.testing.assert_close(
+            data.dynamic_node_feats, recovered_data.dynamic_node_feats
+        )
+    except Exception as e:
+        raise e
+    finally:
+        os.remove(tmp_name_edge)
+        os.remove(tmp_name_node)
 
 
 def test_from_csv_with_node_features():
@@ -388,47 +412,59 @@ def test_from_csv_with_node_features():
     node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
     node_feats_col = [f'dim_{i}' for i in range(5)]
     static_node_feats_col = [f'sdim_{i}' for i in range(3)]
-    with (
-        tempfile.NamedTemporaryFile(mode='w') as edge_file,
-        tempfile.NamedTemporaryFile(mode='w') as node_file,
-        tempfile.NamedTemporaryFile(mode='w') as static_node_file,
-    ):
-        writer = csv.writer(edge_file)
-        writer.writerow(list(edge_col_names.values()))
-        writer.writerows(
-            zip(
-                edge_index[:, 0].tolist(),
-                edge_index[:, 1].tolist(),
-                edge_timestamps.tolist(),
-            )
-        )
-        edge_file.flush()
 
-        writer = csv.writer(node_file)
-        writer.writerow(list(node_col_names.values()) + node_feats_col)
-        writer.writerows(
-            zip(
-                node_ids.tolist(),
-                node_timestamps.tolist(),
-                dynamic_node_feats[:, 0].tolist(),
-                dynamic_node_feats[:, 1].tolist(),
-                dynamic_node_feats[:, 2].tolist(),
-                dynamic_node_feats[:, 3].tolist(),
-                dynamic_node_feats[:, 4].tolist(),
-            )
-        )
-        node_file.flush()
+    tmp_edge = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_edge = tmp_edge.name
+    tmp_edge.close()
 
-        writer = csv.writer(static_node_file)
-        writer.writerow(static_node_feats_col)
-        writer.writerows(
-            zip(
-                static_node_feats[:, 0].tolist(),
-                static_node_feats[:, 1].tolist(),
-                static_node_feats[:, 2].tolist(),
+    tmp_node = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_node = tmp_node.name
+    tmp_node.close()
+
+    tmp_static_node = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_static_node = tmp_static_node.name
+    tmp_static_node.close()
+
+    try:
+        with open(tmp_name_edge, 'w', newline='') as edge_file:
+            writer = csv.writer(edge_file)
+            writer.writerow(list(edge_col_names.values()))
+            writer.writerows(
+                zip(
+                    edge_index[:, 0].tolist(),
+                    edge_index[:, 1].tolist(),
+                    edge_timestamps.tolist(),
+                )
             )
-        )
-        static_node_file.flush()
+            edge_file.flush()
+
+        with open(tmp_name_node, 'w', newline='') as node_file:
+            writer = csv.writer(node_file)
+            writer.writerow(list(node_col_names.values()) + node_feats_col)
+            writer.writerows(
+                zip(
+                    node_ids.tolist(),
+                    node_timestamps.tolist(),
+                    dynamic_node_feats[:, 0].tolist(),
+                    dynamic_node_feats[:, 1].tolist(),
+                    dynamic_node_feats[:, 2].tolist(),
+                    dynamic_node_feats[:, 3].tolist(),
+                    dynamic_node_feats[:, 4].tolist(),
+                )
+            )
+            node_file.flush()
+
+        with open(tmp_name_static_node, 'w', newline='') as static_node_file:
+            writer = csv.writer(static_node_file)
+            writer.writerow(static_node_feats_col)
+            writer.writerows(
+                zip(
+                    static_node_feats[:, 0].tolist(),
+                    static_node_feats[:, 1].tolist(),
+                    static_node_feats[:, 2].tolist(),
+                )
+            )
+            static_node_file.flush()
 
         recovered_data = DGData.from_csv(
             edge_file_path=edge_file.name,
@@ -440,13 +476,21 @@ def test_from_csv_with_node_features():
             **node_col_names,
         )
 
-    torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
-    torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
-    torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
-    torch.testing.assert_close(
-        data.dynamic_node_feats, recovered_data.dynamic_node_feats
-    )
-    torch.testing.assert_close(data.static_node_feats, recovered_data.static_node_feats)
+        torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+        torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+        torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
+        torch.testing.assert_close(
+            data.dynamic_node_feats, recovered_data.dynamic_node_feats
+        )
+        torch.testing.assert_close(
+            data.static_node_feats, recovered_data.static_node_feats
+        )
+    except Exception as e:
+        raise e
+    finally:
+        os.remove(tmp_name_edge)
+        os.remove(tmp_name_node)
+        os.remove(tmp_name_static_node)
 
 
 def test_from_pandas_with_edge_features():
@@ -685,6 +729,154 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
+
+    times_list = data.timestamps.tolist()
+    exp_timestamps = [0, 0, 1, 1, 2]
+    for i in range(5):  # sample a few for sanity check
+        assert times_list[i] == exp_timestamps[i]
+
+
+@pytest.mark.parametrize(
+    'split,expected_indices',
+    [
+        ('train', train_indices),
+        ('all', np.arange(num_events)),
+    ],
+)
+@patch('tgb.nodeproppred.dataset.NodePropPredDataset')
+def test_from_tgb_timestamp_remap_required_coarser(
+    mock_dataset_cls, split, expected_indices
+):
+    node_label_dict = {
+        0: {0: np.zeros(10)},
+        1: {1: np.zeros(10)},
+        2: {2: np.zeros(10)},
+        3: {3: np.zeros(10)},
+        4: {4: np.zeros(10)},
+    }
+    sources = np.arange(num_events)
+    destinations = np.arange(num_events)
+    timestamps = np.arange(num_events)
+    edge_feat = None
+
+    train_mask = np.zeros(num_events, dtype=bool)
+    train_mask[train_indices] = True
+
+    val_mask = np.zeros(num_events, dtype=bool)
+    val_mask[val_indices] = True
+
+    test_mask = np.zeros(num_events, dtype=bool)
+    test_mask[test_indices] = True
+
+    mock_dataset = MagicMock()
+    if split == 'train':
+        mask = train_mask
+    elif split == 'val':
+        mask = val_mask
+    elif split == 'test':
+        mask = test_mask
+    else:
+        mask = np.ones(num_events, dtype=bool)
+    num_nodes = 1 + max(np.max(sources[mask]), np.max(destinations[mask]))
+    mock_dataset.node_feat = np.random.rand(num_nodes, 10)
+    mock_dataset.full_data = {
+        'sources': sources,
+        'destinations': destinations,
+        'timestamps': timestamps,
+        'edge_feat': edge_feat,
+        'node_label_dict': node_label_dict,
+    }
+
+    mock_dataset.train_mask = train_mask
+    mock_dataset.val_mask = val_mask
+    mock_dataset.test_mask = test_mask
+    mock_dataset.num_edges = num_events
+
+    mock_dataset_cls.return_value = mock_dataset
+
+    custom_td = TimeDeltaDG('Y')
+    mock_td = {'tgbn-foo': TimeDeltaDG('s')}
+    with patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td):
+        with pytest.raises(ValueError):
+            DGData.from_tgb(name='tgbn-foo', time_delta=custom_td, split=split)
+
+
+@pytest.mark.parametrize(
+    'split,expected_indices',
+    [
+        ('train', train_indices),
+        ('all', np.arange(num_events)),
+    ],
+)
+@patch('tgb.nodeproppred.dataset.NodePropPredDataset')
+def test_from_tgb_timestamp_remap_required_finer(
+    mock_dataset_cls, split, expected_indices
+):
+    node_label_dict = {
+        0: {0: np.zeros(10)},
+        1: {1: np.zeros(10)},
+        2: {2: np.zeros(10)},
+        3: {3: np.zeros(10)},
+        4: {4: np.zeros(10)},
+    }
+    sources = np.arange(num_events)
+    destinations = np.arange(num_events)
+    timestamps = np.arange(num_events)
+    edge_feat = None
+
+    train_mask = np.zeros(num_events, dtype=bool)
+    train_mask[train_indices] = True
+
+    val_mask = np.zeros(num_events, dtype=bool)
+    val_mask[val_indices] = True
+
+    test_mask = np.zeros(num_events, dtype=bool)
+    test_mask[test_indices] = True
+
+    mock_dataset = MagicMock()
+    if split == 'train':
+        mask = train_mask
+    elif split == 'val':
+        mask = val_mask
+    elif split == 'test':
+        mask = test_mask
+    else:
+        mask = np.ones(num_events, dtype=bool)
+    num_nodes = 1 + max(np.max(sources[mask]), np.max(destinations[mask]))
+    mock_dataset.node_feat = np.random.rand(num_nodes, 10)
+    mock_dataset.full_data = {
+        'sources': sources,
+        'destinations': destinations,
+        'timestamps': timestamps,
+        'edge_feat': edge_feat,
+        'node_label_dict': node_label_dict,
+    }
+
+    mock_dataset.train_mask = train_mask
+    mock_dataset.val_mask = val_mask
+    mock_dataset.test_mask = test_mask
+    mock_dataset.num_edges = num_events
+
+    mock_dataset_cls.return_value = mock_dataset
+
+    custom_td = TimeDeltaDG('s')
+    mock_td = {'tgbn-foo': TimeDeltaDG('Y')}
+    with patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td):
+        data = DGData.from_tgb(name='tgbn-foo', time_delta=custom_td, split=split)
+
+    node_ids_list = data.node_ids.tolist()
+    node_feats_list = data.dynamic_node_feats.tolist()
+
+    for i, idx in enumerate(expected_indices[:5]):  # sample a few for sanity check
+        assert node_ids_list[i] == list(node_label_dict[i].keys())[0]
+        assert node_feats_list[i] == node_label_dict[idx][idx].tolist()
+    mock_dataset_cls.assert_called_once_with(name='tgbn-foo')
+
+    time_factor = int(mock_td['tgbn-foo'].convert(custom_td))
+    times_list = data.timestamps.tolist()
+    exp_timestamps = [0, 0, 1, 1, 2]
+    for i in range(5):  # sample a few for sanity check
+        assert times_list[i] == time_factor * exp_timestamps[i]
 
 
 @patch('tgb.linkproppred.dataset.LinkPropPredDataset')

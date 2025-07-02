@@ -4,8 +4,8 @@ from unittest.mock import patch
 import pytest
 import torch
 
+from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.graph import DGBatch, DGraph
 from tgm.timedelta import TimeDeltaDG
 
 
@@ -103,7 +103,7 @@ def test_init_from_storage(data):
 
 def test_init_bad_args(data):
     with pytest.raises(ValueError):
-        _ = DGraph(data, time_delta='r')
+        _ = DGraph(data, time_delta='foo')
 
 
 def test_init_construct_data():

@@ -6,8 +6,8 @@ from typing import Any, Deque, Dict, List, Protocol, Set, runtime_checkable
 import numpy as np
 import torch
 
+from tgm import DGBatch, DGraph
 from tgm._storage import DGSliceTracker
-from tgm.graph import DGBatch, DGraph
 
 
 @runtime_checkable
@@ -100,14 +100,7 @@ class DeviceTransferHook:
 
 class DeduplicationHook:
     requires: Set[str] = set()
-    produces = {
-        'unique_nids',
-        'nid_to_idx',
-        'src_idx',
-        'dst_idx',
-        'neg_idx',
-        'nbr_nids_idx',
-    }
+    produces = {'unique_nids', 'global_to_local'}
 
     r"""Deduplicate node IDs from batch fields and create index mappings to unique node embeddings.
 
@@ -115,8 +108,6 @@ class DeduplicationHook:
     """
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        device = batch.src.device
-
         nids = [batch.src, batch.dst]
         if hasattr(batch, 'neg'):
             nids.append(batch.neg)
@@ -126,24 +117,10 @@ class DeduplicationHook:
                 nids.append(hop_nids[hop_mask])
 
         all_nids = torch.cat(nids, dim=0)
-        unique_nids = torch.unique(all_nids)
-        max_nid = int(unique_nids.max().item())
-        nid_to_idx = torch.full((max_nid + 1,), -1, dtype=torch.long, device=device)
-        nid_to_idx[unique_nids] = torch.arange(len(unique_nids), device=device)
+        unique_nids = torch.unique(all_nids, sorted=True)
 
         batch.unique_nids = unique_nids  # type: ignore
-        batch.nid_to_idx = nid_to_idx  # type: ignore
-        batch.src_idx = nid_to_idx[batch.src]  # type: ignore
-        batch.dst_idx = nid_to_idx[batch.dst]  # type: ignore
-        if hasattr(batch, 'neg'):
-            batch.neg_idx = nid_to_idx[batch.neg]  # type: ignore
-        if hasattr(batch, 'nbr_nids'):
-            batch.nbr_nids_idx = []  # type: ignore
-            for hop in range(len(batch.nbr_nids)):
-                hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
-                nbr_nids_idx = torch.full_like(hop_nids, -1)
-                nbr_nids_idx[hop_mask] = nid_to_idx[hop_nids[hop_mask]]
-                batch.nbr_nids_idx.append(nbr_nids_idx)  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
 
         return batch
 
@@ -246,20 +223,54 @@ class NeighborSamplerHook:
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         device = dg.device
-        if hasattr(batch, 'neg'):
-            batch.neg = batch.neg.to(device)
-            seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
-        else:
-            seed_nodes = torch.cat([batch.src, batch.dst])
 
-        # TODO: Storage needs to use the right device
-        batch.nids, batch.nbr_nids, batch.nbr_times, batch.nbr_feats, batch.nbr_mask = (  # type: ignore
-            dg._storage.get_nbrs(
-                seed_nodes=seed_nodes,
-                num_nbrs=self.num_nbrs,
-                slice=DGSliceTracker(end_idx=dg._slice.end_idx),
+        batch.nids, batch.times = [], []  # type: ignore
+        batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
+        batch.nbr_feats, batch.nbr_mask = [], []  # type: ignore
+
+        for hop, num_nbrs in enumerate(self.num_nbrs):
+            if hop == 0:
+                seed = [batch.src, batch.dst]
+                times = [batch.time.repeat(2)]  # Real link times
+                if hasattr(batch, 'neg'):
+                    batch.neg = batch.neg.to(device)
+                    seed.append(batch.neg)
+
+                    # This is a heuristic. For our fake (negative) link times,
+                    # we pick random time stamps within temporal window of the batch.
+                    # Using random times on the whole graph will likely produce information
+                    # leakage, making the prediction easier than it should be.
+                    fake_times = torch.randint(
+                        int(batch.time.min().item()),
+                        int(batch.time.max().item()),
+                        (batch.neg.size(0),),
+                        device=device,
+                    )
+                    times.append(fake_times)
+                seed_nodes = torch.cat(seed)
+                seed_times = torch.cat(times)
+            else:
+                mask = batch.nbr_mask[hop - 1].bool()  # type: ignore
+                seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
+                seed_times = batch.nbr_times[hop - 1][mask].flatten()  # type: ignore
+
+            # TODO: Storage needs to use the right device
+
+            # We slice on batch.start_time so that we only consider neighbor events
+            # that occured strictly before this batch
+            nbr_nids, nbr_times, nbr_feats, nbr_mask = dg._storage.get_nbrs(
+                seed_nodes,
+                num_nbrs=num_nbrs,
+                slice=DGSliceTracker(end_time=dg._slice.start_time),
             )
-        )
+
+            batch.nids.append(seed_nodes)  # type: ignore
+            batch.times.append(seed_times)  # type: ignore
+            batch.nbr_nids.append(nbr_nids)  # type: ignore
+            batch.nbr_times.append(nbr_times)  # type: ignore
+            batch.nbr_feats.append(nbr_feats)  # type: ignore
+            batch.nbr_mask.append(nbr_mask)  # type: ignore
+
         return batch
 
 
@@ -305,20 +316,33 @@ class RecencyNeighborHook:
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
                 seed = [batch.src, batch.dst]
+                times = [batch.time.repeat(2)]  # Real link times
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
+
+                    # This is a heuristic. For our fake (negative) link times,
+                    # we pick random time stamps within temporal window of the batch.
+                    # Using random times on the whole graph will likely produce information
+                    # leakage, making the prediction easier than it should be.
+                    fake_times = torch.randint(
+                        int(batch.time.min().item()),
+                        int(batch.time.max().item()),
+                        (batch.neg.size(0),),
+                        device=device,
+                    )
+                    times.append(fake_times)
                 seed_nodes = torch.cat(seed)
-                seed_times = batch.time.repeat(3)  # TODO: Won't work for tgb
+                seed_times = torch.cat(times)
             else:
                 mask = batch.nbr_mask[hop - 1].bool()  # type: ignore
                 seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1][mask].flatten()  # type: ignore
 
             B = len(seed_nodes)
-            nbr_nids = torch.empty(B, num_nbrs, dtype=torch.long, device=device)
-            nbr_times = torch.empty(B, num_nbrs, dtype=torch.long, device=device)
-            nbr_feats = torch.empty(B, num_nbrs, dg.edge_feats_dim, device=device)  # type: ignore
+            nbr_nids = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
+            nbr_times = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
+            nbr_feats = torch.zeros(B, num_nbrs, dg.edge_feats_dim, device=device)  # type: ignore
             nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
 
             unique, inv_idx = seed_nodes.unique(return_inverse=True)

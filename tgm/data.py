@@ -451,13 +451,7 @@ class DGData:
                     f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity or use an ordered time_delta ('r')"
                 )
 
-            # TODO: int conversion may need some thought
             time_factor = int(tgb_time_delta.convert(time_delta))
-
-            # Note: timestamps (and edge list) share memory with the underlying TGB object
-            # due to the .from_numpy() construction. This is an optimization that is valid
-            # since the tgb arrays are discarded afterwards anyway. Warning that this timestamps
-            # remapping modifies the associated array.
             timestamps *= time_factor
             if node_timestamps is not None:
                 node_timestamps *= time_factor
