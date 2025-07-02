@@ -58,6 +58,11 @@ def data_with_features():
     )
 
 
+@pytest.mark.skip('TODO')
+def test_discretize_reduce_op_first():
+    pass
+
+
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
 def test_get_start_time_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)

@@ -74,8 +74,12 @@ class DGraph:
 
         # Note: If we simply return a new storage this will 2x our peak memory since the GC
         # won't be able to clean up the current graph storage while `self` is alive.
-        new_data = self._storage.discretize(time_granularity, reduce_op)
-        dg = DGraph(new_data, time_delta=time_granularity, device=self.device)
+        new_data = self._storage.discretize(
+            old_time_granularity=self.time_delta,
+            new_time_granularity=time_granularity,
+            reduce_op=reduce_op,
+        )
+        dg = DGraph(data=new_data, time_delta=time_granularity, device=self.device)
         return dg
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:

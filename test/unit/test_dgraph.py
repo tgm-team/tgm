@@ -5,6 +5,7 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm._storage import DGStorage
 from tgm.data import DGData
 from tgm.timedelta import TimeDeltaDG
 
@@ -131,16 +132,30 @@ def test_discretize_bad_too_granular(data):
 
 
 def test_discretize_bad_reduce_op(data):
-    dg = DGraph(data, time_delta='m')
+    dg = DGraph(data, time_delta='s')
     with pytest.raises(ValueError):
-        dg.discretize(time_granularity='s', reduce_op='foo')
+        dg.discretize(time_granularity='m', reduce_op='foo')
 
 
 @pytest.mark.skip('TODO')
-def test_discretize_reduce_first():
+def test_discretize_reduce_first_api(data):
     pass
 
 
+def test_discretize_reduce_first_call(data):
+    dg = DGraph(data, time_delta='s')
+    with patch.object(DGStorage, 'discretize') as mock:
+        mock.return_value = dg._storage
+
+        _ = dg.discretize(time_granularity='m', reduce_op='first')
+        mock.assert_called_once_with(
+            old_time_granularity=TimeDeltaDG('s'),
+            new_time_granularity=TimeDeltaDG('m'),
+            reduce_op='first',
+        )
+
+
+@pytest.mark.skip('TODO')
 def test_materialize(data):
     dg = DGraph(data)
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)

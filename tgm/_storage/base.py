@@ -24,7 +24,10 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def discretize(
-        self, time_granularity: TimeDeltaDG | str, reduce_op: Literal['first']
+        self,
+        old_time_granularity: TimeDeltaDG,
+        new_time_granularity: TimeDeltaDG,
+        reduce_op: Literal['first'],
     ) -> 'DGStorageBase': ...
 
     @abstractmethod
