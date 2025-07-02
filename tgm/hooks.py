@@ -248,7 +248,7 @@ class RecencyNeighborHook:
     Args:
         num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
-        edge_feats_dim (Optional[int])
+        edge_feats_dim (int): Edge feature dimension on the dynamic graph.
 
     Raises:
         ValueError: If the num_nbrs list is empty.
@@ -265,6 +265,7 @@ class RecencyNeighborHook:
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
 
+        # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
         self._nbr_nids = torch.full((num_nodes, self._max_nbrs), -1, dtype=torch.long)
         self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
         self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
@@ -302,7 +303,7 @@ class RecencyNeighborHook:
                     # leakage, making the prediction easier than it should be.
                     fake_times = torch.randint(
                         int(batch.time.min().item()),
-                        int(batch.time.max().item()),
+                        int(batch.time.max().item()) + 1,
                         (batch.neg.size(0),),
                         device=device,
                     )
@@ -314,10 +315,10 @@ class RecencyNeighborHook:
                 seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1][mask].flatten()  # type: ignore
 
-            nbr_nids = self._nbr_nids[seed_nodes, :num_nbrs]
-            nbr_times = self._nbr_times[seed_nodes, :num_nbrs]
-            nbr_feats = self._nbr_feats[seed_nodes, :num_nbrs]
-            nbr_mask = self._nbr_mask[seed_nodes, :num_nbrs]
+            nbr_nids = self._get_recent(self._nbr_nids, seed_nodes, num_nbrs)
+            nbr_times = self._get_recent(self._nbr_times, seed_nodes, num_nbrs)
+            nbr_feats = self._get_recent(self._nbr_feats, seed_nodes, num_nbrs)
+            nbr_mask = self._get_recent(self._nbr_mask, seed_nodes, num_nbrs)
 
             batch.nids.append(seed_nodes)  # type: ignore
             batch.times.append(seed_times)  # type: ignore
@@ -328,6 +329,15 @@ class RecencyNeighborHook:
 
         self._update(batch)
         return batch
+
+    def _get_recent(
+        self, x: torch.Tensor, node_ids: torch.Tensor, k: int
+    ) -> torch.Tensor:
+        ptr = self._nbr_ptr[node_ids].unsqueeze(1)
+        offsets = torch.arange(k, device=node_ids.device).unsqueeze(0)
+        indices = (ptr - 1 - offsets) % self._max_nbrs
+        x_recent = x[node_ids.unsqueeze(1), indices]
+        return x_recent
 
     def _update(self, batch: DGBatch) -> None:
         src, dst, time = batch.src, batch.dst, batch.time
