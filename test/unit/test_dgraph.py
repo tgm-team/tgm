@@ -6,6 +6,7 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
+from tgm.timedelta import TimeDeltaDG
 
 
 @pytest.fixture
@@ -109,18 +110,7 @@ def test_init_construct_data():
     data = 'foo.csv'
     with patch.object(DGData, 'from_any') as mock:
         _ = DGraph(data)
-        mock.assert_called_once_with(data)
-
-
-def test_init_get_tgb_time_delta(data):
-    _data = 'tgbl-foo'
-    mock_td = {'tgbl-foo': 'bar'}
-    with (
-        patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td),
-        patch.object(DGData, 'from_any', return_value=data),
-    ):
-        dg = DGraph(_data)
-        assert dg.time_delta == 'bar'
+        mock.assert_called_once_with(data, TimeDeltaDG('r'))
 
 
 def test_str(data):

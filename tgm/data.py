@@ -10,6 +10,8 @@ import numpy as np
 import torch
 from torch import Tensor
 
+from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
+
 
 @dataclass
 class DGData:
@@ -350,7 +352,13 @@ class DGData:
         )
 
     @classmethod
-    def from_tgb(cls, name: str, split: str = 'all', **kwargs: Any) -> DGData:
+    def from_tgb(
+        cls,
+        name: str,
+        split: str = 'all',
+        time_delta: TimeDeltaDG | None = None,
+        **kwargs: Any,
+    ) -> DGData:
         def _check_tgb_import() -> tuple['LinkPropPredDataset', 'NodePropPredDataset']:  # type: ignore
             try:
                 from tgb.linkproppred.dataset import LinkPropPredDataset
@@ -431,6 +439,21 @@ class DGData:
         if dataset.node_feat is not None:
             static_node_feats = torch.from_numpy(dataset.node_feat)
 
+        # Remap timestamps if a custom non-ordered time delta was supplied
+        if time_delta is not None and not time_delta.is_ordered:
+            tgb_time_delta = TGB_TIME_DELTAS[name]
+
+            if time_delta.is_coarser_than(tgb_time_delta):
+                raise ValueError(
+                    f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity or use an ordered time_delta ('r')"
+                )
+
+            # TODO: int conversion may need some thought
+            time_factor = int(tgb_time_delta.convert(time_delta))
+            timestamps *= time_factor
+            if node_timestamps is not None:
+                node_timestamps *= time_factor
+
         return cls.from_raw(
             edge_timestamps=timestamps,
             edge_index=edge_index,
@@ -445,12 +468,13 @@ class DGData:
     def from_any(
         cls,
         data: str | pathlib.Path | 'pandas.DataFrame',  # type: ignore
+        time_delta: TimeDeltaDG | None = None,
         **kwargs: Any,
     ) -> DGData:
         if isinstance(data, (str, pathlib.Path)):
             data_str = str(data)
             if data_str.startswith('tgbl-') or data_str.startswith('tgbn-'):
-                return cls.from_tgb(name=data_str, **kwargs)
+                return cls.from_tgb(name=data_str, time_delta=time_delta, **kwargs)
             if data_str.endswith('.csv'):
                 return cls.from_csv(data, **kwargs)
             raise ValueError(
