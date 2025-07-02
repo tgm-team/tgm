@@ -40,8 +40,6 @@ class DGDataLoader(torch.utils.data.DataLoader):
 
         if dg_ordered and not batch_ordered:
             raise ValueError('Cannot iterate ordered dg using non-ordered batch_unit')
-        if not dg_ordered and batch_ordered:
-            raise ValueError('Cannot iterate non-ordered dg using ordered batch_unit')
         if not dg_ordered and not batch_ordered:
             # Ensure the graph time unit is more granular than batch time unit.
             batch_time_delta = TimeDeltaDG(batch_unit, value=batch_size)
