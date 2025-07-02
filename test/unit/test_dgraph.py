@@ -103,7 +103,7 @@ def test_init_from_storage(data):
 
 def test_init_bad_args(data):
     with pytest.raises(ValueError):
-        _ = DGraph(data, time_delta='r')
+        _ = DGraph(data, time_delta='foo')
 
 
 def test_init_construct_data():
