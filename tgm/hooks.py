@@ -315,10 +315,13 @@ class RecencyNeighborHook:
                 seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1][mask].flatten()  # type: ignore
 
-            nbr_nids = self._get_recent(self._nbr_nids, seed_nodes, num_nbrs)
-            nbr_times = self._get_recent(self._nbr_times, seed_nodes, num_nbrs)
-            nbr_feats = self._get_recent(self._nbr_feats, seed_nodes, num_nbrs)
-            nbr_mask = self._get_recent(self._nbr_mask, seed_nodes, num_nbrs)
+            recency_indices = self._get_recency_indices(seed_nodes, num_nbrs)
+            seed_nodes_ = seed_nodes.unsqueeze(1)
+
+            nbr_nids = self._nbr_nids[seed_nodes_, recency_indices]
+            nbr_times = self._nbr_times[seed_nodes_, recency_indices]
+            nbr_feats = self._nbr_feats[seed_nodes_, recency_indices]
+            nbr_mask = self._nbr_mask[seed_nodes_, recency_indices]
 
             batch.nids.append(seed_nodes)  # type: ignore
             batch.times.append(seed_times)  # type: ignore
@@ -330,14 +333,11 @@ class RecencyNeighborHook:
         self._update(batch)
         return batch
 
-    def _get_recent(
-        self, x: torch.Tensor, node_ids: torch.Tensor, k: int
-    ) -> torch.Tensor:
+    def _get_recency_indices(self, node_ids: torch.Tensor, k: int) -> torch.Tensor:
         ptr = self._nbr_ptr[node_ids].unsqueeze(1)
         offsets = torch.arange(k, device=node_ids.device).unsqueeze(0)
         indices = (ptr - 1 - offsets) % self._max_nbrs
-        x_recent = x[node_ids.unsqueeze(1), indices]
-        return x_recent
+        return indices
 
     def _update(self, batch: DGBatch) -> None:
         src, dst, time = batch.src, batch.dst, batch.time
