@@ -70,15 +70,13 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_nbrs(
         self,
         seed_nodes: Tensor,
-        num_nbrs: List[int],
+        num_nbrs: int,
         slice: DGSliceTracker,
-    ) -> Tuple[List[Tensor], ...]:
+    ) -> Tuple[Tensor, ...]:
         # TODO: Take in a sample_func to enable more than uniform sampling
-        if len(num_nbrs) > 1:
-            raise NotImplementedError(f'Multi-hop not implemented')
-        n_nbrs = num_nbrs[0]
-        unique, inverse_indices = seed_nodes.unique(return_inverse=True)
-        seed_nodes_set = set(unique.tolist())
+        device = seed_nodes.device
+        unique_nodes, inverse_indices = seed_nodes.unique(return_inverse=True)
+        seed_nodes_set = set(unique_nodes.tolist())
 
         lb_idx, ub_idx = self._binary_search(slice)
         edge_mask = (self._data.edge_event_idx >= lb_idx) & (
@@ -87,42 +85,51 @@ class DGStorageArrayBackend(DGStorageBase):
         edges = self._data.edge_index[edge_mask]
         event_ids = self._data.edge_event_idx[edge_mask]
 
-        nbrs: Dict[int, Set[Tuple[int, int]]] = {node: set() for node in seed_nodes_set}
-        for edge, i in zip(edges, event_ids):
-            src, dst = edge
-            # Use 0/1 flag to denote dst/src neighbor, respectively
-            if src in seed_nodes_set:
-                nbrs[src.item()].add((i, 1))
-            if dst in seed_nodes_set:
-                nbrs[dst.item()].add((i, 0))
+        src_list = edges[0].tolist()
+        dst_list = edges[1].tolist()
+        eid_list = event_ids.tolist()
 
-        # TODO: Node feats
-        batch_size = len(seed_nodes)
-        nbr_nids = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
-        nbr_times = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
-        nbr_feats = torch.zeros(batch_size, n_nbrs, self.get_edge_feats_dim())  # type: ignore
-        nbr_mask = torch.zeros(batch_size, n_nbrs, dtype=torch.long)
-        for i, nbrs_set in enumerate(nbrs.values()):
-            node_nbrs = list(nbrs_set)
+        # This is a loop over the entire graph up to (not including) the current batch end time
+        # which results in quadratic cost for a single epoch. Consider raises a warning to let the
+        # user know that this is not the right backend for this.
+        nbrs: Dict[int, List[Tuple[int, int]]] = {node: [] for node in seed_nodes_set}
+        for s, d, i in zip(src_list, dst_list, eid_list):
+            if s in nbrs:
+                nbrs[s].append((i, d))
+            if d in nbrs:
+                nbrs[d].append((i, s))
+
+        B = len(seed_nodes)
+        nbr_nids = torch.full((B, num_nbrs), -1, dtype=torch.long, device=device)
+        nbr_times = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
+        nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
+        nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
+
+        for i, node in enumerate(unique_nodes.tolist()):
+            node_nbrs = nbrs[node]
             if not len(node_nbrs):
                 continue
-            if n_nbrs != -1 and len(node_nbrs) > n_nbrs:
-                node_nbrs = random.sample(node_nbrs, k=n_nbrs)
 
-            nbr_nids_, nbr_times_, nbr_feats_ = [], [], []
-            for event_idx, edge_idx in node_nbrs:
-                nbr_nids_.append(self._data.edge_index[event_idx, edge_idx].item())
-                nbr_times_.append(self._data.timestamps[event_idx])
+            # Subsample if we have more neighbours than was queried
+            if num_nbrs != -1 and len(node_nbrs) > num_nbrs:
+                node_nbrs = random.sample(node_nbrs, k=num_nbrs)
+
+            nbr_ids, times, feats = [], [], []
+            for eid, nbr_id in node_nbrs:
+                nbr_ids.append(nbr_id)
+                times.append(self._data.timestamps[eid])
                 if self._data.edge_feats is not None:
-                    nbr_feats_.append(self._data.edge_feats[event_idx])
+                    feats.append(self._data.edge_feats[eid])
 
-            nn = len(node_nbrs)
+            nn = len(nbr_ids)
             mask = inverse_indices == i
-            nbr_nids[mask, :nn] = torch.LongTensor(nbr_nids_)
-            nbr_times[mask, :nn] = torch.LongTensor(nbr_times_)
-            nbr_feats[mask, :nn] = torch.stack(nbr_feats_)
+            nbr_nids[mask, :nn] = torch.tensor(nbr_ids, dtype=torch.long, device=device)
+            nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.long, device=device)
+            if self._data.edge_feats is not None:
+                nbr_feats[mask, :nn] = torch.stack(feats).to(device)
             nbr_mask[mask, :nn] = 1
-        return [seed_nodes], [nbr_nids], [nbr_times], [nbr_feats], [nbr_mask]
+
+        return nbr_nids, nbr_times, nbr_feats, nbr_mask
 
     def get_static_node_feats(self) -> Optional[Tensor]:
         return self._data.static_node_feats
