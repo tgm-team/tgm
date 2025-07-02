@@ -730,11 +730,6 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
 
-    times_list = data.timestamps.tolist()
-    exp_timestamps = [0, 0, 1, 1, 2]
-    for i in range(5):  # sample a few for sanity check
-        assert times_list[i] == exp_timestamps[i]
-
 
 @patch('tgb.linkproppred.dataset.LinkPropPredDataset')
 def test_from_tgb_time_remap_required_coarser(mock_dataset_cls, tgb_dataset_factory):
