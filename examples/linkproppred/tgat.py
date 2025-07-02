@@ -118,6 +118,7 @@ class TGAT(nn.Module):
         z_src = z[batch.global_to_local(batch.src)]
         z_dst = z[batch.global_to_local(batch.dst)]
         z_neg = z[batch.global_to_local(batch.neg)]
+
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out

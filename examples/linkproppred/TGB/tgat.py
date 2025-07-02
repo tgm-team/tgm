@@ -143,6 +143,7 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
         z = encoder(batch)
+
         z_src = z[batch.global_to_local(batch.src)]
         z_dst = z[batch.global_to_local(batch.dst)]
         z_neg = z[batch.global_to_local(batch.neg)]
