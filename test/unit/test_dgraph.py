@@ -118,6 +118,29 @@ def test_str(data):
     assert isinstance(dg.__str__(), str)
 
 
+def test_discretize_bad_ordered_graph(data):
+    dg = DGraph(data)
+    with pytest.raises(ValueError):
+        dg.discretize(time_granularity='s')
+
+
+def test_discretize_bad_too_granular(data):
+    dg = DGraph(data, time_delta='m')
+    with pytest.raises(ValueError):
+        dg.discretize(time_granularity='s')
+
+
+def test_discretize_bad_reduce_op(data):
+    dg = DGraph(data, time_delta='m')
+    with pytest.raises(ValueError):
+        dg.discretize(time_granularity='s', reduce_op='foo')
+
+
+@pytest.mark.skip('TODO')
+def test_discretize_reduce_first():
+    pass
+
+
 def test_materialize(data):
     dg = DGraph(data)
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)

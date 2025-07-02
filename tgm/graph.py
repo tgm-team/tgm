@@ -39,7 +39,7 @@ class DGraph:
         self._slice = DGSliceTracker()
 
     def discretize(
-        self, time_granularity: TimeDeltaDG | str, reduce_op: Literal['first']
+        self, time_granularity: TimeDeltaDG | str, reduce_op: Literal['first'] = 'first'
     ) -> DGraph:
         r"""Temporally discretize the time granularity on the graph according to time_granularity.
 
@@ -50,6 +50,7 @@ class DGraph:
         Raises:
             ValueError: If the current graph time granularity is ordered.
             ValueError: If time_granularity is not coarser than the current time granularity, or the current time granularity on the graph.
+            ValueError: If the reduce_op is not an implemented reduction.
 
         Note: Produces a deep-copy of the storage, making this an expensive operation.
         Note: Since we don't modify the graph storage in-place, this will result in 2x peak memory.
