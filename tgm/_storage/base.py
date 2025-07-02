@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Set, Tuple
+from typing import Optional, Set, Tuple
 
 from torch import Tensor
 
@@ -61,6 +61,6 @@ class DGStorageBase(ABC):
     def get_nbrs(
         self,
         seed_nodes: Tensor,
-        num_nbrs: List[int],
+        num_nbrs: int,
         slice: DGSliceTracker,
-    ) -> Tuple[List[Tensor], ...]: ...
+    ) -> Tuple[Tensor, ...]: ...
