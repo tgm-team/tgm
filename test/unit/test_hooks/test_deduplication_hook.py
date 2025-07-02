@@ -16,14 +16,7 @@ def dg():
 
 def test_hook_dependancies():
     assert DeduplicationHook.requires == set()
-    assert DeduplicationHook.produces == {
-        'unique_nids',
-        'nid_to_idx',
-        'src_idx',
-        'dst_idx',
-        'neg_idx',
-        'nbr_nids_idx',
-    }
+    assert DeduplicationHook.produces == {'unique_nids', 'global_to_local'}
 
 
 def test_dedup(dg):
@@ -34,10 +27,11 @@ def test_dedup(dg):
         processed_batch.unique_nids, torch.LongTensor([1, 2, 4, 8])
     )
     torch.testing.assert_close(
-        processed_batch.nid_to_idx, torch.LongTensor([-1, 0, 1, -1, 2, -1, -1, -1, 3])
+        processed_batch.global_to_local(batch.src), torch.LongTensor([1, 1, 0])
     )
-    torch.testing.assert_close(processed_batch.src_idx, torch.LongTensor([1, 1, 0]))
-    torch.testing.assert_close(processed_batch.dst_idx, torch.LongTensor([1, 2, 3]))
+    torch.testing.assert_close(
+        processed_batch.global_to_local(batch.dst), torch.LongTensor([1, 2, 3])
+    )
 
 
 def test_dedup_with_negatives(dg):
@@ -50,12 +44,14 @@ def test_dedup_with_negatives(dg):
         processed_batch.unique_nids, torch.LongTensor([1, 2, 4, 5, 8, 10])
     )
     torch.testing.assert_close(
-        processed_batch.nid_to_idx,
-        torch.LongTensor([-1, 0, 1, -1, 2, 3, -1, -1, 4, -1, 5]),
+        processed_batch.global_to_local(batch.src), torch.LongTensor([1, 1, 0])
     )
-    torch.testing.assert_close(processed_batch.src_idx, torch.LongTensor([1, 1, 0]))
-    torch.testing.assert_close(processed_batch.dst_idx, torch.LongTensor([1, 2, 4]))
-    torch.testing.assert_close(processed_batch.neg_idx, torch.LongTensor([0, 3, 5]))
+    torch.testing.assert_close(
+        processed_batch.global_to_local(batch.dst), torch.LongTensor([1, 2, 4])
+    )
+    torch.testing.assert_close(
+        processed_batch.global_to_local(batch.neg), torch.LongTensor([0, 3, 5])
+    )
 
 
 def test_dedup_with_nbrs(dg):
@@ -72,12 +68,14 @@ def test_dedup_with_nbrs(dg):
         processed_batch.unique_nids, torch.LongTensor([1, 2, 4, 5, 8, 10])
     )
     torch.testing.assert_close(
-        processed_batch.nid_to_idx,
-        torch.LongTensor([-1, 0, 1, -1, 2, 3, -1, -1, 4, -1, 5]),
+        processed_batch.global_to_local(batch.src), torch.LongTensor([1, 1, 0])
     )
-    torch.testing.assert_close(processed_batch.src_idx, torch.LongTensor([1, 1, 0]))
-    torch.testing.assert_close(processed_batch.dst_idx, torch.LongTensor([1, 2, 4]))
     torch.testing.assert_close(
-        processed_batch.nbr_nids_idx[0], torch.LongTensor([0, 3])
+        processed_batch.global_to_local(batch.dst), torch.LongTensor([1, 2, 4])
     )
-    torch.testing.assert_close(processed_batch.nbr_nids_idx[1], torch.LongTensor([5]))
+    torch.testing.assert_close(
+        processed_batch.global_to_local(batch.nbr_nids[0]), torch.LongTensor([0, 3])
+    )
+    torch.testing.assert_close(
+        processed_batch.global_to_local(batch.nbr_nids[1]), torch.LongTensor([5])
+    )

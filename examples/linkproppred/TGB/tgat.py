@@ -87,22 +87,21 @@ class TGAT(nn.Module):
         z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
 
         for hop in reversed(range(self.num_layers)):
-            if batch.nids[hop].numel() == 0:
+            seed_nodes = batch.nids[hop]
+            nbrs = batch.nbr_nids[hop]
+            nbr_mask = batch.nbr_mask[hop]
+            if seed_nodes.numel() == 0:
                 continue
 
             # TODO: Check and read static node features
-            node_feat = torch.zeros(
-                (*batch.nids[hop].shape, self.embed_dim), device=device
-            )
-            node_time_feat = self.time_encoder(torch.zeros_like(batch.nids[hop]))
+            node_feat = torch.zeros((*seed_nodes.shape, self.embed_dim), device=device)
+            node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
+            nbr_feat = torch.zeros((*nbrs.shape, self.embed_dim), device=device)
             if hop < self.num_layers - 1:
-                nbr_feat = z[batch.nbr_nids_idx[hop]]
-            else:
-                nbr_feat = torch.zeros(
-                    (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
-                )
+                valid_nbrs = nbrs[nbr_mask.bool()]
+                nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
             nbr_time_feat = self.time_encoder(delta_time)
@@ -113,9 +112,9 @@ class TGAT(nn.Module):
                 edge_feat=batch.nbr_feats[hop],
                 nbr_node_feat=nbr_feat,
                 nbr_time_feat=nbr_time_feat,
-                nbr_mask=batch.nbr_mask[hop],
+                nbr_mask=nbr_mask,
             )
-            z[batch.nid_to_idx[batch.nids[hop]]] = out
+            z[batch.global_to_local(seed_nodes)] = out
         return z
 
 
@@ -144,9 +143,14 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
         z = encoder(batch)
-        z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
+
+        z_src = z[batch.global_to_local(batch.src)]
+        z_dst = z[batch.global_to_local(batch.dst)]
+        z_neg = z[batch.global_to_local(batch.neg)]
+
         pos_out = decoder(z_src, z_dst)
         neg_out = decoder(z_src, z_neg)
+
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
@@ -173,8 +177,8 @@ def eval(
             dst_ids = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
-            z_src = z[batch.nid_to_idx[src_ids]]
-            z_dst = z[batch.nid_to_idx[dst_ids]]
+            z_src = z[batch.global_to_local(src_ids)]
+            z_dst = z[batch.global_to_local(dst_ids)]
             y_pred = decoder(z_src, z_dst)
 
             input_dict = {

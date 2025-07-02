@@ -100,14 +100,7 @@ class DeviceTransferHook:
 
 class DeduplicationHook:
     requires: Set[str] = set()
-    produces = {
-        'unique_nids',
-        'nid_to_idx',
-        'src_idx',
-        'dst_idx',
-        'neg_idx',
-        'nbr_nids_idx',
-    }
+    produces = {'unique_nids', 'global_to_local'}
 
     r"""Deduplicate node IDs from batch fields and create index mappings to unique node embeddings.
 
@@ -115,11 +108,8 @@ class DeduplicationHook:
     """
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        device = batch.src.device
-
         nids = [batch.src, batch.dst]
         if hasattr(batch, 'neg'):
-            batch.neg = batch.neg.to(device)
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
@@ -127,24 +117,10 @@ class DeduplicationHook:
                 nids.append(hop_nids[hop_mask])
 
         all_nids = torch.cat(nids, dim=0)
-        unique_nids = torch.unique(all_nids)
-        max_nid = int(unique_nids.max().item())
-        nid_to_idx = torch.full((max_nid + 1,), -1, dtype=torch.long, device=device)
-        nid_to_idx[unique_nids] = torch.arange(len(unique_nids), device=device)
+        unique_nids = torch.unique(all_nids, sorted=True)
 
         batch.unique_nids = unique_nids  # type: ignore
-        batch.nid_to_idx = nid_to_idx  # type: ignore
-        batch.src_idx = nid_to_idx[batch.src]  # type: ignore
-        batch.dst_idx = nid_to_idx[batch.dst]  # type: ignore
-        if hasattr(batch, 'neg'):
-            batch.neg_idx = nid_to_idx[batch.neg]  # type: ignore
-        if hasattr(batch, 'nbr_nids'):
-            batch.nbr_nids_idx = []  # type: ignore
-            for hop in range(len(batch.nbr_nids)):
-                hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
-                nbr_nids_idx = torch.full_like(hop_nids, -1)
-                nbr_nids_idx[hop_mask] = nid_to_idx[hop_nids[hop_mask]]
-                batch.nbr_nids_idx.append(nbr_nids_idx)  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
 
         return batch
 
