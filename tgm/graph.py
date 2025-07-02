@@ -48,19 +48,33 @@ class DGraph:
             reduce_op (str): The reduce operation to apply when aggregating events.
 
         Raises:
-            ValueError: If time_granularity is not coarser than the current time granularity.
+            ValueError: If the current graph time granularity is ordered.
+            ValueError: If time_granularity is not coarser than the current time granularity, or the current time granularity on the graph.
 
         Note: Produces a deep-copy of the storage, making this an expensive operation.
+        Note: Since we don't modify the graph storage in-place, this will result in 2x peak memory.
         """
         if isinstance(time_granularity, str):
             time_granularity = TimeDeltaDG(time_granularity)
 
+        if self.time_delta.is_ordered:
+            raise ValueError('Cannot discretize a graph with ordered time granularity')
+        if self.time_delta.is_coarser_than(time_granularity):
+            raise ValueError(
+                f'Cannot discretize to a time_granularity ({time_granularity}) which is strictly'
+                f'coarser than the time granularity on the current graph ({self.time_delta})'
+            )
+
+        valid_ops = ['first']
+        if reduce_op not in valid_ops:
+            raise ValueError(
+                f'Unknown reduce_op: {reduce_op}, expected one of: {valid_ops}'
+            )
+
         # Note: If we simply return a new storage this will 2x our peak memory since the GC
         # won't be able to clean up the current graph storage while `self` is alive.
-
-        # Temporary
-        data = self._storage
-        dg = DGraph(data, time_delta=time_granularity, device=self.device)
+        new_data = self._storage.discretize(time_granularity, reduce_op)
+        dg = DGraph(new_data, time_delta=time_granularity, device=self.device)
         return dg
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:

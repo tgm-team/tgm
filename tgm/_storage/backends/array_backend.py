@@ -1,10 +1,11 @@
 import random
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Literal, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
 
 from tgm.data import DGData
+from tgm.timedelta import TimeDeltaDG
 
 from ..base import DGSliceTracker, DGStorageBase
 
@@ -18,6 +19,12 @@ class DGStorageArrayBackend(DGStorageBase):
         # Binary search caches for finding timestamps in event array
         self._lb_cache: Dict[Optional[int], int] = {}
         self._ub_cache: Dict[Optional[int], int] = {}
+
+    def discretize(
+        self, time_granularity: TimeDeltaDG | str, reduce_op: Literal['first']
+    ) -> 'DGStorageBase':
+        # TODO:
+        return self
 
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
