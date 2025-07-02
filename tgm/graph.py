@@ -41,11 +41,11 @@ class DGraph:
     def discretize(
         self, time_granularity: TimeDeltaDG | str, reduce_op: Literal['first'] = 'first'
     ) -> DGraph:
-        r"""Temporally discretize the time granularity on the graph according to time_granularity.
+        r"""Downsample the temporal graph by changing time granularity and reducing events within the same coarse timestamp bucket.
 
         Args:
             time_granularity (TimeDeltaDG | str): The new time granularity which must be coarser than the current time granularity.
-            reduce_op (str): The reduce operation to apply when aggregating events.
+            reduce_op (str): The reduce operation to apply for grouped events.
 
         Raises:
             ValueError: If the current graph time granularity is ordered.

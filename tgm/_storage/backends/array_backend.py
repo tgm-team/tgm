@@ -27,7 +27,56 @@ class DGStorageArrayBackend(DGStorageBase):
         reduce_op: Literal['first'],
     ) -> 'DGStorageBase':
         # TODO:
-        return self
+        # We can assume that new granularity is coarser than old time granularity
+        # since we checked args in the caller.
+        time_factor = old_time_granularity.convert(new_time_granularity)
+        buckets = (self._data.timestamps.float() * time_factor).floor().long()
+
+        if reduce_op == 'first':
+            pass
+        else:
+            raise NotImplementedError(f'No reduction implemented for op: {reduce_op}')
+
+        # Standard array differences since we know buckets are sorted
+        # Always keep first index, and the slots where diff occurs (coarse time change)
+        first = torch.LongTensor([0])
+        diff = torch.nonzero(buckets[1:] != buckets[:-1], as_tuple=False).squeeze() + 1
+        selected = torch.cat([first, diff])
+
+        # Edge events
+        edge_mask = torch.isin(self._data.edge_event_idx, selected)
+        edge_timestamps = self._data.timestamps[self._data.edge_event_idx][edge_mask]
+        edge_index = self._data.edge_index[edge_mask]
+        edge_feats = None
+        if self._data.edge_feats is not None:
+            edge_feats = self._data.edge_feats[edge_mask]
+
+        # Node events
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None
+        if self._data.node_event_idx is not None:
+            node_mask = torch.isin(self._data.node_event_idx, selected)
+            node_timestamps = self._data.timestamps[self._data.node_event_idx][
+                node_mask
+            ]
+            node_ids = self._data.node_ids[node_mask]  # type: ignore
+            dynamic_node_feats = None
+            if self._data.dynamic_node_feats is not None:
+                dynamic_node_feats = self._data.dynamic_node_feats[node_mask]
+
+        static_node_feats = None
+        if self._data.static_node_feats is not None:  # Need a deep copy
+            static_node_feats = self._data.static_node_feats.clone()
+
+        new_data = DGData.from_raw(
+            edge_timestamps=edge_timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            static_node_feats=static_node_feats,
+        )
+        return DGStorageArrayBackend(new_data)
 
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
