@@ -9,7 +9,7 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
+from tgm import DGBatch, DGraph
 from tgm.hooks import NegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
@@ -55,7 +55,9 @@ class GCLSTM_Model(nn.Module):
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
-        z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
+        z_src = z[batch.global_to_local(batch.src)]
+        z_dst = z[batch.global_to_local(batch.dst)]
+        z_neg = z[batch.global_to_local(batch.neg)]
         pos_out = self.decoder(z_src, z_dst)
         neg_out = self.decoder(z_src, z_neg)
         return pos_out, neg_out, h_0, c_0

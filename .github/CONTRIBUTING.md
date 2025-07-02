@@ -92,10 +92,10 @@ It is recommended to use these hooks when commiting code remotely but they can a
 ## Unit Testing
 
 The TGM test suite is located uner `test/`.
-Run the entire test suite with
+Run the entire (unit) test suite with
 
 ```sh
-uv run pytest
+uv run pytest test/unit
 ```
 
 ## Continuous Integration

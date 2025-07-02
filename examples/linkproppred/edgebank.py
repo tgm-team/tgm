@@ -5,7 +5,7 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm.graph import DGraph
+from tgm import DGraph
 from tgm.hooks import NegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
