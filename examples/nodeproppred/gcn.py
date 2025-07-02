@@ -14,7 +14,7 @@ from tgb.nodeproppred.evaluate import Evaluator
 from torch_geometric.nn import GCNConv
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
+from tgm import DGBatch, DGraph
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
