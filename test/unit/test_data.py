@@ -574,157 +574,160 @@ def test_from_pandas_with_node_features():
     )
 
 
-# Constants for split sizes
-num_events = 157474
-num_train = 110232
-num_val = 23621
-num_test = 23621
+@pytest.fixture
+def tgb_dataset_factory():
+    def _make_dataset(split: str = 'all', with_node_feats: bool = False):
+        num_events, num_train, num_val = 10, 7, 2
+        train_indices = np.arange(0, num_train)
+        val_indices = np.arange(num_train, num_train + num_val)
+        test_indices = np.arange(num_train + num_val, num_events)
 
-# Index boundaries for each split
-train_indices = np.arange(0, num_train)
-val_indices = np.arange(num_train, num_train + num_val)
-test_indices = np.arange(num_train + num_val, num_events)
+        sources = np.random.randint(0, 1000, size=num_events)
+        destinations = np.random.randint(0, 1000, size=num_events)
+        timestamps = np.arange(num_events)
+        edge_feat = None
+
+        train_mask = np.zeros(num_events, dtype=bool)
+        val_mask = np.zeros(num_events, dtype=bool)
+        test_mask = np.zeros(num_events, dtype=bool)
+
+        train_mask[train_indices] = True
+        val_mask[val_indices] = True
+        test_mask[test_indices] = True
+
+        mock_dataset = MagicMock()
+        mock_dataset.train_mask = train_mask
+        mock_dataset.val_mask = val_mask
+        mock_dataset.test_mask = test_mask
+        mock_dataset.num_edges = num_events
+        mock_dataset.full_data = {
+            'sources': sources,
+            'destinations': destinations,
+            'timestamps': timestamps,
+            'edge_feat': edge_feat,
+        }
+
+        if split == 'all':
+            num_nodes = 1 + max(np.max(sources), np.max(destinations))
+        else:
+            mask = {'train': train_mask, 'val': val_mask, 'test': test_mask}[split]
+            valid_src, valid_dst = sources[mask], destinations[mask]
+            num_nodes = 1 + max(np.max(valid_src), np.max(valid_dst))
+
+        if with_node_feats:
+            mock_dataset.node_feat = np.random.rand(num_nodes, 10)
+        else:
+            mock_dataset.node_feat = None
+
+        mock_dataset.full_data['node_label_dict'] = {}
+        for i in range(5):
+            mock_dataset.full_data['node_label_dict'][i] = {i: np.zeros(10)}
+
+        return mock_dataset
+
+    return _make_dataset
 
 
 @pytest.mark.parametrize(
-    'split,expected_indices,with_node_features',
-    [
-        ('train', train_indices, False),
-        ('val', val_indices, False),
-        ('test', test_indices, False),
-        ('all', np.arange(num_events), False),
-        ('train', train_indices, True),
-        ('val', val_indices, True),
-        ('test', test_indices, True),
-        ('all', np.arange(num_events), True),
-    ],
+    'split,with_node_feats',
+    [('train', False), ('train', True), ('val', True), ('test', True), ('all', True)],
 )
 @patch('tgb.linkproppred.dataset.LinkPropPredDataset')
-def test_from_tgb_with_static_node_features(
-    mock_dataset_cls, split, expected_indices, with_node_features
-):
-    sources = np.random.randint(0, 1000, size=num_events)
-    destinations = np.random.randint(0, 1000, size=num_events)
-    timestamps = np.arange(num_events)
-    edge_feat = None
+def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats):
+    dataset = tgb_dataset_factory(split, with_node_feats)
+    mock_dataset_cls.return_value = dataset
 
-    train_mask = np.zeros(num_events, dtype=bool)
-    train_mask[train_indices] = True
+    def _get_exp_edges():
+        src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
+        edges = np.stack([src, dst], axis=1)
+        if split == 'all':
+            return edges
+        mask = getattr(dataset, f'{split}_mask')
+        return edges[mask]
 
-    val_mask = np.zeros(num_events, dtype=bool)
-    val_mask[val_indices] = True
+    def _get_exp_times():
+        times = dataset.full_data['timestamps']
+        if split == 'all':
+            return times
+        mask = getattr(dataset, f'{split}_mask')
+        return times[mask]
 
-    test_mask = np.zeros(num_events, dtype=bool)
-    test_mask[test_indices] = True
-
-    mock_dataset = MagicMock()
-
-    if with_node_features:
-        num_nodes = 1 + max(np.max(sources), np.max(destinations))
-        mock_dataset.node_feat = np.random.rand(num_nodes, 10)
-    else:
-        mock_dataset.node_feat = None
-
-    mock_dataset.full_data = {
-        'sources': sources,
-        'destinations': destinations,
-        'timestamps': timestamps,
-        'edge_feat': edge_feat,
-    }
-    mock_dataset.train_mask = train_mask
-    mock_dataset.val_mask = val_mask
-    mock_dataset.test_mask = test_mask
-    mock_dataset.num_edges = num_events
-
-    mock_dataset_cls.return_value = mock_dataset
-
-    # Run the function
     data = DGData.from_tgb(name='tgbl-wiki', split=split)
-
-    # Assertions
     assert isinstance(data, DGData)
-
-    edges_list = data.edge_index.tolist()
-    times_list = data.timestamps.tolist()
-    for i, idx in enumerate(expected_indices[:5]):  # sample a few for sanity check
-        assert times_list[i] == int(timestamps[idx])
-        assert edges_list[i] == [int(sources[idx]), int(destinations[idx])]
+    np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
+    np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbl-wiki')
 
-    if with_node_features:
+    if with_node_feats:
         torch.testing.assert_close(
-            data.static_node_feats, torch.Tensor(mock_dataset.node_feat).double()
+            data.static_node_feats, torch.Tensor(dataset.node_feat).double()
         )
     else:
         assert data.static_node_feats is None
 
 
-@pytest.mark.parametrize(
-    'split,expected_indices',
-    [
-        ('train', train_indices),
-        ('all', np.arange(num_events)),
-    ],
-)
+@pytest.mark.parametrize('split', ['train', 'val', 'test', 'all'])
 @patch('tgb.nodeproppred.dataset.NodePropPredDataset')
-def test_from_tgb_with_node_events(mock_dataset_cls, split, expected_indices):
-    node_label_dict = {
-        0: {0: np.zeros(10)},
-        1: {1: np.zeros(10)},
-        2: {2: np.zeros(10)},
-        3: {3: np.zeros(10)},
-        4: {4: np.zeros(10)},
-    }
-    sources = np.arange(num_events)
-    destinations = np.arange(num_events)
-    timestamps = np.arange(num_events)
-    edge_feat = None
+def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
+    dataset = tgb_dataset_factory(split)
+    mock_dataset_cls.return_value = dataset
 
-    train_mask = np.zeros(num_events, dtype=bool)
-    train_mask[train_indices] = True
+    def _get_exp_edges():
+        src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
+        edges = np.stack([src, dst], axis=1)
+        if split == 'all':
+            return edges
+        mask = getattr(dataset, f'{split}_mask')
+        return edges[mask]
 
-    val_mask = np.zeros(num_events, dtype=bool)
-    val_mask[val_indices] = True
+    def _get_exp_times():
+        times = dataset.full_data['timestamps']
+        if split == 'all':
+            edge_times = times
+        else:
+            mask = getattr(dataset, f'{split}_mask')
+            edge_times = times[mask]
 
-    test_mask = np.zeros(num_events, dtype=bool)
-    test_mask[test_indices] = True
-
-    mock_dataset = MagicMock()
-    if split == 'train':
-        mask = train_mask
-    elif split == 'val':
-        mask = val_mask
-    elif split == 'test':
-        mask = test_mask
-    else:
-        mask = np.ones(num_events, dtype=bool)
-    num_nodes = 1 + max(np.max(sources[mask]), np.max(destinations[mask]))
-    mock_dataset.node_feat = np.random.rand(num_nodes, 10)
-    mock_dataset.full_data = {
-        'sources': sources,
-        'destinations': destinations,
-        'timestamps': timestamps,
-        'edge_feat': edge_feat,
-        'node_label_dict': node_label_dict,
-    }
-
-    mock_dataset.train_mask = train_mask
-    mock_dataset.val_mask = val_mask
-    mock_dataset.test_mask = test_mask
-    mock_dataset.num_edges = num_events
-
-    mock_dataset_cls.return_value = mock_dataset
+        # Node times get integrated into the global timestamp array
+        node_times = list(dataset.full_data['node_label_dict'].keys())
+        node_times = [t for t in node_times if edge_times.min() <= t < edge_times.max()]
+        exp_times = np.concatenate([edge_times, node_times])
+        exp_times.sort()
+        return exp_times
 
     data = DGData.from_tgb(name='tgbn-trade', split=split)
     assert isinstance(data, DGData)
-    node_ids_list = data.node_ids.tolist()
-    node_feats_list = data.dynamic_node_feats.tolist()
+    np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
+    np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
 
-    for i, idx in enumerate(expected_indices[:5]):  # sample a few for sanity check
-        assert node_ids_list[i] == list(node_label_dict[i].keys())[0]
-        assert node_feats_list[i] == node_label_dict[idx][idx].tolist()
+    # Assert valid node-centric data
+    times = dataset.full_data['timestamps']
+    if split == 'all':
+        edge_times = times
+    else:
+        mask = getattr(dataset, f'{split}_mask')
+        edge_times = times[mask]
+
+    full_node_dict = dataset.full_data['node_label_dict']
+    split_node_dict = {
+        t: v for t, v in full_node_dict.items() if edge_times[0] <= t < edge_times[-1]
+    }
+    if not len(split_node_dict):
+        assert data.node_ids is None
+        assert data.dynamic_node_feats is None
+    else:
+        exp_node_ids, exp_node_feats = [], []
+        for node_dict in split_node_dict.values():
+            nodes = list(node_dict.keys())[0]
+            feats = list(node_dict.values())[0].tolist()
+            exp_node_ids.append(nodes)
+            exp_node_feats.append(feats)
+        assert data.node_ids.tolist() == exp_node_ids
+        assert data.dynamic_node_feats.tolist() == exp_node_feats
+
+    # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
 
     times_list = data.timestamps.tolist()
@@ -874,6 +877,48 @@ def test_from_tgb_timestamp_remap_required_finer(
     exp_timestamps = [0, 0, 1, 1, 2]
     for i in range(5):  # sample a few for sanity check
         assert times_list[i] == time_factor * exp_timestamps[i]
+
+
+@patch('tgb.linkproppred.dataset.LinkPropPredDataset')
+def test_from_tgb_time_remap_required_coarser(mock_dataset_cls, tgb_dataset_factory):
+    dataset = tgb_dataset_factory()
+    mock_dataset_cls.return_value = dataset
+
+    custom_td = TimeDeltaDG('Y')
+    mock_td = {'tgbl-foo': TimeDeltaDG('s')}
+    with patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td):
+        with pytest.raises(ValueError):
+            DGData.from_tgb(name='tgbl-foo', time_delta=custom_td)
+
+
+@patch('tgb.linkproppred.dataset.LinkPropPredDataset')
+def test_from_tgb_time_remap_required_finer(mock_dataset_cls, tgb_dataset_factory):
+    dataset = tgb_dataset_factory()
+    mock_dataset_cls.return_value = dataset
+
+    # Save raw (unmapped timestamps) from the original dataset. We do a copy since
+    # TGB constructor modifies timestamp info on the underlying tgb array
+    raw_times = dataset.full_data['timestamps'].copy()
+
+    custom_td = TimeDeltaDG('s')
+    mock_td = {'tgbl-foo': TimeDeltaDG('Y')}
+    with patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td):
+        data = DGData.from_tgb(name='tgbl-foo', time_delta=custom_td)
+
+    def _get_exp_edges():
+        src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
+        return np.stack([src, dst], axis=1)
+
+    def _get_exp_times():
+        time_factor = int(mock_td['tgbl-foo'].convert(custom_td))
+        return raw_times * time_factor
+
+    assert isinstance(data, DGData)
+    np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
+    np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
+
+    # Confirm correct dataset instantiation
+    mock_dataset_cls.assert_called_once_with(name='tgbl-foo')
 
 
 def test_from_any():

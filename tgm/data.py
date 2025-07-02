@@ -412,27 +412,30 @@ class DGData:
             else:
                 raise ValueError('please update your tgb package or install by source')
 
-            num_node_events = 0
-            node_label_dim = 0
-            for t in node_label_dict:
-                for node_id, label in node_label_dict[t].items():
-                    num_node_events += 1
-                    node_label_dim = label.shape[0]
-            temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
-            temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
-            temp_dynamic_node_feats = np.zeros(
-                (num_node_events, node_label_dim), dtype=np.float32
-            )
-            idx = 0
-            for t in node_label_dict:
-                for node_id, label in node_label_dict[t].items():
-                    temp_node_timestamps[idx] = t
-                    temp_node_ids[idx] = node_id
-                    temp_dynamic_node_feats[idx] = label
-                    idx += 1
-            node_timestamps = torch.from_numpy(temp_node_timestamps).long()
-            node_ids = torch.from_numpy(temp_node_ids).long()
-            dynamic_node_feats = torch.from_numpy(temp_dynamic_node_feats).float()
+            if len(node_label_dict):
+                # Node events could be missing from the current data split (e.g. validation)
+                num_node_events = 0
+                node_label_dim = 0
+                for t in node_label_dict:
+                    for node_id, label in node_label_dict[t].items():
+                        num_node_events += 1
+                        node_label_dim = label.shape[0]
+
+                temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
+                temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
+                temp_dynamic_node_feats = np.zeros(
+                    (num_node_events, node_label_dim), dtype=np.float32
+                )
+                idx = 0
+                for t in node_label_dict:
+                    for node_id, label in node_label_dict[t].items():
+                        temp_node_timestamps[idx] = t
+                        temp_node_ids[idx] = node_id
+                        temp_dynamic_node_feats[idx] = label
+                        idx += 1
+                node_timestamps = torch.from_numpy(temp_node_timestamps).long()
+                node_ids = torch.from_numpy(temp_node_ids).long()
+                dynamic_node_feats = torch.from_numpy(temp_dynamic_node_feats).float()
 
         # Read static node features if they exist
         static_node_feats = None
@@ -448,7 +451,6 @@ class DGData:
                     f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity or use an ordered time_delta ('r')"
                 )
 
-            # TODO: int conversion may need some thought
             time_factor = int(tgb_time_delta.convert(time_delta))
             timestamps *= time_factor
             if node_timestamps is not None:
