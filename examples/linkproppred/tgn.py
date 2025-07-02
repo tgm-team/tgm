@@ -351,6 +351,7 @@ class GraphAttentionEmbedding(nn.Module):
         z_src = z[batch.global_to_local(batch.src)]
         z_dst = z[batch.global_to_local(batch.dst)]
         z_neg = z[batch.global_to_local(batch.neg)]
+
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
@@ -421,7 +422,7 @@ test_dg = DGraph(
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     if sampling_type == 'uniform':
-        nbr_hook = NeighborSamplerHook(num_nbrs=[args.n_nbrs])
+        nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
         nbr_hook = RecencyNeighborHook(
             num_nbrs=args.n_nbrs,

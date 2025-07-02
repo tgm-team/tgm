@@ -118,6 +118,7 @@ class TGAT(nn.Module):
         z_src = z[batch.global_to_local(batch.src)]
         z_dst = z[batch.global_to_local(batch.dst)]
         z_neg = z[batch.global_to_local(batch.neg)]
+
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
@@ -225,11 +226,8 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
-    from tgm.util.perf import Profiling
-
     start_time = time.perf_counter()
-    with Profiling(filename='foo'):
-        loss = train(train_loader, model, opt)
+    loss = train(train_loader, model, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 

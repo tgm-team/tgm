@@ -143,6 +143,7 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
         z = encoder(batch)
+
         z_src = z[batch.global_to_local(batch.src)]
         z_dst = z[batch.global_to_local(batch.dst)]
         z_neg = z[batch.global_to_local(batch.neg)]
@@ -267,7 +268,6 @@ opt = torch.optim.Adam(
 for epoch in range(1, args.epochs + 1):
     start_time = time.perf_counter()
     loss = train(train_loader, encoder, decoder, opt)
-    loss = 0
     end_time = time.perf_counter()
     latency = end_time - start_time
 
