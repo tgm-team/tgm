@@ -28,12 +28,12 @@ class HookManager:
         if not all(isinstance(h, DGHook) for h in hooks):
             raise TypeError('All items in hook list must follow DGHook protocol')
 
-        # Implicitly add dedup hook after all user-defined hooks and before device transfer
-        hooks.append(DeduplicationHook())
-
         if dg.device.type != 'cpu':
             hooks.append(PinMemoryHook())
             hooks.append(DeviceTransferHook(dg.device))
+
+        # Implicitly add dedup hook after all user-defined hooks and device transfer
+        hooks.append(DeduplicationHook())
 
         self.hooks = hooks
         self._validate_hook_dependencies()
