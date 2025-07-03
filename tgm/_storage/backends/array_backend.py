@@ -1,5 +1,5 @@
 import random
-from typing import Dict, List, Literal, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
@@ -33,40 +33,27 @@ class DGStorageArrayBackend(DGStorageBase):
         time_factor = old_time_granularity.convert(new_time_granularity)
         buckets = (self._data.timestamps.float() * time_factor).floor().long()
 
-        if reduce_op == 'first':
-            pass
-        else:
+        if reduce_op != 'first':
             raise NotImplementedError(f'No reduction implemented for op: {reduce_op}')
 
-        seen_edges: Set[Tuple[int, int]] = set()
-        keep_edge_indices, curr_bucket = [], None
-        for i, edge_event_idx in enumerate(self._data.edge_event_idx):
-            bucket = buckets[edge_event_idx]
-            if bucket != curr_bucket:
-                seen_edges.clear()
-                curr_bucket = bucket
+        def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
+            event_buckets = buckets[event_idx]
+            seen: Set[Any] = set()
+            keep, prev_bucket = [], None
 
-            edge = tuple(self._data.edge_index[i].tolist())
-            if edge not in seen_edges:
-                seen_edges.add(edge)
-                keep_edge_indices.append(i)
-
-        seen_nodes: Set[int] = set()
-        keep_node_indices, curr_bucket = [], None
-        if self._data.node_event_idx is not None:
-            for i, node_event_idx in enumerate(self._data.node_event_idx):
-                bucket = buckets[node_event_idx]
-                if bucket != curr_bucket:
-                    seen_nodes.clear()
-                    curr_bucket = bucket
-
-                node = int(self._data.node_ids[i].item())  # type: ignore
-                if node not in seen_nodes:
-                    seen_nodes.add(node)
-                    keep_node_indices.append(i)
+            for i in range(event_idx.numel()):
+                bucket = int(event_buckets[i])
+                node_or_edge = tuple(ids[i].tolist()) if ids.ndim > 1 else int(ids[i])
+                if bucket != prev_bucket:
+                    seen.clear()
+                    prev_bucket = bucket
+                if node_or_edge not in seen:
+                    seen.add(node_or_edge)
+                    keep.append(i)
+            return torch.tensor(keep, dtype=torch.long)
 
         # Edge events
-        edge_mask = torch.LongTensor(keep_edge_indices)
+        edge_mask = _get_keep_indices(self._data.edge_event_idx, self._data.edge_index)
         edge_timestamps = buckets[self._data.edge_event_idx][edge_mask]
         edge_index = self._data.edge_index[edge_mask]
         edge_feats = None
@@ -74,9 +61,12 @@ class DGStorageArrayBackend(DGStorageBase):
             edge_feats = self._data.edge_feats[edge_mask]
 
         # Node events
-        node_mask = torch.LongTensor(keep_node_indices)
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if self._data.node_event_idx is not None:
+            node_mask = _get_keep_indices(
+                self._data.node_event_idx,
+                self._data.node_ids,  # type: ignore
+            )
             node_timestamps = buckets[self._data.node_event_idx][node_mask]
             node_ids = self._data.node_ids[node_mask]  # type: ignore
             dynamic_node_feats = None
