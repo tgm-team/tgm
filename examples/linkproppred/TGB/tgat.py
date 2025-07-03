@@ -174,7 +174,7 @@ def eval(
         z = encoder(batch)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
             z_src = z[batch.global_to_local(src_ids)]
@@ -262,11 +262,8 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
-    from tgm.util.perf import Profiling
-
     start_time = time.perf_counter()
-    with Profiling('foo'):
-        loss = train(train_loader, encoder, decoder, opt)
+    loss = train(train_loader, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
