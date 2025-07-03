@@ -298,7 +298,7 @@ class RecencyNeighborHook:
                     seed.append(batch.neg)
 
                     # This is a heuristic. For our fake (negative) link times,
-                    # we pick random time stamps within temporal window of the batch.
+                    # we pick random time stamps within [batch.start_time, batch.end_time].
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
                     fake_times = torch.randint(
