@@ -1,8 +1,8 @@
 """Adapted from https://github.com/benedekrozemberczki/pytorch_geometric_temporal/blob/master/torch_geometric_temporal/nn/recurrent/temporalgcn.py."""
 
 import torch
+from torch import zeros
 from torch_geometric.nn import GCNConv
-from torch_geometric.nn.inits import zeros
 
 
 class TGCN(torch.nn.Module):
