@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import is_dataclass
 from typing import Any, Deque, Dict, List, Protocol, Set, runtime_checkable
 
 import numpy as np
@@ -76,9 +77,12 @@ class PinMemoryHook:
     r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        for k, v in vars(batch).items():
-            if isinstance(v, torch.Tensor) and not v.is_cuda and not v.is_pinned():
-                setattr(batch, k, v.pin_memory())
+        def _pin_if_needed(x: torch.Tensor) -> torch.Tensor:
+            if not x.is_cuda and not x.is_pinned():
+                return x.pin_memory()
+            return x
+
+        _apply_to_tensors_inplace(batch, _pin_if_needed)
         return batch
 
 
@@ -92,9 +96,12 @@ class DeviceTransferHook:
         self.device = torch.device(device)
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        for k, v in vars(batch).items():
-            if isinstance(v, torch.Tensor) and v.device != self.device:
-                setattr(batch, k, v.to(device=self.device, non_blocking=True))
+        def _move_if_needed(x: torch.Tensor) -> torch.Tensor:
+            if x.device != self.device:
+                return x.to(device=self.device, non_blocking=True)
+            return x
+
+        _apply_to_tensors_inplace(batch, _move_if_needed)
         return batch
 
 
@@ -150,7 +157,7 @@ class NegativeEdgeSamplerHook:
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
+        batch.neg = torch.randint(self.low, self.high, size, device=dg.device)  # type: ignore
         return batch
 
 
@@ -378,3 +385,25 @@ class RecencyNeighborHook:
             if batch.edge_feats is not None:
                 self._nbrs[src_nbr][2].append(batch.edge_feats[i])
                 self._nbrs[dst_nbr][2].append(batch.edge_feats[i])
+
+
+def _apply_to_tensors_inplace(obj: Any, fn: Any) -> Any:
+    if torch.is_tensor(obj):
+        return fn(obj)
+    elif is_dataclass(obj):
+        for k, v in vars(obj).items():
+            setattr(obj, k, _apply_to_tensors_inplace(v, fn))
+        return obj
+    elif isinstance(obj, list):
+        for i in range(len(obj)):
+            obj[i] = _apply_to_tensors_inplace(obj[i], fn)
+        return obj
+    elif isinstance(obj, tuple):
+        # Tuples are immutable, so return a new tuple
+        return tuple(_apply_to_tensors_inplace(x, fn) for x in obj)
+    elif isinstance(obj, dict):
+        for k in obj:
+            obj[k] = _apply_to_tensors_inplace(obj[k], fn)
+        return obj
+    else:
+        return obj
