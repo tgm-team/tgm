@@ -9,7 +9,7 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
+from tgm import DGBatch, DGraph
 from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,
@@ -18,7 +18,6 @@ from tgm.hooks import (
 )
 from tgm.loader import DGDataLoader
 from tgm.nn import TemporalAttention, Time2Vec
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -172,15 +171,9 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> dict:
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='train', device=args.device
-)
-val_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='val', device=args.device
-)
-test_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='test', device=args.device
-)
+train_dg = DGraph(args.dataset, split='train', device=args.device)
+val_dg = DGraph(args.dataset, split='val', device=args.device)
+test_dg = DGraph(args.dataset, split='test', device=args.device)
 
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
