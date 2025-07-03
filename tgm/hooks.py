@@ -157,7 +157,7 @@ class NegativeEdgeSamplerHook:
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size, device=dg.device)  # type: ignore
+        batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
         return batch
 
 
