@@ -147,7 +147,8 @@ def test_discretize_api(data, reduce_op):
     assert dg_coarse.device == dg.device
     assert dg_coarse.num_nodes == dg.num_nodes
     assert dg_coarse.nodes == dg.nodes
-    assert dg_coarse.static_node_feats == dg.static_node_feats
+    torch.testing.assert_close(dg_coarse.static_node_feats, dg.static_node_feats)
+    assert id(dg_coarse.static_node_feats) != id(dg.static_node_feats)
 
 
 @pytest.mark.parametrize('reduce_op', ['first'])
