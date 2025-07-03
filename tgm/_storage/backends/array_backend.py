@@ -1,5 +1,5 @@
 import random
-from typing import Dict, List, Literal, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
@@ -26,7 +26,8 @@ class DGStorageArrayBackend(DGStorageBase):
         new_time_granularity: TimeDeltaDG,
         reduce_op: Literal['first'],
     ) -> 'DGStorageBase':
-        # TODO:
+        # TODO: Vectorize this as an effective groupby([bucket, edge_ids].reduce(reduce_op))
+
         # We can assume that new granularity is coarser than old time granularity
         # since we checked args in the caller.
         time_factor = old_time_granularity.convert(new_time_granularity)
@@ -37,11 +38,33 @@ class DGStorageArrayBackend(DGStorageBase):
         else:
             raise NotImplementedError(f'No reduction implemented for op: {reduce_op}')
 
-        # Standard array differences since we know buckets are sorted
-        # Always keep first index, and the slots where diff occurs (coarse time change)
-        first = torch.LongTensor([0])
-        diff = torch.nonzero(buckets[1:] != buckets[:-1], as_tuple=False).squeeze() + 1
-        selected = torch.cat([first, diff])
+        selected = torch.zeros_like(self._data.timestamps)
+        seen: Set[Any] = set()
+        curr_bucket = None
+        for i, edge_event_idx in enumerate(self._data.edge_event_idx):
+            bucket = buckets[edge_event_idx]
+            if bucket != curr_bucket:
+                seen.clear()
+                curr_bucket = bucket
+
+            edge = tuple(self._data.edge_index[i].tolist())
+            if edge not in seen:
+                seen.add(edge)
+                selected[edge_event_idx] = 1
+
+        seen.clear()
+        curr_bucket = None
+        if self._data.node_event_idx is not None:
+            for i, node_event_idx in enumerate(self._data.node_event_idx):
+                bucket = buckets[node_event_idx]
+                if bucket != curr_bucket:
+                    seen.clear()
+                    curr_bucket = bucket
+
+                node = int(self._data.node_ids[i].item())  # type: ignore
+                if node not in seen:
+                    seen.add(node)
+                    selected[node_event_idx] = 1
 
         # Edge events
         edge_mask = torch.isin(self._data.edge_event_idx, selected)
