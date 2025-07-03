@@ -302,8 +302,8 @@ class RecencyNeighborHook:
         # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
         self._nbr_nids = torch.full((num_nodes, self._max_nbrs), -1, dtype=torch.long)
         self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
-        self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
         self._nbr_mask = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.bool)
+        self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
 
         # Circular buffer ptr
         self._nbr_ptr = torch.zeros(num_nodes, dtype=torch.long)
@@ -375,17 +375,22 @@ class RecencyNeighborHook:
 
     def _update(self, batch: DGBatch) -> None:
         src, dst, time = batch.src, batch.dst, batch.time
-        for i in range(src.size(0)):
-            s, d, t = int(src[i].item()), int(dst[i].item()), int(time[i].item())
-            for u, v in [(s, d), (d, s)]:
-                ptr = int(self._nbr_ptr[u].item())
-                self._nbr_nids[u, ptr] = v
-                self._nbr_times[u, ptr] = t
-                self._nbr_mask[u, ptr] = True
-                if batch.edge_feats is not None:
-                    self._nbr_feats[u, ptr] = batch.edge_feats[i]
 
-                self._nbr_ptr[u] = (ptr + 1) % self._max_nbrs
+        # For each edge (s, d), we update both direction: s->d and d->s
+        nodes = torch.cat([src, dst])
+        nbrs = torch.cat([dst, src])
+        times = torch.cat([time, time])
+
+        ptrs = self._nbr_ptr[nodes]
+
+        self._nbr_nids[nodes, ptrs] = nbrs
+        self._nbr_times[nodes, ptrs] = times
+        self._nbr_mask[nodes, ptrs] = True
+        if batch.edge_feats is not None:
+            edge_feats = torch.cat([batch.edge_feats, batch.edge_feats], dim=0).float()
+            self._nbr_feats[nodes, ptrs] = edge_feats
+
+        self._nbr_ptr[nodes] = (ptrs + 1) % self._max_nbrs
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
