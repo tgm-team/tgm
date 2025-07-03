@@ -23,8 +23,12 @@ class HookManager:
     def __init__(self, dg: DGraph, hooks: List[DGHook]) -> None:
         if not isinstance(hooks, list):
             raise TypeError(f'Invalid hook type: {type(hooks)}')
-        if not all(isinstance(h, DGHook) for h in hooks):
-            raise TypeError('All items in hook list must follow DGHook protocol')
+        bad_hook_names = [type(h).__name__ for h in hooks if not isinstance(h, DGHook)]
+        if len(bad_hook_names):
+            raise TypeError(
+                f'Some hooks do not correctly implement the DGHook protocol: {bad_hook_names}, '
+                'ensure there is a __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch implemented'
+            )
 
         # Implicitly add dedup hook after all user-defined hooks and before device transfer
         hooks.append(DeduplicationHook())
@@ -133,22 +137,22 @@ class NegativeEdgeSamplerHook:
     Args:
         low (int): The minimum node id to sample
         high (int) : The maximum node id to sample
-        neg_sampling_ratio (float): The ratio of sampled negative destination nodes
+        neg_ratio (float): The ratio of sampled negative destination nodes
             to the number of positive destination nodes (default = 1.0).
     """
 
-    def __init__(self, low: int, high: int, neg_sampling_ratio: float = 1.0) -> None:
-        if not 0 < neg_sampling_ratio <= 1:
-            raise ValueError('neg_sampling_ratio must be in (0, 1]')
+    def __init__(self, low: int, high: int, neg_ratio: float = 1.0) -> None:
+        if not 0 < neg_ratio <= 1:
+            raise ValueError(f'neg_ratio must be in (0, 1], got: {neg_ratio}')
         if not low < high:
             raise ValueError(f'low ({low}) must be strictly less than high ({high})')
         self.low = low
         self.high = high
-        self.neg_sampling_ratio = neg_sampling_ratio
+        self.neg_ratio = neg_ratio
 
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
+        size = (round(self.neg_ratio * batch.dst.size(0)),)
         batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
         return batch
 
@@ -171,7 +175,7 @@ class TGBNegativeEdgeSamplerHook:
         if neg_sampler is None:
             raise ValueError('neg_sampler must be provided')
         if split_mode not in ['val', 'test']:
-            raise ValueError('split_mode must be one of val, test')
+            raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
         if neg_sampler.eval_set[split_mode] is None:  # type: ignore
             raise ValueError(
                 f'please run load_{split_mode}_ns() before using this hook'
