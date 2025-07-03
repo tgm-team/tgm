@@ -20,15 +20,9 @@ def datasets():
     return DATASETS
 
 
-def pytest_configure(config):
-    config.addinivalue_line(
-        'markers', 'slurm(resources): Run test via sbatch with given Slurm resources.'
-    )
-
-
 @pytest.fixture(scope='session', autouse=True)
 def ci_run_context():
-    # File-io work that should be shared across all integration tests in a single run
+    # File-io work that should be shared across all performance tests in a single run
     def get_commit_hash() -> str:
         return subprocess.check_output(
             ['git', 'rev-parse', '--short', 'HEAD'], text=True
@@ -46,8 +40,3 @@ def ci_run_context():
     # Save the log directory path for easy parsing in the Github action
     latest_path_file = log_base / 'latest_path.txt'
     latest_path_file.write_text(f'{log_dir}\n{ci_run_dir}')
-
-    return {
-        'log_dir': log_dir,
-        'project_root': Path(__file__).resolve().parents[2],
-    }
