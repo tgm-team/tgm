@@ -20,11 +20,11 @@ def test_hook_dependancies():
 
 def test_bad_neighbor_sampler_init():
     with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[0], num_nodes=2)
+        RecencyNeighborHook(num_nbrs=[0], num_nodes=2, edge_feats_dim=1)
     with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[-1], num_nodes=2)
+        RecencyNeighborHook(num_nbrs=[-1], num_nodes=2, edge_feats_dim=1)
     with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[], num_nodes=2)
+        RecencyNeighborHook(num_nbrs=[], num_nodes=2, edge_feats_dim=1)
 
 
 @pytest.mark.skip('TODO: Add recency nbr tests')

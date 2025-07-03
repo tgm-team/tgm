@@ -247,7 +247,9 @@ test_dg = DGraph(args.dataset, split='test', device=args.device)
 
 def _init_hooks(dg: DGraph, time_gap: int) -> List[DGHook]:
     # Graphmixer always uses 1-hop recent neighbors
-    nbr_hook = RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=dg.num_nodes)
+    nbr_hook = RecencyNeighborHook(
+        num_nbrs=[args.n_nbrs], num_nodes=dg.num_nodes, edge_feats_dim=dg.edge_feats_dim
+    )
 
     # Always produce negative edge prior to neighbor sampling for link prediction
     neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
