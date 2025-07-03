@@ -83,6 +83,16 @@ pip install git+https://github.com/tgm-team/tgm.git
 python -c 'import tgm; print(tgm.__version__)'
 ```
 
+The steps above should work on Linux systems. We have not officially tested on other platforms, so expect additional steps may be required. If you encounter any issues on your system, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
+
+### Windows
+
+In order to enable GPU on non-linux platforms, you will need to manually install the appropriate torch wheels for your drivers. For instance, for *cuda:12.4*, follow the steps outlined above and then issue:
+
+```sh
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+```
+
 ## Quick Tour for New Users
 
 ![image](./docs/img/architecture-dark.svg#gh-dark-mode-only)
