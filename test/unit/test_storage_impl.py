@@ -59,8 +59,51 @@ def data_with_features():
 
 
 @pytest.mark.skip('TODO')
-def test_discretize_reduce_op_first():
-    pass
+def test_discretize_reduce_op_first(DGStorageImpl):
+    edge_index = torch.LongTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_feats = torch.rand(5, 5)
+    static_node_feats = torch.rand(6, 11)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        static_node_feats=static_node_feats,
+    )
+    storage = DGStorageImpl(data)
+    coarse_storage = storage.discretize(
+        old_time_granularity='m', new_time_granularity='h', reduce_op='first'
+    )
+
+
+@pytest.mark.skip('TODO')
+def test_discretize_with_node_events_reduce_op_first(DGStorageImpl):
+    # 1-2, 1-2, 2-3, 1-2 4-5
+    # 1     2    3    63 65
+
+    # 6  6 7        6 6 7
+    # 10 20 30      70 80 90
+    edge_index = torch.LongTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_feats = torch.rand(5, 5)
+
+    node_timestamps = torch.LongTensor([10, 20, 30, 70, 80, 90])
+    node_ids = torch.LongTensor([6, 6, 7, 6, 6, 7])
+    dynamic_node_feats = torch.rand(6, 5)
+    static_node_feats = torch.rand(8, 11)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        node_timestamps,
+        node_ids,
+        dynamic_node_feats,
+        static_node_feats,
+    )
+    storage = DGStorageImpl(data)
+    coarse_storage = storage.discretize(
+        old_time_granularity='m', new_time_granularity='h', reduce_op='first'
+    )
 
 
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])

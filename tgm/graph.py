@@ -51,6 +51,7 @@ class DGraph:
             ValueError: If the current graph time granularity is ordered.
             ValueError: If time_granularity is not coarser than the current time granularity on the graph.
             ValueError: If the reduce_op is not an implemented reduction.
+            NotImplementedError: If attempting to discretize a sliced (sub)-graph.
 
         Note: Produces a deep-copy of the storage, making this an expensive operation.
         Note: Since we don't modify the graph storage in-place, this will result in 2x peak memory.
@@ -58,6 +59,10 @@ class DGraph:
         if isinstance(time_granularity, str):
             time_granularity = TimeDeltaDG(time_granularity)
 
+        if self._slice != DGSliceTracker():
+            raise NotImplementedError(
+                'Cannot discretize a sliced (sub)-graph, try discretizing the original graph'
+            )
         if self.time_delta.is_ordered:
             raise ValueError('Cannot discretize a graph with ordered time granularity')
         if self.time_delta.is_coarser_than(time_granularity):

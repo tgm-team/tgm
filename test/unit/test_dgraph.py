@@ -137,17 +137,26 @@ def test_discretize_bad_reduce_op(data):
         dg.discretize(time_granularity='m', reduce_op='foo')
 
 
-@pytest.mark.skip('TODO')
-def test_discretize_reduce_first_api(data):
-    pass
+@pytest.mark.parametrize('reduce_op', ['first'])
+def test_discretize_api(data, reduce_op):
+    dg = DGraph(data, time_delta='s')
+    dg_coarse = dg.discretize(time_granularity='m', reduce_op=reduce_op)
+    assert isinstance(dg_coarse, DGraph)
+    assert id(dg._storage) != id(dg_coarse._storage)
+    assert dg_coarse.time_delta.unit == 'm'
+    assert dg_coarse.device == dg.device
+    assert dg_coarse.num_nodes == dg.num_nodes
+    assert dg_coarse.nodes == dg.nodes
+    assert dg_coarse.static_node_feats == dg.static_node_feats
 
 
-def test_discretize_reduce_first_call(data):
+@pytest.mark.parametrize('reduce_op', ['first'])
+def test_discretize_reduce_first_call(data, reduce_op):
     dg = DGraph(data, time_delta='s')
     with patch.object(DGStorage, 'discretize') as mock:
         mock.return_value = dg._storage
 
-        _ = dg.discretize(time_granularity='m', reduce_op='first')
+        _ = dg.discretize(time_granularity='m', reduce_op=reduce_op)
         mock.assert_called_once_with(
             old_time_granularity=TimeDeltaDG('s'),
             new_time_granularity=TimeDeltaDG('m'),
