@@ -28,12 +28,12 @@ class HookManager:
         if not all(isinstance(h, DGHook) for h in hooks):
             raise TypeError('All items in hook list must follow DGHook protocol')
 
+        # Implicitly add dedup hook after all user-defined hooks and before device transfer
+        hooks.append(DeduplicationHook())
+
         if dg.device.type != 'cpu':
             hooks.append(PinMemoryHook())
             hooks.append(DeviceTransferHook(dg.device))
-
-        # Implicitly add dedup hook after all user-defined hooks and device transfer
-        hooks.append(DeduplicationHook())
 
         self.hooks = hooks
         self._validate_hook_dependencies()
@@ -77,12 +77,11 @@ class PinMemoryHook:
     r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        def _pin_if_needed(x: torch.Tensor) -> torch.Tensor:
-            if not x.is_cuda and not x.is_pinned():
-                return x.pin_memory()
-            return x
+        pin_if_needed = (
+            lambda x: x.pin_memory() if not x.is_cuda and not x.is_pinned() else x
+        )
 
-        _apply_to_tensors_inplace(batch, _pin_if_needed)
+        _apply_to_tensors_inplace(batch, pin_if_needed)
         return batch
 
 
@@ -96,12 +95,13 @@ class DeviceTransferHook:
         self.device = torch.device(device)
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        def _move_if_needed(x: torch.Tensor) -> torch.Tensor:
-            if x.device != self.device:
-                return x.to(device=self.device, non_blocking=True)
-            return x
+        move_if_needed = (
+            lambda x: x.to(device=self.device, non_blocking=True)
+            if x.device != self.device
+            else x
+        )
 
-        _apply_to_tensors_inplace(batch, _move_if_needed)
+        _apply_to_tensors_inplace(batch, move_if_needed)
         return batch
 
 
