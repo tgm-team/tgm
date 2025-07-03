@@ -49,7 +49,7 @@ class DGraph:
 
         Raises:
             ValueError: If the current graph time granularity is ordered.
-            ValueError: If time_granularity is not coarser than the current time granularity, or the current time granularity on the graph.
+            ValueError: If time_granularity is not coarser than the current time granularity on the graph.
             ValueError: If the reduce_op is not an implemented reduction.
 
         Note: Produces a deep-copy of the storage, making this an expensive operation.
@@ -63,7 +63,7 @@ class DGraph:
         if self.time_delta.is_coarser_than(time_granularity):
             raise ValueError(
                 f'Cannot discretize to a time_granularity ({time_granularity}) which is strictly'
-                f'coarser than the time granularity on the current graph ({self.time_delta})'
+                f'more granular than the time granularity on the current graph ({self.time_delta})'
             )
 
         valid_ops = ['first']
