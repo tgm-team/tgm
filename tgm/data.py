@@ -448,7 +448,7 @@ class DGData:
 
             if time_delta.is_coarser_than(tgb_time_delta):
                 raise ValueError(
-                    f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity or use an ordered time_delta ('r')"
+                    f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity, use an ordered time_delta ('r'), or coarsen the graph (dg.discretize() after construction)"
                 )
 
             time_factor = int(tgb_time_delta.convert(time_delta))
