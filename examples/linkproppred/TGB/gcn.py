@@ -73,13 +73,13 @@ class GCNEncoder(torch.nn.Module):
         self.convs = torch.nn.ModuleList()
         self.bns = torch.nn.ModuleList()
 
-        self.convs.append(GCNConv(in_channels, embed_dim, cached=True))
+        self.convs.append(GCNConv(in_channels, embed_dim))
         self.bns.append(torch.nn.BatchNorm1d(embed_dim))
 
         for _ in range(num_layers - 2):
-            self.convs.append(GCNConv(embed_dim, embed_dim, cached=True))
+            self.convs.append(GCNConv(embed_dim, embed_dim))
             self.bns.append(torch.nn.BatchNorm1d(embed_dim))
-        self.convs.append(GCNConv(embed_dim, out_channels, cached=True))
+        self.convs.append(GCNConv(embed_dim, out_channels))
 
     def reset_parameters(self) -> None:
         for conv in self.convs:
@@ -97,42 +97,45 @@ class GCNEncoder(torch.nn.Module):
         return x
 
 
-# class LinkPredictor(nn.Module):
-#     def __init__(self, dim: int) -> None:
-#         super().__init__()
-#         self.lin_src = nn.Linear(dim, dim)
-#         self.lin_dst = nn.Linear(dim, dim)
-#         self.lin_out = nn.Linear(dim, 1)
-
-#     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-#         h = self.lin_src(z_src) + self.lin_dst(z_dst)
-#         h = h.relu()
-#         return self.lin_out(h).sigmoid().view(-1)
-
-
 class LinkPredictor(nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout):
-        super(LinkPredictor, self).__init__()
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.lin_src = nn.Linear(dim, dim)
+        self.lin_dst = nn.Linear(dim, dim)
+        self.lin_out = nn.Linear(dim, 1)
 
-        self.lins = torch.nn.ModuleList()
-        self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
-        for _ in range(num_layers - 2):
-            self.lins.append(torch.nn.Linear(hidden_channels, hidden_channels))
-        self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
-        self.dropout = dropout
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        h = z_src + z_dst
+        h = self.lin_src(h)
+        h = h.relu()
+        h = self.lin_dst(h)
+        h = h.relu()
+        return self.lin_out(h).sigmoid()
 
-    def reset_parameters(self):
-        for lin in self.lins:
-            lin.reset_parameters()
 
-    def forward(self, x_i, x_j):
-        x = x_i * x_j
-        for lin in self.lins[:-1]:
-            x = lin(x)
-            x = F.relu(x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.lins[-1](x)
-        return torch.sigmoid(x)
+# class LinkPredictor(nn.Module):
+#     def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout):
+#         super(LinkPredictor, self).__init__()
+
+#         self.lins = torch.nn.ModuleList()
+#         self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
+#         for _ in range(num_layers - 2):
+#             self.lins.append(torch.nn.Linear(hidden_channels, hidden_channels))
+#         self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
+#         self.dropout = dropout
+
+#     def reset_parameters(self):
+#         for lin in self.lins:
+#             lin.reset_parameters()
+
+#     def forward(self, x_i, x_j):
+#         x = x_i * x_j
+#         for lin in self.lins[:-1]:
+#             x = lin(x)
+#             x = F.relu(x)
+#             x = F.dropout(x, p=self.dropout, training=self.training)
+#         x = self.lins[-1](x)
+#         return torch.sigmoid(x)
 
 
 def train(
@@ -183,8 +186,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    iter_loader = iter(snapshots_loader)
-    next(iter_loader)
+    # iter_loader = iter(snapshots_loader)
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
@@ -195,6 +197,7 @@ def eval(
             y_pred = decoder(
                 z[batch.global_to_local(query_src)], z[batch.global_to_local(query_dst)]
             )
+
             # compute MRR
             input_dict = {
                 'y_pred_pos': np.array([y_pred[0]]),
@@ -241,7 +244,6 @@ train_snapshots = DGraph(
     split='train',
     device=args.device,
 ).discretize('h')
-
 
 val_dg = DGraph(
     args.dataset,
@@ -313,6 +315,8 @@ if train_dg.dynamic_node_feats_dim is not None:
 # TODO: add static node features to DGraph
 args.node_dim = args.embed_dim
 static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
+# static_node_feats = torch.zeros((test_dg.num_nodes, args.node_dim), device=args.device)
+
 
 encoder = GCN(
     in_channels=args.embed_dim,
@@ -321,17 +325,21 @@ encoder = GCN(
     dropout=float(args.dropout),
 ).to(args.device)
 
+# decoder = LinkPredictor(
+#     in_channels=args.embed_dim,
+#     hidden_channels=args.embed_dim,
+#     out_channels=1,
+#     num_layers=1,
+#     dropout=0,
+# ).to(args.device)
+
 decoder = LinkPredictor(
-    in_channels=args.embed_dim,
-    hidden_channels=args.embed_dim,
-    out_channels=1,
-    num_layers=2,
-    dropout=0.1,
+    args.embed_dim,
 ).to(args.device)
+
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
-
 
 for epoch in range(1, args.epochs + 1):
     start_time = time.perf_counter()
