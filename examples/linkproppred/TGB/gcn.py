@@ -193,7 +193,7 @@ def eval(
             query_src = torch.tensor(
                 [batch.src[idx] for _ in range(len(neg_batch) + 1)]
             )
-            query_dst = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             y_pred = decoder(
                 z[batch.global_to_local(query_src)], z[batch.global_to_local(query_dst)]
             )
