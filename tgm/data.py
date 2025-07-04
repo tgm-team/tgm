@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import pathlib
-import warnings
 from dataclasses import dataclass
 from typing import Any, List
 
@@ -148,8 +147,6 @@ class DGData:
 
         # Sort if necessary
         if not torch.all(torch.diff(self.timestamps) >= 0):
-            warnings.warn('received non-chronological events, sorting by time')
-
             # Sort timestamps
             sort_idx = torch.argsort(self.timestamps)
             inverse_sort_idx = torch.empty_like(sort_idx)
