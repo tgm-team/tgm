@@ -1,10 +1,26 @@
 # Constructing and Accessing Properties in DGraph
 
-This tutorial shows how to construct a `DGraph` object in `tgm` and explore its properties..
+This tutorial shows how to construct a `DGraph` object in `tgm` and explore its properties.
 
 The `DGraph` class is defined in [`tgm/graph.py`](https://github.com/tgm-team/tgm/blob/main/tgm/graph.py).
 
-Let's first learn how to make a `DGraph`by defining the graph ourselves.
+## Construct `DGraph` from TGB Datasets
+
+The [Temporal Graph Benchmark (TGB)](https://tgb.complexdatalab.com/) provides a suite of temporal graph datasets with diverse scale, properties and tasks.
+
+We support the construction of `DGraph` from TGB link property prediction and node property prediction datasets. Currently, TKG and THG datasets from TGB is not supported. specify the time granularity of the dataset with `TimeDeltaDG`. Note that time granularity related functions are in alpha, and will be still under change
+
+`r` means ordered time granularity which means the underlining timestamps tell us the ordering of edges and we do not use it for time conversion. (other time granularities will allow).
+
+```python
+from tgm.timedelta import TimeDeltaDG
+
+train_dg = DGraph('tgbl-wiki', time_delta=TimeDeltaDG('r'), split='train')
+```
+
+## Create Custom `DGraph`
+
+Let's learn how to make a `DGraph`by defining the graph ourselves.
 
 Start by defining the temporal edges, the `edge_index` has shape $\[num_edge_events, 2\]$
 
@@ -112,7 +128,11 @@ We can also construct `DGraph` directly from csv files by using `DGraph.from_csv
 
 ## Properties of `DGraph`
 
-`DGraph` objects act as a view on the underlying graph data, allowing the user to access various properties as well as slicing and other operations. Additional properties are seen in the `tgm/graph.py`
+`DGraph` objects act as a view on the underlying graph data, allowing the user to access various properties as well as slicing and other operations. Additional properties are seen in the [`tgm/graph.py`](https://github.com/tgm-team/tgm/blob/main/tgm/graph.py).
+
+The number nodes is the maximum node ID in the graph plus one, we currently assume the node ID start from 0.
+
+If the `DGraph` is empty, the start time and end time are None.
 
 ```python
 print('=== Graph Properties ===')
@@ -128,16 +148,15 @@ print(f'dynamic node feature dim : {our_dgraph.dynamic_node_feats_dim}')
 print('======================')
 ```
 
-## Construct `DGraph` from TGB Datasets
+## Slicing `DGraph`
 
-We support the construction of `DGraph` from TGB link property prediction and node property prediction datasets. Currently, TKG and THG datasets from TGB is not supported. specify the time granularity of the dataset with `TimeDeltaDG`. Note that time granularity related functions are in alpha, and will be still under change
-
-`r` means ordered time granularity which means the underlining timestamps tell us the ordering of edges and we do not use it for time conversion. (other time granularities will allow)
+The `DGraph` object provides a view on the underlying temporal graph data. Specifically, TGM supports temporal slicing on `DGraph`. You can easily slice `DGraph` with the `slice_time` function. The sliced `DGraph` continues only the events between the specified start and end time.
 
 ```python
-from tgm.timedelta import TimeDeltaDG
+start_time = 5
+end_time = 10
 
-train_dg = DGraph('tgbl-wiki', time_delta=TimeDeltaDG('r'), split='train')
+sliced_dg = dgraph.slice_time(start_time, end_time)
 ```
 
 ## `DGDataLoader` and `DGHook`
