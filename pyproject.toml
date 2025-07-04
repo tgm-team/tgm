@@ -1,12 +1,5 @@
-[build-system]
-requires = ["flit_core >=3.2,<4"]
-build-backend = "flit_core.buildapi"
-
-[tool.uv.pip]
-torch-backend = "auto"
-
 [project]
-name = "tgm"
+name = "py-tgm"
 version = "0.1.0a0"
 description = "Efficient and Modular ML on Dynamic Graphs"
 readme = "README.md"
@@ -43,6 +36,17 @@ examples = [
     "torchmetrics>=1.7.0",
     "tqdm>=4.67.1",
 ]
+
+
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.uv.pip]
+torch-backend = "auto"
+
+[tool.flit.module]
+name = "tgm"
 
 [tool.mypy]
 files = ["tgm"]
