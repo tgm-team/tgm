@@ -104,7 +104,8 @@ class DGraph:
         time_delta: TimeDeltaDG | str = 'r',
         device: str | torch.device = 'cpu',
     ) -> DGraph:
-        r"""Constructs DGraph from raw tensors
+        r"""Constructs DGraph from raw tensors.
+
         Args:
             edge_timestamps (Tensor): Timestamps of the edges.
             edge_index (Tensor): Edge index tensor of shape (2, E) where E is the number of edges.
