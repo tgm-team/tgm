@@ -29,42 +29,39 @@ class DGData:
     static_node_feats: Tensor | None = None  # [num_nodes, D_node_static]
 
     def __post_init__(self) -> None:
+        def _assert_is_tensor(x: Any, name: str) -> None:
+            if not isinstance(x, Tensor):
+                raise TypeError(f'{name} must be a Tensor, got: {type(x)}')
+
         def _assert_tensor_is_integral(x: Tensor, name: str) -> None:
             int_types = [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8]
             if x.dtype not in int_types:
                 raise TypeError(f'{name} must have integer dtype but got: {x.dtype}')
 
         # Validate edge index
-        if not isinstance(self.edge_index, Tensor):
-            raise TypeError(f'edge_index must be Tensor, got: {type(self.edge_index)}')
+        _assert_is_tensor(self.edge_index, 'edge_index')
+        _assert_tensor_is_integral(self.edge_index, 'edge_index')
         if self.edge_index.ndim != 2 or self.edge_index.shape[1] != 2:
             raise ValueError(
                 f'edge_index must have shape [num_edges, 2], got: {self.edge_index.shape}',
             )
-        _assert_tensor_is_integral(self.edge_index, 'edge_index')
 
         num_edges = self.edge_index.shape[0]
         if num_edges == 0:
             raise ValueError('empty graphs not supported')
 
         # Validate edge event idx
-        if not isinstance(self.edge_event_idx, Tensor):
-            raise TypeError(
-                f'edge_event_idx must be Tensor, got: {type(self.edge_event_idx)}'
-            )
+        _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
+        _assert_tensor_is_integral(self.edge_event_idx, 'edge_event_idx')
         if self.edge_event_idx.ndim != 1 or self.edge_event_idx.shape[0] != num_edges:
             raise ValueError(
                 'edge_event_idx must have shape [num_edges], '
                 f'got {num_edges} edges and shape {self.edge_event_idx.shape}'
             )
-        _assert_tensor_is_integral(self.edge_event_idx, 'edge_event_idx')
 
         # Validate edge features
         if self.edge_feats is not None:
-            if not isinstance(self.edge_feats, Tensor):
-                raise TypeError(
-                    f'edge_feats must be Tensor, got: {type(self.edge_feats)}'
-                )
+            _assert_is_tensor(self.edge_feats, 'edge_feats')
             if self.edge_feats.ndim != 2 or self.edge_feats.shape[0] != num_edges:
                 raise ValueError(
                     'edge_feats must have shape [num_edges, D_edge], '
@@ -74,15 +71,12 @@ class DGData:
         # Validate node event idx
         num_node_events = 0
         if self.node_event_idx is not None:
-            if not isinstance(self.node_event_idx, Tensor):
-                raise TypeError(
-                    f'node_event_idx must be Tensor, got: {type(self.node_event_idx)}'
-                )
+            _assert_is_tensor(self.node_event_idx, 'node_event_idx')
+            _assert_tensor_is_integral(self.node_event_idx, 'node_event_idx')
             if self.node_event_idx.ndim != 1:
                 raise ValueError(
                     f'node_event_idx must have shape [num_node_events], got: {self.node_event_idx.shape}'
                 )
-            _assert_tensor_is_integral(self.node_event_idx, 'node_event_idx')
 
             num_node_events = self.node_event_idx.shape[0]
             if num_node_events == 0:
@@ -91,23 +85,17 @@ class DGData:
                 )
 
             # Validate node ids
-            if not isinstance(self.node_ids, Tensor):
-                raise TypeError(
-                    f'node_ids must be a Tensor, got: {type(self.node_ids)}'
-                )
-            if self.node_ids.ndim != 1 or self.node_ids.shape[0] != num_node_events:
+            _assert_is_tensor(self.node_ids, 'node_ids')
+            _assert_tensor_is_integral(self.node_ids, 'node_ids')  # type: ignore
+            if self.node_ids.ndim != 1 or self.node_ids.shape[0] != num_node_events:  # type: ignore
                 raise ValueError(
                     'node_ids must have shape [num_node_events], ',
-                    f'got {num_node_events} node events and shape {self.node_ids.shape}',
+                    f'got {num_node_events} node events and shape {self.node_ids.shape}',  # type: ignore
                 )
-            _assert_tensor_is_integral(self.node_ids, 'node_ids')
 
             # Validate dynamic node features (could be None)
             if self.dynamic_node_feats is not None:
-                if not isinstance(self.dynamic_node_feats, Tensor):
-                    raise TypeError(
-                        f'dynamic_node_feats must be a Tensor, got: {type(self.dynamic_node_feats)}'
-                    )
+                _assert_is_tensor(self.dynamic_node_feats, 'dynamic_node_feats')
                 if (
                     self.dynamic_node_feats.ndim != 2
                     or self.dynamic_node_feats.shape[0] != num_node_events
@@ -130,10 +118,7 @@ class DGData:
             num_nodes = max(num_nodes, torch.max(self.node_ids).item() + 1)  # 0-indexed
 
         if self.static_node_feats is not None:
-            if not isinstance(self.static_node_feats, Tensor):
-                raise TypeError(
-                    f'static_node_feats must be a Tensor, got: {type(self.static_node_feats)}'
-                )
+            _assert_is_tensor(self.static_node_feats, 'static_node_feats')
             if (
                 self.static_node_feats.ndim != 2
                 or self.static_node_feats.shape[0] != num_nodes
@@ -144,10 +129,10 @@ class DGData:
                 )
 
         # Validate timestamps
-        if not isinstance(self.timestamps, Tensor):
-            raise TypeError(
-                f'timestamps must be a Tensor, got: {type(self.timestamps)}'
-            )
+        _assert_is_tensor(self.timestamps, 'timestamps')
+        _assert_tensor_is_integral(self.timestamps, 'timestamps')
+        if not torch.all(self.timestamps >= 0):
+            raise ValueError('timestamps must all be non-negative')
         if (
             self.timestamps.ndim != 1
             or self.timestamps.shape[0] != num_edges + num_node_events
@@ -158,9 +143,6 @@ class DGData:
                 'Please double-check the edge and node timestamps you provided. If this is not resolved '
                 'raise an issue and provide instructions on how to reproduce your the error'
             )
-        _assert_tensor_is_integral(self.timestamps, 'timestamps')
-        if not torch.all(self.timestamps >= 0):
-            raise ValueError('timestamps must all be non-negative')
 
         # Sort if necessary
         if not torch.all(torch.diff(self.timestamps) >= 0):
