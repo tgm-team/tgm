@@ -45,6 +45,9 @@ build-backend = "flit_core.buildapi"
 [tool.uv.pip]
 torch-backend = "auto"
 
+[tool.uv.project]
+root-package = "tgm"
+
 [tool.flit.module]
 name = "tgm"
 
