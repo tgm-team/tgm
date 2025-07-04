@@ -2,7 +2,7 @@
 
 This tutorial shows how to construct a `DGraph` object in `tgm` and explore its properties..
 
-The `DGraph` object can be found in `tgm/graph.py`
+The `DGraph` class is defined in [`tgm/graph.py`](https://github.com/tgm-team/tgm/blob/main/tgm/graph.py).
 
 Let's first learn how to make a `DGraph`by defining the graph ourselves.
 
