@@ -1,6 +1,6 @@
 # Constructing and Accessing Properties in DGraph
 
-This tutorial will show you how to construct a `DGraph` object in `tgm` and accessing its properties.
+This tutorial shows how to construct a `DGraph` object in `tgm` and explore its properties..
 
 The `DGraph` object can be found in `tgm/graph.py`
 
