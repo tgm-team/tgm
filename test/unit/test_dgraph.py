@@ -114,6 +114,80 @@ def test_init_construct_data():
         mock.assert_called_once_with(data, TimeDeltaDG('r'))
 
 
+def test_dgraph_from_raw():
+    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
+    edge_feats = torch.rand(3, 5)
+    node_timestamps = torch.LongTensor([1, 5, 10])
+    node_ids = torch.LongTensor([2, 4, 6])
+    dynamic_node_feats = torch.rand([3, 5])
+    static_node_feats = torch.rand(9, 11)
+
+    dg = DGraph.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        node_timestamps,
+        node_ids,
+        dynamic_node_feats,
+        static_node_feats,
+    )
+
+    assert dg.time_delta.is_ordered
+    assert len(dg) == 4
+    assert dg.start_time == 1
+    assert dg.end_time == 20
+    assert dg.num_nodes == 9
+    assert dg.num_edges == 3
+    assert dg.num_timestamps == 4
+    assert dg.num_events == 6
+    assert dg.nodes == {1, 2, 4, 6, 8}
+    assert dg.static_node_feats_dim == 11
+    assert dg.dynamic_node_feats_dim == 5
+    assert dg.edge_feats_dim == 5
+    assert dg.device == torch.device('cpu')
+
+
+def test_dgraph_from_pandas():
+    import pandas as pd
+
+    edge_dict = {
+        'src': [2, 10],
+        'dst': [3, 20],
+        't': [1337, 1338],
+        'edge_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
+    }  # edge events
+
+    node_dict = {
+        'node': [7, 8],
+        't': [3, 6],
+        'node_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
+    }  # node events, optional
+
+    dg = DGraph.from_pandas(
+        edge_df=pd.DataFrame(edge_dict),
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
+        edge_feats_col='edge_feat',
+        node_df=pd.DataFrame(node_dict),
+        node_id_col='node',
+        node_time_col='t',
+        dynamic_node_feats_col='node_feat',
+    )
+
+    assert dg.time_delta.is_ordered
+    assert dg.num_events == len(dg) == 4
+    assert dg.start_time == 3
+    assert dg.num_nodes == 21
+    assert dg.num_edges == 2
+    assert dg.num_timestamps == 4
+    assert dg.nodes == {2, 3, 7, 8, 10, 20}
+    assert dg.dynamic_node_feats_dim == 5
+    assert dg.edge_feats_dim == 5
+    assert dg.device == torch.device('cpu')
+
+
 def test_str(data):
     dg = DGraph(data)
     assert isinstance(dg.__str__(), str)
