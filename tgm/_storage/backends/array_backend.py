@@ -126,6 +126,8 @@ class DGStorageArrayBackend(DGStorageBase):
         edges = self._data.edge_index[edge_mask]
         src, dst = edges[:, 0], edges[:, 1]
         time = self._data.timestamps[self._data.edge_event_idx[edge_mask]]
+
+        src, dst, time = src.contiguous(), dst.contiguous(), time.contiguous()
         return src, dst, time
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:

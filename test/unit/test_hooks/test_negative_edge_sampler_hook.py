@@ -22,9 +22,9 @@ def test_bad_negative_edge_sampler_init():
     with pytest.raises(ValueError):
         NegativeEdgeSamplerHook(low=0, high=0)
     with pytest.raises(ValueError):
-        NegativeEdgeSamplerHook(low=0, high=1, neg_sampling_ratio=0)
+        NegativeEdgeSamplerHook(low=0, high=1, neg_ratio=0)
     with pytest.raises(ValueError):
-        NegativeEdgeSamplerHook(low=0, high=1, neg_sampling_ratio=2)
+        NegativeEdgeSamplerHook(low=0, high=1, neg_ratio=2)
 
 
 def test_negative_edge_sampler(data):
