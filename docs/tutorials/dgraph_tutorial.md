@@ -4,77 +4,66 @@ This tutorial shows how to construct a `DGraph` object in `tgm` and explore its 
 
 The `DGraph` class is defined in [`tgm/graph.py`](https://github.com/tgm-team/tgm/blob/main/tgm/graph.py).
 
+______________________________________________________________________
+
 ## Construct `DGraph` from TGB Datasets
 
-The [Temporal Graph Benchmark (TGB)](https://tgb.complexdatalab.com/) provides a suite of temporal graph datasets with diverse scale, properties and tasks.
+The [Temporal Graph Benchmark (TGB)](https://tgb.complexdatalab.com/) provides a suite of temporal graph datasets with diverse scales, properties, and tasks.
 
-We support the construction of `DGraph` from TGB link property prediction and node property prediction datasets. Currently, TKG and THG datasets from TGB is not supported. specify the time granularity of the dataset with `TimeDeltaDG`. Note that time granularity related functions are in alpha, and will be still under change
+TGM supports constructing `DGraph` objects from TGB [LinkPropPrediction](https://tgb.complexdatalab.com/docs/linkprop/) and [NodePropPrediction](https://tgb.complexdatalab.com/docs/nodeprop/) datasets. Temporal knowledge graphs (TKG) and temporal hypergraphs (THG) are not yet supported.
 
-`r` means ordered time granularity which means the underlining timestamps tell us the ordering of edges and we do not use it for time conversion. (other time granularities will allow).
+You can specify the time granularity with [`TimeDeltaDG`](https://github.com/tgm-team/tgm/blob/main/tgm/timedelta.py). For example, `'r'` (relative) means timestamps define only the ordering of edges and are not used for time conversion. Other granularities allow unit-based conversions. The default time granularity is `'r'`, and the default device is `'cpu'`.
 
 ```python
-from tgm.timedelta import TimeDeltaDG
+from tgm import DGraph
 
-train_dg = DGraph('tgbl-wiki', time_delta=TimeDeltaDG('r'), split='train')
+train_dg = DGraph.from_tgb('tgbl-wiki', time_delta='r', split='train', device='cpu')
 ```
 
-## Create Custom `DGraph`
+> **Note:** Time granularity features are experimental and may change.
 
-Let's learn how to make a `DGraph`by defining the graph ourselves.
+______________________________________________________________________
 
-Start by defining the temporal edges, the `edge_index` has shape $\[num_edge_events, 2\]$
+## Create a Custom `DGraph`
 
-The `edge_timestamps` tensor specifies the timestamps associated with each edge, must has shape $\[num_edge_events\]$
+You can also define a `DGraph` from your own data.
 
-The `edge_feats` specifies the features associated with each edge, must has shape $\[num_edge_events, D_edge\]$ where $D_edge$ is the feature dimension of edge. Edge features are also optional
+### Construct `DGraph` From Raw Tensors
+
+#### Define Temporal Edges
+
+- `edge_index`: shape `[num_edge_events, 2]`
+- `edge_timestamps`: shape `[num_edge_events]`
+- `edge_feats`: shape `[num_edge_events, D_edge]` (optional)
 
 ```python
 import torch
 
 edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
 edge_timestamps = torch.LongTensor([1, 5, 20])
-edge_feats = torch.rand(3, 5)
+edge_feats = torch.rand(3, 5)  # optional edge features
 ```
 
-## Construct `DGraph` from raw tensors
+#### Define Node Events (Optional)
 
-To construct a `DGraph` object, we use `DGraph.from_raw` method, seen in [`tgm/graph.py`](https://github.com/tgm-team/tgm/blob/main/tgm/graph.py). In TGM, we support both edge events and node events at the same time. The core assumption is that a temporal graph must have edge events and with optional node events as well. You can also easily specify the time granularity of your data with a single string, for example we will specify a second wise granularity, as 's'. Similarly, we can also specify the device.
-
-The edge events are specified with the following arguments:
-
-- `edge_timestamps`: Tensor  # \[num_edge_events\] (required)
-
-- `edge_index`: Tensor  # \[num_edge_events, 2\] (required)
-
-- `edge_feats`: Tensor | None = None  # \[num_edge_events, D_edge\] (optional)
-
-The node events are specified with the following arguments:
-
-- `node_timestamps`: Tensor | None = None  # \[num_node_events\] (optional)
-
-- `node_ids`: Tensor | None = None, # \[num_node_events\] (optional)
-
-- `dynamic_node_feats`: Tensor | None = None  # \[num_node_events, D_node_dynamic\]
-
-Lastly, each node can also have a static node feature, i.e. node feature that doesn't change over time
-
-- `static_node_feats`: Tensor | None = None  # \[num_nodes, D_node_static\]
-
-In the next part, we will specify our node events
+- `node_timestamps`: shape `[num_node_events]`
+- `node_ids`: shape `[num_node_events]`
+- `dynamic_node_feats`: shape `[num_node_events, D_node_dynamic]`
+- `static_node_feats`: shape `[num_nodes, D_node_static]` (optional)
 
 ```python
-from tgm.graph import DGraph
-
-
-node_timestamps = torch.LongTensor([1, 5, 10])
+node_timestamps = torch.LongTensor([1, 2, 3])
 node_ids = torch.LongTensor([2, 4, 6])
 dynamic_node_feats = torch.rand([3, 5])
-
-assert node_timestamps.shape[0] == node_ids.shape[0] == dynamic_node_feats.shape[0]
-
 static_node_feats = torch.rand(9, 11)
+```
 
-our_dgraph = DGraph.from_raw(
+#### Construct the `DGraph`
+
+```python
+from tgm import DGraph
+
+dg = DGraph.from_raw(
     edge_timestamps=edge_timestamps,
     edge_index=edge_index,
     edge_feats=edge_feats,
@@ -82,123 +71,135 @@ our_dgraph = DGraph.from_raw(
     node_ids=node_ids,
     dynamic_node_feats=dynamic_node_feats,
     static_node_feats=static_node_feats,
-    time_delta='s',
-    device='cpu',
-) # initializing our DGraph, with second wise granularity
+    time_delta='s',  # second-wise granularity
+    device='cuda', # move graph to GPU
+)
 ```
 
-## Construct `DGraph` from Pandas
-
-We can also construct `DGraph` directly from Pandas dataframes by using `DGraph.from_pandas` method. See the example below:
+### Construct `DGraph` from Pandas DataFrames
 
 ```python
 import pandas as pd
 
-edge_dict = {
-    'src': [2, 10],
-    'dst': [3, 20],
-    't': [1337, 1338],
-    'edge_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
-}  # edge events
+edge_df = pd.DataFrame({
+    'src': [2, 2, 1],
+    'dst': [2, 4, 8],
+    't': [1, 5, 10],
+    'edge_feat': [torch.rand(5).tolist() for _ in range(3)],
+})
 
-node_dict = {
-    'node': [7, 8],
-    't': [3, 6],
-    'node_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
-}  # node events, optional
+dynamic_node_df = pd.DataFrame({
+    'node': [2, 4, 6],
+    't': [1, 2, 3],
+    'dynamic_node_feat': [torch.rand(5).tolist() for _ in range(3)],
+})
 
-dgraph = DGraph.from_pandas(
-    edge_df=pd.DataFrame(edge_dict),
+static_node_df = pd.DataFrame({
+    'static_node_feat': [torch.rand(11).tolist() for _ in range(9)]
+})
+
+dg = DGraph.from_pandas(
+    edge_df=edge_df,
     edge_src_col='src',
     edge_dst_col='dst',
     edge_time_col='t',
     edge_feats_col='edge_feat',
-    node_df=pd.DataFrame(node_dict),
+    node_df=dynamic_node_df,
     node_id_col='node',
     node_time_col='t',
-    dynamic_node_feats_col='node_feat',
-    time_delta='s',
-    device='cpu',
+    dynamic_node_feats_col='dynamic_node_feat',
+    static_node_feats_df=static_node_df,
+    static_node_feats_col='static_node_feat',
+    time_delta='s',  # second-wise granularity
+    device='cuda', # move graph to GPU
 )
 ```
 
-## Construct `DGraph` from CSVs
+### Construct `DGraph` from CSV Files
 
-We can also construct `DGraph` directly from csv files by using `DGraph.from_csv` method. see [`tgm/graph.py`](https://github.com/tgm-team/tgm/blob/main/tgm/graph.py) for details.
+To load graph data from CSV files, use `DGraph.from_csv()`.
+See [`tgm/graph.py`](https://github.com/tgm-team/tgm/blob/main/tgm/graph.py) for details.
 
-## Properties of `DGraph`
+______________________________________________________________________
 
-`DGraph` objects act as a view on the underlying graph data, allowing the user to access various properties as well as slicing and other operations. Additional properties are seen in the [`tgm/graph.py`](https://github.com/tgm-team/tgm/blob/main/tgm/graph.py).
+## Accessing `DGraph` Properties
 
-The number nodes is the maximum node ID in the graph plus one, we currently assume the node ID start from 0.
+`DGraph` objects act as views over the underlying data. You can access properties and perform slicing operations.
 
-If the `DGraph` is empty, the start time and end time are None.
+The number of nodes is computed as `max(node_ids) + 1`. If the `DGraph` is empty, `start_time` and `end_time` are `None`.
 
 ```python
 print('=== Graph Properties ===')
-print(f'start time : {our_dgraph.start_time}')
-print(f'end time : {our_dgraph.end_time}')
-print(f'number of nodes : {our_dgraph.num_nodes}')
-print(f'number of edge events : {our_dgraph.num_edges}')
-print(f'number of timestamps : {our_dgraph.num_timestamps}')
-print(f'number of edge and node events : {our_dgraph.num_events}')
-print(f'edge feature dim : {our_dgraph.edge_feats_dim}')
-print(f'static node feature dim : {our_dgraph.static_node_feats_dim}')
-print(f'dynamic node feature dim : {our_dgraph.dynamic_node_feats_dim}')
-print('======================')
+print(f'Start time                : {dg.start_time}')
+print(f'End time                  : {dg.end_time}')
+print(f'Number of nodes           : {dg.num_nodes}')
+print(f'Number of edge events     : {dg.num_edges}')
+print(f'Number of timestamps      : {dg.num_timestamps}')
+print(f'Total events (edge+node)  : {dg.num_events}') # or len(dg)
+print(f'Edge feature dimension    : {dg.edge_feats_dim}')
+print(f'Static node feature dim   : {dg.static_node_feats_dim}')
+print(f'Dynamic node feature dim  : {dg.dynamic_node_feats_dim}')
+print('==========================')
 ```
+
+______________________________________________________________________
 
 ## Slicing `DGraph`
 
-The `DGraph` object provides a view on the underlying temporal graph data. Specifically, TGM supports temporal slicing on `DGraph`. You can easily slice `DGraph` with the `slice_time` function. The sliced `DGraph` continues only the events between the specified start and end time.
+You can slice temporal data using `slice_time()`. This returns a new `DGraph` containing only events within the specified time range (end time exclusive). Slicing is a lightweight operation since the underlying data storage is shared across `DGraph` instances.
 
 ```python
-start_time = 5
-end_time = 10
-
-sliced_dg = dgraph.slice_time(start_time, end_time)
+start_time, end_time = 5, 10
+sliced_dg = dg.slice_time(start_time, end_time)
 ```
 
-## `DGDataLoader` and `DGHook`
+______________________________________________________________________
 
-In TGM, we integrate data loading related operations such as negative sampling and neighbor sampling as hooks to the dataloader. For advanced users, you can also create your own custom hooks.
+## Using `DGDataLoader` and Hooks
+
+TGM integrates operations like **negative sampling** and **neighbor sampling** into the data loader via hooks.
 
 ```python
 from tgm.loader import DGDataLoader
-from tgm.hooks import (
-    NegativeEdgeSamplerHook,
-    RecencyNeighborHook,
-)
+from tgm.hooks import NegativeEdgeSamplerHook, RecencyNeighborHook
 
 neg_hook = NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes)
 
-n_nbrs = [20]  # sample 20 1-hop neighbors for each node
-nbr_hook = RecencyNeighborHook(num_nbrs=n_nbrs, num_nodes=train_dg.num_nodes)
+# Sample 20 1-hop neighbors per node
+nbr_hook = RecencyNeighborHook(num_nbrs=[20], num_nodes=train_dg.num_nodes)
 
 train_loader = DGDataLoader(
-    train_dg, hook=[neg_hook, nbr_hook], batch_size=200
-)  # compose hooks
+    train_dg,
+    hook=[neg_hook, nbr_hook],
+    batch_size=200,
+)
 ```
 
-## `DGDataLoader` materializes each batch into `DGBatch`
+You can also iterate over time windows (instead of event counts) by specifying a `TimeDeltaDG` in the data loader constructor. For this to work, the underlying graph must be non-ordered (e.g. time granularity `'s'`).
 
-For simplicity, we will use an iterator on the loader, you will use `for batch in train_loader:` loop in practice.
+______________________________________________________________________
+
+## Iterating Over Batches with `DGBatch`
+
+Each batch from `DGDataLoader` is a `DGBatch`.
 
 ```python
 iter_loader = iter(train_loader)
 batch = next(iter_loader)
 
-src = batch.src
-dst = batch.dst
-time = batch.time
-neg = batch.neg
-nbr_nids = batch.nbr_nids[1]
-
 print('=== Batch of 200 edges ===')
-print(f'source nodes shape : {src.shape}')
-print(f'destination nodes shape : {dst.shape}')
-print(f'timestamps shape : {time.shape}')
-print(f'negative destinations shape : {neg.shape}')
-print(f'one hop node neighbors shape: {nbr_nids.shape}')
-print('======================')
+print(f'Source nodes shape         : {batch.src.shape}')
+print(f'Destination nodes shape    : {batch.dst.shape}')
+print(f'Timestamps shape           : {batch.time.shape}')
+print(f'Negative destinations shape: {batch.neg.shape}')
+print(f'1-hop neighbors shape      : {batch.nbr_nids[1].shape}')
+print('===========================')
 ```
+
+The materialized batch will contain, at a minimum the batch of edges, features and nodes on the appropriate device. Hooks inject additional attributes at runtime (e.g. `batch.neg`).
+
+______________________________________________________________________
+
+## Feedback
+
+Please feel free to reach out to us if anything is unclear or unintuitive. We are happy to discuss and improve your experience with TGM.
