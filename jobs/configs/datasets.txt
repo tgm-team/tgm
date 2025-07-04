@@ -1,5 +1,0 @@
-tgbl-wiki
-tgbl-subreddit
-tgbl-lastfm
-tgbl-enron
-tgbl-uci
