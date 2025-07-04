@@ -146,6 +146,8 @@ class DGraph:
         dynamic_node_feats_col: List[str] | None = None,
         static_node_feats_df: 'pandas.DataFrame' | None = None,  # type: ignore
         static_node_feats_col: List[str] | None = None,
+        time_delta: TimeDeltaDG | str = 'r',
+        device: str | torch.device = 'cpu',
     ) -> DGraph:
         r"""Constructs a DGraph from pandas DataFrames.
 
@@ -161,6 +163,8 @@ class DGraph:
             dynamic_node_feats_col (List[str] | None): List of column names for dynamic node features in the node DataFrame. Defaults to None.
             static_node_feats_df (pandas.DataFrame | None): DataFrame containing static node features.
             static_node_feats_col (List[str] | None): List of column names for static node features in the static node features DataFrame.
+            time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
+            device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
         """
         data = DGData.from_pandas(
             edge_df=edge_df,
@@ -175,9 +179,38 @@ class DGraph:
             static_node_feats_df=static_node_feats_df,
             static_node_feats_col=static_node_feats_col,
         )
+
         return cls(
             data=data,
-            time_delta='r',
+            time_delta=time_delta,
+            device=device,
+        )
+
+    @classmethod
+    def from_tgb(
+        cls,
+        name: str,
+        split: str = 'all',
+        time_delta: TimeDeltaDG | str | None = None,
+        device: str | torch.device = 'cpu',
+    ) -> DGraph:
+        r"""Constructs a DGraph from a TGB dataset.
+
+        Args:
+            name (str): Name of the TGB dataset.
+            split (str): Split of the dataset to use. Defaults to 'all'.
+            time_delta (TimeDeltaDG | None): Time delta for the graph. If None, uses the default for the dataset.
+            device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
+        """
+        data = DGData.from_tgb(
+            name=name,
+            split=split,
+            time_delta=time_delta,  # type: ignore
+        )
+
+        return cls(
+            data=data,
+            device=device,
         )
 
     def discretize(

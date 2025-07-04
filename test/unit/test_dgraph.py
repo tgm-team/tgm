@@ -148,6 +148,42 @@ def test_dgraph_from_raw():
     assert dg.device == torch.device('cpu')
 
 
+@pytest.mark.parametrize(
+    'time_gran',
+    ['s', 'm', 'r'],
+)
+def test_dgraph_from_raw_time_gran(time_gran):
+    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
+    edge_feats = torch.rand(3, 5)
+
+    dg = DGraph.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        time_delta=time_gran,
+    )
+    assert dg.time_delta == TimeDeltaDG(time_gran)
+
+
+@pytest.mark.parametrize(
+    'device',
+    ['cpu'],
+)
+def test_dgraph_from_raw_device(device):
+    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
+    edge_feats = torch.rand(3, 5)
+
+    dg = DGraph.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        device=device,
+    )
+    assert dg.device == torch.device('cpu')
+
+
 def test_dgraph_from_pandas():
     import pandas as pd
 
@@ -186,6 +222,69 @@ def test_dgraph_from_pandas():
     assert dg.dynamic_node_feats_dim == 5
     assert dg.edge_feats_dim == 5
     assert dg.device == torch.device('cpu')
+
+
+@pytest.mark.parametrize(
+    'time_gran',
+    ['s', 'm', 'r'],
+)
+def test_dgraph_from_pandas_time_gran(time_gran):
+    import pandas as pd
+
+    edge_dict = {
+        'src': [2, 10],
+        'dst': [3, 20],
+        't': [1337, 1338],
+        'edge_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
+    }  # edge events
+
+    dg = DGraph.from_pandas(
+        edge_df=pd.DataFrame(edge_dict),
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
+        edge_feats_col='edge_feat',
+        time_delta=time_gran,
+    )
+    assert dg.time_delta == TimeDeltaDG(time_gran)
+
+
+@pytest.mark.parametrize(
+    'device',
+    ['cpu'],
+)
+def test_dgraph_from_pandas_device(device):
+    import pandas as pd
+
+    edge_dict = {
+        'src': [2, 10],
+        'dst': [3, 20],
+        't': [1337, 1338],
+        'edge_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
+    }  # edge events
+    dg = DGraph.from_pandas(
+        edge_df=pd.DataFrame(edge_dict),
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
+        edge_feats_col='edge_feat',
+        device=device,
+    )
+    assert dg.device == torch.device('cpu')
+
+
+def test_dgraph_from_csv():
+    data = 'foo.csv'
+    with patch.object(DGraph, 'from_csv') as mock_csv:
+        _ = DGraph.from_csv(data)
+        mock_csv.assert_called_once_with(data)
+
+
+def test_dgraph_from_tgb():
+    data = 'tgbl-mock'
+    with patch.object(DGraph, 'from_tgb') as mock_tgb:
+        _ = DGraph.from_tgb(name=data, time_delta=None)
+        mock_tgb.assert_called_once_with(name=data, time_delta=None)
 
 
 def test_str(data):
