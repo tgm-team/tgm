@@ -6,10 +6,11 @@ build-backend = "flit_core.buildapi"
 torch-backend = "auto"
 
 [project]
-name = "tgm"
-version = "0.0.1-alpha"
+name = "py-tgm"
+version = "0.1.0a0"
 description = "Efficient and Modular ML on Dynamic Graphs"
 readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
