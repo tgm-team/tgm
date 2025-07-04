@@ -6,7 +6,7 @@ build-backend = "flit_core.buildapi"
 torch-backend = "auto"
 
 [project]
-name = "py-tgm"
+name = "tgm"
 version = "0.1.0a0"
 description = "Efficient and Modular ML on Dynamic Graphs"
 readme = "README.md"
