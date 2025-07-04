@@ -174,7 +174,7 @@ def eval(
         z = encoder(batch)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
             z_src = z[batch.global_to_local(src_ids)]
