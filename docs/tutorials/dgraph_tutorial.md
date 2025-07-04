@@ -130,15 +130,15 @@ The number of nodes is computed as `max(node_ids) + 1`. If the `DGraph` is empty
 
 ```python
 print('=== Graph Properties ===')
-print(f'Start time                : {dg.start_time}')
-print(f'End time                  : {dg.end_time}')
-print(f'Number of nodes           : {dg.num_nodes}')
-print(f'Number of edge events     : {dg.num_edges}')
-print(f'Number of timestamps      : {dg.num_timestamps}')
-print(f'Total events (edge+node)  : {dg.num_events}') # or len(dg)
-print(f'Edge feature dimension    : {dg.edge_feats_dim}')
-print(f'Static node feature dim   : {dg.static_node_feats_dim}')
-print(f'Dynamic node feature dim  : {dg.dynamic_node_feats_dim}')
+print(f'Start time                : {dg.start_time}') # 1
+print(f'End time                  : {dg.end_time}') # 10
+print(f'Number of nodes           : {dg.num_nodes}') # 9
+print(f'Number of edge events     : {dg.num_edges}') # 3
+print(f'Number of timestamps      : {dg.num_timestamps}') # or len(dg); 5
+print(f'Total events (edge+node)  : {dg.num_events}') # 6
+print(f'Edge feature dimension    : {dg.edge_feats_dim}') # 5
+print(f'Static node feature dim   : {dg.static_node_feats_dim}') # 11
+print(f'Dynamic node feature dim  : {dg.dynamic_node_feats_dim}') # 5
 print('==========================')
 ```
 
