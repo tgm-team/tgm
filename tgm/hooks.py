@@ -26,7 +26,7 @@ class HookManager:
         bad_hook_names = [type(h).__name__ for h in hooks if not isinstance(h, DGHook)]
         if len(bad_hook_names):
             raise TypeError(
-                f'Some hooks do not correctly implement the DGHook protocol: {bad_hook_names}, '
+                f'These hooks do not correctly implement the DGHook protocol: {bad_hook_names}, '
                 'ensure there is a __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch implemented'
             )
 

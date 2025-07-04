@@ -29,6 +29,11 @@ class DGData:
     static_node_feats: Tensor | None = None  # [num_nodes, D_node_static]
 
     def __post_init__(self) -> None:
+        def _assert_tensor_is_integer(x: Tensor, name: str) -> None:
+            int_types = [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8]
+            if x.dtype not in int_types:
+                raise TypeError(f'{name} must have integer dtype but got: {x.dtype}')
+
         # Validate edge index
         if not isinstance(self.edge_index, Tensor):
             raise TypeError(f'edge_index must be Tensor, got: {type(self.edge_index)}')
@@ -36,6 +41,7 @@ class DGData:
             raise ValueError(
                 f'edge_index must have shape [num_edges, 2], got: {self.edge_index.shape}',
             )
+        _assert_tensor_is_integer(self.edge_index, 'edge_index')
 
         num_edges = self.edge_index.shape[0]
         if num_edges == 0:
@@ -51,6 +57,7 @@ class DGData:
                 'edge_event_idx must have shape [num_edges], '
                 f'got {num_edges} edges and shape {self.edge_event_idx.shape}'
             )
+        _assert_tensor_is_integer(self.edge_event_idx, 'edge_event_idx')
 
         # Validate edge features
         if self.edge_feats is not None:
@@ -75,7 +82,13 @@ class DGData:
                 raise ValueError(
                     f'node_event_idx must have shape [num_node_events], got: {self.node_event_idx.shape}'
                 )
+            _assert_tensor_is_integer(self.node_event_idx, 'node_event_idx')
+
             num_node_events = self.node_event_idx.shape[0]
+            if num_node_events == 0:
+                raise ValueError(
+                    'node_event_idx is an empty tensor, please double-check your inputs'
+                )
 
             # Validate node ids
             if not isinstance(self.node_ids, Tensor):
@@ -87,6 +100,7 @@ class DGData:
                     'node_ids must have shape [num_node_events], ',
                     f'got {num_node_events} node events and shape {self.node_ids.shape}',
                 )
+            _assert_tensor_is_integer(self.node_ids, 'node_ids')
 
             # Validate dynamic node features (could be None)
             if self.dynamic_node_feats is not None:
@@ -140,8 +154,11 @@ class DGData:
         ):
             raise ValueError(
                 'timestamps must have shape [num_edges + num_node_events], '
-                f'got {num_edges} edges, {num_node_events} node_events, shape: {self.timestamps.shape} '
+                f'got {num_edges} edges, {num_node_events} node_events, shape: {self.timestamps.shape}. '
+                'Please double-check the edge and node timestamps you provided. If this is not resolved '
+                'raise an issue and provide instructions on how to reproduce your the error'
             )
+        _assert_tensor_is_integer(self.timestamps, 'timestamps')
         if not torch.all(self.timestamps >= 0):
             raise ValueError('timestamps must all be non-negative')
 

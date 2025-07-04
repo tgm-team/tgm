@@ -133,7 +133,9 @@ def test_init_dg_data_sort_required():
 def test_init_dg_data_bad_args_empty_graph():
     # Empty graph not supported
     with pytest.raises(ValueError):
-        _ = DGData.from_raw(torch.empty(0), torch.empty((0, 2)))
+        _ = DGData.from_raw(
+            torch.empty(0, dtype=torch.int), torch.empty((0, 2), dtype=torch.int)
+        )
 
 
 def test_init_dg_data_bad_args_bad_timestamps():
@@ -184,6 +186,42 @@ def test_init_dg_data_bad_args_bad_node_ids():
             edge_feats,
             node_timestamps,
             node_ids=torch.LongTensor([0]),
+        )
+
+
+def test_init_dg_data_bad_args_non_integral_types():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    node_timestamps = torch.LongTensor([6, 7, 8])
+    node_ids = torch.LongTensor([0, 1, 0])
+
+    with pytest.raises(TypeError):
+        _ = DGData.from_raw(
+            edge_timestamps.float(),
+            edge_index,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+        )
+    with pytest.raises(TypeError):
+        _ = DGData.from_raw(
+            edge_timestamps,
+            edge_index.float(),
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+        )
+    with pytest.raises(TypeError):
+        _ = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_timestamps=node_timestamps.float(),
+            node_ids=node_ids,
+        )
+    with pytest.raises(TypeError):
+        _ = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids.float(),
         )
 
 
