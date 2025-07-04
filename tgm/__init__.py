@@ -1,4 +1,4 @@
-"""TGM: Efficient and Modular ML on Dynamic Graphs."""
+"""TGM: Efficient and Modular ML on Temporal Graphs."""
 
 from .graph import DGraph, DGBatch
 
