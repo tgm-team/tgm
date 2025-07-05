@@ -51,7 +51,6 @@ class TGCN(torch.nn.Module):
             edge_index (PyTorch Long Tensor): Graph edge indices.
             edge_weight (PyTorch Long Tensor, optional): Edge weight vector.
             H (PyTorch Tensor, optional): Hidden state matrix for all nodes.
-            C (PyTorch Tensor, optional): Cell state matrix for all nodes.
             lambda_max (PyTorch Tensor, optional but mandatory if normalization is not sym): Largest eigenvalue of Laplacian.
 
         Returns:

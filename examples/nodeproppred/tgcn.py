@@ -1,5 +1,5 @@
-r"""python -u gclstm.py --dataset tgbn-trade --time-gran r --batch-time-gran r
-python -u gclstm.py --dataset tgbn-genre --time-gran s --batch-time-gran D\
+r"""python -u tgcn.py --dataset tgbn-trade --time-gran r --batch-time-gran r
+python -u tgcn.py --dataset tgbn-genre --time-gran s --batch-time-gran D\
 example commands to run this script.
 """
 
@@ -59,7 +59,7 @@ class TGCN_Model(nn.Module):
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0 = self.encoder(node_feat, edge_index, edge_weight, h_0)
-        z_node = z[batch.nid_to_idx[batch.node_ids]]  # type: ignore
+        z_node = z[batch.global_to_local[batch.node_ids]]  # type: ignore
         pred = self.decoder(z_node)
         return pred, h_0
 
@@ -74,7 +74,7 @@ class RecurrentGCN(torch.nn.Module):
         self,
         x: torch.Tensor,
         edge_index: torch.Tensor,
-        edge_weight: torch.Tensor,
+        edge_weight: torch.Tensor | None,
         h: torch.Tensor | None,
     ) -> Tuple[torch.Tensor, ...]:
         h_0 = self.recurrent(x, edge_index, edge_weight, h)

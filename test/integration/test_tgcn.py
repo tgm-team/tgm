@@ -12,7 +12,7 @@ import pytest
         '--gres=gpu:a100l:1',
     ]
 )
-def test_gclstm_nodeprop_pred(slurm_job_runner, dataset):
+def test_tgcn_nodeprop_pred(slurm_job_runner, dataset):
     cmd = f"""
 echo "Downloading dataset: {dataset}"
 echo "y" | python -c "from tgb.nodeproppred.dataset import NodePropPredDataset; NodePropPredDataset('{dataset}')"
