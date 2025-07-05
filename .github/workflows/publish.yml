@@ -1,0 +1,52 @@
+name: Publish Python Package
+
+on: # yamllint disable-line rule:truthy
+  push:
+    tags:
+      - 'v*'  # Runs for tags like v0.1.0a0, v1.0.0
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up python
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Set up uv
+        run: curl -LsSf https://astral.sh/uv/${{ env.UV_VERSION }}/install.sh | sh
+
+      - name: Check package metadata
+        run: |
+          uv version
+
+      - name: Build the package
+        run: uv build
+
+      - name: Sanity check that package installs and imports
+        run: |
+          echo "Verifying package installs and imports correctly..."
+          uv run --with py-tgm --no-project -- python -c "import tgm; print(tgm.__version__)"
+
+      - name: Publish to TestPyPI (default)
+        if: ${{ !env.RELEASE }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+
+      - name: Publish to PyPI
+        if: ${{ env.RELEASE }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
