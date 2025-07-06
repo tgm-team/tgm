@@ -235,7 +235,9 @@ def _init_hooks(
     if split_mode in ['val', 'test']:
         neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
     else:
-        neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
+        _, dst, _ = dg.edges
+        min_dst, max_dst = int(dst.min()), int(dst.max())
+        neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
     return [neg_hook, nbr_hook]
 
 
@@ -272,8 +274,7 @@ for epoch in range(1, args.epochs + 1):
         batch_size=args.bsize,
     )
     start_time = time.perf_counter()
-    # loss = train(train_loader, encoder, decoder, opt)
-    loss = 0
+    loss = train(train_loader, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
