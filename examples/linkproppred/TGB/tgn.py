@@ -323,7 +323,7 @@ class LinkPredictor(nn.Module):
         h = h.relu()
         h = self.lin_2(h)
         h = h.relu()
-        return self.lin_out(h).sigmoid()
+        return self.lin_out(h).sigmoid().view(-1)  # Ensure output is 1D tensor
 
 
 def train(
@@ -385,7 +385,13 @@ def eval(
                 'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
-            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+
+            tgb_score = evaluator.eval(input_dict)[eval_metric]
+            # target = torch.zeros(len(y_pred), dtype=torch.bool)
+            # target[0] = True  # The first element is the positive sample
+            # rr = retrieval_reciprocal_rank(y_pred, target)
+            # assert round(rr.item(),2) == round(tgb_score,2), f'Expected {rr.item()} to be equal to {tgb_score}'
+            perf_list.append(tgb_score)
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
     return metric_dict
