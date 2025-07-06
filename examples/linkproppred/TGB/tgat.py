@@ -87,7 +87,7 @@ class TGAT(nn.Module):
         for hop in reversed(range(self.num_layers)):
             seed_nodes = batch.nids[hop]
             nbrs = batch.nbr_nids[hop]
-            nbr_mask = batch.nbr_mask[hop]
+            nbr_mask = batch.nbr_mask[hop].bool()
             if seed_nodes.numel() == 0:
                 continue
 
@@ -98,8 +98,8 @@ class TGAT(nn.Module):
             # If next next hops embeddings exist, use them instead of raw features
             nbr_feat = STATIC_NODE_FEAT[nbrs]
             if hop < self.num_layers - 1:
-                valid_nbrs = nbrs[nbr_mask.bool()]
-                nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
+                valid_nbrs = nbrs[nbr_mask]
+                nbr_feat[nbr_mask] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
             delta_time = delta_time.masked_fill(~nbr_mask, 0)
