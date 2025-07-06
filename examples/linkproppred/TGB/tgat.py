@@ -102,6 +102,8 @@ class TGAT(nn.Module):
                 nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
+            delta_time = delta_time.masked_fill(~nbr_mask, 0)
+
             nbr_time_feat = self.time_encoder(delta_time)
 
             out = self.attn[hop](
