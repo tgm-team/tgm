@@ -214,15 +214,19 @@ test_dg = DGraph(
 
 
 def _init_hooks(
-    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
+    sampling_type: str,
+    neg_sampler: object,
+    split_mode: str,
+    num_nodes: int,
+    edge_feats_dim: int,
 ) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
         nbr_hook = RecencyNeighborHook(
             num_nbrs=args.n_nbrs,
-            num_nodes=dg.num_nodes,
-            edge_feats_dim=dg.edge_feats_dim,
+            num_nodes=num_nodes,
+            edge_feats_dim=edge_feats_dim,
         )
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
@@ -231,23 +235,29 @@ def _init_hooks(
     if split_mode in ['val', 'test']:
         neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
     else:
-        neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
+        neg_hook = NegativeEdgeSamplerHook(low=0, high=num_nodes)
     return [neg_hook, nbr_hook]
 
 
 train_loader = DGDataLoader(
     train_dg,
-    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
+    hook=_init_hooks(
+        args.sampling, neg_sampler, 'train', test_dg.num_nodes, test_dg.edge_feats_dim
+    ),
     batch_size=args.bsize,
 )
 val_loader = DGDataLoader(
     val_dg,
-    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
+    hook=_init_hooks(
+        args.sampling, neg_sampler, 'val', test_dg.num_nodes, test_dg.edge_feats_dim
+    ),
     batch_size=args.bsize,
 )
 test_loader = DGDataLoader(
     test_dg,
-    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'test'),
+    hook=_init_hooks(
+        args.sampling, neg_sampler, 'test', test_dg.num_nodes, test_dg.edge_feats_dim
+    ),
     batch_size=args.bsize,
 )
 
