@@ -252,11 +252,16 @@ class NeighborSamplerHook:
                     # we pick random time stamps within [batch.start_time, batch.end_time].
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
+
+                    # Use generator to locall constrain rng for reproducability
+                    gen = torch.Generator(device=device)
+                    gen.manual_seed(0)
                     fake_times = torch.randint(
                         int(batch.time.min().item()),
                         int(batch.time.max().item()) + 1,
                         (batch.neg.size(0),),
                         device=device,
+                        generator=gen,
                     )
                     times.append(fake_times)
                 seed_nodes = torch.cat(seed)
@@ -348,11 +353,15 @@ class RecencyNeighborHook:
                     # we pick random time stamps within [batch.start_time, batch.end_time].
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
+                    # Use generator to locall constrain rng for reproducability
+                    gen = torch.Generator(device=device)
+                    gen.manual_seed(0)
                     fake_times = torch.randint(
                         int(batch.time.min().item()),
                         int(batch.time.max().item()) + 1,
                         (batch.neg.size(0),),
                         device=device,
+                        generator=gen,
                     )
                     times.append(fake_times)
                 seed_nodes = torch.cat(seed)

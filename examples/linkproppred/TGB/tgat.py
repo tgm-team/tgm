@@ -169,7 +169,14 @@ def eval(
     decoder.eval()
     perf_list = []
     for batch in tqdm(loader):
+        # dd = {}
+        # for k, v in vars(batch).items():
+        #    if k != 'global_to_local':
+        #        dd[k] = v
+
         z = encoder(batch)
+        # dd['z'] = z
+        # return dd
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
@@ -185,6 +192,7 @@ def eval(
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
+
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
     return metric_dict
@@ -206,7 +214,7 @@ test_dg = DGraph(args.dataset, split='test', device=args.device)
 
 # TODO: Read from graph
 NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
-STATIC_NODE_FEAT = torch.randn((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
 
 
 def _init_hooks(
@@ -231,16 +239,6 @@ def _init_hooks(
     return [neg_hook, nbr_hook]
 
 
-train_loader = DGDataLoader(
-    train_dg,
-    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
-    batch_size=args.bsize,
-)
-val_loader = DGDataLoader(
-    val_dg,
-    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
-    batch_size=args.bsize,
-)
 test_loader = DGDataLoader(
     test_dg,
     hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'test'),
@@ -261,13 +259,35 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
+# prev_val_results = None
 for epoch in range(1, args.epochs + 1):
+    train_loader = DGDataLoader(
+        train_dg,
+        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
+        batch_size=args.bsize,
+    )
+    val_loader = DGDataLoader(
+        val_dg,
+        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
+        batch_size=args.bsize,
+    )
     start_time = time.perf_counter()
-    loss = train(train_loader, encoder, decoder, opt)
+    # loss = train(train_loader, encoder, decoder, opt)
+    loss = 0
     end_time = time.perf_counter()
     latency = end_time - start_time
 
     val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
+    # if prev_val_results is None:
+    #    prev_val_results = val_results
+    #    continue
+    # else:
+    #    for k, v in val_results.items():
+    #        print(k)
+    #        torch.testing.assert_close(prev_val_results[k], v)
+    #        print('Ok.')
+    #    exit()
+
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
