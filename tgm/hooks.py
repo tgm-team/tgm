@@ -162,9 +162,9 @@ class NegativeEdgeSamplerHook:
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(
+        batch.neg = torch.randint(  # type: ignore
             self.low, self.high, size, dtype=torch.long, device=dg.device
-        )  # type: ignore
+        )
         return batch
 
 
@@ -280,7 +280,7 @@ class NeighborSamplerHook:
             nbr_nids, nbr_times, nbr_feats, nbr_mask = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
-                slice=DGSliceTracker(end_time=dg._slice.start_time),
+                slice=DGSliceTracker(end_time=int(batch.time.min())),
             )
 
             batch.nids.append(seed_nodes)  # type: ignore
