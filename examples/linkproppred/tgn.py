@@ -42,7 +42,7 @@ parser.add_argument(
     help='num sampled nbrs at each hop',
 )
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
+parser.add_argument('--embed-dim', type=int, default=172, help='attention dimension')
 parser.add_argument(
     '--sampling',
     type=str,
@@ -55,7 +55,6 @@ parser.add_argument(
 class TGN(torch.nn.Module):
     def __init__(
         self,
-        node_dim: int,
         edge_dim: int,
         time_dim: int,
         embed_dim: int,
@@ -73,9 +72,8 @@ class TGN(torch.nn.Module):
         self.memory = Memory(n_nodes=num_nodes, memory_dim=embed_dim)
         self.memory_updater = GRUMemoryUpdater(self.memory, msg_dim, embed_dim)
         self.gat = GraphAttentionEmbedding(
-            node_dim=node_dim,
             edge_dim=edge_dim,
-            time_dim=node_dim,
+            time_dim=time_dim,
             embed_dim=embed_dim,
             num_layers=num_layers,
             n_heads=n_heads,
@@ -243,7 +241,6 @@ class GRUMemoryUpdater(nn.Module):
 class GraphAttentionEmbedding(nn.Module):
     def __init__(
         self,
-        node_dim: int,
         edge_dim: int,
         time_dim: int,
         embed_dim: int,
@@ -261,13 +258,13 @@ class GraphAttentionEmbedding(nn.Module):
             [
                 TemporalAttention(
                     n_heads=n_heads,
-                    node_dim=node_dim if i == 0 else embed_dim,
+                    node_dim=embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
                     out_dim=embed_dim,
                     dropout=dropout,
                 )
-                for i in range(num_layers)
+                for _ in range(num_layers)
             ]
         )
 
@@ -280,18 +277,19 @@ class GraphAttentionEmbedding(nn.Module):
         for hop in reversed(range(self.num_layers)):
             seed_nodes = batch.nids[hop]
             nbrs = batch.nbr_nids[hop]
+            nbr_mask = batch.nbr_mask[hop]
             if seed_nodes.numel() == 0:
                 continue
 
             # TODO: Check and read static node features
-            node_feat = torch.zeros((*seed_nodes.shape, self.embed_dim), device=device)
+            node_feat = STATIC_NODE_FEAT[seed_nodes]
             node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
+            nbr_feat = STATIC_NODE_FEAT[nbrs]
             if hop < self.num_layers - 1:
-                nbr_feat = z[batch.global_to_local(nbrs)]
-            else:
-                nbr_feat = torch.zeros((*nbrs.shape, self.embed_dim), device=device)
+                valid_nbrs = nbrs[nbr_mask.bool()]
+                nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
             nbr_time_feat = self.time_encoder(delta_time)
@@ -370,6 +368,10 @@ train_dg = DGraph(args.dataset, split='train', device=args.device)
 val_dg = DGraph(args.dataset, split='val', device=args.device)
 test_dg = DGraph(args.dataset, split='test', device=args.device)
 
+# TODO: Read from graph
+NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
+STATIC_NODE_FEAT = torch.randn((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     if sampling_type == 'uniform':
@@ -402,10 +404,9 @@ test_loader = DGDataLoader(
 num_nodes = DGraph(args.dataset).num_nodes
 
 model = TGN(
-    node_dim=train_dg.dynamic_node_feats_dim or args.embed_dim,  # TODO: verify
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
-    embed_dim=args.embed_dim,
+    embed_dim=train_dg.static_node_feats_dim or args.embed_dim,
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),

@@ -40,7 +40,7 @@ parser.add_argument(
     help='num sampled nbrs at each hop',
 )
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
+parser.add_argument('--embed-dim', type=int, default=172, help='attention dimension')
 parser.add_argument(
     '--sampling',
     type=str,
@@ -53,7 +53,6 @@ parser.add_argument(
 class TGAT(nn.Module):
     def __init__(
         self,
-        node_dim: int,
         edge_dim: int,
         time_dim: int,
         embed_dim: int,
@@ -70,13 +69,13 @@ class TGAT(nn.Module):
             [
                 TemporalAttention(
                     n_heads=n_heads,
-                    node_dim=node_dim if i == 0 else embed_dim,
+                    node_dim=embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
                     out_dim=embed_dim,
                     dropout=dropout,
                 )
-                for i in range(num_layers)
+                for _ in range(num_layers)
             ]
         )
 
@@ -92,11 +91,11 @@ class TGAT(nn.Module):
                 continue
 
             # TODO: Check and read static node features
-            node_feat = torch.zeros((*seed_nodes.shape, self.embed_dim), device=device)
+            node_feat = STATIC_NODE_FEAT[seed_nodes]
             node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
-            nbr_feat = torch.zeros((*nbrs.shape, self.embed_dim), device=device)
+            nbr_feat = STATIC_NODE_FEAT[nbrs]
             if hop < self.num_layers - 1:
                 valid_nbrs = nbrs[nbr_mask.bool()]
                 nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
@@ -175,6 +174,10 @@ train_dg = DGraph(args.dataset, split='train', device=args.device)
 val_dg = DGraph(args.dataset, split='val', device=args.device)
 test_dg = DGraph(args.dataset, split='test', device=args.device)
 
+# TODO: Read from graph
+NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
+STATIC_NODE_FEAT = torch.randn((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     if sampling_type == 'uniform':
@@ -204,10 +207,9 @@ test_loader = DGDataLoader(
 )
 
 model = TGAT(
-    node_dim=train_dg.dynamic_node_feats_dim or args.embed_dim,  # TODO: verify
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
-    embed_dim=args.embed_dim,
+    embed_dim=train_dg.static_node_feats_dim or args.embed_dim,
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
