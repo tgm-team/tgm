@@ -120,11 +120,13 @@ class DeduplicationHook:
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         nids = [batch.src, batch.dst]
         if hasattr(batch, 'neg'):
+            batch.neg = batch.neg.to(batch.src.device)
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
                 hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
-                nids.append(hop_nids[hop_mask])
+                valid_hop_nids = hop_nids[hop_mask].to(batch.src.device)
+                nids.append(valid_hop_nids)
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)
