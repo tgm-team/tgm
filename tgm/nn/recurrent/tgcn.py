@@ -11,8 +11,8 @@ class TGCN(torch.nn.Module):
     Args:
         in_channels (int): Number of input features.
         out_channels (int): Number of output features.
-        improved (bool): Stronger self loops. Default is False.
-        cached (bool): Caching the message weights. Default is False.
+        improved (bool): Stronger self loops. Default is False. If `improved = True`, the self-loops are added `A+2I` instead of `A+I` giving each node’s own features more influence during aggregation
+        cached (bool): Caching the message weights. Default is False. The layer computes the normalized adjacency matrix only once. Speed up training but limit to transductive learning scenario (graph structure is assumed to be static)
         add_self_loops (bool): Adding self-loops for smoothing. Default is True.
 
     Reference: https://arxiv.org/abs/1811.05320
