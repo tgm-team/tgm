@@ -214,7 +214,7 @@ test_dg = DGraph(args.dataset, split='test', device=args.device)
 
 # TODO: Read from graph
 NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
-STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+STATIC_NODE_FEAT = torch.randn((NUM_NODES, NODE_FEAT_DIM), device=args.device)
 
 
 def _init_hooks(
