@@ -120,11 +120,13 @@ class DeduplicationHook:
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         nids = [batch.src, batch.dst]
         if hasattr(batch, 'neg'):
+            batch.neg = batch.neg.to(batch.src.device)
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
                 hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
-                nids.append(hop_nids[hop_mask])
+                valid_hop_nids = hop_nids[hop_mask].to(batch.src.device)
+                nids.append(valid_hop_nids)
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)
@@ -160,7 +162,9 @@ class NegativeEdgeSamplerHook:
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
+        batch.neg = torch.randint(  # type: ignore
+            self.low, self.high, size, dtype=torch.long, device=dg.device
+        )
         return batch
 
 
@@ -200,9 +204,11 @@ class TGBNegativeEdgeSamplerHook:
         tensor_batch_list = []
         for neg_batch in neg_batch_list:
             queries.append(neg_batch)
-            tensor_batch_list.append(torch.tensor(neg_batch, dtype=torch.long))
+            tensor_batch_list.append(
+                torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+            )
         unique_neg = np.unique(np.concatenate(queries))
-        batch.neg = torch.tensor(unique_neg, dtype=torch.long)  # type: ignore
+        batch.neg = torch.tensor(unique_neg, dtype=torch.long, device=dg.device)  # type: ignore
         batch.neg_batch_list = tensor_batch_list  # type: ignore
         return batch
 
@@ -250,11 +256,16 @@ class NeighborSamplerHook:
                     # we pick random time stamps within [batch.start_time, batch.end_time].
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
+
+                    # Use generator to locall constrain rng for reproducability
+                    gen = torch.Generator(device=device)
+                    gen.manual_seed(0)
                     fake_times = torch.randint(
                         int(batch.time.min().item()),
                         int(batch.time.max().item()) + 1,
                         (batch.neg.size(0),),
                         device=device,
+                        generator=gen,
                     )
                     times.append(fake_times)
                 seed_nodes = torch.cat(seed)
@@ -271,7 +282,7 @@ class NeighborSamplerHook:
             nbr_nids, nbr_times, nbr_feats, nbr_mask = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
-                slice=DGSliceTracker(end_time=dg._slice.start_time),
+                slice=DGSliceTracker(end_time=int(batch.time.min())),
             )
 
             batch.nids.append(seed_nodes)  # type: ignore
@@ -346,11 +357,15 @@ class RecencyNeighborHook:
                     # we pick random time stamps within [batch.start_time, batch.end_time].
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
+                    # Use generator to locall constrain rng for reproducability
+                    gen = torch.Generator(device=device)
+                    gen.manual_seed(0)
                     fake_times = torch.randint(
                         int(batch.time.min().item()),
                         int(batch.time.max().item()) + 1,
                         (batch.neg.size(0),),
                         device=device,
+                        generator=gen,
                     )
                     times.append(fake_times)
                 seed_nodes = torch.cat(seed)
