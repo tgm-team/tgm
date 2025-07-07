@@ -36,7 +36,8 @@ jobs:
       - name: Sanity check that package installs and imports
         run: |
           echo "Verifying package installs and imports correctly..."
-          uv run --with tgm-lib --no-project -- python -c "import tgm; print(tgm.__version__)"
+          uv pip install dist/*.whl
+          uv run python -c "import tgm; print(tgm.__version__)"
 
       - name: Publish package
         uses: pypa/gh-action-pypi-publish@release/v1
