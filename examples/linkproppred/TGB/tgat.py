@@ -257,6 +257,7 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
+    # TODO: Need a clean way to clear nbr state across epochs
     train_loader = DGDataLoader(
         train_dg,
         hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),

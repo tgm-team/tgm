@@ -101,6 +101,7 @@ class TGAT(nn.Module):
                 nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
+            delta_time = delta_time.masked_fill(~nbr_mask, 0)
             nbr_time_feat = self.time_encoder(delta_time)
 
             out = self.attn[hop](
@@ -196,14 +197,10 @@ def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     return [neg_hook, nbr_hook]
 
 
-train_loader = DGDataLoader(
-    train_dg, hook=_init_hooks(train_dg, args.sampling), batch_size=args.bsize
-)
-val_loader = DGDataLoader(
-    val_dg, hook=_init_hooks(val_dg, args.sampling), batch_size=args.bsize
-)
 test_loader = DGDataLoader(
-    test_dg, hook=_init_hooks(test_dg, args.sampling), batch_size=args.bsize
+    test_dg,
+    hook=_init_hooks(test_dg, args.sampling),
+    batch_size=args.bsize,
 )
 
 model = TGAT(
@@ -221,6 +218,17 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
+    # TODO: Need a clean way to clear nbr state across epochs
+    train_loader = DGDataLoader(
+        train_dg,
+        hook=_init_hooks(test_dg, args.sampling),
+        batch_size=args.bsize,
+    )
+    val_loader = DGDataLoader(
+        val_dg,
+        hook=_init_hooks(test_dg, args.sampling),
+        batch_size=args.bsize,
+    )
     start_time = time.perf_counter()
     loss = train(train_loader, model, opt)
     end_time = time.perf_counter()

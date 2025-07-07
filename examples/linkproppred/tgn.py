@@ -277,7 +277,7 @@ class GraphAttentionEmbedding(nn.Module):
         for hop in reversed(range(self.num_layers)):
             seed_nodes = batch.nids[hop]
             nbrs = batch.nbr_nids[hop]
-            nbr_mask = batch.nbr_mask[hop]
+            nbr_mask = batch.nbr_mask[hop].bool()
             if seed_nodes.numel() == 0:
                 continue
 
@@ -288,10 +288,11 @@ class GraphAttentionEmbedding(nn.Module):
             # If next next hops embeddings exist, use them instead of raw features
             nbr_feat = STATIC_NODE_FEAT[nbrs]
             if hop < self.num_layers - 1:
-                valid_nbrs = nbrs[nbr_mask.bool()]
-                nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
+                valid_nbrs = nbrs[nbr_mask]
+                nbr_feat[nbr_mask] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
+            delta_time = delta_time.masked_fill(~nbr_mask, 0)
             nbr_time_feat = self.time_encoder(delta_time)
 
             out = self.attn[hop](
@@ -300,13 +301,14 @@ class GraphAttentionEmbedding(nn.Module):
                 edge_feat=batch.nbr_feats[hop],
                 nbr_node_feat=nbr_feat,
                 nbr_time_feat=nbr_time_feat,
-                nbr_mask=batch.nbr_mask[hop],
+                nbr_mask=nbr_mask,
             )
             z[batch.global_to_local(seed_nodes)] = out
 
         z_src = z[batch.global_to_local(batch.src)]
         z_dst = z[batch.global_to_local(batch.dst)]
         z_neg = z[batch.global_to_local(batch.neg)]
+
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
@@ -390,12 +392,6 @@ def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     return [neg_hook, nbr_hook]
 
 
-train_loader = DGDataLoader(
-    train_dg, hook=_init_hooks(train_dg, args.sampling), batch_size=args.bsize
-)
-val_loader = DGDataLoader(
-    val_dg, hook=_init_hooks(val_dg, args.sampling), batch_size=args.bsize
-)
 test_loader = DGDataLoader(
     test_dg, hook=_init_hooks(test_dg, args.sampling), batch_size=args.bsize
 )
@@ -420,6 +416,13 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
+    # TODO: Need a clean way to clear nbr state across epochs
+    train_loader = DGDataLoader(
+        train_dg, hook=_init_hooks(train_dg, args.sampling), batch_size=args.bsize
+    )
+    val_loader = DGDataLoader(
+        val_dg, hook=_init_hooks(val_dg, args.sampling), batch_size=args.bsize
+    )
     start_time = time.perf_counter()
     loss = train(train_loader, model, opt)
     end_time = time.perf_counter()
