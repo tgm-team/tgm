@@ -1,4 +1,4 @@
-r"""python -u gcn.py --dataset tgbn-trade --time-gran r --batch-time-gran r
+r"""python -u gcn.py --dataset tgbn-trade --time-gran Y --batch-time-gran Y
 python -u gcn.py --dataset tgbn-genre --time-gran s --batch-time-gran D
 example commands to run this script.
 """
