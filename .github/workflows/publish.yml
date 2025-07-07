@@ -40,7 +40,7 @@ jobs:
       - name: Sanity check that package installs and imports
         run: |
           echo "Verifying package installs and imports correctly..."
-          uv run --with py-tgm --no-project -- python -c "import tgm; print(tgm.__version__)"
+          uv run --with tgm-lib --no-project -- python -c "import tgm; print(tgm.__version__)"
 
       - name: Publish to PyPI or TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1

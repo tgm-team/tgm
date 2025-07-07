@@ -1303,67 +1303,6 @@ wheels = [
 ]
 
 [[package]]
-name = "py-tgm"
-version = "0.1.0a0"
-source = { editable = "." }
-dependencies = [
-    { name = "numpy" },
-    { name = "torch" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "isort" },
-    { name = "mypy" },
-    { name = "pandas" },
-    { name = "pre-commit" },
-    { name = "py-tgb" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-xdist" },
-    { name = "ruff" },
-]
-docs = [
-    { name = "mkdocs" },
-    { name = "mkdocs-material" },
-    { name = "mkdocstrings", extra = ["python"] },
-]
-examples = [
-    { name = "py-tgb" },
-    { name = "torchmetrics" },
-    { name = "tqdm" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=2.2.6" },
-    { name = "torch", specifier = ">=2.5.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "isort", specifier = ">=5.13.2" },
-    { name = "mypy", specifier = ">=1.13.0" },
-    { name = "pandas", specifier = ">=1.5.3" },
-    { name = "pre-commit", specifier = ">=4.0.1" },
-    { name = "py-tgb", specifier = ">=2.1.0" },
-    { name = "pytest", specifier = ">=8.3.3" },
-    { name = "pytest-cov", specifier = ">=6.0.0" },
-    { name = "pytest-xdist", specifier = ">=3.7.0" },
-    { name = "ruff", specifier = "==0.11.1" },
-]
-docs = [
-    { name = "mkdocs", specifier = ">=1.6.1" },
-    { name = "mkdocs-material", specifier = ">=9.6.9" },
-    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.0" },
-]
-examples = [
-    { name = "py-tgb", specifier = ">=2.1.0" },
-    { name = "torchmetrics", specifier = ">=1.7.0" },
-    { name = "tqdm", specifier = ">=4.67.1" },
-]
-
-[[package]]
 name = "pygments"
 version = "2.19.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1676,6 +1615,67 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ca/99/5a5b6f19ff9f083671ddf7b9632028436167cd3d33e11015754e41b249a4/sympy-1.13.1.tar.gz", hash = "sha256:9cebf7e04ff162015ce31c9c6c9144daa34a93bd082f54fd8f12deca4f47515f", size = 7533040, upload-time = "2024-07-19T09:26:51.238Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b2/fe/81695a1aa331a842b582453b605175f419fe8540355886031328089d840a/sympy-1.13.1-py3-none-any.whl", hash = "sha256:db36cdc64bf61b9b24578b6f7bab1ecdd2452cf008f34faa33776680c26d66f8", size = 6189177, upload-time = "2024-07-19T09:26:48.863Z" },
+]
+
+[[package]]
+name = "tgm-lib"
+version = "0.1.0a0"
+source = { editable = "." }
+dependencies = [
+    { name = "numpy" },
+    { name = "torch" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "isort" },
+    { name = "mypy" },
+    { name = "pandas" },
+    { name = "pre-commit" },
+    { name = "py-tgb" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-xdist" },
+    { name = "ruff" },
+]
+docs = [
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
+]
+examples = [
+    { name = "py-tgb" },
+    { name = "torchmetrics" },
+    { name = "tqdm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.2.6" },
+    { name = "torch", specifier = ">=2.5.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "isort", specifier = ">=5.13.2" },
+    { name = "mypy", specifier = ">=1.13.0" },
+    { name = "pandas", specifier = ">=1.5.3" },
+    { name = "pre-commit", specifier = ">=4.0.1" },
+    { name = "py-tgb", specifier = ">=2.1.0" },
+    { name = "pytest", specifier = ">=8.3.3" },
+    { name = "pytest-cov", specifier = ">=6.0.0" },
+    { name = "pytest-xdist", specifier = ">=3.7.0" },
+    { name = "ruff", specifier = "==0.11.1" },
+]
+docs = [
+    { name = "mkdocs", specifier = ">=1.6.1" },
+    { name = "mkdocs-material", specifier = ">=9.6.9" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.0" },
+]
+examples = [
+    { name = "py-tgb", specifier = ">=2.1.0" },
+    { name = "torchmetrics", specifier = ">=1.7.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [[package]]
