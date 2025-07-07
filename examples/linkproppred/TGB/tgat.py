@@ -171,14 +171,7 @@ def eval(
     decoder.eval()
     perf_list = []
     for batch in tqdm(loader):
-        # dd = {}
-        # for k, v in vars(batch).items():
-        #    if k != 'global_to_local':
-        #        dd[k] = v
-
         z = encoder(batch)
-        # dd['z'] = z
-        # return dd
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
@@ -263,7 +256,6 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
-# prev_val_results = None
 for epoch in range(1, args.epochs + 1):
     train_loader = DGDataLoader(
         train_dg,
@@ -281,15 +273,6 @@ for epoch in range(1, args.epochs + 1):
     latency = end_time - start_time
 
     val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
-    # if prev_val_results is None:
-    #    prev_val_results = val_results
-    #    continue
-    # else:
-    #    for k, v in val_results.items():
-    #        print(k)
-    #        torch.testing.assert_close(prev_val_results[k], v)
-    #        print('Ok.')
-    #    exit()
 
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
