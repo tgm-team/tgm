@@ -204,9 +204,11 @@ class TGBNegativeEdgeSamplerHook:
         tensor_batch_list = []
         for neg_batch in neg_batch_list:
             queries.append(neg_batch)
-            tensor_batch_list.append(torch.tensor(neg_batch, dtype=torch.long))
+            tensor_batch_list.append(
+                torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+            )
         unique_neg = np.unique(np.concatenate(queries))
-        batch.neg = torch.tensor(unique_neg, dtype=torch.long)  # type: ignore
+        batch.neg = torch.tensor(unique_neg, dtype=torch.long, device=dg.device)  # type: ignore
         batch.neg_batch_list = tensor_batch_list  # type: ignore
         return batch
 
