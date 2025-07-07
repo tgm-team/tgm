@@ -1,5 +1,5 @@
 [project]
-name = "py-tgm"
+name = "tgm-lib"
 version = "0.1.0a0"
 description = "Efficient and Modular ML on Temporal Graphs"
 readme = "README.md"
