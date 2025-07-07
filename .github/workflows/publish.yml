@@ -3,8 +3,8 @@ name: Publish Python Package
 on: # yamllint disable-line rule:truthy
   push:
     tags:
-      - "v*" # Trigger only when a tag like v* is pushed
-  workflow_dispatch: # TODO: Remove this once TEST-PYPI publish is verified
+      - "v*" # Trigger on tags like v0.1.0 (PyPI)
+      - "test-v*" # Trigger ont ags like test-v0.1.0 (Test-PyPI)
 
 jobs:
   publish:
@@ -41,6 +41,5 @@ jobs:
       - name: Publish package
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # TODO: Switch this once TEST-PYPI publish is verified
-          repository-url: https://test.pypi.org/legacy/ # <-- TESTPYPI for testing
-          # Switch to https://upload.pypi.org/legacy/ when ready for PyPI
+          repository-url: >-
+            ${{ startsWith(github.ref_name, 'test-v') && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
