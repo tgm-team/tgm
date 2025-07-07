@@ -36,6 +36,7 @@ jobs:
       - name: Sanity check that package installs and imports
         run: |
           echo "Verifying package installs and imports correctly..."
+          uv venv .venv
           uv pip install dist/*.whl
           uv run python -c "import tgm; print(tgm.__version__)"
 
