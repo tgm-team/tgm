@@ -53,6 +53,7 @@ def test_n_upate(
         if batch.dynamic_node_feats is None:
             continue
 
+        print(batch.node_times[0])
         preds = []
         label = batch.dynamic_node_feats.cpu().detach().numpy()
         label_srcs = batch.node_ids.cpu().detach().numpy()
@@ -169,6 +170,8 @@ def loop_data(loader):
                 label_tuple[1],
                 label_tuple[2],
             )
+            print(f'Label time starts at {label_ts[0]}')
+            print(batch.t[-1])
             label_ts = label_ts.numpy()
             label_srcs = label_srcs.numpy()
             labels = labels.numpy()
@@ -181,13 +184,14 @@ def loop_data(loader):
 
 
 num_labels = loop_data(train_loader)
-print(f'Number of labels seen during training in TGM: {num_train_labels_tgm}')
+print('----------------------------')
 print(f'Number of labels seen during training in TGB: {num_labels}')
-
+print(f'Number of labels seen during training in TGM: {num_train_labels_tgm}')
 num_labels = loop_data(val_loader)
-print(f'Number of labels seen during validation in TGM: {num_val_labels_tgm}')
+print('----------------------------')
 print(f'Number of labels seen during validation in TGB: {num_labels}')
-
+print(f'Number of labels seen during validation in TGM: {num_val_labels_tgm}')
 num_labels = loop_data(test_loader)
-print(f'Number of labels seen during testing in TGM: {num_test_labels_tgm}')
+print('----------------------------')
 print(f'Number of labels seen during testing in TGB: {num_labels}')
+print(f'Number of labels seen during testing in TGM: {num_test_labels_tgm}')
