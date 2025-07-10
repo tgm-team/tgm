@@ -110,7 +110,7 @@ class LinkPredictor(nn.Module):
         h = h.relu()
         h = self.lin_dst(h)
         h = h.relu()
-        return self.lin_out(h).sigmoid()
+        return self.lin_out(h).sigmoid().view(-1)
 
 
 # class LinkPredictor(nn.Module):
@@ -186,7 +186,8 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    # iter_loader = iter(snapshots_loader)
+    iter_loader = iter(snapshots_loader)
+    snapshot_batch = next(iter_loader)
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
@@ -206,15 +207,15 @@ def eval(
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
-        # # update the model if the prediction batch has moved to next snapshot.
-        # while (
-        #     batch.time[-1] > (snapshot_batch.time[-1]+1)*3600
-        # ):  # if batch timestamps greater than snapshot, process the snapshot
-        #     z = encoder(snapshot_batch, static_node_feat).detach()
-        #     try:
-        #         snapshot_batch = next(iter_loader)
-        #     except StopIteration:
-        #         pass
+        # update the model if the prediction batch has moved to next snapshot.
+        while (
+            batch.time[-1] > (snapshot_batch.time[-1] + 1) * 3600
+        ):  # if batch timestamps greater than snapshot, process the snapshot
+            z = encoder(snapshot_batch, static_node_feat).detach()
+            try:
+                snapshot_batch = next(iter_loader)
+            except StopIteration:
+                pass
 
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
