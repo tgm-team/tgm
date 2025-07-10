@@ -20,7 +20,6 @@ from tgm.hooks import (
 )
 from tgm.loader import DGDataLoader
 from tgm.nn import TemporalAttention, Time2Vec
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -43,7 +42,7 @@ parser.add_argument(
     help='num sampled nbrs at each hop',
 )
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
+parser.add_argument('--embed-dim', type=int, default=172, help='attention dimension')
 parser.add_argument(
     '--sampling',
     type=str,
@@ -56,7 +55,6 @@ parser.add_argument(
 class TGAT(nn.Module):
     def __init__(
         self,
-        node_dim: int,
         edge_dim: int,
         time_dim: int,
         embed_dim: int,
@@ -72,13 +70,13 @@ class TGAT(nn.Module):
             [
                 TemporalAttention(
                     n_heads=n_heads,
-                    node_dim=node_dim if i == 0 else embed_dim,
+                    node_dim=embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
                     out_dim=embed_dim,
                     dropout=dropout,
                 )
-                for i in range(num_layers)
+                for _ in range(num_layers)
             ]
         )
 
@@ -89,21 +87,23 @@ class TGAT(nn.Module):
         for hop in reversed(range(self.num_layers)):
             seed_nodes = batch.nids[hop]
             nbrs = batch.nbr_nids[hop]
-            nbr_mask = batch.nbr_mask[hop]
+            nbr_mask = batch.nbr_mask[hop].bool()
             if seed_nodes.numel() == 0:
                 continue
 
             # TODO: Check and read static node features
-            node_feat = torch.zeros((*seed_nodes.shape, self.embed_dim), device=device)
+            node_feat = STATIC_NODE_FEAT[seed_nodes]
             node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
-            nbr_feat = torch.zeros((*nbrs.shape, self.embed_dim), device=device)
+            nbr_feat = STATIC_NODE_FEAT[nbrs]
             if hop < self.num_layers - 1:
-                valid_nbrs = nbrs[nbr_mask.bool()]
-                nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
+                valid_nbrs = nbrs[nbr_mask]
+                nbr_feat[nbr_mask] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
+            delta_time = delta_time.masked_fill(~nbr_mask, 0)
+
             nbr_time_feat = self.time_encoder(delta_time)
 
             out = self.attn[hop](
@@ -187,6 +187,7 @@ def eval(
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
+
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
     return metric_dict
@@ -202,15 +203,13 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='train', device=args.device
-)
-val_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='val', device=args.device
-)
-test_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='test', device=args.device
-)
+train_dg = DGraph(args.dataset, split='train', device=args.device)
+val_dg = DGraph(args.dataset, split='val', device=args.device)
+test_dg = DGraph(args.dataset, split='test', device=args.device)
+
+# TODO: Read from graph
+NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
+STATIC_NODE_FEAT = torch.randn((NUM_NODES, NODE_FEAT_DIM), device=args.device)
 
 
 def _init_hooks(
@@ -231,31 +230,23 @@ def _init_hooks(
     if split_mode in ['val', 'test']:
         neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
     else:
-        neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
+        _, dst, _ = dg.edges
+        min_dst, max_dst = int(dst.min()), int(dst.max())
+        neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
     return [neg_hook, nbr_hook]
 
 
-train_loader = DGDataLoader(
-    train_dg,
-    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
-    batch_size=args.bsize,
-)
-val_loader = DGDataLoader(
-    val_dg,
-    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
-    batch_size=args.bsize,
-)
 test_loader = DGDataLoader(
     test_dg,
     hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'test'),
     batch_size=args.bsize,
 )
 
+
 encoder = TGAT(
-    node_dim=train_dg.dynamic_node_feats_dim or args.embed_dim,  # TODO: verify
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
-    embed_dim=args.embed_dim,
+    embed_dim=train_dg.static_node_feats_dim or args.embed_dim,
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
@@ -266,12 +257,24 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
+    # TODO: Need a clean way to clear nbr state across epochs
+    train_loader = DGDataLoader(
+        train_dg,
+        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
+        batch_size=args.bsize,
+    )
+    val_loader = DGDataLoader(
+        val_dg,
+        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
+        batch_size=args.bsize,
+    )
     start_time = time.perf_counter()
     loss = train(train_loader, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
     val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
+
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())

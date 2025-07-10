@@ -16,7 +16,6 @@ from tqdm import tqdm
 
 from tgm import DGBatch, DGraph
 from tgm.loader import DGDataLoader
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -190,24 +189,15 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
-    split='train',
-    device=args.device,
-)
-val_dg = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
-    split='val',
-    device=args.device,
-)
-test_dg = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
-    split='test',
-    device=args.device,
-)
+# TODO: Fix discretize api
+train_dg = DGraph(args.dataset, time_delta='s', split='train', device=args.device)
+train_dg = train_dg.discretize(args.time_gran)
+
+val_dg = DGraph(args.dataset, time_delta='s', split='val', device=args.device)
+val_dg = val_dg.discretize(args.time_gran)
+
+test_dg = DGraph(args.dataset, time_delta='s', split='test', device=args.device)
+test_dg = test_dg.discretize(args.time_gran)
 
 dgraph = DGraph(args.dataset)
 num_nodes = dgraph.num_nodes

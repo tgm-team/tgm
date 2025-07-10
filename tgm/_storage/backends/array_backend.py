@@ -156,8 +156,8 @@ class DGStorageArrayBackend(DGStorageBase):
         edges = self._data.edge_index[edge_mask]
         event_ids = self._data.edge_event_idx[edge_mask]
 
-        src_list = edges[0].tolist()
-        dst_list = edges[1].tolist()
+        src_list = edges[:, 0].tolist()
+        dst_list = edges[:, 1].tolist()
         eid_list = event_ids.tolist()
 
         # This is a loop over the entire graph up to (not including) the current batch end time
@@ -197,7 +197,7 @@ class DGStorageArrayBackend(DGStorageBase):
             nbr_nids[mask, :nn] = torch.tensor(nbr_ids, dtype=torch.long, device=device)
             nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.long, device=device)
             if self._data.edge_feats is not None:
-                nbr_feats[mask, :nn] = torch.stack(feats).to(device)
+                nbr_feats[mask, :nn] = torch.stack(feats).to(device).float()
             nbr_mask[mask, :nn] = 1
 
         return nbr_nids, nbr_times, nbr_feats, nbr_mask
