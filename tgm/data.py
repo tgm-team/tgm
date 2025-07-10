@@ -432,10 +432,17 @@ class DGData:
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if name.startswith('tgbn-'):
             if 'node_label_dict' in data:
+                # in TGB, after passing a batch of edges, you find the nearest node event batch in the past
+                # in tgbn-trade, validation edge starts at 2010 while the first node event batch starts at 2009.
+                # therefore we do (timestamps[0] - 1) to account for this behaviour
                 node_label_dict = {
                     t: v
                     for t, v in data['node_label_dict'].items()
-                    if timestamps[0] <= t < timestamps[-1]
+                    if (timestamps[0] - 1)
+                    <= t
+                    < timestamps[
+                        -1
+                    ]  # include the batch of labels even if they start before the edge events.
                 }
             else:
                 raise ValueError('please update your tgb package or install by source')
