@@ -6,9 +6,7 @@ example commands to run this script.
 import argparse
 
 import numpy as np
-from tgb.nodeproppred.dataset_pyg import PyGNodePropPredDataset
 from tgb.nodeproppred.evaluate import Evaluator
-from torch_geometric.loader import TemporalDataLoader
 from tqdm import tqdm
 
 from tgm import DGraph
@@ -101,11 +99,7 @@ args = parser.parse_args()
 seed_everything(args.seed)
 
 train_dg = DGraph(args.dataset, time_delta=args.time_gran, split='train')
-# print (train_dg.start_time, train_dg.end_time)
-
 val_dg = DGraph(args.dataset, time_delta=args.time_gran, split='val')
-# print (val_dg.start_time, val_dg.end_time)
-
 test_dg = DGraph(args.dataset, time_delta=args.time_gran, split='test')
 
 
@@ -121,17 +115,6 @@ test_loader = DGDataLoader(
     test_dg,
     batch_unit=args.batch_time_gran,
 )
-
-
-# for batch in train_loader:
-#     print (f'Batch time: {batch.time[0:3]}')
-#     if (batch.node_times is not None):
-#         print(f'Batch node times: {batch.node_times[0:3]}')
-
-# for batch in val_loader:
-#     print (f'Batch time: {batch.time[0:3]}')
-#     if (batch.node_times is not None):
-#         print(f'Batch node times: {batch.node_times[0:3]}')
 
 num_nodes = test_dg.num_nodes
 num_classes = train_dg.dynamic_node_feats_dim
@@ -151,59 +134,3 @@ print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
 test_results, num_test_labels_tgm = test_n_upate(test_loader, forecaster)
 print('Test results:')
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
-
-
-name = args.dataset
-dataset = PyGNodePropPredDataset(name=name, root='datasets')
-num_classes = dataset.num_classes
-data = dataset.get_TemporalData()
-
-train_data, val_data, test_data = data.train_val_test_split(
-    val_ratio=0.15, test_ratio=0.15
-)
-
-batch_size = 200
-train_loader = TemporalDataLoader(train_data, batch_size=batch_size)
-val_loader = TemporalDataLoader(val_data, batch_size=batch_size)
-test_loader = TemporalDataLoader(test_data, batch_size=batch_size)
-
-
-def loop_data(loader):
-    label_t = dataset.get_label_time()  # check when does the first label start
-    num_labels = 0
-    for batch in loader:
-        query_t = batch.t[-1]
-        if query_t > label_t:
-            label_tuple = dataset.get_node_label(query_t)
-            if label_tuple is None:
-                break
-            label_ts, label_srcs, labels = (
-                label_tuple[0],
-                label_tuple[1],
-                label_tuple[2],
-            )
-            # print(f'Node Label time starts at {label_ts[0]}')
-            # print(batch.t[-1])
-            label_ts = label_ts.numpy()
-            label_srcs = label_srcs.numpy()
-            labels = labels.numpy()
-            label_t = dataset.get_label_time()
-
-            for i in range(0, label_srcs.shape[0]):
-                label_srcs[i]
-                num_labels += 1
-    return num_labels
-
-
-num_labels = loop_data(train_loader)
-print('----------------------------')
-print(f'Number of labels seen during training in TGB: {num_labels}')
-print(f'Number of labels seen during training in TGM: {num_train_labels_tgm}')
-num_labels = loop_data(val_loader)
-print('----------------------------')
-print(f'Number of labels seen during validation in TGB: {num_labels}')
-print(f'Number of labels seen during validation in TGM: {num_val_labels_tgm}')
-num_labels = loop_data(test_loader)
-print('----------------------------')
-print(f'Number of labels seen during testing in TGB: {num_labels}')
-print(f'Number of labels seen during testing in TGM: {num_test_labels_tgm}')
