@@ -98,47 +98,19 @@ class GCNEncoder(torch.nn.Module):
 
 
 class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
+    def __init__(self, in_channels):
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.lin_src = nn.Linear(in_channels, in_channels)
+        self.lin_dst = nn.Linear(in_channels, in_channels)
+        self.lin_final = nn.Linear(in_channels, 1)
 
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = z_src + z_dst
-        h = self.lin_src(h)
+    def forward(self, z_src, z_dst):
+        h = self.lin_src(z_src) + self.lin_dst(z_dst)
         h = h.relu()
-        h = self.lin_dst(h)
-        h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        return self.lin_final(h).sigmoid().view(-1)  # Ensure output is a 1D tensor
 
 
-# class LinkPredictor(nn.Module):
-#     def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout):
-#         super(LinkPredictor, self).__init__()
-
-#         self.lins = torch.nn.ModuleList()
-#         self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
-#         for _ in range(num_layers - 2):
-#             self.lins.append(torch.nn.Linear(hidden_channels, hidden_channels))
-#         self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
-#         self.dropout = dropout
-
-#     def reset_parameters(self):
-#         for lin in self.lins:
-#             lin.reset_parameters()
-
-#     def forward(self, x_i, x_j):
-#         x = x_i * x_j
-#         for lin in self.lins[:-1]:
-#             x = lin(x)
-#             x = F.relu(x)
-#             x = F.dropout(x, p=self.dropout, training=self.training)
-#         x = self.lins[-1](x)
-#         return torch.sigmoid(x)
-
-
-def train(
+def train_in_batches(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
     encoder: nn.Module,
@@ -150,26 +122,29 @@ def train(
     decoder.train()
     total_loss = 0
     criterion = torch.nn.MSELoss()
-    prev_snapshot = None
-    for idx, batch in tqdm(enumerate(snapshots_loader)):
+    iter_loader = iter(snapshots_loader)
+    snapshot_batch = next(iter_loader)
+    embeddings = encoder(snapshot_batch, static_node_feat)
+    for batch in tqdm(loader):
         opt.zero_grad()
-        if idx == 0:
-            prev_snapshot = batch
-        z = encoder(prev_snapshot, static_node_feat)
-        z_src, z_dst, z_neg = (
-            z[batch.global_to_local(batch.src)],
-            z[batch.global_to_local(batch.dst)],
-            z[batch.global_to_local(batch.neg)],
-        )  # type: ignore
-        pos_out = decoder(z_src, z_dst)
-        neg_out = decoder(z_src, z_neg)
+        embeddings = encoder(snapshot_batch, static_node_feat)
+        pos_out = decoder(embeddings[batch.src], embeddings[batch.dst])
+        neg_out = decoder(embeddings[batch.src], embeddings[batch.neg])
         loss = criterion(pos_out, torch.ones_like(pos_out))
         loss += criterion(neg_out, torch.zeros_like(neg_out))
+        total_loss += float(loss) / batch.src.shape[0]
         loss.backward()
         opt.step()
-        total_loss += float(loss)
-    z = z.detach()
-    return total_loss, z
+
+        # update the model if the prediction batch has moved to next snapshot.
+        while (
+            batch.time[-1] > (snapshot_batch.time[-1] + 1) * 3600
+        ):  # if batch timestamps greater than snapshot, process the snapshot
+            try:
+                snapshot_batch = next(iter_loader)
+            except StopIteration:
+                pass
+    return total_loss, embeddings.detach()
 
 
 @torch.no_grad()
@@ -195,9 +170,7 @@ def eval(
                 [batch.src[idx] for _ in range(len(neg_batch) + 1)]
             )
             query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            y_pred = decoder(
-                z[batch.global_to_local(query_src)], z[batch.global_to_local(query_dst)]
-            )
+            y_pred = decoder(z[query_src], z[query_dst])
 
             # compute MRR
             input_dict = {
@@ -314,25 +287,17 @@ if train_dg.dynamic_node_feats_dim is not None:
     )
 
 # TODO: add static node features to DGraph
-args.node_dim = args.embed_dim
+args.node_dim = 256
 static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
 # static_node_feats = torch.zeros((test_dg.num_nodes, args.node_dim), device=args.device)
 
 
 encoder = GCN(
-    in_channels=args.embed_dim,
+    in_channels=args.node_dim,
     embed_dim=args.embed_dim,
     num_layers=args.n_layers,
     dropout=float(args.dropout),
 ).to(args.device)
-
-# decoder = LinkPredictor(
-#     in_channels=args.embed_dim,
-#     hidden_channels=args.embed_dim,
-#     out_channels=1,
-#     num_layers=1,
-#     dropout=0,
-# ).to(args.device)
 
 decoder = LinkPredictor(
     args.embed_dim,
@@ -344,7 +309,7 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     start_time = time.perf_counter()
-    loss, z = train(
+    loss, z = train_in_batches(
         train_loader, train_snapshots_loader, encoder, decoder, opt, static_node_feats
     )
     end_time = time.perf_counter()
