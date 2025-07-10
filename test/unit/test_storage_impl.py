@@ -11,6 +11,7 @@ from tgm._storage import (
 )
 from tgm._storage.backends import DGStorageArrayBackend
 from tgm.data import DGData
+from tgm.timedelta import TimeDeltaDG
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +59,6 @@ def data_with_features():
     )
 
 
-@pytest.mark.skip('TODO')
 def test_discretize_reduce_op_first(DGStorageImpl):
     edge_index = torch.LongTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
     edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
@@ -71,24 +71,46 @@ def test_discretize_reduce_op_first(DGStorageImpl):
         static_node_feats=static_node_feats,
     )
     storage = DGStorageImpl(data)
+    old_granularity = TimeDeltaDG('m')
+    new_granularity = TimeDeltaDG('h')
     coarse_storage = storage.discretize(
-        old_time_granularity='m', new_time_granularity='h', reduce_op='first'
+        old_granularity, new_granularity, reduce_op='first'
+    )
+    full_slice = DGSliceTracker()
+    assert coarse_storage.get_start_time(full_slice) == 0
+    assert coarse_storage.get_end_time(full_slice) == 1
+    assert coarse_storage.get_num_timestamps(full_slice) == 2
+    assert coarse_storage.get_num_events(full_slice) == 4
+    assert coarse_storage.get_nodes(full_slice) == storage.get_nodes(full_slice)
+    torch.testing.assert_close(
+        coarse_storage.get_static_node_feats(), storage.get_static_node_feats()
+    )
+    assert coarse_storage.get_dynamic_node_feats(full_slice) is None
+
+    exp_src = torch.LongTensor([1, 2, 1, 4])
+    exp_dst = torch.LongTensor([2, 3, 2, 5])
+    exp_time = torch.LongTensor([0, 0, 1, 1])
+    exp_edges = (exp_src, exp_dst, exp_time)
+    edges = coarse_storage.get_edges(full_slice)
+    torch.testing.assert_close(edges, exp_edges)
+
+    exp_edge_feats = torch.zeros(2, 5 + 1, 5 + 1, 5)
+    exp_edge_feats[0, 1, 2] = data.edge_feats[0]
+    exp_edge_feats[0, 2, 3] = data.edge_feats[2]
+    exp_edge_feats[1, 1, 2] = data.edge_feats[3]
+    exp_edge_feats[1, 4, 5] = data.edge_feats[4]
+    assert torch.equal(
+        coarse_storage.get_edge_feats(full_slice).to_dense(), exp_edge_feats
     )
 
 
-@pytest.mark.skip('TODO')
 def test_discretize_with_node_events_reduce_op_first(DGStorageImpl):
-    # 1-2, 1-2, 2-3, 1-2 4-5
-    # 1     2    3    63 65
-
-    # 6  6 7        6 6 7
-    # 10 20 30      70 80 90
     edge_index = torch.LongTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
     edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
     edge_feats = torch.rand(5, 5)
 
-    node_timestamps = torch.LongTensor([10, 20, 30, 70, 80, 90])
     node_ids = torch.LongTensor([6, 6, 7, 6, 6, 7])
+    node_timestamps = torch.LongTensor([10, 20, 30, 70, 80, 90])
     dynamic_node_feats = torch.rand(6, 5)
     static_node_feats = torch.rand(8, 11)
     data = DGData.from_raw(
@@ -101,8 +123,45 @@ def test_discretize_with_node_events_reduce_op_first(DGStorageImpl):
         static_node_feats,
     )
     storage = DGStorageImpl(data)
+
+    old_granularity = TimeDeltaDG('m')
+    new_granularity = TimeDeltaDG('h')
     coarse_storage = storage.discretize(
-        old_time_granularity='m', new_time_granularity='h', reduce_op='first'
+        old_granularity, new_granularity, reduce_op='first'
+    )
+    full_slice = DGSliceTracker()
+    assert coarse_storage.get_start_time(full_slice) == 0
+    assert coarse_storage.get_end_time(full_slice) == 1
+    assert coarse_storage.get_num_timestamps(full_slice) == 2
+    assert coarse_storage.get_num_events(full_slice) == 8
+    assert coarse_storage.get_nodes(full_slice) == storage.get_nodes(full_slice)
+    torch.testing.assert_close(
+        coarse_storage.get_static_node_feats(), storage.get_static_node_feats()
+    )
+
+    exp_node_feats = torch.zeros(2, 7 + 1, 5)
+    exp_node_feats[0, 6] = data.dynamic_node_feats[0]
+    exp_node_feats[0, 7] = data.dynamic_node_feats[2]
+    exp_node_feats[1, 6] = data.dynamic_node_feats[3]
+    exp_node_feats[1, 7] = data.dynamic_node_feats[5]
+    assert torch.equal(
+        coarse_storage.get_dynamic_node_feats(full_slice).to_dense(), exp_node_feats
+    )
+
+    exp_src = torch.LongTensor([1, 2, 1, 4])
+    exp_dst = torch.LongTensor([2, 3, 2, 5])
+    exp_time = torch.LongTensor([0, 0, 1, 1])
+    exp_edges = (exp_src, exp_dst, exp_time)
+    edges = coarse_storage.get_edges(full_slice)
+    torch.testing.assert_close(edges, exp_edges)
+
+    exp_edge_feats = torch.zeros(2, 7 + 1, 7 + 1, 5)
+    exp_edge_feats[0, 1, 2] = data.edge_feats[0]
+    exp_edge_feats[0, 2, 3] = data.edge_feats[2]
+    exp_edge_feats[1, 1, 2] = data.edge_feats[3]
+    exp_edge_feats[1, 4, 5] = data.edge_feats[4]
+    assert torch.equal(
+        coarse_storage.get_edge_feats(full_slice).to_dense(), exp_edge_feats
     )
 
 

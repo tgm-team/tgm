@@ -180,7 +180,11 @@ def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=dg.num_nodes)
+        nbr_hook = RecencyNeighborHook(
+            num_nbrs=args.n_nbrs,
+            num_nodes=dg.num_nodes,
+            edge_feats_dim=dg.edge_feats_dim,
+        )
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 

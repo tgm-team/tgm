@@ -165,7 +165,6 @@ def test_discretize_reduce_first_call(data, reduce_op):
         )
 
 
-@pytest.mark.skip('TODO')
 def test_materialize(data):
     dg = DGraph(data)
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)

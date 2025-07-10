@@ -174,7 +174,7 @@ def eval(
         z = encoder(batch)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
             z_src = z[batch.global_to_local(src_ids)]
@@ -214,12 +214,16 @@ test_dg = DGraph(
 
 
 def _init_hooks(
-    num_nodes: int, sampling_type: str, neg_sampler: object, split_mode: str
+    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
 ) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=num_nodes)
+        nbr_hook = RecencyNeighborHook(
+            num_nbrs=args.n_nbrs,
+            num_nodes=dg.num_nodes,
+            edge_feats_dim=dg.edge_feats_dim,
+        )
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -227,23 +231,23 @@ def _init_hooks(
     if split_mode in ['val', 'test']:
         neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
     else:
-        neg_hook = NegativeEdgeSamplerHook(low=0, high=num_nodes)
+        neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
     return [neg_hook, nbr_hook]
 
 
 train_loader = DGDataLoader(
     train_dg,
-    hook=_init_hooks(test_dg.num_nodes, args.sampling, neg_sampler, 'train'),
+    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
     batch_size=args.bsize,
 )
 val_loader = DGDataLoader(
     val_dg,
-    hook=_init_hooks(test_dg.num_nodes, args.sampling, neg_sampler, 'val'),
+    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
     batch_size=args.bsize,
 )
 test_loader = DGDataLoader(
     test_dg,
-    hook=_init_hooks(test_dg.num_nodes, args.sampling, neg_sampler, 'test'),
+    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'test'),
     batch_size=args.bsize,
 )
 
