@@ -1,5 +1,0 @@
-edgebank
-gcn
-gclstm
-tgat
-tgn

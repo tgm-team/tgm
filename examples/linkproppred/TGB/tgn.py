@@ -7,8 +7,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics import Metric, MetricCollection
-from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
+from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
+from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGraph
@@ -17,13 +17,14 @@ from tgm.hooks import (
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
     RecencyNeighborHook,
+    TGBNegativeEdgeSamplerHook,
 )
 from tgm.loader import DGDataLoader
 from tgm.nn import TemporalAttention, Time2Vec
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='TGN Example',
+    description='TGN TGB Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -91,9 +92,9 @@ class TGN(torch.nn.Module):
         # batch.time[batch.dst] -= last_update[batch.dst].long()
         # batch.time[batch.neg] -= last_update[batch.neg].long()
 
-        pos_out, neg_out = self.gat(batch, memory=memory)
+        z = self.gat(batch, memory=memory)
         self._update_memory(batch)
-        return pos_out, neg_out
+        return z
 
     def _update_memory(self, batch: DGBatch) -> None:
         device = batch.src.device
@@ -252,7 +253,6 @@ class GraphAttentionEmbedding(nn.Module):
         super().__init__()
         self.num_layers = num_layers
         self.embed_dim = embed_dim
-        self.link_predictor = LinkPredictor(dim=embed_dim)
         self.time_encoder = time_encoder
         self.attn = nn.ModuleList(
             [
@@ -269,7 +269,9 @@ class GraphAttentionEmbedding(nn.Module):
         )
 
     def forward(
-        self, batch: DGBatch, memory: Memory
+        self,
+        batch: DGBatch,
+        memory: Memory,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
         z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
@@ -304,14 +306,7 @@ class GraphAttentionEmbedding(nn.Module):
                 nbr_mask=nbr_mask,
             )
             z[batch.global_to_local(seed_nodes)] = out
-
-        z_src = z[batch.global_to_local(batch.src)]
-        z_dst = z[batch.global_to_local(batch.dst)]
-        z_neg = z[batch.global_to_local(batch.neg)]
-
-        pos_out = self.link_predictor(z_src, z_dst)
-        neg_out = self.link_predictor(z_src, z_neg)
-        return pos_out, neg_out
+        return z
 
 
 class LinkPredictor(nn.Module):
@@ -327,44 +322,82 @@ class LinkPredictor(nn.Module):
         return self.lin_out(h).sigmoid().view(-1)
 
 
-def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) -> float:
+def train(
+    loader: DGDataLoader,
+    encoder: nn.Module,
+    decoder: nn.Module,
+    opt: torch.optim.Optimizer,
+) -> float:
     # Reinitialize memory of the model at the start of each epoch
-    model.memory.reset()
-    model.train()
+    encoder.memory.reset()
+    encoder.train()
+    decoder.train()
     total_loss = 0
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out = model(batch)
+        z = encoder(batch)
+
+        z_src = z[batch.global_to_local(batch.src)]
+        z_dst = z[batch.global_to_local(batch.dst)]
+        z_neg = z[batch.global_to_local(batch.neg)]
+
+        pos_out = decoder(z_src, z_dst)
+        neg_out = decoder(z_src, z_neg)
+
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
         # Detach memory so we don't backpropagate to the start of time
-        model.memory.detach_memory()
+        encoder.memory.detach_memory()
     return total_loss
 
 
 @torch.no_grad()
-def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> dict:
-    model.eval()
+def eval(
+    loader: DGDataLoader,
+    encoder: nn.Module,
+    decoder: nn.Module,
+    eval_metric: str,
+    evaluator: Evaluator,
+) -> dict:
+    encoder.eval()
+    decoder.eval()
+    perf_list = []
     for batch in tqdm(loader):
-        pos_out, neg_out = model(batch)
-        y_pred = torch.cat([pos_out, neg_out], dim=0).float()
-        y_true = (
-            torch.cat(
-                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-            )
-            .long()
-            .to(y_pred.device)
-        )
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
-        metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute()
+        z = encoder(batch)
+
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.src[idx].repeat(len(dst_ids))
+
+            z_src = z[batch.global_to_local(src_ids)]
+            z_dst = z[batch.global_to_local(dst_ids)]
+            y_pred = decoder(z_src, z_dst)
+
+            input_dict = {
+                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
+                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'eval_metric': [eval_metric],
+            }
+
+            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+    metric_dict = {}
+    metric_dict[eval_metric] = float(np.mean(perf_list))
+    return metric_dict
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
+
+# loading negative sample from TGB
+dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
+eval_metric = dataset.eval_metric
+neg_sampler = dataset.negative_sampler
+evaluator = Evaluator(name=args.dataset)
+dataset.load_val_ns()
+dataset.load_test_ns()
 
 train_dg = DGraph(args.dataset, split='train', device=args.device)
 val_dg = DGraph(args.dataset, split='val', device=args.device)
@@ -372,10 +405,12 @@ test_dg = DGraph(args.dataset, split='test', device=args.device)
 
 # TODO: Read from graph
 NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
-STATIC_NODE_FEAT = torch.randn((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
 
 
-def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
+def _init_hooks(
+    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
+) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
@@ -388,57 +423,64 @@ def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
     # Always produce negative edge prior to neighbor sampling for link prediction
-    neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
+    if split_mode in ['val', 'test']:
+        neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
+    else:
+        _, dst, _ = dg.edges
+        min_dst, max_dst = int(dst.min()), int(dst.max())
+        neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
     return [neg_hook, nbr_hook]
 
 
 test_loader = DGDataLoader(
-    test_dg, hook=_init_hooks(test_dg, args.sampling), batch_size=args.bsize
+    test_dg,
+    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'test'),
+    batch_size=args.bsize,
 )
 
-# Get global number of nodes for TGN Memory
-num_nodes = DGraph(args.dataset).num_nodes
 
-model = TGN(
+encoder = TGN(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
     embed_dim=train_dg.static_node_feats_dim or args.embed_dim,
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
-    num_nodes=num_nodes,
+    num_nodes=test_dg.num_nodes,
 ).to(args.device)
-model.memory.set_device(args.device)
-opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+encoder.memory.set_device(args.device)
+decoder = LinkPredictor(dim=args.embed_dim).to(args.device)
+opt = torch.optim.Adam(
+    set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
+)
 
-metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-val_metrics = MetricCollection(metrics, prefix='Validation')
-test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
     # TODO: Need a clean way to clear nbr state across epochs
     train_loader = DGDataLoader(
-        train_dg, hook=_init_hooks(train_dg, args.sampling), batch_size=args.bsize
+        train_dg,
+        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
+        batch_size=args.bsize,
     )
     val_loader = DGDataLoader(
-        val_dg, hook=_init_hooks(val_dg, args.sampling), batch_size=args.bsize
+        val_dg,
+        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
+        batch_size=args.bsize,
     )
     start_time = time.perf_counter()
-    loss = train(train_loader, model, opt)
+    loss = train(train_loader, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results = eval(val_loader, model, val_metrics)
-    val_metrics.reset()
-
+    val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
     # Clear memory state between epochs
-    model.memory.clear_msgs(list(range(num_nodes)))
+    encoder.memory.clear_msgs(list(range(test_dg.num_nodes)))
 
 
-test_results = eval(test_loader, model, test_metrics)
-print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+test_results = eval(test_loader, encoder, decoder, eval_metric, evaluator)
+print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

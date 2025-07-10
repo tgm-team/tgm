@@ -61,7 +61,7 @@ class TemporalAttention(torch.nn.Module):
         V = V.reshape(V.shape[0], self.n_heads, -1, self.head_dim)
         del Z
 
-        A = torch.einsum('bhld,bhnd->bhln', Q, V)  # (batch, n_heads, 1, num_nbrs)
+        A = torch.einsum('bhld,bhnd->bhln', Q, K)  # (batch, n_heads, 1, num_nbrs)
         A *= self.head_dim**-0.5
         del Q, K
 

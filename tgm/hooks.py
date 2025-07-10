@@ -24,8 +24,12 @@ class HookManager:
     def __init__(self, dg: DGraph, hooks: List[DGHook]) -> None:
         if not isinstance(hooks, list):
             raise TypeError(f'Invalid hook type: {type(hooks)}')
-        if not all(isinstance(h, DGHook) for h in hooks):
-            raise TypeError('All items in hook list must follow DGHook protocol')
+        bad_hook_names = [type(h).__name__ for h in hooks if not isinstance(h, DGHook)]
+        if len(bad_hook_names):
+            raise TypeError(
+                f'These hooks do not correctly implement the DGHook protocol: {bad_hook_names}, '
+                'ensure there is a __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch implemented'
+            )
 
         # Implicitly add dedup hook after all user-defined hooks and before device transfer
         hooks.append(DeduplicationHook())
@@ -116,11 +120,13 @@ class DeduplicationHook:
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         nids = [batch.src, batch.dst]
         if hasattr(batch, 'neg'):
+            batch.neg = batch.neg.to(batch.src.device)
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
                 hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
-                nids.append(hop_nids[hop_mask])
+                valid_hop_nids = hop_nids[hop_mask].to(batch.src.device)
+                nids.append(valid_hop_nids)
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)
@@ -140,23 +146,25 @@ class NegativeEdgeSamplerHook:
     Args:
         low (int): The minimum node id to sample
         high (int) : The maximum node id to sample
-        neg_sampling_ratio (float): The ratio of sampled negative destination nodes
+        neg_ratio (float): The ratio of sampled negative destination nodes
             to the number of positive destination nodes (default = 1.0).
     """
 
-    def __init__(self, low: int, high: int, neg_sampling_ratio: float = 1.0) -> None:
-        if not 0 < neg_sampling_ratio <= 1:
-            raise ValueError('neg_sampling_ratio must be in (0, 1]')
+    def __init__(self, low: int, high: int, neg_ratio: float = 1.0) -> None:
+        if not 0 < neg_ratio <= 1:
+            raise ValueError(f'neg_ratio must be in (0, 1], got: {neg_ratio}')
         if not low < high:
             raise ValueError(f'low ({low}) must be strictly less than high ({high})')
         self.low = low
         self.high = high
-        self.neg_sampling_ratio = neg_sampling_ratio
+        self.neg_ratio = neg_ratio
 
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        size = (round(self.neg_sampling_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(self.low, self.high, size)  # type: ignore
+        size = (round(self.neg_ratio * batch.dst.size(0)),)
+        batch.neg = torch.randint(  # type: ignore
+            self.low, self.high, size, dtype=torch.long, device=dg.device
+        )
         return batch
 
 
@@ -178,7 +186,7 @@ class TGBNegativeEdgeSamplerHook:
         if neg_sampler is None:
             raise ValueError('neg_sampler must be provided')
         if split_mode not in ['val', 'test']:
-            raise ValueError('split_mode must be one of val, test')
+            raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
         if neg_sampler.eval_set[split_mode] is None:  # type: ignore
             raise ValueError(
                 f'please run load_{split_mode}_ns() before using this hook'
@@ -196,9 +204,11 @@ class TGBNegativeEdgeSamplerHook:
         tensor_batch_list = []
         for neg_batch in neg_batch_list:
             queries.append(neg_batch)
-            tensor_batch_list.append(torch.tensor(neg_batch, dtype=torch.long))
+            tensor_batch_list.append(
+                torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+            )
         unique_neg = np.unique(np.concatenate(queries))
-        batch.neg = torch.tensor(unique_neg, dtype=torch.long)  # type: ignore
+        batch.neg = torch.tensor(unique_neg, dtype=torch.long, device=dg.device)  # type: ignore
         batch.neg_batch_list = tensor_batch_list  # type: ignore
         return batch
 
@@ -246,11 +256,16 @@ class NeighborSamplerHook:
                     # we pick random time stamps within [batch.start_time, batch.end_time].
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
+
+                    # Use generator to locall constrain rng for reproducability
+                    gen = torch.Generator(device=device)
+                    gen.manual_seed(0)
                     fake_times = torch.randint(
                         int(batch.time.min().item()),
                         int(batch.time.max().item()) + 1,
                         (batch.neg.size(0),),
                         device=device,
+                        generator=gen,
                     )
                     times.append(fake_times)
                 seed_nodes = torch.cat(seed)
@@ -267,7 +282,7 @@ class NeighborSamplerHook:
             nbr_nids, nbr_times, nbr_feats, nbr_mask = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
-                slice=DGSliceTracker(end_time=dg._slice.start_time),
+                slice=DGSliceTracker(end_time=int(batch.time.min())),
             )
 
             batch.nids.append(seed_nodes)  # type: ignore
@@ -342,11 +357,15 @@ class RecencyNeighborHook:
                     # we pick random time stamps within [batch.start_time, batch.end_time].
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
+                    # Use generator to locall constrain rng for reproducability
+                    gen = torch.Generator(device=device)
+                    gen.manual_seed(0)
                     fake_times = torch.randint(
                         int(batch.time.min().item()),
                         int(batch.time.max().item()) + 1,
                         (batch.neg.size(0),),
                         device=device,
+                        generator=gen,
                     )
                     times.append(fake_times)
                 seed_nodes = torch.cat(seed)
