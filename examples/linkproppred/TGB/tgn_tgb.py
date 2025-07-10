@@ -70,8 +70,11 @@ class GraphAttentionEmbedding(torch.nn.Module):
         )
 
     def forward(self, x, last_update, edge_index, t, msg):
+        print(edge_index[0].shape, t.shape)
         rel_t = last_update[edge_index[0]] - t
         rel_t_enc = self.time_enc(rel_t.to(x.dtype))
+        print(rel_t_enc.shape, msg.shape)
+        input()
         edge_attr = torch.cat([rel_t_enc, msg], dim=-1)
         return self.conv(x, edge_index, edge_attr)
 
@@ -246,6 +249,8 @@ class TGNMemory(torch.nn.Module):
         aggr = self.aggr_module(msg, self._assoc[idx], t, n_id.size(0))
 
         # Get local copy of updated memory.
+        # TODO: THIS IS DIFFERENT
+        aggr = aggr.float()
         memory = self.memory_updater(aggr, self.memory[n_id])
 
         # Get local copy of updated `last_update`.
@@ -277,6 +282,7 @@ class TGNMemory(torch.nn.Module):
         t = torch.cat(t, dim=0)
         raw_msg = torch.cat(raw_msg, dim=0)
         t_rel = t - self.last_update[src]
+
         t_enc = self.time_enc(t_rel.to(raw_msg.dtype))
 
         msg = msg_module(self.memory[src], self.memory[dst], raw_msg, t_enc)
@@ -302,6 +308,8 @@ class TimeEncoder(torch.nn.Module):
         self.lin.reset_parameters()
 
     def forward(self, t: Tensor) -> Tensor:
+        # TODO: THIS IS DIFFERENT
+        t = t.float()
         return self.lin(t.view(-1, 1)).cos()
 
 
@@ -317,52 +325,62 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
 
     total_loss = 0
     num_edges = 0
+    i = 0
     for batch in loader:
         opt.zero_grad()
 
         src, pos_dst, t, msg = batch.src, batch.dst, batch.time, batch.edge_feats
         neg_dst = batch.neg
 
-        hop = 0
-        seed_nodes = batch.nids[hop]
-        nbr_nodes = batch.nbr_nids[hop]
+        if i > 0:
+            hop = 0
+            seed_nodes = batch.nids[hop]
+            nbr_nodes = batch.nbr_nids[hop]
 
-        seed_nodes_flat = seed_nodes.repeat_interleave(10)
-        nbr_nodes_flat = nbr_nodes.flatten()
+            seed_nodes_flat = seed_nodes.repeat_interleave(10)
+            nbr_nodes_flat = nbr_nodes.flatten()
 
-        nbr_edge_index = torch.stack((seed_nodes_flat, nbr_nodes_flat), dim=1)
-        nbr_times = batch.nbr_times[hop]
-        nbr_feats = batch.nbr_feats[hop]
+            nbr_edge_index = torch.stack([seed_nodes_flat, nbr_nodes_flat])
+            nbr_times = batch.nbr_times[hop].flatten()
+            nbr_feats = batch.nbr_feats[hop].flatten(0, -2)
 
-        # Get updated memory of all nodes involved in the computation.
-        z, last_update = model['memory'](batch.unique_nids)
-        z = model['gnn'](
-            z,
-            last_update,
-            nbr_edge_index,
-            nbr_times,
-            nbr_feats,
-        )
+            # Get updated memory of all nodes involved in the computation.
 
-        pos_out = model['link_pred'](
-            z[batch.global_to_local(src)], z[batch.global_to_local(pos_dst)]
-        )
-        neg_out = model['link_pred'](
-            z[batch.global_to_local(src)], z[batch.global_to_local(neg_dst)]
-        )
+            z, last_update = model['memory'](batch.unique_nids)
+            z = model['gnn'](
+                z,
+                last_update,
+                nbr_edge_index,
+                nbr_times,
+                nbr_feats,
+            )
 
-        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
-        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
+            pos_out = model['link_pred'](
+                z[batch.global_to_local(src)], z[batch.global_to_local(pos_dst)]
+            )
+            neg_out = model['link_pred'](
+                z[batch.global_to_local(src)], z[batch.global_to_local(neg_dst)]
+            )
+
+            loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
+            loss += F.binary_cross_entropy_with_logits(
+                neg_out, torch.zeros_like(neg_out)
+            )
 
         # Update memory and neighbor loader with ground-truth state.
         model['memory'].update_state(src, pos_dst, t, msg)
 
-        loss.backward()
-        opt.step()
+        if i > 0:
+            loss.backward()
+            opt.step()
 
         model['memory'].detach()
-        total_loss += float(loss) * batch.src.size(0)
+
+        if i > 0:
+            total_loss += float(loss) * batch.src.size(0)
         num_edges += batch.src.size(0)
+
+        i += 1
 
     return total_loss / num_edges
 
@@ -374,7 +392,6 @@ def test(loader, neg_sampler, split_mode):
     model['link_pred'].eval()
 
     perf_list = []
-
     for pos_batch in loader:
         pos_src, pos_dst, pos_t, pos_msg = (
             pos_batch.src,
@@ -443,7 +460,7 @@ MODEL_NAME = 'TGN'
 
 seed_everything(SEED)
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
 
 dataset = PyGLinkPropPredDataset(name=DATA, root='datasets')
 eval_metric = dataset.eval_metric
