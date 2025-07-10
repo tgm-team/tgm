@@ -224,7 +224,6 @@ class TGNMemory(torch.nn.Module):
         aggr = self.aggr_module(msg, self._assoc[idx], t, n_id.size(0))
 
         # Get local copy of updated memory.
-        aggr = aggr.float()  # TODO: THIS WAS ADDED
         memory = self.memory_updater(aggr, self.memory[n_id])
 
         # Get local copy of updated `last_update`.
@@ -277,7 +276,6 @@ class TimeEncoder(torch.nn.Module):
         self.lin.reset_parameters()
 
     def forward(self, t: Tensor) -> Tensor:
-        t = t.float()  # TODO: THIS WAS ADDED
         return self.lin(t.view(-1, 1)).cos()
 
 
@@ -307,7 +305,7 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
         nbr_edge_index = torch.stack([seed_nodes, nbr_nodes])
 
         nbr_times = batch.nbr_times[0].flatten()
-        nbr_feats = batch.nbr_feats[0].flatten(0, -2)
+        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()
 
         # Get updated memory of all nodes involved in the computation.
         z, last_update = model['memory'](batch.unique_nids)
@@ -330,6 +328,7 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
 
         # Update memory and neighbor loader with ground-truth state.
+        msg = msg.float()
         model['memory'].update_state(src, pos_dst, t, msg)
 
         loss.backward()
@@ -360,14 +359,8 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
 
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
-            src = torch.full((1 + len(neg_batch),), pos_src[idx], device=pos_src.device)
-            dst = torch.tensor(
-                np.concatenate(
-                    ([np.array([pos_dst.cpu().numpy()[idx]]), neg_batch.cpu().numpy()]),
-                    axis=0,
-                ),
-                device=pos_src.device,
-            )
+            dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            src = batch.src[idx].repeat(len(dst))
 
             seed_nodes = batch.nids[0].repeat_interleave(10)
             nbr_nodes = batch.nbr_nids[0].flatten()
@@ -393,6 +386,7 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
         # Update memory and neighbor loader with ground-truth state.
+        pos_msg = pos_msg.float()
         model['memory'].update_state(pos_src, pos_dst, pos_t, pos_msg)
 
     metric_dict = {}
