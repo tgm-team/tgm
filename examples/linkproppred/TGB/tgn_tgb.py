@@ -316,15 +316,12 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
     model['memory'].reset_state()  # Start with a fresh memory.
 
     total_loss = 0
+    num_edges = 0
     for batch in loader:
         opt.zero_grad()
 
         src, pos_dst, t, msg = batch.src, batch.dst, batch.time, batch.edge_feats
         neg_dst = batch.neg
-
-        # n_id = torch.cat([src, pos_dst, neg_dst]).unique()
-        # n_id, edge_index, e_id = neighbor_loader(n_id)
-        # assoc[n_id] = torch.arange(n_id.size(0), device=device)
 
         hop = 0
         seed_nodes = batch.nids[hop]
@@ -332,16 +329,10 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
 
         seed_nodes_flat = seed_nodes.repeat_interleave(10)
         nbr_nodes_flat = nbr_nodes.flatten()
-        print(seed_nodes_flat.shape, nbr_nodes_flat.shape)
 
         nbr_edge_index = torch.stack((seed_nodes_flat, nbr_nodes_flat), dim=1)
-
         nbr_times = batch.nbr_times[hop]
-        print(nbr_times.shape)
-
         nbr_feats = batch.nbr_feats[hop]
-        print(nbr_feats.shape)
-        input()
 
         # Get updated memory of all nodes involved in the computation.
         z, last_update = model['memory'](batch.unique_nids)
@@ -353,22 +344,27 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
             nbr_feats,
         )
 
-        pos_out = model['link_pred'](z[assoc[src]], z[assoc[pos_dst]])
-        neg_out = model['link_pred'](z[assoc[src]], z[assoc[neg_dst]])
+        pos_out = model['link_pred'](
+            z[batch.global_to_local(src)], z[batch.global_to_local(pos_dst)]
+        )
+        neg_out = model['link_pred'](
+            z[batch.global_to_local(src)], z[batch.global_to_local(neg_dst)]
+        )
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
 
         # Update memory and neighbor loader with ground-truth state.
         model['memory'].update_state(src, pos_dst, t, msg)
-        neighbor_loader.insert(src, pos_dst)
 
         loss.backward()
         opt.step()
-        model['memory'].detach()
-        total_loss += float(loss) * batch.num_events
 
-    return total_loss / train_data.num_events
+        model['memory'].detach()
+        total_loss += float(loss) * batch.src.size(0)
+        num_edges += batch.src.size(0)
+
+    return total_loss / num_edges
 
 
 @torch.no_grad()
