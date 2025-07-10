@@ -1,4 +1,4 @@
-r"""python -u persistant_forecast.py --dataset tgbn-trade --time-gran s --batch-time-gran Y
+r"""python -u persistant_forecast.py --dataset tgbn-trade --time-gran Y --batch-time-gran Y
 python -u persistant_forecast.py --dataset tgbn-genre --time-gran s --batch-time-gran D
 example commands to run this script.
 """
@@ -45,15 +45,11 @@ def test_n_upate(
     eval_metric = 'ndcg'
     total_score = 0
     num_labels = 0
+    num_label_batches = 0
     for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
-
         if batch.dynamic_node_feats is None:
             continue
 
-        print(batch.node_times[0])
         preds = []
         label = batch.dynamic_node_feats.cpu().detach().numpy()
         label_srcs = batch.node_ids.cpu().detach().numpy()
@@ -75,8 +71,9 @@ def test_n_upate(
         result_dict = evaluator.eval(input_dict)
         score = result_dict[eval_metric]
         total_score += score
+        num_label_batches += 1
     metric_dict = {}
-    metric_dict[eval_metric] = float(total_score) / len(loader)
+    metric_dict[eval_metric] = float(total_score) / num_label_batches
     return metric_dict, num_labels
 
 
@@ -104,7 +101,11 @@ args = parser.parse_args()
 seed_everything(args.seed)
 
 train_dg = DGraph(args.dataset, time_delta=args.time_gran, split='train')
+# print (train_dg.start_time, train_dg.end_time)
+
 val_dg = DGraph(args.dataset, time_delta=args.time_gran, split='val')
+# print (val_dg.start_time, val_dg.end_time)
+
 test_dg = DGraph(args.dataset, time_delta=args.time_gran, split='test')
 
 
@@ -120,6 +121,17 @@ test_loader = DGDataLoader(
     test_dg,
     batch_unit=args.batch_time_gran,
 )
+
+
+# for batch in train_loader:
+#     print (f'Batch time: {batch.time[0:3]}')
+#     if (batch.node_times is not None):
+#         print(f'Batch node times: {batch.node_times[0:3]}')
+
+# for batch in val_loader:
+#     print (f'Batch time: {batch.time[0:3]}')
+#     if (batch.node_times is not None):
+#         print(f'Batch node times: {batch.node_times[0:3]}')
 
 num_nodes = test_dg.num_nodes
 num_classes = train_dg.dynamic_node_feats_dim
@@ -170,8 +182,8 @@ def loop_data(loader):
                 label_tuple[1],
                 label_tuple[2],
             )
-            print(f'Label time starts at {label_ts[0]}')
-            print(batch.t[-1])
+            # print(f'Node Label time starts at {label_ts[0]}')
+            # print(batch.t[-1])
             label_ts = label_ts.numpy()
             label_srcs = label_srcs.numpy()
             labels = labels.numpy()
