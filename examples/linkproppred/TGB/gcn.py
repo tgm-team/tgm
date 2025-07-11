@@ -276,7 +276,6 @@ test_loader = DGDataLoader(
 )
 test_snapshots_loader = DGDataLoader(
     test_snapshots,
-    hook=[],
     batch_unit='h',
 )
 
