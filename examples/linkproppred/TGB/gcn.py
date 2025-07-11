@@ -43,7 +43,7 @@ parser.add_argument(
     help='raw time granularity for dataset',
 )
 parser.add_argument(
-    '--batch-time-gran',
+    '--snapshot-time-gran',
     type=str,
     default='h',
     help='time granularity to operate on for snapshots',
@@ -135,13 +135,14 @@ def train_in_batches(
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
     static_node_feat: torch.Tensor,
+    conversion_rate: int,
 ) -> float:
     encoder.train()
     decoder.train()
     total_loss = 0
     criterion = torch.nn.MSELoss()
-    iter_loader = iter(snapshots_loader)
-    snapshot_batch = next(iter_loader)
+    snapshots_iterator = iter(snapshots_loader)
+    snapshot_batch = next(snapshots_iterator)
     embeddings = encoder(snapshot_batch, static_node_feat)
     for batch in tqdm(loader):
         opt.zero_grad()
@@ -156,10 +157,10 @@ def train_in_batches(
 
         # update the model if the prediction batch has moved to next snapshot.
         while (
-            batch.time[-1] > (snapshot_batch.time[-1] + 1) * 3600
+            batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate
         ):  # if batch timestamps greater than snapshot, process the snapshot
             try:
-                snapshot_batch = next(iter_loader)
+                snapshot_batch = next(snapshots_iterator)
             except StopIteration:
                 pass
     return total_loss, embeddings.detach()
@@ -175,12 +176,13 @@ def eval(
     evaluator: Evaluator,
     static_node_feat: torch.Tensor,
     z: torch.Tensor,
+    conversion_rate: int,
 ) -> dict:
     encoder.eval()
     decoder.eval()
     perf_list = []
-    iter_loader = iter(snapshots_loader)
-    snapshot_batch = next(iter_loader)
+    snapshots_iterator = iter(snapshots_loader)
+    snapshot_batch = next(snapshots_iterator)
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
@@ -200,11 +202,11 @@ def eval(
 
         # update the model if the prediction batch has moved to next snapshot.
         while (
-            batch.time[-1] > (snapshot_batch.time[-1] + 1) * 3600
+            batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate
         ):  # if batch timestamps greater than snapshot, process the snapshot
             z = encoder(snapshot_batch, static_node_feat).detach()
             try:
-                snapshot_batch = next(iter_loader)
+                snapshot_batch = next(snapshots_iterator)
             except StopIteration:
                 pass
 
@@ -215,6 +217,9 @@ def eval(
 
 args = parser.parse_args()
 seed_everything(args.seed)
+snapshot_td = TimeDeltaDG(args.snapshot_time_gran, 1)
+tgb_td = TimeDeltaDG(args.time_gran, 1)
+conversion_rate = int(snapshot_td.convert(tgb_td))
 
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
 eval_metric = dataset.eval_metric
@@ -235,7 +240,7 @@ train_snapshots = DGraph(
     time_delta=TimeDeltaDG(args.time_gran),
     split='train',
     device=args.device,
-).discretize(args.batch_time_gran)
+).discretize(args.snapshot_time_gran)
 
 val_dg = DGraph(
     args.dataset,
@@ -249,7 +254,7 @@ val_snapshots = DGraph(
     time_delta=TimeDeltaDG(args.time_gran),
     split='val',
     device=args.device,
-).discretize(args.batch_time_gran)
+).discretize(args.snapshot_time_gran)
 
 test_dg = DGraph(
     args.dataset,
@@ -263,7 +268,7 @@ test_snapshots = DGraph(
     time_delta=TimeDeltaDG(args.time_gran),
     split='test',
     device=args.device,
-).discretize(args.batch_time_gran)
+).discretize(args.snapshot_time_gran)
 
 train_loader = DGDataLoader(
     train_dg,
@@ -273,7 +278,7 @@ train_loader = DGDataLoader(
 train_snapshots_loader = DGDataLoader(
     train_snapshots,
     hook=[NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes)],
-    batch_unit=args.batch_time_gran,
+    batch_unit=args.snapshot_time_gran,
 )
 
 
@@ -284,8 +289,7 @@ val_loader = DGDataLoader(
 )
 val_snapshots_loader = DGDataLoader(
     val_snapshots,
-    hook=[],
-    batch_unit=args.batch_time_gran,
+    batch_unit=args.snapshot_time_gran,
 )
 
 test_loader = DGDataLoader(
@@ -295,8 +299,7 @@ test_loader = DGDataLoader(
 )
 test_snapshots_loader = DGDataLoader(
     test_snapshots,
-    hook=[],
-    batch_unit=args.batch_time_gran,
+    batch_unit=args.snapshot_time_gran,
 )
 
 if train_dg.dynamic_node_feats_dim is not None:
@@ -307,7 +310,6 @@ if train_dg.dynamic_node_feats_dim is not None:
 # TODO: add static node features to DGraph
 args.node_dim = 256
 static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
-# static_node_feats = torch.zeros((test_dg.num_nodes, args.node_dim), device=args.device)
 
 
 encoder = GCN(
@@ -328,7 +330,13 @@ opt = torch.optim.Adam(
 for epoch in range(1, args.epochs + 1):
     start_time = time.perf_counter()
     loss, z = train_in_batches(
-        train_loader, train_snapshots_loader, encoder, decoder, opt, static_node_feats
+        train_loader,
+        train_snapshots_loader,
+        encoder,
+        decoder,
+        opt,
+        static_node_feats,
+        conversion_rate,
     )
     end_time = time.perf_counter()
     latency = end_time - start_time
@@ -343,6 +351,7 @@ for epoch in range(1, args.epochs + 1):
         evaluator,
         static_node_feats,
         z,
+        conversion_rate,
     )
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
@@ -358,5 +367,6 @@ test_results = eval(
     evaluator,
     static_node_feats,
     z,
+    conversion_rate,
 )
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
