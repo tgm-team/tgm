@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import csv
 import pathlib
-import warnings
 from dataclasses import dataclass
 from typing import Any, List
 
 import numpy as np
 import torch
 from torch import Tensor
+
+from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
 @dataclass
@@ -28,54 +29,80 @@ class DGData:
     static_node_feats: Tensor | None = None  # [num_nodes, D_node_static]
 
     def __post_init__(self) -> None:
+        def _assert_is_tensor(x: Any, name: str) -> None:
+            if not isinstance(x, Tensor):
+                raise TypeError(f'{name} must be a Tensor, got: {type(x)}')
+
+        def _assert_tensor_is_integral(x: Tensor, name: str) -> None:
+            int_types = [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8]
+            if x.dtype not in int_types:
+                raise TypeError(f'{name} must have integer dtype but got: {x.dtype}')
+
         # Validate edge index
-        if not isinstance(self.edge_index, Tensor):
-            raise TypeError('edge_index must be a Tensor')
+        _assert_is_tensor(self.edge_index, 'edge_index')
+        _assert_tensor_is_integral(self.edge_index, 'edge_index')
         if self.edge_index.ndim != 2 or self.edge_index.shape[1] != 2:
-            raise ValueError('edge_index must have shape [num_edges, 2]')
+            raise ValueError(
+                f'edge_index must have shape [num_edges, 2], got: {self.edge_index.shape}',
+            )
 
         num_edges = self.edge_index.shape[0]
         if num_edges == 0:
             raise ValueError('empty graphs not supported')
 
         # Validate edge event idx
-        if not isinstance(self.edge_event_idx, Tensor):
-            raise TypeError('edge_event_idx must be a Tensor')
+        _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
+        _assert_tensor_is_integral(self.edge_event_idx, 'edge_event_idx')
         if self.edge_event_idx.ndim != 1 or self.edge_event_idx.shape[0] != num_edges:
-            raise ValueError('edge_event_idx must have shape [num_edges]')
+            raise ValueError(
+                'edge_event_idx must have shape [num_edges], '
+                f'got {num_edges} edges and shape {self.edge_event_idx.shape}'
+            )
 
         # Validate edge features
         if self.edge_feats is not None:
-            if not isinstance(self.edge_feats, Tensor):
-                raise TypeError('edge_feats must be a Tensor')
+            _assert_is_tensor(self.edge_feats, 'edge_feats')
             if self.edge_feats.ndim != 2 or self.edge_feats.shape[0] != num_edges:
-                raise ValueError('edge_feats must have shape [num_edges, D_edge]')
+                raise ValueError(
+                    'edge_feats must have shape [num_edges, D_edge], '
+                    f'got {num_edges} edges and shape {self.edge_feats.shape}'
+                )
 
         # Validate node event idx
         num_node_events = 0
         if self.node_event_idx is not None:
-            if not isinstance(self.node_event_idx, Tensor):
-                raise TypeError('node_event_idx must be a Tensor')
+            _assert_is_tensor(self.node_event_idx, 'node_event_idx')
+            _assert_tensor_is_integral(self.node_event_idx, 'node_event_idx')
             if self.node_event_idx.ndim != 1:
-                raise ValueError('node_event_idx must have shape [num_node_events]')
+                raise ValueError(
+                    f'node_event_idx must have shape [num_node_events], got: {self.node_event_idx.shape}'
+                )
+
             num_node_events = self.node_event_idx.shape[0]
+            if num_node_events == 0:
+                raise ValueError(
+                    'node_event_idx is an empty tensor, please double-check your inputs'
+                )
 
             # Validate node ids
-            if not isinstance(self.node_ids, Tensor):
-                raise TypeError('node_ids must be a Tensor')
-            if self.node_ids.ndim != 1 or self.node_ids.shape[0] != num_node_events:
-                raise ValueError('node_ids must have shape [num_node_events]')
+            _assert_is_tensor(self.node_ids, 'node_ids')
+            _assert_tensor_is_integral(self.node_ids, 'node_ids')  # type: ignore
+            if self.node_ids.ndim != 1 or self.node_ids.shape[0] != num_node_events:  # type: ignore
+                raise ValueError(
+                    'node_ids must have shape [num_node_events], ',
+                    f'got {num_node_events} node events and shape {self.node_ids.shape}',  # type: ignore
+                )
 
             # Validate dynamic node features (could be None)
             if self.dynamic_node_feats is not None:
-                if not isinstance(self.dynamic_node_feats, Tensor):
-                    raise TypeError('dynamic_node_feats must be a Tensor')
+                _assert_is_tensor(self.dynamic_node_feats, 'dynamic_node_feats')
                 if (
                     self.dynamic_node_feats.ndim != 2
                     or self.dynamic_node_feats.shape[0] != num_node_events
                 ):
                     raise ValueError(
-                        'dynamic_node_feats must have shape [num_node_events, D_node_dynamic]'
+                        'dynamic_node_feats must have shape [num_node_events, D_node_dynamic], '
+                        f'got {num_node_events} node events and shape {self.dynamic_node_feats.shape}'
                     )
         else:
             if self.node_ids is not None:
@@ -91,31 +118,34 @@ class DGData:
             num_nodes = max(num_nodes, torch.max(self.node_ids).item() + 1)  # 0-indexed
 
         if self.static_node_feats is not None:
-            if not isinstance(self.static_node_feats, Tensor):
-                raise TypeError('static_node_feats must be a Tensor')
+            _assert_is_tensor(self.static_node_feats, 'static_node_feats')
             if (
                 self.static_node_feats.ndim != 2
                 or self.static_node_feats.shape[0] != num_nodes
             ):
                 raise ValueError(
-                    'static_node_feats must have shape [num_nodes, D_node_static]'
+                    'static_node_feats must have shape [num_nodes, D_node_static], '
+                    f'got {num_nodes} nodes and shape {self.static_node_feats.shape}'
                 )
 
         # Validate timestamps
-        if not isinstance(self.timestamps, Tensor):
-            raise TypeError('timestamps must be a Tensor')
+        _assert_is_tensor(self.timestamps, 'timestamps')
+        _assert_tensor_is_integral(self.timestamps, 'timestamps')
+        if not torch.all(self.timestamps >= 0):
+            raise ValueError('timestamps must all be non-negative')
         if (
             self.timestamps.ndim != 1
             or self.timestamps.shape[0] != num_edges + num_node_events
         ):
-            raise ValueError('timestamps must have shape [num_edges + num_node_events]')
-        if not torch.all(self.timestamps >= 0):
-            raise ValueError('timestamps must be non-negative integers')
+            raise ValueError(
+                'timestamps must have shape [num_edges + num_node_events], '
+                f'got {num_edges} edges, {num_node_events} node_events, shape: {self.timestamps.shape}. '
+                'Please double-check the edge and node timestamps you provided. If this is not resolved '
+                'raise an issue and provide instructions on how to reproduce your the error'
+            )
 
         # Sort if necessary
         if not torch.all(torch.diff(self.timestamps) >= 0):
-            warnings.warn('received non-chronological events, sorting by time')
-
             # Sort timestamps
             sort_idx = torch.argsort(self.timestamps)
             inverse_sort_idx = torch.empty_like(sort_idx)
@@ -350,7 +380,13 @@ class DGData:
         )
 
     @classmethod
-    def from_tgb(cls, name: str, split: str = 'all', **kwargs: Any) -> DGData:
+    def from_tgb(
+        cls,
+        name: str,
+        split: str = 'all',
+        time_delta: TimeDeltaDG | None = None,
+        **kwargs: Any,
+    ) -> DGData:
         def _check_tgb_import() -> tuple['LinkPropPredDataset', 'NodePropPredDataset']:  # type: ignore
             try:
                 from tgb.linkproppred.dataset import LinkPropPredDataset
@@ -404,32 +440,49 @@ class DGData:
             else:
                 raise ValueError('please update your tgb package or install by source')
 
-            num_node_events = 0
-            node_label_dim = 0
-            for t in node_label_dict:
-                for node_id, label in node_label_dict[t].items():
-                    num_node_events += 1
-                    node_label_dim = label.shape[0]
-            temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
-            temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
-            temp_dynamic_node_feats = np.zeros(
-                (num_node_events, node_label_dim), dtype=np.float32
-            )
-            idx = 0
-            for t in node_label_dict:
-                for node_id, label in node_label_dict[t].items():
-                    temp_node_timestamps[idx] = t
-                    temp_node_ids[idx] = node_id
-                    temp_dynamic_node_feats[idx] = label
-                    idx += 1
-            node_timestamps = torch.from_numpy(temp_node_timestamps).long()
-            node_ids = torch.from_numpy(temp_node_ids).long()
-            dynamic_node_feats = torch.from_numpy(temp_dynamic_node_feats).float()
+            if len(node_label_dict):
+                # Node events could be missing from the current data split (e.g. validation)
+                num_node_events = 0
+                node_label_dim = 0
+                for t in node_label_dict:
+                    for node_id, label in node_label_dict[t].items():
+                        num_node_events += 1
+                        node_label_dim = label.shape[0]
+
+                temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
+                temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
+                temp_dynamic_node_feats = np.zeros(
+                    (num_node_events, node_label_dim), dtype=np.float32
+                )
+                idx = 0
+                for t in node_label_dict:
+                    for node_id, label in node_label_dict[t].items():
+                        temp_node_timestamps[idx] = t
+                        temp_node_ids[idx] = node_id
+                        temp_dynamic_node_feats[idx] = label
+                        idx += 1
+                node_timestamps = torch.from_numpy(temp_node_timestamps).long()
+                node_ids = torch.from_numpy(temp_node_ids).long()
+                dynamic_node_feats = torch.from_numpy(temp_dynamic_node_feats).float()
 
         # Read static node features if they exist
         static_node_feats = None
         if dataset.node_feat is not None:
             static_node_feats = torch.from_numpy(dataset.node_feat)
+
+        # Remap timestamps if a custom non-ordered time delta was supplied
+        if time_delta is not None and not time_delta.is_ordered:
+            tgb_time_delta = TGB_TIME_DELTAS[name]
+
+            if time_delta.is_coarser_than(tgb_time_delta):
+                raise ValueError(
+                    f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity, use an ordered time_delta ('r'), or coarsen the graph (dg.discretize() after construction)"
+                )
+
+            time_factor = int(tgb_time_delta.convert(time_delta))
+            timestamps *= time_factor
+            if node_timestamps is not None:
+                node_timestamps *= time_factor
 
         return cls.from_raw(
             edge_timestamps=timestamps,
@@ -445,12 +498,13 @@ class DGData:
     def from_any(
         cls,
         data: str | pathlib.Path | 'pandas.DataFrame',  # type: ignore
+        time_delta: TimeDeltaDG | None = None,
         **kwargs: Any,
     ) -> DGData:
         if isinstance(data, (str, pathlib.Path)):
             data_str = str(data)
             if data_str.startswith('tgbl-') or data_str.startswith('tgbn-'):
-                return cls.from_tgb(name=data_str, **kwargs)
+                return cls.from_tgb(name=data_str, time_delta=time_delta, **kwargs)
             if data_str.endswith('.csv'):
                 return cls.from_csv(data, **kwargs)
             raise ValueError(

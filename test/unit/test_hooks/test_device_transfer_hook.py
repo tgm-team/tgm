@@ -1,8 +1,8 @@
 import pytest
 import torch
 
+from tgm import DGraph
 from tgm.data import DGData
-from tgm.graph import DGraph
 from tgm.hooks import DeviceTransferHook
 
 

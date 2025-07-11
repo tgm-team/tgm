@@ -3,7 +3,7 @@
 ![image](./docs/img/logo.svg)
 
 <div align="center">
-<h3 style="font-size: 22px">Efficient and Modular ML on Dynamic Graphs</h3>
+<h3 style="font-size: 22px">Efficient and Modular ML on Temporal Graphs</h3>
 <a href="https://tgm.readthedocs.io/en/latest"/><strong style="font-size: 18px;">Read Our Docs»</strong></a>
 <a href="https://github.com/tgm-team/tgm"/><strong style="font-size: 18px;">Read Our Paper»</strong></a>
 <br/>
@@ -81,6 +81,16 @@ pip install git+https://github.com/tgm-team/tgm.git
 
 # Test the install
 python -c 'import tgm; print(tgm.__version__)'
+```
+
+These steps should work on Linux systems. We have not officially tested on other platforms, so expect additional work may be required. If you encounter issues on your system, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
+
+### Windows
+
+To enable GPU on non-linux platforms, you will need to manually install the appropriate torch wheels for your drivers. For instance, for *cuda:12.4*, follow the steps above and then issue:
+
+```sh
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
 ## Quick Tour for New Users

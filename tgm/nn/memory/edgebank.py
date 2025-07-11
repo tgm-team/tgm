@@ -1,4 +1,4 @@
-from typing import Dict, Literal, Tuple
+from typing import Any, Dict, Literal, Tuple
 
 import torch
 
@@ -93,9 +93,12 @@ class EdgeBankPredictor:
     def _check_input_data(
         self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor
     ) -> None:
+        def _get_info(fn: Any) -> str:
+            return f'src: {fn(src)}, dst: {fn(dst)}, ts: {fn(ts)}'
+
         if not (type(src) == type(dst) == type(ts) == torch.Tensor):
-            raise TypeError('src, dst, ts must all be torch.Tensor')
+            raise TypeError(f'src, dst, ts must all be Tensor, got {_get_info(type)}')
         if not (len(src) == len(dst) == len(ts)):
-            raise ValueError(f'mismatch src:{len(src)}, dst: {len(dst)}, ts: {len(ts)}')
+            raise ValueError(f'mismatch shape: {_get_info(len)}')
         if len(src) == 0:
-            raise ValueError('src, dst, and ts must have at least one element')
+            raise ValueError(f'src, dst, ts must have at len > 1, got {_get_info(len)}')

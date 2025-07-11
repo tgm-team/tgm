@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Set, Tuple
+from typing import Literal, Optional, Set, Tuple
 
 from torch import Tensor
 
 from tgm.data import DGData
+from tgm.timedelta import TimeDeltaDG
 
 
 @dataclass(slots=True)
@@ -20,6 +21,14 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def __init__(self, data: DGData) -> None: ...
+
+    @abstractmethod
+    def discretize(
+        self,
+        old_time_granularity: TimeDeltaDG,
+        new_time_granularity: TimeDeltaDG,
+        reduce_op: Literal['first'],
+    ) -> 'DGStorageBase': ...
 
     @abstractmethod
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]: ...
@@ -61,6 +70,6 @@ class DGStorageBase(ABC):
     def get_nbrs(
         self,
         seed_nodes: Tensor,
-        num_nbrs: List[int],
+        num_nbrs: int,
         slice: DGSliceTracker,
-    ) -> Tuple[List[Tensor], ...]: ...
+    ) -> Tuple[Tensor, ...]: ...

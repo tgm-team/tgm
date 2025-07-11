@@ -87,22 +87,21 @@ class TGAT(nn.Module):
         z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
 
         for hop in reversed(range(self.num_layers)):
-            if batch.nids[hop].numel() == 0:
+            seed_nodes = batch.nids[hop]
+            nbrs = batch.nbr_nids[hop]
+            nbr_mask = batch.nbr_mask[hop]
+            if seed_nodes.numel() == 0:
                 continue
 
             # TODO: Check and read static node features
-            node_feat = torch.zeros(
-                (*batch.nids[hop].shape, self.embed_dim), device=device
-            )
-            node_time_feat = self.time_encoder(torch.zeros_like(batch.nids[hop]))
+            node_feat = torch.zeros((*seed_nodes.shape, self.embed_dim), device=device)
+            node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
+            nbr_feat = torch.zeros((*nbrs.shape, self.embed_dim), device=device)
             if hop < self.num_layers - 1:
-                nbr_feat = z[batch.nbr_nids_idx[hop]]
-            else:
-                nbr_feat = torch.zeros(
-                    (*batch.nbr_nids[hop].shape, self.embed_dim), device=device
-                )
+                valid_nbrs = nbrs[nbr_mask.bool()]
+                nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
             nbr_time_feat = self.time_encoder(delta_time)
@@ -113,9 +112,9 @@ class TGAT(nn.Module):
                 edge_feat=batch.nbr_feats[hop],
                 nbr_node_feat=nbr_feat,
                 nbr_time_feat=nbr_time_feat,
-                nbr_mask=batch.nbr_mask[hop],
+                nbr_mask=nbr_mask,
             )
-            z[batch.nid_to_idx[batch.nids[hop]]] = out
+            z[batch.global_to_local(seed_nodes)] = out
         return z
 
 
@@ -144,9 +143,14 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
         z = encoder(batch)
-        z_src, z_dst, z_neg = z[batch.src_idx], z[batch.dst_idx], z[batch.neg_idx]  # type: ignore
+
+        z_src = z[batch.global_to_local(batch.src)]
+        z_dst = z[batch.global_to_local(batch.dst)]
+        z_neg = z[batch.global_to_local(batch.neg)]
+
         pos_out = decoder(z_src, z_dst)
         neg_out = decoder(z_src, z_neg)
+
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
@@ -170,11 +174,11 @@ def eval(
         z = encoder(batch)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
-            z_src = z[batch.nid_to_idx[src_ids]]
-            z_dst = z[batch.nid_to_idx[dst_ids]]
+            z_src = z[batch.global_to_local(src_ids)]
+            z_dst = z[batch.global_to_local(dst_ids)]
             y_pred = decoder(z_src, z_dst)
 
             input_dict = {
@@ -210,12 +214,16 @@ test_dg = DGraph(
 
 
 def _init_hooks(
-    num_nodes: int, sampling_type: str, neg_sampler: object, split_mode: str
+    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
 ) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=num_nodes)
+        nbr_hook = RecencyNeighborHook(
+            num_nbrs=args.n_nbrs,
+            num_nodes=dg.num_nodes,
+            edge_feats_dim=dg.edge_feats_dim,
+        )
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -223,23 +231,23 @@ def _init_hooks(
     if split_mode in ['val', 'test']:
         neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
     else:
-        neg_hook = NegativeEdgeSamplerHook(low=0, high=num_nodes)
+        neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
     return [neg_hook, nbr_hook]
 
 
 train_loader = DGDataLoader(
     train_dg,
-    hook=_init_hooks(test_dg.num_nodes, args.sampling, neg_sampler, 'train'),
+    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
     batch_size=args.bsize,
 )
 val_loader = DGDataLoader(
     val_dg,
-    hook=_init_hooks(test_dg.num_nodes, args.sampling, neg_sampler, 'val'),
+    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
     batch_size=args.bsize,
 )
 test_loader = DGDataLoader(
     test_dg,
-    hook=_init_hooks(test_dg.num_nodes, args.sampling, neg_sampler, 'test'),
+    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'test'),
     batch_size=args.bsize,
 )
 
