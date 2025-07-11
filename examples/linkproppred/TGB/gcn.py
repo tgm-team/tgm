@@ -1,3 +1,7 @@
+r"""python -u gcn.py --dataset tgbl-wiki --time-gran s --batch-time-gran h
+example commands to run this script.
+"""
+
 import argparse
 import time
 from typing import Tuple
@@ -29,7 +33,21 @@ parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
-parser.add_argument('--bsize', type=int, default=200, help='batch size')
+parser.add_argument(
+    '--bsize', type=int, default=200, help='batch size for TGN CTDG iteration'
+)
+parser.add_argument(
+    '--time-gran',
+    type=str,
+    default='s',
+    help='raw time granularity for dataset',
+)
+parser.add_argument(
+    '--batch-time-gran',
+    type=str,
+    default='h',
+    help='time granularity to operate on for snapshots',
+)
 
 
 class GCN(nn.Module):
@@ -214,10 +232,10 @@ train_dg = DGraph(
 
 train_snapshots = DGraph(
     args.dataset,
-    time_delta=TimeDeltaDG('s'),
+    time_delta=TimeDeltaDG(args.time_gran),
     split='train',
     device=args.device,
-).discretize('h')
+).discretize(args.batch_time_gran)
 
 val_dg = DGraph(
     args.dataset,
@@ -228,10 +246,10 @@ val_dg = DGraph(
 
 val_snapshots = DGraph(
     args.dataset,
-    time_delta=TimeDeltaDG('s'),
+    time_delta=TimeDeltaDG(args.time_gran),
     split='val',
     device=args.device,
-).discretize('h')
+).discretize(args.batch_time_gran)
 
 test_dg = DGraph(
     args.dataset,
@@ -242,10 +260,10 @@ test_dg = DGraph(
 
 test_snapshots = DGraph(
     args.dataset,
-    time_delta=TimeDeltaDG('s'),
+    time_delta=TimeDeltaDG(args.time_gran),
     split='test',
     device=args.device,
-).discretize('h')
+).discretize(args.batch_time_gran)
 
 train_loader = DGDataLoader(
     train_dg,
@@ -255,7 +273,7 @@ train_loader = DGDataLoader(
 train_snapshots_loader = DGDataLoader(
     train_snapshots,
     hook=[NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes)],
-    batch_unit='h',
+    batch_unit=args.batch_time_gran,
 )
 
 
@@ -267,7 +285,7 @@ val_loader = DGDataLoader(
 val_snapshots_loader = DGDataLoader(
     val_snapshots,
     hook=[],
-    batch_unit='h',
+    batch_unit=args.batch_time_gran,
 )
 
 test_loader = DGDataLoader(
@@ -278,7 +296,7 @@ test_loader = DGDataLoader(
 test_snapshots_loader = DGDataLoader(
     test_snapshots,
     hook=[],
-    batch_unit='h',
+    batch_unit=args.batch_time_gran,
 )
 
 if train_dg.dynamic_node_feats_dim is not None:
@@ -331,5 +349,14 @@ for epoch in range(1, args.epochs + 1):
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
-# test_results = eval(test_loader, model, test_metrics, static_node_feats)
-# print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+test_results = eval(
+    test_loader,
+    test_snapshots_loader,
+    encoder,
+    decoder,
+    eval_metric,
+    evaluator,
+    static_node_feats,
+    z,
+)
+print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
