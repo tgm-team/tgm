@@ -122,7 +122,7 @@ def train_in_batches(
     decoder.train()
     total_loss = 0
     criterion = torch.nn.MSELoss()
-    iter_loader = iter(snapshots_loader)
+    snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(iter_loader)
     embeddings = encoder(snapshot_batch, static_node_feat)
     for batch in tqdm(loader):
