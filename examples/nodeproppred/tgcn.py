@@ -1,4 +1,4 @@
-r"""python -u tgcn.py --dataset tgbn-trade --time-gran r --batch-time-gran r
+r"""python -u tgcn.py --dataset tgbn-trade --time-gran Y --batch-time-gran Y
 python -u tgcn.py --dataset tgbn-genre --time-gran s --batch-time-gran D\
 example commands to run this script.
 """
@@ -59,7 +59,7 @@ class TGCN_Model(nn.Module):
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0 = self.encoder(node_feat, edge_index, edge_weight, h_0)
-        z_node = z[batch.global_to_local[batch.node_ids]]  # type: ignore
+        z_node = z[batch.global_to_local(batch.node_ids)]  # type: ignore
         pred = self.decoder(z_node)
         return pred, h_0
 
@@ -211,11 +211,10 @@ for epoch in range(1, args.epochs + 1):
     latency = end_time - start_time
 
     val_results, h_0 = eval(val_loader, model, static_node_feats, h_0)
-
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
 test_results, h_0 = eval(test_loader, model, static_node_feats, h_0)
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+print('Test:', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
