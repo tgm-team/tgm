@@ -161,7 +161,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    iter_loader = iter(snapshots_loader)
+    snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(iter_loader)
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
