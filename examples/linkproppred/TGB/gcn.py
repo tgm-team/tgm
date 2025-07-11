@@ -266,7 +266,6 @@ val_loader = DGDataLoader(
 )
 val_snapshots_loader = DGDataLoader(
     val_snapshots,
-    hook=[],
     batch_unit='h',
 )
 
