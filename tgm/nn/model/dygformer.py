@@ -5,6 +5,7 @@ from typing import Callable, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ..time_encoding import Time2Vec
 
@@ -146,8 +147,25 @@ class TransformerEncoder(nn.Module):
         self, attention_dim: int, num_heads: int, dropout: float = 0.1
     ) -> None:
         super(TransformerEncoder, self).__init__()
-        # @TODO
-        raise Exception('Not implemented yet')
+        self.attention_dim = attention_dim
+        self.num_heads = num_heads
+        self.dropout_rate = dropout
+
+        self.multi_head_attention = nn.MultiheadAttention(
+            embed_dim=attention_dim, num_heads=num_heads, dropout=dropout
+        )
+
+        self.dropout = nn.Dropout(self.dropout_rate)
+
+        self.linear_layers = nn.ModuleList(
+            [
+                nn.Linear(in_features=attention_dim, out_features=4 * attention_dim),
+                nn.Linear(in_features=4 * attention_dim, out_features=attention_dim),
+            ]
+        )
+        self.norm_layers = nn.ModuleList(
+            [nn.LayerNorm(attention_dim), nn.LayerNorm(attention_dim)]
+        )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         r"""Forward pass. Encode the inputs by Transformer encoder (Section 4.1).
@@ -158,8 +176,26 @@ class TransformerEncoder(nn.Module):
         Returns:
             H (PyTorch Float Tensor): Representations of all nodes.
         """
-        # @TODO
-        raise Exception('Not implemented yet')
+        transposed_inputs = inputs.transpose(0, 1)
+        transposed_inputs = self.norm_layers[0](transposed_inputs)
+
+        # E.q 5 - Section 4.1
+        hidden_states = self.multi_head_attention(
+            query=transposed_inputs, key=transposed_inputs, value=transposed_inputs
+        )[0].transpose(0, 1)
+
+        # E.q 6 - Section 4.1
+        outputs = inputs + self.dropout(hidden_states)
+
+        # E.q 7 - Section 4.1
+        hidden_states = self.linear_layers[1](
+            self.dropout(F.gelu(self.linear_layers[0](self.norm_layers[1](outputs))))
+        )
+
+        # E.q 7 - Section 4.1
+        outputs = outputs + self.dropout(hidden_states)
+
+        return outputs
 
 
 class DyGFormer(nn.Module):
