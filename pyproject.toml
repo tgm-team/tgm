@@ -35,6 +35,7 @@ examples = [
     "py-tgb>=2.1.0",
     "torchmetrics>=1.7.0",
     "tqdm>=4.67.1",
+    "torch_geometric>=2.6.1",
 ]
 
 [build-system]
