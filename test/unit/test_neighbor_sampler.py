@@ -23,6 +23,33 @@ def _init_hooks(dg: DGraph, sampling_type: str, n_nbrs: List) -> List[DGHook]:
     return [nbr_hook]
 
 
+def _batch_eq_nbrs(batch_1: DGBatch, batch_2: DGBatch) -> bool:
+    """Assert if two batches neighbors are equal."""
+    assert np.array_equal(batch_1.nids, batch_2.nids)
+    assert np.array_equal(batch_1.nbr_nids, batch_2.nbr_nids)
+    assert np.array_equal(batch_1.nbr_times, batch_2.nbr_times)
+    assert np.array_equal(batch_1.nbr_feats, batch_2.nbr_feats)
+    assert np.array_equal(batch_1.nbr_mask, batch_2.nbr_mask)
+    return True
+
+
+def _nbrs_2_np(batch: DGBatch) -> List[np.ndarray]:
+    """Convert neighbors in batch to numpy arrays."""
+    assert isinstance(batch, DGBatch)
+    assert hasattr(batch, 'nids')
+    assert hasattr(batch, 'nbr_nids')
+    assert hasattr(batch, 'nbr_times')
+    assert hasattr(batch, 'nbr_feats')
+    assert hasattr(batch, 'nbr_mask')
+
+    nids = np.array(batch.nids)
+    nbr_nids = np.array(batch.nbr_nids)
+    nbr_times = np.array(batch.nbr_times)
+    nbr_feats = np.array(batch.nbr_feats)
+    nbr_mask = np.array(batch.nbr_mask)
+    return [nids, nbr_nids, nbr_times, nbr_feats, nbr_mask]
+
+
 def _init_basic_sample_graph():
     """Initializes the following graph.
 
@@ -55,46 +82,47 @@ def test_init_basic_sampled_graph_1_hop():
     loader = DGDataLoader(dg, hook=hook, batch_size=1)
     assert loader._batch_size == 1
 
-    batch = next(iter(loader))
-    assert isinstance(batch, DGBatch)
-    assert hasattr(batch, 'nids')
-    assert hasattr(batch, 'nbr_nids')
-    assert hasattr(batch, 'nbr_times')
-    assert hasattr(batch, 'nbr_feats')
-    assert hasattr(batch, 'nbr_mask')
-
-    nids = np.array(batch.nids)
-    nbr_nids = np.array(batch.nbr_nids)
-    nbr_times = np.array(batch.nbr_times)
-    nbr_feats = np.array(batch.nbr_feats)
-    nbr_mask = np.array(batch.nbr_mask)
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_1)
 
     assert nids.shape == (1, 2)
+    assert nids[0][0] == 0
+    assert nids[0][1] == 1
     assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == -1
+    assert nbr_nids[0][1][0] == -1
     assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == nbr_times[0][1][0] == 0
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][1][0][0] == nbr_feats[0][1][0][0] == 0.0
     assert nbr_mask.shape == (1, 2, 1)
 
+    batch_2 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
+    assert nids.shape == (1, 2)
+    assert nids[0][0] == 0
+    assert nids[0][1] == 1
+    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == 1
+    assert nbr_nids[0][1][0] == 0
+    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == nbr_times[0][1][0] == 1
+    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][1][0][0] == nbr_feats[0][1][0][0] == 2
+    assert nbr_mask.shape == (1, 2, 1)
+
+    # starting test for uniform sampler
     hook = _init_hooks(dg, 'uniform', n_nbrs=n_nbrs)
     loader = DGDataLoader(dg, hook=hook, batch_size=1)
     assert loader._batch_size == 1
 
     batch = next(iter(loader))
-    assert isinstance(batch, DGBatch)
-    assert hasattr(batch, 'nids')
-    assert hasattr(batch, 'nbr_nids')
-    assert hasattr(batch, 'nbr_times')
-    assert hasattr(batch, 'nbr_feats')
-    assert hasattr(batch, 'nbr_mask')
-
-    nids = np.array(batch.nids)
-    nbr_nids = np.array(batch.nbr_nids)
-    nbr_times = np.array(batch.nbr_times)
-    nbr_feats = np.array(batch.nbr_feats)
-    nbr_mask = np.array(batch.nbr_mask)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch)
 
     assert nids.shape == (1, 2)
     assert nbr_nids.shape == (1, 2, 1)
     assert nbr_times.shape == (1, 2, 1)
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_mask.shape == (1, 2, 1)
+    assert _batch_eq_nbrs(batch_2, batch)
