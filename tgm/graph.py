@@ -449,10 +449,9 @@ class DGBatch:
                 for element in object:
                     unique_type.add(_get_description(element))
                 description = type(object).__name__ + '(' + '|'.join(unique_type) + ')'
-            elif object is not None:
-                description = type(object).__name__
             else:
-                description = 'None'
+                description = type(object).__name__
+                
             return description
 
         descriptions = []
