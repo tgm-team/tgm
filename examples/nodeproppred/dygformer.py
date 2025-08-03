@@ -106,6 +106,9 @@ for batch in train_loader:
 
     break
 
+# TODO: need to feed delta time: as TGAT do (DyGFormer):edge_time.unsqueeze(1) - src_neighbours_time
+# TODO: RecencySample = max_sequence -1 (keep 1 for target node itself)
+
 # for epoch in range(1, args.epochs + 1):
 #     start_time = time.perf_counter()
 #     loss, h_0 = train(train_loader, model, opt, static_node_feats)

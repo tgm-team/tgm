@@ -251,7 +251,7 @@ class DyGFormer(nn.Module):
         self.num_channels = num_channels
 
         self.time_encoder = time_encoder(time_feat_dim)
-        self.neighbor_co_occurrence_encoder = NeighborCooccurrenceEncoder(
+        self.co_occurrence_encoder = NeighborCooccurrenceEncoder(
             feat_dim=self.neighbor_co_occurrence_feat_dim,
             device=self.device,
         )
@@ -301,13 +301,9 @@ class DyGFormer(nn.Module):
         X: torch.Tensor,
         edge_index: torch.Tensor,
         edge_time: torch.Tensor,
-        edge_feat: torch.Tensor,
-        src_neighbours: torch.Tensor,
-        src_neighbours_time: torch.Tensor,
-        src_neighbours_edge_feat: torch.Tensor,
-        dst_neighbours: torch.Tensor,
-        dst_neighbours_time: torch.Tensor,
-        dst_neighbours_edge_feat: torch.Tensor,
+        neighbours: torch.Tensor,
+        neighbours_time: torch.Tensor,
+        neighbours_edge_feat: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         f"""Forward pass.
 
@@ -319,42 +315,31 @@ class DyGFormer(nn.Module):
         Returns:
             H (PyTorch Float Tensor): Time-aware representations of all nodes.
         """
-        assert (
-            src_neighbours.shape[1]
-            == src_neighbours_time.shape[1]
-            == src_neighbours_edge_feat.shape[1]
-            == self.max_input_sequence_length
-        )
-        assert (
-            dst_neighbours.shape[1]
-            == dst_neighbours_time.shape[1]
-            == dst_neighbours_edge_feat.shape[1]
-            == self.max_input_sequence_length
-        )
-        assert (
-            src_neighbours.shape[0]
-            == dst_neighbours.shape[0]
-            == edge_index.shape[1]
-            == edge_feat.shape[0]
-        )
+        src, dst = edge_index[0], edge_index[1]
+        num_edge = src.shape[0]
+        src_neighbours = neighbours[:num_edge]
+        dst_neighbours = neighbours[num_edge : num_edge * 2]
+        src_neighbours = torch.cat([src.unsqueeze(dim=1), src_neighbours], dim=1)
+        dst_neighbours = torch.cat([dst.unsqueeze(dim=1), dst_neighbours], dim=1)
+
+        src_neighbours_time = neighbours_time[:num_edge]
+        dst_neighbours_time = neighbours_time[num_edge : num_edge * 2]
+        src_neighbours_edge_feat = neighbours_edge_feat[:num_edge]
+        dst_neighbours_edge_feat = neighbours_edge_feat[num_edge : num_edge * 2]
 
         # Get node feat and time feat using Time Encoder
-        src_neighbours_node_feats, dst_neighbours_node_feats = (
-            self._get_node_features(X, src_neighbours),
-            self._get_node_features(X, dst_neighbours),
+        src_neighbours_node_feats = self._get_node_features(X, src_neighbours)
+        dst_neighbours_node_feats = self._get_node_features(X, dst_neighbours)
+
+        src_neighbours_time_feats = self.time_encoder(
+            edge_time.unsqueeze(1) - src_neighbours_time
         )
-        src_neighbours_time_feats = (
-            self.time_encoder(edge_time.unsqueeze(1) - src_neighbours_time)
-            .float()
-            .to(self.device)
+        dst_neighbours_time_feats = self.time_encoder(
+            edge_time.unsqueeze(1) - dst_neighbours_time
         )
-        dst_neighbours_time_feats = (
-            self.time_encoder(edge_time.unsqueeze(1) - dst_neighbours_time)
-            .float()
-            .to(self.device)
-        )
-        src_neighbours_co_occurrence_feats, dst_neighbours_co_occurrence_feats = (
-            self.neighbor_co_occurrence_encoder(src_neighbours, dst_neighbours)
+
+        src_co_occurrence_feats, dst_co_occurrence_feats = self.co_occurrence_encoder(
+            src_neighbours, dst_neighbours
         )
 
         # Get patches for src and dst
@@ -362,23 +347,23 @@ class DyGFormer(nn.Module):
             src_neighbours_node_features_patches,
             src_neighbours_edge_features_patches,
             src_neighbours_time_features_patches,
-            src_neighbours_co_occurence_features_patches,
+            src_co_occurence_features_patches,
         ) = self._get_patches(
             src_neighbours_node_feats,
             src_neighbours_edge_feat,
             src_neighbours_time_feats,
-            src_neighbours_co_occurrence_feats,
+            src_co_occurrence_feats,
         )
         (
             dst_neighbours_node_features_patches,
             dst_neighbours_edge_features_patches,
             dst_neighbours_time_features_patches,
-            dst_neighbours_co_occurence_features_patches,
+            dst_co_occurence_features_patches,
         ) = self._get_patches(
             dst_neighbours_node_feats,
             dst_neighbours_edge_feat,
             dst_neighbours_time_feats,
-            dst_neighbours_co_occurrence_feats,
+            dst_co_occurrence_feats,
         )
 
         # Use projection to align the patch encoding dimension for both dst and src
@@ -391,9 +376,9 @@ class DyGFormer(nn.Module):
         src_neighbours_time_features_patches = self.projection_layer['time'](
             src_neighbours_time_features_patches
         )
-        src_neighbours_co_occurence_features_patches = self.projection_layer[
+        src_co_occurence_features_patches = self.projection_layer[
             'neighbor_co_occurrence'
-        ](src_neighbours_co_occurence_features_patches)
+        ](src_co_occurence_features_patches)
 
         # Tensor, shape (batch_size, dst_num_patches, channel_embedding_dim)
         dst_neighbours_node_features_patches = self.projection_layer['node'](
@@ -405,9 +390,9 @@ class DyGFormer(nn.Module):
         dst_neighbours_time_features_patches = self.projection_layer['time'](
             dst_neighbours_time_features_patches
         )
-        dst_neighbours_co_occurence_features_patches = self.projection_layer[
+        dst_co_occurence_features_patches = self.projection_layer[
             'neighbor_co_occurrence'
-        ](dst_neighbours_co_occurence_features_patches)
+        ](dst_co_occurence_features_patches)
 
         # Perform transformer
         batch_size = len(src_neighbours_node_features_patches)
@@ -437,8 +422,8 @@ class DyGFormer(nn.Module):
         )
         patches_nodes_neighbor_co_occurrence_features = torch.cat(
             [
-                src_neighbours_co_occurence_features_patches,
-                dst_neighbours_co_occurence_features_patches,
+                src_co_occurence_features_patches,
+                dst_co_occurence_features_patches,
             ],
             dim=1,
         )
