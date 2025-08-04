@@ -7,7 +7,6 @@ import argparse
 import time
 from typing import Callable, List
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -196,7 +195,7 @@ def train(
 
 @torch.no_grad()
 def eval(
-    evaluator : Evaluator,
+    evaluator: Evaluator,
     loader: DGDataLoader,
     model: nn.Module,
     metrics: Metric,
@@ -283,7 +282,7 @@ if __name__ == '__main__':
         num_heads=args.num_heads,
         num_channels=args.num_channels,
         num_layers=args.num_layers,
-        device = args.device
+        device=args.device,
     ).to(args.device)
 
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
@@ -292,18 +291,19 @@ if __name__ == '__main__':
     val_metrics = MetricCollection(metrics, prefix='Validation')
     test_metrics = MetricCollection(metrics, prefix='Test')
 
-
     for epoch in range(1, args.epochs + 1):
         start_time = time.perf_counter()
         loss = train(train_loader, model, opt, static_node_feats)
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-        val_results = eval(evaluator,val_loader, model,val_metrics ,static_node_feats)
+        val_results = eval(evaluator, val_loader, model, val_metrics, static_node_feats)
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
             + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
         )
 
-        test_results = eval(evaluator,test_loader, model, test_metrics,static_node_feats)
+        test_results = eval(
+            evaluator, test_loader, model, test_metrics, static_node_feats
+        )
         print('Test:', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
