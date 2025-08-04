@@ -11,7 +11,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tgb.nodeproppred.evaluate import Evaluator
+from tgb.linkproppred.evaluate import Evaluator
+from torchmetrics import Metric, MetricCollection
+from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from tgm.graph import DGBatch, DGraph
@@ -38,23 +40,23 @@ parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--max_sequence_length',
     type=int,
-    default=256,
+    default=32,
     help='maximal length of the input sequence of each node',
 )
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
-parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed-dim', type=int, default=172, help='attention dimension')
-parser.add_argument('--node-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument('--time_dim', type=int, default=100, help='time encoding dimension')
+parser.add_argument('--embed_dim', type=int, default=172, help='attention dimension')
+parser.add_argument('--node_dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
     '--channel-embedding-dim',
     type=int,
     default=50,
     help='dimension of each channel embedding',
 )
-parser.add_argument('--patch-size', type=int, default=1, help='patch size')
-parser.add_argument('--num-layers', type=int, default=2, help='number of model layers')
+parser.add_argument('--patch-size', type=int, default=8, help='patch size')
+parser.add_argument('--num_layers', type=int, default=2, help='number of model layers')
 parser.add_argument(
-    '--num-heads', type=int, default=2, help='number of heads used in attention layer'
+    '--num_heads', type=int, default=2, help='number of heads used in attention layer'
 )
 parser.add_argument(
     '--num-channels',
@@ -182,7 +184,6 @@ def train(
         edge_idx_pos = torch.stack([src, dst], dim=1).t()
         edge_idx_neg = torch.stack([src, neg], dim=1).t()
         pos_out = model(edge_idx_pos, batch, node_feat)
-        exit()
         neg_out = model(edge_idx_neg, batch, node_feat)
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
@@ -195,36 +196,33 @@ def train(
 
 @torch.no_grad()
 def eval(
+    evaluator : Evaluator,
     loader: DGDataLoader,
-    encoder: nn.Module,
-    decoder: nn.Module,
-    eval_metric: str,
-    evaluator: Evaluator,
+    model: nn.Module,
+    metrics: Metric,
+    node_feat: torch.Tensor,
 ) -> dict:
-    encoder.eval()
-    decoder.eval()
-    perf_list = []
+    model.eval()
     for batch in tqdm(loader):
-        z = encoder(batch)
+        src = batch.src
+        dst = batch.dst
+        neg = batch.neg
+        edge_idx_pos = torch.stack([src, dst], dim=1).t()
+        edge_idx_neg = torch.stack([src, neg], dim=1).t()
+        pos_out = model(edge_idx_pos, batch, node_feat)
+        neg_out = model(edge_idx_neg, batch, node_feat)
 
-        for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src_ids = batch.src[idx].repeat(len(dst_ids))
-
-            z_src = z[batch.global_to_local(src_ids)]
-            z_dst = z[batch.global_to_local(dst_ids)]
-            y_pred = decoder(z_src, z_dst)
-
-            input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
-                'eval_metric': [eval_metric],
-            }
-            perf_list.append(evaluator.eval(input_dict)[eval_metric])
-
-    metric_dict = {}
-    metric_dict[eval_metric] = float(np.mean(perf_list))
-    return metric_dict
+        y_pred = torch.cat([pos_out, neg_out], dim=0).float()
+        y_true = (
+            torch.cat(
+                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
+            )
+            .long()
+            .to(y_pred.device)
+        )
+        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
+        metrics(y_pred, y_true, indexes=indexes)
+    return metrics.compute()
 
 
 if __name__ == '__main__':
@@ -254,7 +252,6 @@ if __name__ == '__main__':
     num_nodes = dgraph.num_nodes
     edge_feats_dim = dgraph.edge_feats_dim
     label_dim = train_dg.dynamic_node_feats_dim
-    evaluator = Evaluator(name=args.dataset)
 
     train_loader = DGDataLoader(
         train_dg,
@@ -286,21 +283,27 @@ if __name__ == '__main__':
         num_heads=args.num_heads,
         num_channels=args.num_channels,
         num_layers=args.num_layers,
-    )
+        device = args.device
+    ).to(args.device)
 
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+    evaluator = Evaluator(name=args.dataset)
+    metrics = [BinaryAveragePrecision(), BinaryAUROC()]
+    val_metrics = MetricCollection(metrics, prefix='Validation')
+    test_metrics = MetricCollection(metrics, prefix='Test')
+
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.perf_counter()
-        loss, h_0 = train(train_loader, model, opt, static_node_feats)
+        loss = train(train_loader, model, opt, static_node_feats)
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-        val_results, h_0 = eval(val_loader, model, static_node_feats, h_0)
+        val_results = eval(evaluator,val_loader, model,val_metrics ,static_node_feats)
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
             + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
         )
 
-    test_results, h_0 = eval(test_loader, model, static_node_feats, h_0)
-    print('Test:', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+        test_results = eval(evaluator,test_loader, model, test_metrics,static_node_feats)
+        print('Test:', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
