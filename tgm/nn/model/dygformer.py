@@ -239,9 +239,9 @@ class DyGFormer(nn.Module):
         num_heads: int = 2,
         dropout: float = 0.1,
         max_input_sequence_length: int = 512,
+        num_channels: int = 4,
         time_encoder: Callable[..., nn.Module] = Time2Vec,
         device: str = 'cpu',
-        num_channels: int = 4,
     ) -> None:
         super(DyGFormer, self).__init__()
         self.node_feat_dim = node_feat_dim
