@@ -9,6 +9,8 @@ import torch.nn.functional as F
 
 from ..time_encoding import Time2Vec
 
+PADDED_NODE_ID = -1
+
 
 class NeighborCooccurrenceEncoder(nn.Module):
     r"""An implementation of Neighbor Co-occurrence Encoding Scheme.
@@ -104,8 +106,10 @@ class NeighborCooccurrenceEncoder(nn.Module):
         dst_freq_tensor = torch.stack(dst_freq, dim=0)
 
         # set the frequencies of the padded nodes (with zero index) to zeros
-        source_freq_tensor[torch.from_numpy(all_sources_neighbors == 0)] = 0.0
-        dst_freq_tensor[torch.from_numpy(all_dsts_neighbors == 0)] = 0.0
+        source_freq_tensor[
+            torch.from_numpy(all_sources_neighbors == PADDED_NODE_ID)
+        ] = 0.0
+        dst_freq_tensor[torch.from_numpy(all_dsts_neighbors == PADDED_NODE_ID)] = 0.0
         return source_freq_tensor, dst_freq_tensor
 
     def forward(
@@ -315,17 +319,36 @@ class DyGFormer(nn.Module):
         Returns:
             H (PyTorch Float Tensor): Time-aware representations of all nodes.
         """
+
         src, dst = edge_index[0], edge_index[1]
         num_edge = src.shape[0]
         src_neighbours = neighbours[:num_edge]
         dst_neighbours = neighbours[num_edge : num_edge * 2]
-        src_neighbours = torch.cat([src.unsqueeze(dim=1), src_neighbours], dim=1)
-        dst_neighbours = torch.cat([dst.unsqueeze(dim=1), dst_neighbours], dim=1)
-
         src_neighbours_time = neighbours_time[:num_edge]
         dst_neighbours_time = neighbours_time[num_edge : num_edge * 2]
         src_neighbours_edge_feat = neighbours_edge_feat[:num_edge]
         dst_neighbours_edge_feat = neighbours_edge_feat[num_edge : num_edge * 2]
+
+        # include seed nodes are neighbors themselves
+        src_neighbours = torch.cat([src.unsqueeze(dim=1), src_neighbours], dim=1)
+        dst_neighbours = torch.cat([dst.unsqueeze(dim=1), dst_neighbours], dim=1)
+
+        src_neighbours_time = torch.cat(
+            [edge_time.unsqueeze(1), src_neighbours_time], dim=1
+        )
+        dst_neighbours_time = torch.cat(
+            [edge_time.unsqueeze(1), dst_neighbours_time], dim=1
+        )
+
+        padding = torch.zeros(
+            src_neighbours_edge_feat.shape[0],
+            1,
+            src_neighbours_edge_feat.shape[2],
+            device=self.device,
+            dtype=src_neighbours_edge_feat.dtype,
+        )
+        src_neighbours_edge_feat = torch.cat([padding, src_neighbours_edge_feat], dim=1)
+        dst_neighbours_edge_feat = torch.cat([padding, dst_neighbours_edge_feat], dim=1)
 
         # Get node feat and time feat using Time Encoder
         src_neighbours_node_feats = self._get_node_features(X, src_neighbours)
@@ -337,6 +360,13 @@ class DyGFormer(nn.Module):
         dst_neighbours_time_feats = self.time_encoder(
             edge_time.unsqueeze(1) - dst_neighbours_time
         )
+
+        src_neighbours_time_feats[
+            (src_neighbours[1:] == PADDED_NODE_ID).nonzero(as_tuple=True)
+        ] = 0
+        dst_neighbours_time_feats[
+            (dst_neighbours[1:] == PADDED_NODE_ID).nonzero(as_tuple=True)
+        ] = 0
 
         src_co_occurrence_feats, dst_co_occurrence_feats = self.co_occurrence_encoder(
             src_neighbours, dst_neighbours
