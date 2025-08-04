@@ -51,7 +51,7 @@ parser.add_argument(
     default=50,
     help='dimension of each channel embedding',
 )
-parser.add_argument('--patch-size', type=int, default=8, help='patch size')
+parser.add_argument('--patch-size', type=int, default=1, help='patch size')
 parser.add_argument('--num-layers', type=int, default=2, help='number of model layers')
 parser.add_argument(
     '--num-heads', type=int, default=2, help='number of heads used in attention layer'
@@ -135,9 +135,18 @@ class DyGFormer_LinkPrediction(nn.Module):
         )
         self.decoder = LinkPredictor(output_dim)
 
-    def forward(self, batch: DGBatch):
-        # @TODO
-        raise Exception('Not yet implement')
+    def forward(self, edge_idx: torch.Tensor, batch: DGBatch, X: torch.Tensor):
+        src_embeddings, dst_embeddings = self.encoder(
+            X,
+            edge_idx,
+            batch.time,
+            batch.nbr_nids[0],
+            batch.nbr_times[0],
+            batch.nbr_feats[0],
+        )
+
+        out = self.decoder(src_embeddings, dst_embeddings)
+        return out
 
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
@@ -159,23 +168,22 @@ def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
 
 def train(
     loader: DGDataLoader,
-    encoder: nn.Module,
-    decoder: nn.Module,
+    model: nn.Module,
     opt: torch.optim.Optimizer,
+    node_feat: torch.Tensor,
 ) -> float:
-    encoder.train()
-    decoder.train()
+    model.train()
     total_loss = 0
     for batch in tqdm(loader):
         opt.zero_grad()
-        z = encoder(batch)
-
-        z_src = z[batch.global_to_local(batch.src)]
-        z_dst = z[batch.global_to_local(batch.dst)]
-        z_neg = z[batch.global_to_local(batch.neg)]
-
-        pos_out = decoder(z_src, z_dst)
-        neg_out = decoder(z_src, z_neg)
+        src = batch.src
+        dst = batch.dst
+        neg = batch.neg
+        edge_idx_pos = torch.stack([src, dst], dim=1).t()
+        edge_idx_neg = torch.stack([src, neg], dim=1).t()
+        pos_out = model(edge_idx_pos, batch, node_feat)
+        exit()
+        neg_out = model(edge_idx_neg, batch, node_feat)
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
@@ -280,7 +288,7 @@ if __name__ == '__main__':
         num_layers=args.num_layers,
     )
 
-    opt = torch.optim.Adam(model, lr=float(args.lr))
+    opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.perf_counter()
