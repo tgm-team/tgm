@@ -313,11 +313,14 @@ class DyGFormer(nn.Module):
 
         Args:
             X (PyTorch Float Tensor): Node features.
-            edge_index (PyTorch Long Tensor): Graph edge indices.
-            edge_feat (PyTorch Long Tensor): Edge feature vector.
+            edge_index (PyTorch Tensor): Graph edge indices.
+            edge_feat (PyTorch Tensor): Edge feature vector.
+            neighbours (PyTorch Tensor): Neighbours of src and dst nodes from edge_index
+            neighbours_time (PyTorch Tensor): Interaction time of src/dst nodes and their neighbours
+            neighbours_edge_feat (PyTorch Tensor): Features of edge between src/dst nodes and their neighbours
 
         Returns:
-            H (PyTorch Float Tensor): Time-aware representations of all nodes.
+            H_source,H_dest (PyTorch Float Tensor): Time-aware representations of src and dst nodes.
         """
 
         src, dst = edge_index[0], edge_index[1]
