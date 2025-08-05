@@ -108,24 +108,6 @@ class DeviceTransferHook:
         return batch
 
 
-class UnsqueezeEdgeWeight:
-    requires: Set[str] = set()
-    produces: Set[str] = set()
-    r"""Unsqueeze `edge_feats` to turn each edge feature from 1-D (D,) Tensor into 2-D Tensor (D,1).
-
-    Raises:
-        AttributeError: edges don't have edge feature.
-    """
-
-    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        if batch.edge_feats is None:
-            raise AttributeError('Edges do not have edge features')
-
-        if len(batch.edge_feats.shape) == 2:
-            batch.edge_feats = batch.edge_feats.unsqueeze(-1)
-        return batch
-
-
 class DeduplicationHook:
     requires: Set[str] = set()
     produces = {'unique_nids', 'global_to_local'}
