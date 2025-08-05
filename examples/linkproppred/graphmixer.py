@@ -252,7 +252,9 @@ def _init_hooks(dg: DGraph, time_gap: int) -> List[DGHook]:
     )
 
     # Always produce negative edge prior to neighbor sampling for link prediction
-    neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
+    _, dst, _ = dg.edges
+    min_dst, max_dst = int(dst.min()), int(dst.max())
+    neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
 
     class GraphMixerHook:
         r"""Custom hook that gets 1-hop neighbors in a specific window.
