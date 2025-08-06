@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+from collections.abc import Iterable, Sized
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, List, Literal, Optional, Set, Tuple
@@ -437,3 +438,30 @@ class DGBatch:
     edge_feats: Optional[Tensor] = None
     node_times: Optional[Tensor] = None
     node_ids: Optional[Tensor] = None
+
+    def __str__(self) -> str:
+        def _get_description(object: Any) -> str:
+            description = ''
+            if isinstance(object, torch.Tensor):
+                description = str(list(object.shape))
+            elif isinstance(object, Iterable):
+                unique_type = set()
+                for element in object:
+                    unique_type.add(_get_description(element))
+                if isinstance(object, Sized):
+                    obj_len = f' x{str(len(object))}'
+                else:
+                    obj_len = ''
+
+                description = (
+                    type(object).__name__ + '(' + '|'.join(unique_type) + obj_len + ')'
+                )
+            else:
+                description = type(object).__name__
+
+            return description
+
+        descriptions = []
+        for attr, value in vars(self).items():
+            descriptions.append(f'{attr} = {_get_description(value)}')
+        return 'DGBatch(' + ', '.join(descriptions) + ')'
