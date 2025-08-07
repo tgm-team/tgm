@@ -139,7 +139,7 @@ class DeduplicationHook:
 
 class NegativeEdgeSamplerHook:
     requires: Set[str] = set()
-    produces = {'neg'}
+    produces = {'neg', 'neg_time'}
 
     r"""Sample negative edges for dynamic link prediction.
 
@@ -165,12 +165,13 @@ class NegativeEdgeSamplerHook:
         batch.neg = torch.randint(  # type: ignore
             self.low, self.high, size, dtype=torch.long, device=dg.device
         )
+        batch.neg_time = batch.time
         return batch
 
 
 class TGBNegativeEdgeSamplerHook:
     requires: Set[str] = set()
-    produces = {'neg', 'neg_batch_list'}
+    produces = {'neg', 'neg_batch_list', 'neg_time'}
     r"""Load data from DGraph using pre-generated TGB negative samples.
     Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
 
@@ -210,6 +211,22 @@ class TGBNegativeEdgeSamplerHook:
         unique_neg = np.unique(np.concatenate(queries))
         batch.neg = torch.tensor(unique_neg, dtype=torch.long, device=dg.device)  # type: ignore
         batch.neg_batch_list = tensor_batch_list  # type: ignore
+
+        # This is a heuristic. For our fake (negative) link times,
+        # we pick random time stamps within [batch.start_time, batch.end_time].
+        # Using random times on the whole graph will likely produce information
+        # leakage, making the prediction easier than it should be.
+
+        # Use generator to locall constrain rng for reproducability
+        gen = torch.Generator(device=dg.device)
+        gen.manual_seed(0)
+        batch.neg_time = torch.randint(
+            int(batch.time.min().item()),
+            int(batch.time.max().item()) + 1,
+            (batch.neg.size(0),),
+            device=dg.device,
+            generator=gen,
+        )
         return batch
 
 
@@ -251,23 +268,8 @@ class NeighborSamplerHook:
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
+                    times.append(batch.neg_time)
 
-                    # This is a heuristic. For our fake (negative) link times,
-                    # we pick random time stamps within [batch.start_time, batch.end_time].
-                    # Using random times on the whole graph will likely produce information
-                    # leakage, making the prediction easier than it should be.
-
-                    # Use generator to locall constrain rng for reproducability
-                    gen = torch.Generator(device=device)
-                    gen.manual_seed(0)
-                    fake_times = torch.randint(
-                        int(batch.time.min().item()),
-                        int(batch.time.max().item()) + 1,
-                        (batch.neg.size(0),),
-                        device=device,
-                        generator=gen,
-                    )
-                    times.append(fake_times)
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
             else:
@@ -352,22 +354,8 @@ class RecencyNeighborHook:
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
+                    times.append(batch.neg_time)
 
-                    # This is a heuristic. For our fake (negative) link times,
-                    # we pick random time stamps within [batch.start_time, batch.end_time].
-                    # Using random times on the whole graph will likely produce information
-                    # leakage, making the prediction easier than it should be.
-                    # Use generator to locall constrain rng for reproducability
-                    gen = torch.Generator(device=device)
-                    gen.manual_seed(0)
-                    fake_times = torch.randint(
-                        int(batch.time.min().item()),
-                        int(batch.time.max().item()) + 1,
-                        (batch.neg.size(0),),
-                        device=device,
-                        generator=gen,
-                    )
-                    times.append(fake_times)
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
             else:
