@@ -506,7 +506,7 @@ class DyGFormer(nn.Module):
             'neighbor_co_occurrence'
         ](dst_co_occurence_features_patches)
 
-        # Perform transformer
+        # Perform transformer operation
         batch_size = len(src_neighbours_node_features_patches)
         src_num_patches = src_neighbours_node_features_patches.shape[1]
         dst_num_patches = dst_neighbours_node_features_patches.shape[1]
