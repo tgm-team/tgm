@@ -117,7 +117,7 @@ class NeighborCooccurrenceEncoder(nn.Module):
         assert all_sources_neighbors.dim() == 2
         assert all_sources_neighbors.shape == all_dsts_neighbors.shape
 
-        B, N = all_sources_neighbors.shape  # batch size, number of neighbors
+        B, N = all_sources_neighbors.shape
 
         source_freq_list = []
         dst_freq_list = []
