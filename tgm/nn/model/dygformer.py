@@ -23,7 +23,7 @@ class NeighborCooccurrenceEncoder(nn.Module):
     """
 
     def __init__(self, feat_dim: int, device: str) -> None:
-        super(NeighborCooccurrenceEncoder, self).__init__()
+        super().__init__()
         self.feat_dim = feat_dim
         self.device = device
 
@@ -36,10 +36,9 @@ class NeighborCooccurrenceEncoder(nn.Module):
     def _count_nodes_freq(
         self, all_sources_neighbors: np.ndarray, all_dsts_neighbors: np.ndarray
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        assert len(all_sources_neighbors.shape) == 2
         assert (
-            all_sources_neighbors.shape[0] == all_dsts_neighbors.shape[0]
-            and all_sources_neighbors.shape[1] == all_dsts_neighbors.shape[1]
+            all_sources_neighbors.ndim == 2
+            and all_sources_neighbors.shape == all_dsts_neighbors.shape
         )
 
         source_freq, dst_freq = [], []
@@ -111,6 +110,80 @@ class NeighborCooccurrenceEncoder(nn.Module):
         ] = 0.0
         dst_freq_tensor[torch.from_numpy(all_dsts_neighbors == PADDED_NODE_ID)] = 0.0
         return source_freq_tensor, dst_freq_tensor
+
+    def _count_nodes_freq_torch(
+        self, all_sources_neighbors: torch.Tensor, all_dsts_neighbors: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        assert all_sources_neighbors.dim() == 2
+        assert all_sources_neighbors.shape == all_dsts_neighbors.shape
+
+        B, N = all_sources_neighbors.shape  # batch size, number of neighbors
+
+        source_freq_list = []
+        dst_freq_list = []
+
+        for i in range(B):
+            src_neighbors = all_sources_neighbors[i]
+            dst_neighbors = all_dsts_neighbors[i]
+
+            # Unique IDs and counts in source's neighbors
+            src_unique, src_inverse_indices, src_counts = torch.unique(
+                src_neighbors, return_inverse=True, return_counts=True
+            )
+            src_neighbors_freq_src_neighbors = src_counts[src_inverse_indices].float()
+            src_mapping_dict = {
+                int(k.item()): int(v.item()) for k, v in zip(src_unique, src_counts)
+            }
+
+            # Unique IDs and counts in destination's neighbors
+            dst_unique, dst_inverse_indices, dst_counts = torch.unique(
+                dst_neighbors, return_inverse=True, return_counts=True
+            )
+            dst_neighbors_freq_dst_neighbors = dst_counts[dst_inverse_indices].float()
+            dst_mapping_dict = {
+                int(k.item()): int(v.item()) for k, v in zip(dst_unique, dst_counts)
+            }
+
+            # Cross frequencies
+            src_neighbors_freq_dst_neighbors = torch.tensor(
+                [dst_mapping_dict.get(int(n.item()), 0) for n in src_neighbors],
+                dtype=torch.float,
+                device=all_sources_neighbors.device,
+            )
+            dst_neighbors_freq_src_neighbors = torch.tensor(
+                [src_mapping_dict.get(int(n.item()), 0) for n in dst_neighbors],
+                dtype=torch.float,
+                device=all_sources_neighbors.device,
+            )
+
+            # Stack own + cross frequencies
+            source_freq_list.append(
+                torch.stack(
+                    [
+                        src_neighbors_freq_src_neighbors,
+                        src_neighbors_freq_dst_neighbors,
+                    ],
+                    dim=1,
+                )
+            )
+            dst_freq_list.append(
+                torch.stack(
+                    [
+                        dst_neighbors_freq_dst_neighbors,
+                        dst_neighbors_freq_src_neighbors,
+                    ],
+                    dim=1,
+                )
+            )
+
+        source_freq_tensor = torch.stack(source_freq_list, dim=0)
+        dst_freq_tensor = torch.stack(dst_freq_list, dim=0)
+
+        # Zero-out padded nodes
+        source_freq_tensor[all_sources_neighbors == PADDED_NODE_ID] = 0.0
+        dst_freq_tensor[all_dsts_neighbors == PADDED_NODE_ID] = 0.0
+
+        return source_freq_tensor.to(self.device), dst_freq_tensor.to(self.device)
 
     def forward(
         self,
@@ -244,6 +317,10 @@ class DyGFormer(nn.Module):
         device: str = 'cpu',
     ) -> None:
         super(DyGFormer, self).__init__()
+        assert (
+            max_input_sequence_length % patch_size == 0
+        ), 'Max sequence length must be a multiple of path size'
+
         self.node_feat_dim = node_feat_dim
         self.edge_feat_dim = edge_feat_dim
         self.time_feat_dim = time_feat_dim
@@ -253,6 +330,7 @@ class DyGFormer(nn.Module):
         self.neighbor_co_occurrence_feat_dim = self.channel_embedding_dim
         self.device = device
         self.num_channels = num_channels
+        self.num_patches = max_input_sequence_length // patch_size
 
         self.time_encoder = time_encoder(time_feat_dim)
         self.co_occurrence_encoder = NeighborCooccurrenceEncoder(
@@ -324,6 +402,7 @@ class DyGFormer(nn.Module):
         """
 
         src, dst = edge_index[0], edge_index[1]
+        batch_size = src.shape[0]
         num_edge = src.shape[0]
         src_neighbours = neighbours[:num_edge]
         dst_neighbours = neighbours[num_edge : num_edge * 2]
@@ -375,29 +454,29 @@ class DyGFormer(nn.Module):
             src_neighbours, dst_neighbours
         )
 
-        # Get patches for src and dst
-        (
-            src_neighbours_node_features_patches,
-            src_neighbours_edge_features_patches,
-            src_neighbours_time_features_patches,
-            src_co_occurence_features_patches,
-        ) = self._get_patches(
-            src_neighbours_node_feats,
-            src_neighbours_edge_feat,
-            src_neighbours_time_feats,
-            src_co_occurrence_feats,
+        # Get patches for each features of src and dst
+        neighbours_node_feats = self._get_patches(
+            torch.cat([src_neighbours_node_feats, dst_neighbours_node_feats], dim=0)
         )
-        (
-            dst_neighbours_node_features_patches,
-            dst_neighbours_edge_features_patches,
-            dst_neighbours_time_features_patches,
-            dst_co_occurence_features_patches,
-        ) = self._get_patches(
-            dst_neighbours_node_feats,
-            dst_neighbours_edge_feat,
-            dst_neighbours_time_feats,
-            dst_co_occurrence_feats,
+        neighbours_edge_feats = self._get_patches(
+            torch.cat([src_neighbours_edge_feat, dst_neighbours_edge_feat], dim=0)
         )
+        neighbours_time_feats = self._get_patches(
+            torch.cat([src_neighbours_time_feats, dst_neighbours_time_feats], dim=0)
+        )
+        co_occurrence_feats = self._get_patches(
+            torch.cat([src_co_occurrence_feats, dst_co_occurrence_feats], dim=0)
+        )
+
+        src_neighbours_node_features_patches = neighbours_node_feats[:batch_size]
+        src_neighbours_edge_features_patches = neighbours_edge_feats[:batch_size]
+        src_neighbours_time_features_patches = neighbours_time_feats[:batch_size]
+        src_co_occurence_features_patches = co_occurrence_feats[:batch_size]
+
+        dst_neighbours_node_features_patches = neighbours_node_feats[batch_size:]
+        dst_neighbours_edge_features_patches = neighbours_edge_feats[batch_size:]
+        dst_neighbours_time_features_patches = neighbours_time_feats[batch_size:]
+        dst_co_occurence_features_patches = co_occurrence_feats[batch_size:]
 
         # Use projection to align the patch encoding dimension for both dst and src
         src_neighbours_node_features_patches = self.projection_layer['node'](
@@ -496,107 +575,15 @@ class DyGFormer(nn.Module):
         # extract node feature here and return
         return X[node_idx, :]
 
-    def _get_patches(
-        self,
-        neighbors_node_feats: torch.Tensor,
-        neighbors_edge_feats: torch.Tensor,
-        neighbors_time_feats: torch.Tensor,
-        neighbors_co_occurrence_feats: torch.Tensor,
-        patch_size: int = 1,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        assert neighbors_node_feats.shape[1] % patch_size == 0
-        num_patches = neighbors_node_feats.shape[1] // patch_size
+    def _get_patches(self, feat: torch.Tensor) -> torch.Tensor:
+        list_patches = []
+        for patch_id in range(self.num_patches):
+            start_idx = patch_id * self.patch_size
+            end_idx = patch_id * self.patch_size + self.patch_size
+            list_patches.append(feat[:, start_idx:end_idx, :])
 
-        (
-            list_patches_node_feats,
-            list_patches_edge_feats,
-            list_patches_time_feats,
-            list_patches_co_occurrence_feats,
-        ) = [], [], [], []
-
-        for patch_id in range(num_patches):
-            start_idx = patch_id * patch_size
-            end_idx = patch_id * patch_size + patch_size
-            list_patches_node_feats.append(
-                neighbors_node_feats[:, start_idx:end_idx, :]
-            )
-            list_patches_edge_feats.append(
-                neighbors_edge_feats[:, start_idx:end_idx, :]
-            )
-            list_patches_time_feats.append(
-                neighbors_time_feats[:, start_idx:end_idx, :]
-            )
-            list_patches_co_occurrence_feats.append(
-                neighbors_co_occurrence_feats[:, start_idx:end_idx, :]
-            )
-
-        batch_size = len(neighbors_node_feats)
-        patches_neighbors_node_feats = torch.stack(
-            list_patches_node_feats, dim=1
-        ).reshape(batch_size, num_patches, patch_size * self.node_feat_dim)
-        patches_neighbors_edge_feats = torch.stack(
-            list_patches_edge_feats, dim=1
-        ).reshape(batch_size, num_patches, patch_size * self.edge_feat_dim)
-        patches_neighbors_time_feats = torch.stack(
-            list_patches_time_feats, dim=1
-        ).reshape(batch_size, num_patches, patch_size * self.time_feat_dim)
-        patches_neighbors_co_occurrence_feats = torch.stack(
-            list_patches_co_occurrence_feats, dim=1
-        ).reshape(
-            batch_size, num_patches, patch_size * self.neighbor_co_occurrence_feat_dim
+        patches_feats = torch.stack(list_patches, dim=1).reshape(
+            feat.shape[0], self.num_patches, self.patch_size * feat.shape[2]
         )
 
-        return (
-            patches_neighbors_node_feats,
-            patches_neighbors_edge_feats,
-            patches_neighbors_time_feats,
-            patches_neighbors_co_occurrence_feats,
-        )
-
-    def _get_patches_refractor(
-        self,
-        neighbors_node_feats: torch.Tensor,
-        neighbors_edge_feats: torch.Tensor,
-        neighbors_time_feats: torch.Tensor,
-        neighbors_co_occurrence_feats: torch.Tensor,
-        patch_size: int = 1,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        num_patches = neighbors_node_feats.shape[1] // patch_size
-        batch_size = neighbors_node_feats.shape[0]
-
-        # Split along dimension 1 into num_patches chunks of size patch_size
-        patches_nodes_neighbor_node_raw_features_chunks = torch.tensor_split(
-            neighbors_node_feats, num_patches, dim=1
-        )
-        patches_nodes_edge_raw_features_chunks = torch.tensor_split(
-            neighbors_edge_feats, num_patches, dim=1
-        )
-        patches_nodes_neighbor_time_features_chunks = torch.tensor_split(
-            neighbors_time_feats, num_patches, dim=1
-        )
-        patches_nodes_neighbor_co_occurrence_features_chunks = torch.tensor_split(
-            neighbors_co_occurrence_feats, num_patches, dim=1
-        )
-
-        # Stack along a new dimension (num_patches) then reshape
-        patches_nodes_neighbor_node_raw_features = torch.stack(
-            patches_nodes_neighbor_node_raw_features_chunks, dim=1
-        ).reshape(batch_size, num_patches, patch_size * self.node_feat_dim)
-        patches_nodes_edge_raw_features = torch.stack(
-            patches_nodes_edge_raw_features_chunks, dim=1
-        ).reshape(batch_size, num_patches, patch_size * self.edge_feat_dim)
-        patches_nodes_neighbor_time_features = torch.stack(
-            patches_nodes_neighbor_time_features_chunks, dim=1
-        ).reshape(batch_size, num_patches, patch_size * self.time_feat_dim)
-        patches_nodes_neighbor_co_occurrence_features = torch.stack(
-            patches_nodes_neighbor_co_occurrence_features_chunks, dim=1
-        ).reshape(
-            batch_size, num_patches, patch_size * self.neighbor_co_occurrence_feat_dim
-        )
-
-        return (
-            patches_nodes_neighbor_node_raw_features,
-            patches_nodes_edge_raw_features,
-            patches_nodes_neighbor_time_features,
-            patches_nodes_neighbor_co_occurrence_features,
-        )
+        return patches_feats
