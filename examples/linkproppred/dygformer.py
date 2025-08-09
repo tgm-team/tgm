@@ -108,17 +108,21 @@ class DyGFormer_LinkPrediction(nn.Module):
         src = batch.src
         dst = batch.dst
         neg = batch.neg
+        nbr_nids = batch.nbr_nids[0]
+        nbr_times = batch.nbr_times[0]
+        nbr_feats = batch.nbr_feats[0]
         edge_idx_pos = torch.stack((src, dst), dim=0)
         edge_idx_neg = torch.stack((src, neg), dim=0)
+        batch_size = src.shape[0]
 
         # positive edge
         z_src_pos, z_dst_pos = self.encoder(
             STATIC_NODE_FEAT,
             edge_idx_pos,
-            batch.time,
-            batch.nbr_nids[0],
-            batch.nbr_times[0],
-            batch.nbr_feats[0],
+            batch.time[:batch_size],
+            nbr_nids[: batch_size * 2],
+            nbr_times[: batch_size * 2],
+            nbr_feats[: batch_size * 2],
         )
         pos_out = self.decoder(z_src_pos, z_dst_pos)
 
@@ -126,10 +130,10 @@ class DyGFormer_LinkPrediction(nn.Module):
         z_src_neg, z_dst_neg = self.encoder(
             STATIC_NODE_FEAT,
             edge_idx_neg,
-            batch.time,
-            batch.nbr_nids[0],
-            batch.nbr_times[0],
-            batch.nbr_feats[0],
+            batch.time[-batch_size:],
+            torch.cat([nbr_nids[:batch_size], nbr_nids[-batch_size:]], dim=0),
+            torch.cat([nbr_times[:batch_size], nbr_times[-batch_size:]], dim=0),
+            torch.cat([nbr_feats[:batch_size], nbr_feats[-batch_size:]], dim=0),
         )
         neg_out = self.decoder(z_src_neg, z_dst_neg)
 
