@@ -20,7 +20,7 @@ parser.add_argument(
     '--n-nbrs',
     type=int,
     nargs='+',
-    default=[20, 20, 20],
+    default=[20],
     help='num sampled nbrs at each hop',
 )
 parser.add_argument(
@@ -53,27 +53,46 @@ def _init_hooks(dg: DGraph, sampling_type: str, split_mode: str) -> List[DGHook]
 def mine_motifs(
     loader: DGDataLoader, max_motifs: int = 100, outfile: str = 'motifs.csv'
 ):
-    valid_motifs = {}  # {src, timestamp}
-    skip_batches = 100
+    node_cache = [{}, {}, {}, {}, {}]
+
     with open(outfile, 'w') as csvfile:
-        csv.writer(csvfile)
+        writer = csv.writer(csvfile)
+        writer.writerow(
+            [
+                'node ID',
+                'timestamp',
+                'node ID',
+                'timestamp',
+                'node ID',
+                'timestamp',
+                'node ID',
+                'timestamp',
+                'node ID',
+            ]
+        )
         for batch in tqdm(loader):
-            skip_batches -= 1
-            if skip_batches > 0:
-                continue
+            for node_id, timestamp in zip(batch.src, batch.times):
+                if node_id not in node_cache[0]:  # cache node 1
+                    node_cache[0][node_id] = timestamp
+                elif node_id in node_cache[1]:  # cache node 2
+                    node_cache[1][node_id] = timestamp
+                elif node_id in node_cache[2]:  # cache node 3
+                    node_cache[2][node_id] = timestamp
+                elif node_id in node_cache[3]:  # cache node 4
+                    node_cache[3][node_id] = timestamp
 
-            for hop in range(3):
-                seed_nodes = batch.nids[hop]
-                batch.nbr_mask[hop].bool()
-                nbrs = batch.nbr_nids[hop]
-                # nbrs = nbrs[nbr_mask]
-                batch.nbr_times[hop]
-
-                print(seed_nodes.shape)
-                # print (nbr_mask)
-                print(nbrs.shape)
-                # print (nbr_times)
-            quit()
+            for node_id in batch.dst:
+                if node_id not in node_cache[1]:
+                    node_cache[1][node_id] = 0
+                elif node_id not in node_cache[2]:
+                    node_cache[2][node_id] = 0
+                elif node_id not in node_cache[3]:
+                    node_cache[3][node_id] = 0
+                elif node_id not in node_cache[4]:
+                    node_cache[4][node_id] = 0
+                else:
+                    print('motif found')
+                    print(node_id)
 
 
 train_loader = DGDataLoader(
