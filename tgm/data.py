@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import pathlib
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Literal, Set, Tuple
 
 import numpy as np
 import torch
@@ -169,6 +169,88 @@ class DGData:
                 self.node_ids = self.node_ids[node_order]  # type: ignore
                 if self.dynamic_node_feats is not None:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]
+
+    def discretize(
+        self,
+        old_time_granularity: TimeDeltaDG | str,
+        new_time_granularity: TimeDeltaDG | str,
+        reduce_op: Literal['first'],
+    ) -> DGData:
+        # TODO: Check time delta equality and deep copy (or shallow copy)
+        if isinstance(old_time_granularity, str):
+            old_time_granularity = TimeDeltaDG(old_time_granularity)
+        if isinstance(new_time_granularity, str):
+            new_time_granularity = TimeDeltaDG(new_time_granularity)
+
+        if old_time_granularity.is_ordered:
+            raise ValueError('Cannot discretize a graph with ordered time granularity')
+        if old_time_granularity.is_coarser_than(new_time_granularity):
+            raise ValueError(
+                f'Cannot discretize to a time_granularity ({new_time_granularity}) which is strictly'
+                f'more granular than the time granularity on the current graph ({old_time_granularity})'
+            )
+
+        valid_ops = ['first']
+        if reduce_op not in valid_ops:
+            raise ValueError(
+                f'Unknown reduce_op: {reduce_op}, expected one of: {valid_ops}'
+            )
+
+        # Note: If we simply return a new storage this will 2x our peak memory since the GC
+        # won't be able to clean up the current graph storage while `self` is alive.
+        time_factor = old_time_granularity.convert(new_time_granularity)
+        buckets = (self.timestamps.float() * time_factor).floor().long()
+
+        def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
+            event_buckets = buckets[event_idx]
+            seen: Set[Any] = set()
+            keep, prev_bucket = [], None
+
+            for i in range(event_idx.numel()):
+                bucket = int(event_buckets[i])
+                node_or_edge = tuple(ids[i].tolist()) if ids.ndim > 1 else int(ids[i])
+                if bucket != prev_bucket:
+                    seen.clear()
+                    prev_bucket = bucket
+                if node_or_edge not in seen:
+                    seen.add(node_or_edge)
+                    keep.append(i)
+            return torch.tensor(keep, dtype=torch.long)
+
+        # Edge events
+        edge_mask = _get_keep_indices(self.edge_event_idx, self.edge_index)
+        edge_timestamps = buckets[self.edge_event_idx][edge_mask]
+        edge_index = self.edge_index[edge_mask]
+        edge_feats = None
+        if self.edge_feats is not None:
+            edge_feats = self.edge_feats[edge_mask]
+
+        # Node events
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None
+        if self.node_event_idx is not None:
+            node_mask = _get_keep_indices(
+                self.node_event_idx,
+                self.node_ids,  # type: ignore
+            )
+            node_timestamps = buckets[self.node_event_idx][node_mask]
+            node_ids = self.node_ids[node_mask]  # type: ignore
+            dynamic_node_feats = None
+            if self.dynamic_node_feats is not None:
+                dynamic_node_feats = self.dynamic_node_feats[node_mask]
+
+        static_node_feats = None
+        if self.static_node_feats is not None:  # Need a deep copy
+            static_node_feats = self.static_node_feats.clone()
+
+        return DGData.from_raw(
+            edge_timestamps=edge_timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            static_node_feats=static_node_feats,
+        )
 
     @classmethod
     def from_raw(
@@ -380,13 +462,7 @@ class DGData:
         )
 
     @classmethod
-    def from_tgb(
-        cls,
-        name: str,
-        split: str = 'all',
-        time_delta: TimeDeltaDG | None = None,
-        **kwargs: Any,
-    ) -> DGData:
+    def from_tgb(cls, name: str, split: str = 'all', **kwargs: Any) -> DGData:
         def _check_tgb_import() -> tuple['LinkPropPredDataset', 'NodePropPredDataset']:  # type: ignore
             try:
                 from tgb.linkproppred.dataset import LinkPropPredDataset
@@ -477,20 +553,6 @@ class DGData:
         if dataset.node_feat is not None:
             static_node_feats = torch.from_numpy(dataset.node_feat)
 
-        # Remap timestamps if a custom non-ordered time delta was supplied
-        if time_delta is not None and not time_delta.is_ordered:
-            tgb_time_delta = TGB_TIME_DELTAS[name]
-
-            if time_delta.is_coarser_than(tgb_time_delta):
-                raise ValueError(
-                    f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity, use an ordered time_delta ('r'), or coarsen the graph (dg.discretize() after construction)"
-                )
-
-            time_factor = int(tgb_time_delta.convert(time_delta))
-            timestamps *= time_factor
-            if node_timestamps is not None:
-                node_timestamps *= time_factor
-
         return cls.from_raw(
             edge_timestamps=timestamps,
             edge_index=edge_index,
@@ -502,9 +564,7 @@ class DGData:
         )
 
     @classmethod
-    def from_known_dataset(
-        cls, data: str, time_delta: TimeDeltaDG | None = None, **kwargs: Any
-    ) -> DGData:
+    def from_known_dataset(cls, data: str, **kwargs: Any) -> Tuple[DGData, TimeDeltaDG]:
         if data.startswith('tgbl-') or data.startswith('tgbn-'):
-            return cls.from_tgb(name=data, time_delta=time_delta, **kwargs)
+            return cls.from_tgb(name=data, **kwargs), TGB_TIME_DELTAS[data]
         raise ValueError(f'Unsupported dataset identifier: {data}')
