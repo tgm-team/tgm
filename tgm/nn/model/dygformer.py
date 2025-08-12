@@ -31,8 +31,9 @@ class NeighborCooccurrenceEncoder(nn.Module):
             nn.Linear(in_features=1, out_features=self.feat_dim),
             nn.ReLU(),
             nn.Linear(in_features=self.feat_dim, out_features=self.feat_dim),
-        )
+        ).to(device)
 
+    # @TODO: Optimize this function to work with torch.Tensor directly and vectorize everything
     def _count_nodes_freq(
         self, all_sources_neighbors: np.ndarray, all_dsts_neighbors: np.ndarray
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -360,7 +361,7 @@ class DyGFormer(nn.Module):
                     bias=True,
                 ),
             }
-        )
+        ).to(device)
         self.transformers = nn.ModuleList(
             [
                 TransformerEncoder(
@@ -370,13 +371,13 @@ class DyGFormer(nn.Module):
                 )
                 for _ in range(num_layers)
             ]
-        )
+        ).to(device)
 
         self.output_layer = nn.Linear(
             in_features=self.num_channels * self.channel_embedding_dim,
             out_features=output_dim,
             bias=True,
-        )
+        ).to(device)
 
     def forward(
         self,
@@ -399,6 +400,8 @@ class DyGFormer(nn.Module):
 
         Returns:
             H_source,H_dest (PyTorch Float Tensor): Time-aware representations of src and dst nodes.
+
+        *Note: Information of about neighbours of both src and dst nodes are concated together. Neighbour information of all src nodes comes first, then that of all dst nodes*
         """
 
         src, dst = edge_index[0], edge_index[1]
@@ -412,14 +415,14 @@ class DyGFormer(nn.Module):
         dst_neighbours_edge_feat = neighbours_edge_feat[num_edge : num_edge * 2]
 
         # include seed nodes are neighbors themselves
-        src_neighbours = torch.cat([src.unsqueeze(dim=1), src_neighbours], dim=1)
-        dst_neighbours = torch.cat([dst.unsqueeze(dim=1), dst_neighbours], dim=1)
+        src_neighbours = torch.cat([src[:, None], src_neighbours], dim=1)
+        dst_neighbours = torch.cat([dst[:, None], dst_neighbours], dim=1)
 
         src_neighbours_time = torch.cat(
-            [edge_time.unsqueeze(1), src_neighbours_time], dim=1
+            [edge_time[:, None], src_neighbours_time], dim=1
         )
         dst_neighbours_time = torch.cat(
-            [edge_time.unsqueeze(1), dst_neighbours_time], dim=1
+            [edge_time[:, None], dst_neighbours_time], dim=1
         )
 
         padding = torch.zeros(
@@ -433,8 +436,8 @@ class DyGFormer(nn.Module):
         dst_neighbours_edge_feat = torch.cat([padding, dst_neighbours_edge_feat], dim=1)
 
         # Get node feat and time feat using Time Encoder
-        src_neighbours_node_feats = self._get_node_features(X, src_neighbours)
-        dst_neighbours_node_feats = self._get_node_features(X, dst_neighbours)
+        src_neighbours_node_feats = X[src_neighbours, :]
+        dst_neighbours_node_feats = X[dst_neighbours, :]
 
         src_neighbours_time_feats = self.time_encoder(
             edge_time.unsqueeze(1) - src_neighbours_time
@@ -568,12 +571,6 @@ class DyGFormer(nn.Module):
         src_node_embeddings = self.output_layer(src_patches_data)
         dst_node_embeddings = self.output_layer(dst_patches_data)
         return src_node_embeddings, dst_node_embeddings
-
-    def _get_node_features(
-        self, X: torch.Tensor, node_idx: torch.Tensor
-    ) -> torch.Tensor:
-        # extract node feature here and return
-        return X[node_idx, :]
 
     def _get_patches(self, feat: torch.Tensor) -> torch.Tensor:
         list_patches = []

@@ -23,12 +23,12 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbn-genre', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=250, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--max_sequence_length',
     type=int,
-    default=40,
+    default=32,
     help='maximal length of the input sequence of each node',
 )
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
@@ -41,7 +41,7 @@ parser.add_argument(
     default=50,
     help='dimension of each channel embedding',
 )
-parser.add_argument('--patch-size', type=int, default=8, help='patch size')
+parser.add_argument('--patch-size', type=int, default=1, help='patch size')
 parser.add_argument('--num_layers', type=int, default=2, help='number of model layers')
 parser.add_argument(
     '--num_heads', type=int, default=2, help='number of heads used in attention layer'
@@ -119,7 +119,7 @@ class DyGFormer_LinkPrediction(nn.Module):
         z_src_pos, z_dst_pos = self.encoder(
             STATIC_NODE_FEAT,
             edge_idx_pos,
-            batch.time[:batch_size],
+            batch.time,
             nbr_nids[: batch_size * 2],
             nbr_times[: batch_size * 2],
             nbr_feats[: batch_size * 2],
@@ -130,8 +130,10 @@ class DyGFormer_LinkPrediction(nn.Module):
         z_src_neg, z_dst_neg = self.encoder(
             STATIC_NODE_FEAT,
             edge_idx_neg,
-            batch.time[-batch_size:],
-            torch.cat([nbr_nids[:batch_size], nbr_nids[-batch_size:]], dim=0),
+            batch.time,
+            torch.cat(
+                [nbr_nids[:batch_size], nbr_nids[-batch_size:]], dim=0
+            ),  # Get neighbour inf of src and neg nodes
             torch.cat([nbr_times[:batch_size], nbr_times[-batch_size:]], dim=0),
             torch.cat([nbr_feats[:batch_size], nbr_feats[-batch_size:]], dim=0),
         )
@@ -142,11 +144,13 @@ class DyGFormer_LinkPrediction(nn.Module):
 
 def _init_hooks(dg: DGraph) -> List[DGHook]:
     nbr_hook = RecencyNeighborHook(
-        num_nbrs=[args.max_sequence_length - 1],  # 1 remaining for seed node itself
+        num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
         num_nodes=dg.num_nodes,
         edge_feats_dim=dg.edge_feats_dim,
     )
-    neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
+    _, dst, _ = dg.edges
+    min_dst, max_dst = int(dst.min()), int(dst.max())
+    neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
 
     return [neg_hook, nbr_hook]
 
@@ -260,6 +264,7 @@ if __name__ == '__main__':
     test_metrics = MetricCollection(metrics, prefix='Test')
 
     for epoch in range(1, args.epochs + 1):
+        # TODO: Need a clean way to clear nbr state across epochs
         train_loader = DGDataLoader(
             train_dg,
             batch_size=args.bsize,
@@ -282,5 +287,5 @@ if __name__ == '__main__':
             + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
         )
 
-        test_results = eval(evaluator, test_loader, model, test_metrics)
-        print('Test:', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    test_results = eval(evaluator, test_loader, model, test_metrics)
+    print('Test:', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

@@ -12,7 +12,7 @@ import pytest
         '--gres=gpu:a100l:1',
     ]
 )
-def test_tgat_recency_sampler_linkprop_pred(slurm_job_runner, dataset):
+def test_dygformer_link_prediction(slurm_job_runner, dataset):
     cmd = f"""
 echo "Downloading dataset: {dataset}"
 echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('{dataset}')"

@@ -34,7 +34,7 @@ parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--max_sequence_length',
     type=int,
-    default=40,
+    default=16,
     help='maximal length of the input sequence of each node',
 )
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
@@ -136,18 +136,21 @@ class DyGFormer_LinkPrediction(nn.Module):
         neg_nbr_nids = nbr_nids[-neg_batch_size:]
         neg_nbr_times = nbr_times[-neg_batch_size:]
         neg_nbr_feats = nbr_feats[-neg_batch_size:]
+        src_nbr_nids = nbr_nids[:pos_batch_size]
+        src_nbr_times = nbr_times[:pos_batch_size]
+        src_nbr_feats = nbr_feats[:pos_batch_size]
 
         if src.shape[0] != neg_batch_size:
             src = torch.repeat_interleave(src, repeats=neg_batch_size, dim=0)
             time = torch.repeat_interleave(time, repeats=neg_batch_size, dim=0)
             src_nbr_nids = torch.repeat_interleave(
-                nbr_nids[:pos_batch_size], repeats=neg_batch_size, dim=0
+                src_nbr_nids, repeats=neg_batch_size, dim=0
             )
             src_nbr_times = torch.repeat_interleave(
-                nbr_times[:pos_batch_size], repeats=neg_batch_size, dim=0
+                src_nbr_times, repeats=neg_batch_size, dim=0
             )
             src_nbr_feats = torch.repeat_interleave(
-                nbr_feats[:pos_batch_size], repeats=neg_batch_size, dim=0
+                src_nbr_feats, repeats=neg_batch_size, dim=0
             )
             neg_nbr_nids = neg_nbr_nids.repeat(pos_batch_size, 1)
             neg_nbr_times = neg_nbr_times.repeat(pos_batch_size, 1)
@@ -159,6 +162,7 @@ class DyGFormer_LinkPrediction(nn.Module):
             src_nbr_feats = nbr_feats[:pos_batch_size]
 
         edge_idx_neg = torch.stack((src, neg), dim=0)
+
         # negative edge
         z_src_neg, z_dst_neg = self.encoder(
             STATIC_NODE_FEAT,
@@ -220,7 +224,7 @@ def eval(
     model.eval()
     perf_list = []
     for batch in tqdm(loader):
-        for idx, neg_batch in enumerate(batch.neg_batch_list):
+        for idx, neg_batch in enumerate(tqdm(batch.neg_batch_list)):
             copy_batch = copy.deepcopy(batch)
 
             copy_batch.src = batch.src[idx].unsqueeze(0)
@@ -231,8 +235,10 @@ def eval(
 
             all_idx = torch.cat(
                 [
-                    torch.Tensor([idx]).to(neg_batch.device),
-                    torch.Tensor([idx + batch.src.shape[0]]).to(neg_batch.device),
+                    torch.Tensor([idx]).to(neg_batch.device),  # src idx
+                    torch.Tensor([idx + batch.src.shape[0]]).to(
+                        neg_batch.device
+                    ),  # dst idx
                     neg_idx,
                 ],
                 dim=0,
@@ -316,8 +322,8 @@ for epoch in range(1, args.epochs + 1):
         batch_size=args.bsize,
     )
 
-    start_time = time.perf_counter()
     val_results = eval(evaluator, val_loader, model, eval_metric)
+    start_time = time.perf_counter()
     loss = train(train_loader, model, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
