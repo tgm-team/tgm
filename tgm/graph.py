@@ -35,14 +35,7 @@ class DGraph:
             if not isinstance(data, (str, DGData)):
                 raise ValueError(f'bad dataset name type: {type(data)}')
             if isinstance(data, str):
-                data, native_time_delta = DGData.from_known_dataset(data, **kwargs)
-
-                # We can discretize this, how about properity data?
-                data = data.discretize(
-                    old_time_granularity=native_time_delta,
-                    new_time_granularity=time_delta,
-                    reduce_op='first',
-                )
+                data = DGData.from_known_dataset(data, time_delta, **kwargs)
 
             self._storage = DGStorage(data)
 
@@ -64,6 +57,7 @@ class DGraph:
         dynamic_node_feats_col: List[str] | None = None,
         static_node_feats_file_path: str | pathlib.Path | None = None,
         static_node_feats_col: List[str] | None = None,
+        native_time_delta: TimeDeltaDG | str = 'r',
         time_delta: TimeDeltaDG | str = 'r',
         device: str | torch.device = 'cpu',
     ) -> DGraph:
@@ -81,6 +75,7 @@ class DGraph:
             dynamic_node_feats_col (List[str] | None): List of column names for dynamic node features in the node file. Defaults to None.
             static_node_feats_file_path (str | pathlib.Path | None): Path to the static node features CSV file.
             static_node_feats_col (List[str] | None): List of column names for static node features in the static node features file.
+            native_time_delta (TimeDeltaDG | str): Native Time Delta for the graph.
             time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
             device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
         """
@@ -97,6 +92,11 @@ class DGraph:
             static_node_feats_file_path=static_node_feats_file_path,
             static_node_feats_col=static_node_feats_col,
         )
+        data = data.discretize(
+            old_time_granularity=native_time_delta,
+            new_time_granularity=time_delta,
+            reduce_op='first',
+        )
         return cls(data=data, time_delta=time_delta, device=device)
 
     @classmethod
@@ -109,6 +109,7 @@ class DGraph:
         node_ids: Tensor | None = None,
         dynamic_node_feats: Tensor | None = None,
         static_node_feats: Tensor | None = None,
+        native_time_delta: TimeDeltaDG | str = 'r',
         time_delta: TimeDeltaDG | str = 'r',
         device: str | torch.device = 'cpu',
     ) -> DGraph:
@@ -122,6 +123,7 @@ class DGraph:
             node_ids (Tensor | None): Node ids tensor of shape (N,) or None if no node ids.
             dynamic_node_feats (Tensor | None): Dynamic node features tensor of shape (T, N, d_node_dynamic) or None if no dynamic node features.
             static_node_feats (Tensor | None): Static node features tensor of shape (N, d_node_static) or None if no static node features.
+            native_time_delta (TimeDeltaDG | str): Native Time Delta for the graph.
             time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
             device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
         """
@@ -133,6 +135,11 @@ class DGraph:
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
+        )
+        data = data.discretize(
+            old_time_granularity=native_time_delta,
+            new_time_granularity=time_delta,
+            reduce_op='first',
         )
         return cls(data=data, time_delta=time_delta, device=device)
 
@@ -150,6 +157,7 @@ class DGraph:
         dynamic_node_feats_col: List[str] | None = None,
         static_node_feats_df: 'pandas.DataFrame' | None = None,  # type: ignore
         static_node_feats_col: List[str] | None = None,
+        native_time_delta: TimeDeltaDG | str = 'r',
         time_delta: TimeDeltaDG | str = 'r',
         device: str | torch.device = 'cpu',
     ) -> DGraph:
@@ -167,6 +175,7 @@ class DGraph:
             dynamic_node_feats_col (List[str] | None): List of column names for dynamic node features in the node DataFrame. Defaults to None.
             static_node_feats_df (pandas.DataFrame | None): DataFrame containing static node features.
             static_node_feats_col (List[str] | None): List of column names for static node features in the static node features DataFrame.
+            native_time_delta (TimeDeltaDG | str): Native Time Delta for the graph.
             time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
             device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
         """
@@ -182,6 +191,11 @@ class DGraph:
             dynamic_node_feats_col=dynamic_node_feats_col,
             static_node_feats_df=static_node_feats_df,
             static_node_feats_col=static_node_feats_col,
+        )
+        data = data.discretize(
+            old_time_granularity=native_time_delta,
+            new_time_granularity=time_delta,
+            reduce_op='first',
         )
         return cls(data=data, time_delta=time_delta, device=device)
 

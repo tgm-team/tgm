@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import pathlib
 from dataclasses import dataclass
-from typing import Any, List, Literal, Set, Tuple
+from typing import Any, List, Literal, Set
 
 import numpy as np
 import torch
@@ -183,6 +183,8 @@ class DGData:
             new_time_granularity = TimeDeltaDG(new_time_granularity)
 
         if old_time_granularity.is_ordered:
+            if new_time_granularity.is_ordered:
+                return self  # TODO: Figure out copy semantics
             raise ValueError('Cannot discretize a graph with ordered time granularity')
         if old_time_granularity.is_coarser_than(new_time_granularity):
             raise ValueError(
@@ -564,7 +566,17 @@ class DGData:
         )
 
     @classmethod
-    def from_known_dataset(cls, data: str, **kwargs: Any) -> Tuple[DGData, TimeDeltaDG]:
-        if data.startswith('tgbl-') or data.startswith('tgbn-'):
-            return cls.from_tgb(name=data, **kwargs), TGB_TIME_DELTAS[data]
-        raise ValueError(f'Unsupported dataset identifier: {data}')
+    def from_known_dataset(
+        cls, data_name: str, time_delta: TimeDeltaDG, **kwargs: Any
+    ) -> DGData:
+        if data_name.startswith('tgbl-') or data_name.startswith('tgbn-'):
+            data = cls.from_tgb(name=data_name, **kwargs)
+            native_time_delta = TGB_TIME_DELTAS[data_name]
+        else:
+            raise ValueError(f'Unsupported dataset identifier: {data_name}')
+
+        return data.discretize(
+            old_time_granularity=native_time_delta,
+            new_time_granularity=time_delta,
+            reduce_op='first',
+        )
