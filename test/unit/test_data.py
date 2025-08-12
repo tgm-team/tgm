@@ -811,21 +811,8 @@ def test_from_tgb_time_remap_required_finer(mock_dataset_cls, tgb_dataset_factor
     mock_dataset_cls.assert_called_once_with(name='tgbl-foo')
 
 
-def test_from_any():
+def test_from_known_dataset():
     data = 'tgbl-mock'
     with patch.object(DGData, 'from_tgb') as mock_tgb:
-        _ = DGData.from_any(data)
+        _ = DGData.from_known_dataset(data)
         mock_tgb.assert_called_once_with(name=data, time_delta=None)
-
-    data = 'foo.csv'
-    with patch.object(DGData, 'from_csv') as mock_csv:
-        _ = DGData.from_any(data)
-        mock_csv.assert_called_once_with(data)
-
-    data = pd.DataFrame()
-    with patch.object(DGData, 'from_pandas') as mock_pandas:
-        _ = DGData.from_any(data)
-        mock_pandas.assert_called_once_with(data)
-
-    with pytest.raises(ValueError):
-        _ = DGData.from_any('foo')
