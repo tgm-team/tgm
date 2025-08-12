@@ -165,17 +165,23 @@ test_dg = test_dg.discretize(args.time_gran)
 
 train_loader = DGDataLoader(
     train_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes),
+    hook=NegativeEdgeSamplerHook(
+        low=int(train_dg.edges[1].min()), high=int(train_dg.edges[1].max())
+    ),
     batch_unit=args.batch_time_gran,
 )
 val_loader = DGDataLoader(
     val_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
+    hook=NegativeEdgeSamplerHook(
+        low=int(val_dg.edges[1].min()), high=int(val_dg.edges[1].max())
+    ),
     batch_unit=args.batch_time_gran,
 )
 test_loader = DGDataLoader(
     test_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
+    hook=NegativeEdgeSamplerHook(
+        low=int(test_dg.edges[1].min()), high=int(test_dg.edges[1].max())
+    ),
     batch_unit=args.batch_time_gran,
 )
 
