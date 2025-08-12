@@ -43,7 +43,7 @@ parser.add_argument(
     help='raw time granularity for dataset',
 )
 parser.add_argument(
-    '--snapshot-time-gran',
+    '--batch-time-gran',
     type=str,
     default='h',
     help='time granularity to operate on for snapshots',
@@ -217,7 +217,7 @@ def eval(
 
 args = parser.parse_args()
 seed_everything(args.seed)
-snapshot_td = TimeDeltaDG(args.snapshot_time_gran, 1)
+snapshot_td = TimeDeltaDG(args.batch_time_gran, 1)
 tgb_td = TimeDeltaDG(args.time_gran, 1)
 conversion_rate = int(snapshot_td.convert(tgb_td))
 
@@ -228,47 +228,19 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG('r'),
-    split='train',
-    device=args.device,
-)
+train_dg = DGraph(args.dataset, split='train', device=args.device)
+val_dg = DGraph(args.dataset, split='val', device=args.device)
+test_dg = DGraph(args.dataset, split='test', device=args.device)
 
 train_snapshots = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
-    split='train',
-    device=args.device,
-).discretize(args.snapshot_time_gran)
-
-val_dg = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG('r'),
-    split='val',
-    device=args.device,
+    args.dataset, time_delta=args.batch_time_gran, split='train', device=args.device
 )
-
 val_snapshots = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
-    split='val',
-    device=args.device,
-).discretize(args.snapshot_time_gran)
-
-test_dg = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG('r'),
-    split='test',
-    device=args.device,
+    args.dataset, time_delta=args.batch_time_gran, split='val', device=args.device
 )
-
 test_snapshots = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
-    split='test',
-    device=args.device,
-).discretize(args.snapshot_time_gran)
+    args.dataset, time_delta=args.batch_time_gran, split='test', device=args.device
+)
 
 train_loader = DGDataLoader(
     train_dg,
@@ -278,29 +250,22 @@ train_loader = DGDataLoader(
 train_snapshots_loader = DGDataLoader(
     train_snapshots,
     hook=[NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes)],
-    batch_unit=args.snapshot_time_gran,
+    batch_unit=args.batch_time_gran,
 )
-
 
 val_loader = DGDataLoader(
     val_dg,
     hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')],
     batch_size=args.bsize,
 )
-val_snapshots_loader = DGDataLoader(
-    val_snapshots,
-    batch_unit=args.snapshot_time_gran,
-)
+val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.batch_time_gran)
 
 test_loader = DGDataLoader(
     test_dg,
     hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')],
     batch_size=args.bsize,
 )
-test_snapshots_loader = DGDataLoader(
-    test_snapshots,
-    batch_unit=args.snapshot_time_gran,
-)
+test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.batch_time_gran)
 
 if train_dg.dynamic_node_feats_dim is not None:
     raise ValueError(
