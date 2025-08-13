@@ -5,7 +5,6 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm._storage import DGStorage
 from tgm.data import DGData
 from tgm.timedelta import TimeDeltaDG
 
@@ -31,7 +30,7 @@ def data():
 
 
 def test_init_from_data(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
 
     assert dg.time_delta.is_ordered
 
@@ -70,7 +69,7 @@ def test_init_from_data(data):
 
 @pytest.mark.gpu
 def test_init_gpu(data):
-    dg = DGraph(data, device='cuda')
+    dg = DGraph(data, 'r', device='cuda')
 
     assert dg.device == torch.device('cuda')
 
@@ -97,21 +96,14 @@ def test_init_gpu(data):
 
 
 def test_init_from_storage(data):
-    dg_tmp = DGraph(data)
-    dg = DGraph(dg_tmp._storage)
+    dg_tmp = DGraph(data, 'r')
+    dg = DGraph(dg_tmp._storage, 'r')
     assert id(dg_tmp._storage) == id(dg._storage)
 
 
 def test_init_bad_args(data):
     with pytest.raises(ValueError):
-        _ = DGraph(data, time_delta='foo')
-
-
-def test_init_construct_data():
-    data = 'foo.csv'
-    with patch.object(DGData, 'from_known_dataset') as mock:
-        _ = DGraph(data)
-        mock.assert_called_once_with(data, TimeDeltaDG('r'))
+        _ = DGraph(data, 'foo')
 
 
 def test_dgraph_from_raw():
@@ -148,10 +140,7 @@ def test_dgraph_from_raw():
     assert dg.device == torch.device('cpu')
 
 
-@pytest.mark.parametrize(
-    'time_gran',
-    ['s', 'm', 'r'],
-)
+@pytest.mark.parametrize('time_gran', ['s', 'm'])
 def test_dgraph_from_raw_time_gran(time_gran):
     edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
     edge_timestamps = torch.LongTensor([1, 5, 20])
@@ -161,7 +150,9 @@ def test_dgraph_from_raw_time_gran(time_gran):
         edge_timestamps,
         edge_index,
         edge_feats,
-        time_delta=time_gran,
+        native_time_delta='s',
+        discretize_time_delta=time_gran,
+        reduce_op='first',
     )
     assert dg.time_delta == TimeDeltaDG(time_gran)
 
@@ -224,10 +215,7 @@ def test_dgraph_from_pandas():
     assert dg.device == torch.device('cpu')
 
 
-@pytest.mark.parametrize(
-    'time_gran',
-    ['s', 'm', 'r'],
-)
+@pytest.mark.parametrize('time_gran', ['s', 'm'])
 def test_dgraph_from_pandas_time_gran(time_gran):
     import pandas as pd
 
@@ -244,7 +232,9 @@ def test_dgraph_from_pandas_time_gran(time_gran):
         edge_dst_col='dst',
         edge_time_col='t',
         edge_feats_col='edge_feat',
-        time_delta=time_gran,
+        native_time_delta='s',
+        discretize_time_delta=time_gran,
+        reduce_op='first',
     )
     assert dg.time_delta == TimeDeltaDG(time_gran)
 
@@ -283,63 +273,17 @@ def test_dgraph_from_csv():
 def test_dgraph_from_tgb():
     data = 'tgbl-mock'
     with patch.object(DGraph, 'from_tgb') as mock_tgb:
-        _ = DGraph.from_tgb(name=data, time_delta=None)
-        mock_tgb.assert_called_once_with(name=data, time_delta=None)
+        _ = DGraph.from_tgb(name=data)
+        mock_tgb.assert_called_once_with(name=data)
 
 
 def test_str(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
     assert isinstance(dg.__str__(), str)
 
 
-def test_discretize_bad_ordered_graph(data):
-    dg = DGraph(data)
-    with pytest.raises(ValueError):
-        dg.discretize(time_granularity='s')
-
-
-def test_discretize_bad_too_granular(data):
-    dg = DGraph(data, time_delta='m')
-    with pytest.raises(ValueError):
-        dg.discretize(time_granularity='s')
-
-
-def test_discretize_bad_reduce_op(data):
-    dg = DGraph(data, time_delta='s')
-    with pytest.raises(ValueError):
-        dg.discretize(time_granularity='m', reduce_op='foo')
-
-
-@pytest.mark.parametrize('reduce_op', ['first'])
-def test_discretize_api(data, reduce_op):
-    dg = DGraph(data, time_delta='s')
-    dg_coarse = dg.discretize(time_granularity='m', reduce_op=reduce_op)
-    assert isinstance(dg_coarse, DGraph)
-    assert id(dg._storage) != id(dg_coarse._storage)
-    assert dg_coarse.time_delta.unit == 'm'
-    assert dg_coarse.device == dg.device
-    assert dg_coarse.num_nodes == dg.num_nodes
-    assert dg_coarse.nodes == dg.nodes
-    torch.testing.assert_close(dg_coarse.static_node_feats, dg.static_node_feats)
-    assert id(dg_coarse.static_node_feats) != id(dg.static_node_feats)
-
-
-@pytest.mark.parametrize('reduce_op', ['first'])
-def test_discretize_reduce_first_call(data, reduce_op):
-    dg = DGraph(data, time_delta='s')
-    with patch.object(DGStorage, 'discretize') as mock:
-        mock.return_value = dg._storage
-
-        _ = dg.discretize(time_granularity='m', reduce_op=reduce_op)
-        mock.assert_called_once_with(
-            old_time_granularity=TimeDeltaDG('s'),
-            new_time_granularity=TimeDeltaDG('m'),
-            reduce_op='first',
-        )
-
-
 def test_materialize(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
@@ -356,7 +300,7 @@ def test_materialize(data):
 
 
 def test_materialize_skip_feature_materialization(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
@@ -367,14 +311,14 @@ def test_materialize_skip_feature_materialization(data):
 
 
 def test_slice_time_no_time_bounds(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
     dg1 = dg.slice_time()
     assert id(dg1._storage) == id(dg._storage)
     assert dg1._slice == dg._slice
 
 
 def test_slice_time_no_upper_bound(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
 
     dg1 = dg.slice_time(5)
     assert id(dg1._storage) == id(dg._storage)
@@ -409,7 +353,7 @@ def test_slice_time_no_upper_bound(data):
 
 
 def test_slice_time_at_end_time(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
 
     dg1 = dg.slice_time(1, 20)
     assert id(dg1._storage) == id(dg._storage)
@@ -452,7 +396,7 @@ def test_slice_time_at_end_time(data):
 
 
 def test_slice_time_to_empty(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
 
     # Slice Number 1
     dg1 = dg.slice_time(1, 15)
@@ -562,13 +506,13 @@ def test_slice_time_to_empty(data):
 
 
 def test_slice_time_bad_args(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
     with pytest.raises(ValueError):
         dg.slice_time(2, 1)
 
 
 def test_slice_events(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
 
     dg1 = dg.slice_events(2, 5)
     assert id(dg1._storage) == id(dg._storage)
@@ -609,13 +553,13 @@ def test_slice_events(data):
 
 
 def test_slice_events_bad_args(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
     with pytest.raises(ValueError):
         dg.slice_events(2, 1)
 
 
 def test_slice_events_slice_time_combination(data):
-    dg = DGraph(data)
+    dg = DGraph(data, 'r')
 
     dg1 = dg.slice_events(2, 5).slice_time(5, 7)
     assert id(dg1._storage) == id(dg._storage)

@@ -4,7 +4,6 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm._storage import DGStorage
 from tgm.data import DGData
 from tgm.hooks import TGBNegativeEdgeSamplerHook
 
@@ -39,7 +38,6 @@ def test_bad_tgb_negative_edge_sampler_init():
 
 
 def test_negative_edge_sampler(data):
-    data = DGStorage(data)
     dg = DGraph(data, discretize_time_delta='r')
     mock_sampler = Mock(spec=FakeNegSampler)
     mock_sampler.eval_set = {}

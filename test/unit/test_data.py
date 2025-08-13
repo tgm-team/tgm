@@ -771,8 +771,8 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
 
 def test_from_known_dataset():
     data_name = 'tgbl-mock'
-    mock_native_time_delta = 's'
-    mock_discretize_time_delta = 'D'
+    mock_native_time_delta = TimeDeltaDG('s')
+    mock_discretize_time_delta = TimeDeltaDG('D')
     mock_reduce_op = 'first'
 
     with (

@@ -2,7 +2,6 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm._storage.backends import DGStorage
 from tgm.data import DGData
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
@@ -18,10 +17,8 @@ def run_seed_before_tests():
 def test_init_ordered_dg_ordered_batch():
     edge_index = torch.LongTensor([[2, 3]])
     edge_timestamps = torch.LongTensor([1])
-    dg_data = DGData.from_raw(edge_timestamps, edge_index)
-    data = DGStorage(dg_data)
-
-    dg = DGraph(data, discretize_time_delta='r')
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, 'r')
     loader = DGDataLoader(dg)
     assert loader._batch_size == 1
 
@@ -30,10 +27,8 @@ def test_init_ordered_dg_ordered_batch():
 def test_init_ordered_dg_non_ordered_batch(batch_unit):
     edge_index = torch.LongTensor([[2, 3]])
     edge_timestamps = torch.LongTensor([1])
-    dg_data = DGData.from_raw(edge_timestamps, edge_index)
-    data = DGStorage(dg_data)
-
-    dg = DGraph(data, discretize_time_delta='r')
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, 'r')
     with pytest.raises(ValueError):
         _ = DGDataLoader(dg, batch_unit=batch_unit)
 
@@ -41,10 +36,8 @@ def test_init_ordered_dg_non_ordered_batch(batch_unit):
 def test_init_bad_batch_size():
     edge_index = torch.LongTensor([[2, 3]])
     edge_timestamps = torch.LongTensor([1])
-    dg_data = DGData.from_raw(edge_timestamps, edge_index)
-    data = DGStorage(dg_data)
-
-    dg = DGraph(data, discretize_time_delta='r')
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, 'r')
     with pytest.raises(ValueError):
         _ = DGDataLoader(dg, batch_size=0)
 
@@ -67,10 +60,8 @@ def test_iteration_ordered(drop_last, time_delta):
         ]
     )
     edge_timestamps = torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    dg_data = DGData.from_raw(edge_timestamps, edge_index)
-    data = DGStorage(dg_data)
-
-    dg = DGraph(data, discretize_time_delta=time_delta)
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta)
     loader = DGDataLoader(dg, batch_size=3, batch_unit='r', drop_last=drop_last)
 
     src, dst, t = dg.edges
@@ -105,10 +96,8 @@ def test_iteration_by_time_equal_unit(drop_last):
         ]
     )
     edge_timestamps = torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    dg_data = DGData.from_raw(edge_timestamps, edge_index)
-    data = DGStorage(dg_data)
-
-    dg = DGraph(data, discretize_time_delta='s')
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, 's')
     loader = DGDataLoader(
         dg,
         batch_size=3,
@@ -147,9 +136,7 @@ def test_iteration_by_time_with_conversion_time_delta_value(drop_last):
         ]
     )
     edge_timestamps = torch.LongTensor([0, 0, 1, 1, 1, 12, 18, 24, 24])
-    dg_data = DGData.from_raw(edge_timestamps, edge_index)
-    data = DGStorage(dg_data)
-
+    data = DGData.from_raw(edge_timestamps, edge_index)
     dg = DGraph(data, discretize_time_delta=TimeDeltaDG('s', value=10))
     loader = DGDataLoader(dg, batch_size=2, batch_unit='m', drop_last=drop_last)
 
@@ -175,10 +162,8 @@ def test_iteration_by_time_with_conversion_time_delta_value(drop_last):
 def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
     edge_index = torch.LongTensor([[2, 3]])
     edge_timestamps = torch.LongTensor([1])
-    dg_data = DGData.from_raw(edge_timestamps, edge_index)
-    data = DGStorage(dg_data)
-
-    dg = DGraph(data, discretize_time_delta='m')
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, 'm')
     with pytest.raises(ValueError):
         # Seconds are too granular of an iteration unit for DG with minute time granularity
         _ = DGDataLoader(dg, batch_unit='s')

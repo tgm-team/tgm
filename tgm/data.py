@@ -187,7 +187,7 @@ class DGData:
             raise ValueError(
                 f'Tried to discretize to {discretize_time_delta} without specifying a reduce_op'
             )
-        if native_time_delta.is_ordered:
+        if native_time_delta.is_ordered or discretize_time_delta.is_ordered:
             raise ValueError('Cannot discretize a graph with ordered time granularity')
         if native_time_delta.is_coarser_than(discretize_time_delta):
             raise ValueError(
@@ -582,5 +582,13 @@ class DGData:
         else:
             raise ValueError(f'Unsupported dataset identifier: {data_name}')
 
-        data = data.discretize(native_time_delta, discretize_time_delta, reduce_op)
-        return data, native_time_delta
+        if discretize_time_delta is not None:
+            if isinstance(discretize_time_delta, str):
+                discretize_time_delta = TimeDeltaDG(discretize_time_delta)
+
+            data = data.discretize(native_time_delta, discretize_time_delta, reduce_op)
+            time_delta = discretize_time_delta
+        else:
+            time_delta = native_time_delta
+
+        return data, time_delta
