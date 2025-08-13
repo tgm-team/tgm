@@ -4,7 +4,7 @@ import pathlib
 from collections.abc import Iterable, Sized
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, List, Literal, Optional, Set, Tuple
+from typing import Any, List, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
@@ -19,7 +19,7 @@ class DGraph:
 
     def __init__(
         self,
-        data: DGStorage | DGData | str,
+        data: DGStorage | DGData,
         time_delta: TimeDeltaDG | str = 'r',
         device: str | torch.device = 'cpu',
         **kwargs: Any,
@@ -32,9 +32,6 @@ class DGraph:
         if isinstance(data, DGStorage):
             self._storage = data
         elif isinstance(data, DGData):
-            self._storage = DGStorage(data)
-        elif isinstance(data, str):
-            data = DGData.from_known_dataset(data, time_delta, **kwargs)
             self._storage = DGStorage(data)
         else:
             raise ValueError(f'bad dataset name type: {type(data)}')
@@ -177,74 +174,6 @@ class DGraph:
             static_node_feats_col=static_node_feats_col,
         )
         return cls(data=data, time_delta=time_delta, device=device)
-
-    @classmethod
-    def from_tgb(
-        cls,
-        name: str,
-        split: str = 'all',
-        time_delta: TimeDeltaDG | str | None = None,
-        device: str | torch.device = 'cpu',
-    ) -> DGraph:
-        r"""Constructs a DGraph from a TGB dataset.
-
-        Args:
-            name (str): Name of the TGB dataset.
-            split (str): Split of the dataset to use. Defaults to 'all'.
-            time_delta (TimeDeltaDG | None): Time delta for the graph. If None, uses the default for the dataset.
-            device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
-        """
-        data = DGData.from_tgb(name=name, split=split, time_delta=time_delta)  # type: ignore
-        return cls(data=data, device=device)
-
-    def discretize(
-        self, time_granularity: TimeDeltaDG | str, reduce_op: Literal['first'] = 'first'
-    ) -> DGraph:
-        r"""Downsample the temporal graph by changing time granularity and reducing events within the same coarse timestamp bucket.
-
-        Args:
-            time_granularity (TimeDeltaDG | str): The new time granularity which must be coarser than the current time granularity.
-            reduce_op (str): The reduce operation to apply for grouped events.
-
-        Raises:
-            ValueError: If the current graph time granularity is ordered.
-            ValueError: If time_granularity is not coarser than the current time granularity on the graph.
-            ValueError: If the reduce_op is not an implemented reduction.
-            NotImplementedError: If attempting to discretize a sliced (sub)-graph.
-
-        Note: Produces a deep-copy of the storage, making this an expensive operation.
-        Note: Since we don't modify the graph storage in-place, this will result in 2x peak memory.
-        """
-        if isinstance(time_granularity, str):
-            time_granularity = TimeDeltaDG(time_granularity)
-
-        if self._slice != DGSliceTracker():
-            raise NotImplementedError(
-                'Cannot discretize a sliced (sub)-graph, try discretizing the original graph'
-            )
-        if self.time_delta.is_ordered:
-            raise ValueError('Cannot discretize a graph with ordered time granularity')
-        if self.time_delta.is_coarser_than(time_granularity):
-            raise ValueError(
-                f'Cannot discretize to a time_granularity ({time_granularity}) which is strictly'
-                f'more granular than the time granularity on the current graph ({self.time_delta})'
-            )
-
-        valid_ops = ['first']
-        if reduce_op not in valid_ops:
-            raise ValueError(
-                f'Unknown reduce_op: {reduce_op}, expected one of: {valid_ops}'
-            )
-
-        # Note: If we simply return a new storage this will 2x our peak memory since the GC
-        # won't be able to clean up the current graph storage while `self` is alive.
-        new_data = self._storage.discretize(
-            old_time_granularity=self.time_delta,
-            new_time_granularity=time_granularity,
-            reduce_op=reduce_op,
-        )
-        dg = DGraph(data=new_data, time_delta=time_granularity, device=self.device)  # type: ignore
-        return dg
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': dynamic_node_feats, node_times, node_ids, 'edge': edge_features}."""
