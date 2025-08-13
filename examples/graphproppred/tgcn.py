@@ -1,12 +1,15 @@
 import argparse
-from typing import Callable
+from typing import Callable, Tuple
 
 import pandas as pd
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from tgb.nodeproppred.evaluate import Evaluator
 
 from tgm import DGBatch, DGraph
 from tgm.loader import DGDataLoader
+from tgm.nn.recurrent import TGCN
 
 parser = argparse.ArgumentParser(
     description='TGCN Graph Property Example',
@@ -60,6 +63,7 @@ def label_generator_next_binary_classification(
     return torch.tensor(labels, dtype=torch.int64)
 
 
+# ETL step
 def preproccess_raw_data(dataframe: pd.DataFrame) -> pd.DataFrame:
     # time offset
     start_time = dataframe['timestamp'].min()
@@ -80,74 +84,145 @@ def preproccess_raw_data(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe['to'] = dataframe['to'].apply(
         lambda x: node_id_map.setdefault(x, len(node_id_map))
     )
+
+    dataframe['value'] = dataframe['value'].apply(lambda x: [x])
+
     return dataframe
 
 
-args = parser.parse_args()
-train_dg = DGraph(args.dataset, time_delta='s', split='train', device=args.device)
-train_dg = train_dg.discretize(args.time_gran)
-
-val_dg = DGraph(args.dataset, time_delta='s', split='val', device=args.device)
-val_dg = val_dg.discretize(args.time_gran)
-
-test_dg = DGraph(args.dataset, time_delta='s', split='test', device=args.device)
-test_dg = test_dg.discretize(args.time_gran)
-
-dgraph = DGraph(args.dataset)
-num_nodes = dgraph.num_nodes
-label_dim = train_dg.dynamic_node_feats_dim
-evaluator = Evaluator(name=args.dataset)
-train_loader = DGDataLoader(
-    train_dg,
-    batch_unit=args.batch_time_gran,
-)
-val_loader = DGDataLoader(
-    val_dg,
-    batch_unit=args.batch_time_gran,
-)
-test_loader = DGDataLoader(
-    test_dg,
-    batch_unit=args.batch_time_gran,
-)
-
-print(len(train_loader))
-print(len(val_loader))
-print(len(test_loader))
-
-for batch in train_loader:
-    print(batch.src.shape)
-    print('\n')
-
-labels = label_generator_next_binary_classification(train_loader)
-token = pd.read_csv('examples/graphproppred/test_token.csv')
-token = preproccess_raw_data(token)
-
-dgraph_token = DGraph.from_pandas(
-    edge_df=token,
-    edge_src_col='from',
-    edge_dst_col='to',
-    edge_time_col='timestamp',
-    # edge_feats_col ='value', # @TODO: CHECK
-    time_delta='s',
-    device=args.device,
-    # split = 'train' # @TODO: CHECK
-)
+# graph pooling
+def sum_pooling(z: torch.Tensor) -> torch.Tensor:
+    return torch.sum(z, dim=0)[0].squeeze()
 
 
-train_loader = DGDataLoader(
-    dgraph_token,
-    batch_unit=args.batch_time_gran,
-)
-val_loader = DGDataLoader(
-    dgraph_token,
-    batch_unit=args.batch_time_gran,
-)
-test_loader = DGDataLoader(
-    dgraph_token,
-    batch_unit=args.batch_time_gran,
-)
+def mean_pooling(z: torch.Tensor) -> torch.Tensor:
+    return torch.mean(z, dim=0)[0].squeeze()
 
 
-print(len(train_loader))
-print(len(val_loader))
-print(len(test_loader))
+class TGCN_Model(nn.Module):
+    def __init__(
+        self,
+        node_dim: int,
+        embed_dim: int,
+        num_classes: int,
+        graph_pooling: Callable = mean_pooling,
+    ) -> None:
+        super().__init__()
+        self.encoder = RecurrentGCN(node_dim=node_dim, embed_dim=embed_dim)
+        self.graph_pooling = graph_pooling
+        self.decoder = GraphPredictor(in_dim=embed_dim, out_dim=num_classes)
+
+    def forward(
+        self,
+        batch: DGBatch,
+        node_feat: torch.Tensor,
+        h_0: torch.Tensor | None = None,
+    ) -> Tuple[torch.Tensor, ...]:
+        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
+        z, h_0 = self.encoder(node_feat, edge_index, edge_weight, h_0)
+        z_node = z[batch.global_to_local(batch.node_ids)]  # type: ignore
+        z_graph = self.graph_pooling(z_node)
+        pred = self.decoder(z_graph)
+        return pred, h_0
+
+
+class RecurrentGCN(torch.nn.Module):
+    def __init__(self, node_dim: int, embed_dim: int) -> None:
+        super().__init__()
+        self.recurrent = TGCN(in_channels=node_dim, out_channels=embed_dim)
+        self.linear = nn.Linear(embed_dim, embed_dim)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_weight: torch.Tensor | None,
+        h: torch.Tensor | None,
+    ) -> Tuple[torch.Tensor, ...]:
+        h_0 = self.recurrent(x, edge_index, edge_weight, h)
+        h = F.relu(h_0)
+        h = self.linear(h)
+        return h, h_0
+
+
+class GraphPredictor(torch.nn.Module):
+    def __init__(self, in_dim: int, out_dim: int) -> None:
+        super().__init__()
+        self.lin_node = nn.Linear(in_dim, in_dim)
+        self.out = nn.Linear(in_dim, out_dim)
+
+    def forward(self, node_embed):
+        h = self.lin_node(node_embed)
+        h = h.relu()
+        h = self.out(h)
+        return h.sigmoid()
+
+
+if __name__ == '__main__':
+    args = parser.parse_args()
+    train_dg = DGraph(args.dataset, time_delta='s', split='train', device=args.device)
+    train_dg = train_dg.discretize(args.time_gran)
+
+    val_dg = DGraph(args.dataset, time_delta='s', split='val', device=args.device)
+    val_dg = val_dg.discretize(args.time_gran)
+
+    test_dg = DGraph(args.dataset, time_delta='s', split='test', device=args.device)
+    test_dg = test_dg.discretize(args.time_gran)
+
+    dgraph = DGraph(args.dataset)
+    num_nodes = dgraph.num_nodes
+    label_dim = train_dg.dynamic_node_feats_dim
+    evaluator = Evaluator(name=args.dataset)
+    train_loader = DGDataLoader(
+        train_dg,
+        batch_unit=args.batch_time_gran,
+    )
+    val_loader = DGDataLoader(
+        val_dg,
+        batch_unit=args.batch_time_gran,
+    )
+    test_loader = DGDataLoader(
+        test_dg,
+        batch_unit=args.batch_time_gran,
+    )
+
+    print(len(train_loader))
+    print(len(val_loader))
+    print(len(test_loader))
+
+    for batch in train_loader:
+        print(batch.src.shape)
+        print('\n')
+
+    labels = label_generator_next_binary_classification(train_loader)
+    token = pd.read_csv('examples/graphproppred/test_token.csv')
+    token = preproccess_raw_data(token)
+
+    dgraph_token = DGraph.from_pandas(
+        edge_df=token,
+        edge_src_col='from',
+        edge_dst_col='to',
+        edge_time_col='timestamp',
+        edge_feats_col='value',  # @TODO: CHECK
+        time_delta='s',
+        device=args.device,
+        # split = 'train' # @TODO: CHECK
+    )
+
+    train_loader = DGDataLoader(
+        dgraph_token,
+        batch_unit=args.batch_time_gran,
+    )
+    val_loader = DGDataLoader(
+        dgraph_token,
+        batch_unit=args.batch_time_gran,
+    )
+    test_loader = DGDataLoader(
+        dgraph_token,
+        batch_unit=args.batch_time_gran,
+    )
+
+    print(len(train_loader))
+    print(len(val_loader))
+    print(len(test_loader))
