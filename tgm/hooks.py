@@ -122,6 +122,7 @@ class DeduplicationHook:
         if hasattr(batch, 'neg'):
             batch.neg = batch.neg.to(batch.src.device)
             nids.append(batch.neg)
+            nids.append(batch.neg_src)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
                 hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
@@ -150,7 +151,14 @@ class NegativeEdgeSamplerHook:
             to the number of positive destination nodes (default = 1.0).
     """
 
-    def __init__(self, low: int, high: int, neg_ratio: float = 1.0) -> None:
+    def __init__(
+        self,
+        low: int,
+        high: int,
+        src_low: int = -1,
+        src_high: int = -1,
+        neg_ratio: float = 1.0,
+    ) -> None:
         if not 0 < neg_ratio <= 1:
             raise ValueError(f'neg_ratio must be in (0, 1], got: {neg_ratio}')
         if not low < high:
@@ -159,11 +167,16 @@ class NegativeEdgeSamplerHook:
         self.high = high
         self.neg_ratio = neg_ratio
 
+        self.src_low, self.src_high = src_low, src_high
+
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.dst.size(0)),)
         batch.neg = torch.randint(  # type: ignore
             self.low, self.high, size, dtype=torch.long, device=dg.device
+        )
+        batch.neg_src = torch.randint(  # type: ignore
+            self.src_low, self.src_high + 1, size, dtype=torch.long, device=dg.device
         )
         return batch
 
@@ -352,6 +365,7 @@ class RecencyNeighborHook:
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
+                    seed.append(batch.neg_src)
 
                     # This is a heuristic. For our fake (negative) link times,
                     # we pick random time stamps within [batch.start_time, batch.end_time].
@@ -360,14 +374,17 @@ class RecencyNeighborHook:
                     # Use generator to locall constrain rng for reproducability
                     gen = torch.Generator(device=device)
                     gen.manual_seed(0)
-                    fake_times = torch.randint(
-                        int(batch.time.min().item()),
-                        int(batch.time.max().item()) + 1,
-                        (batch.neg.size(0),),
-                        device=device,
-                        generator=gen,
-                    )
+                    fake_times = torch.ones_like(batch.neg) * int(batch.time.min())
+                    # fake_times = torch.randint(
+                    #    int(batch.time.min().item()),
+                    #    int(batch.time.max().item()) + 1,
+                    #    (batch.neg.size(0),),
+                    #    device=device,
+                    #    generator=gen,
+                    # )
                     times.append(fake_times)
+                    times.append(fake_times)
+
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
             else:
@@ -390,6 +407,13 @@ class RecencyNeighborHook:
             batch.nbr_feats.append(nbr_feats)  # type: ignore
             batch.nbr_mask.append(nbr_mask)  # type: ignore
 
+            # print('NBR SAMPLER TGM\n')
+            # print('Batch nids', batch.nids[0])
+            # print('Batch times', batch.times[0])
+            # print('Batch nbr_ids', batch.nbr_nids[0])
+            # print('Batch nbr_times', batch.nbr_times[0])
+            # print('Batch mask', batch.nbr_mask[0])
+            # input()
         self._update(batch)
         return batch
 

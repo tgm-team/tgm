@@ -120,15 +120,30 @@ class TGAT(nn.Module):
 
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        # E    super().__init__()
+        # E    self.lin_src = nn.Linear(dim, dim)
+        # E    self.lin_dst = nn.Linear(dim, dim)
+        # E    self.lin_out = nn.Linear(dim, 1)
 
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
-        h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        # Edef forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        # E    h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        # E    h = h.relu()
+        # E    return self.lin_out(h).sigmoid().view(-1)
+        super().__init__()
+
+        input_dim1 = input_dim2 = hidden_dim = dim
+        output_dim = 1
+
+        self.fc1 = nn.Linear(input_dim1 + input_dim2, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.act = nn.ReLU()
+
+    def forward(self, input_1: torch.Tensor, input_2: torch.Tensor):
+        # Tensor, shape (*, input_dim1 + input_dim2)
+        x = torch.cat([input_1, input_2], dim=1)
+        # Tensor, shape (*, output_dim)
+        h = self.fc2(self.act(self.fc1(x)))
+        return h
 
 
 def train(
@@ -140,6 +155,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+
     for batch in tqdm(loader):
         opt.zero_grad()
         z = encoder(batch)
@@ -151,8 +167,20 @@ def train(
         pos_out = decoder(z_src, z_dst)
         neg_out = decoder(z_src, z_neg)
 
-        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
-        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
+        pos_prob = pos_out.sigmoid()
+        neg_prob = neg_out.sigmoid()
+
+        loss_func = nn.BCELoss()
+        predicts = torch.cat([pos_prob, neg_prob], dim=0)
+        labels = torch.cat(
+            [torch.ones_like(pos_prob), torch.zeros_like(neg_prob)], dim=0
+        )
+
+        # loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
+        # loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
+
+        loss = loss_func(input=predicts, target=labels)
+        print(loss)
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -256,6 +284,8 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
+print('encoder: ', encoder)
+input()
 for epoch in range(1, args.epochs + 1):
     # TODO: Need a clean way to clear nbr state across epochs
     train_loader = DGDataLoader(

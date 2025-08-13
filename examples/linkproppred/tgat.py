@@ -193,9 +193,12 @@ def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
     # Always produce negative edge prior to neighbor sampling for link prediction
-    _, dst, _ = dg.edges
+    src, dst, _ = dg.edges
     min_dst, max_dst = int(dst.min()), int(dst.max())
-    neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
+    min_src, max_src = int(src.min()), int(src.max())
+    neg_hook = NegativeEdgeSamplerHook(
+        low=min_dst, high=max_dst, src_low=min_src, src_high=max_src
+    )
     return [neg_hook, nbr_hook]
 
 
