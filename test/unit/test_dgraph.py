@@ -109,7 +109,7 @@ def test_init_bad_args(data):
 
 def test_init_construct_data():
     data = 'foo.csv'
-    with patch.object(DGData, 'from_any') as mock:
+    with patch.object(DGData, 'from_known_dataset') as mock:
         _ = DGraph(data)
         mock.assert_called_once_with(data, TimeDeltaDG('r'))
 

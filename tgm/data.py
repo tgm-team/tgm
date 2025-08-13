@@ -502,20 +502,9 @@ class DGData:
         )
 
     @classmethod
-    def from_any(
-        cls,
-        data: str | pathlib.Path | 'pandas.DataFrame',  # type: ignore
-        time_delta: TimeDeltaDG | None = None,
-        **kwargs: Any,
+    def from_known_dataset(
+        cls, data: str, time_delta: TimeDeltaDG | None = None, **kwargs: Any
     ) -> DGData:
-        if isinstance(data, (str, pathlib.Path)):
-            data_str = str(data)
-            if data_str.startswith('tgbl-') or data_str.startswith('tgbn-'):
-                return cls.from_tgb(name=data_str, time_delta=time_delta, **kwargs)
-            if data_str.endswith('.csv'):
-                return cls.from_csv(data, **kwargs)
-            raise ValueError(
-                f'Unsupported file format or dataset identifier: {data_str}'
-            )
-        else:
-            return cls.from_pandas(data, **kwargs)
+        if data.startswith('tgbl-') or data.startswith('tgbn-'):
+            return cls.from_tgb(name=data, time_delta=time_delta, **kwargs)
+        raise ValueError(f'Unsupported dataset identifier: {data}')

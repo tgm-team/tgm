@@ -19,7 +19,7 @@ class DGraph:
 
     def __init__(
         self,
-        data: DGStorage | DGData | str | pathlib.Path | 'pd.DataFrame',  # type: ignore
+        data: DGStorage | DGData | str,
         time_delta: TimeDeltaDG | str = 'r',
         device: str | torch.device = 'cpu',
         **kwargs: Any,
@@ -28,12 +28,16 @@ class DGraph:
             time_delta = TimeDeltaDG(time_delta)
         if not isinstance(time_delta, TimeDeltaDG):
             raise ValueError(f'Bad time_delta type: {type(time_delta)}')
+
         if isinstance(data, DGStorage):
             self._storage = data
-        else:
-            if not isinstance(data, DGData):
-                data = DGData.from_any(data, time_delta, **kwargs)
+        elif isinstance(data, DGData):
             self._storage = DGStorage(data)
+        elif isinstance(data, str):
+            data = DGData.from_known_dataset(data, time_delta, **kwargs)
+            self._storage = DGStorage(data)
+        else:
+            raise ValueError(f'bad dataset name type: {type(data)}')
 
         self._time_delta = time_delta
         self._device = torch.device(device)
@@ -86,11 +90,7 @@ class DGraph:
             static_node_feats_file_path=static_node_feats_file_path,
             static_node_feats_col=static_node_feats_col,
         )
-        return cls(
-            data=data,
-            time_delta=time_delta,
-            device=device,
-        )
+        return cls(data=data, time_delta=time_delta, device=device)
 
     @classmethod
     def from_raw(
@@ -127,11 +127,7 @@ class DGraph:
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
         )
-        return cls(
-            data=data,
-            time_delta=time_delta,
-            device=device,
-        )
+        return cls(data=data, time_delta=time_delta, device=device)
 
     @classmethod
     def from_pandas(
@@ -180,12 +176,7 @@ class DGraph:
             static_node_feats_df=static_node_feats_df,
             static_node_feats_col=static_node_feats_col,
         )
-
-        return cls(
-            data=data,
-            time_delta=time_delta,
-            device=device,
-        )
+        return cls(data=data, time_delta=time_delta, device=device)
 
     @classmethod
     def from_tgb(
@@ -203,16 +194,8 @@ class DGraph:
             time_delta (TimeDeltaDG | None): Time delta for the graph. If None, uses the default for the dataset.
             device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
         """
-        data = DGData.from_tgb(
-            name=name,
-            split=split,
-            time_delta=time_delta,  # type: ignore
-        )
-
-        return cls(
-            data=data,
-            device=device,
-        )
+        data = DGData.from_tgb(name=name, split=split, time_delta=time_delta)  # type: ignore
+        return cls(data=data, device=device)
 
     def discretize(
         self, time_granularity: TimeDeltaDG | str, reduce_op: Literal['first'] = 'first'
@@ -260,7 +243,7 @@ class DGraph:
             new_time_granularity=time_granularity,
             reduce_op=reduce_op,
         )
-        dg = DGraph(data=new_data, time_delta=time_granularity, device=self.device)
+        dg = DGraph(data=new_data, time_delta=time_granularity, device=self.device)  # type: ignore
         return dg
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
