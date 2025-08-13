@@ -165,6 +165,9 @@ class NegativeEdgeSamplerHook:
         batch.neg = torch.randint(  # type: ignore
             self.low, self.high, size, dtype=torch.long, device=dg.device
         )
+        batch.dumb_negative_source = torch.randint(  # type: ignore
+            self.low, self.high, size, dtype=torch.long, device=dg.device
+        )
         return batch
 
 
