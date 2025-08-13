@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import pathlib
 from dataclasses import dataclass
-from typing import Any, List, Literal, Set
+from typing import Any, List, Set, Tuple
 
 import numpy as np
 import torch
@@ -172,24 +172,27 @@ class DGData:
 
     def discretize(
         self,
-        old_time_granularity: TimeDeltaDG | str,
-        new_time_granularity: TimeDeltaDG | str,
-        reduce_op: Literal['first'],
+        native_time_delta: TimeDeltaDG | str,
+        discretize_time_delta: TimeDeltaDG | str | None,
+        reduce_op: str | None,
     ) -> DGData:
-        # TODO: Check time delta equality and deep copy (or shallow copy)
-        if isinstance(old_time_granularity, str):
-            old_time_granularity = TimeDeltaDG(old_time_granularity)
-        if isinstance(new_time_granularity, str):
-            new_time_granularity = TimeDeltaDG(new_time_granularity)
+        if isinstance(native_time_delta, str):
+            native_time_delta = TimeDeltaDG(native_time_delta)
+        if isinstance(discretize_time_delta, str):
+            discretize_time_delta = TimeDeltaDG(discretize_time_delta)
 
-        if old_time_granularity.is_ordered:
-            if new_time_granularity.is_ordered:
-                return self  # TODO: Figure out copy semantics
-            raise ValueError('Cannot discretize a graph with ordered time granularity')
-        if old_time_granularity.is_coarser_than(new_time_granularity):
+        if discretize_time_delta is None or native_time_delta == discretize_time_delta:
+            return self  # Note: Does not do a copy
+        if reduce_op is None:
             raise ValueError(
-                f'Cannot discretize to a time_granularity ({new_time_granularity}) which is strictly'
-                f'more granular than the time granularity on the current graph ({old_time_granularity})'
+                f'Tried to discretize to {discretize_time_delta} without specifying a reduce_op'
+            )
+        if native_time_delta.is_ordered:
+            raise ValueError('Cannot discretize a graph with ordered time granularity')
+        if native_time_delta.is_coarser_than(discretize_time_delta):
+            raise ValueError(
+                f'Cannot discretize to {discretize_time_delta} which is strictly'
+                f'finer than the native_time_delta: {native_time_delta}'
             )
 
         valid_ops = ['first']
@@ -200,7 +203,7 @@ class DGData:
 
         # Note: If we simply return a new storage this will 2x our peak memory since the GC
         # won't be able to clean up the current graph storage while `self` is alive.
-        time_factor = old_time_granularity.convert(new_time_granularity)
+        time_factor = native_time_delta.convert(discretize_time_delta)
         buckets = (self.timestamps.float() * time_factor).floor().long()
 
         def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
@@ -567,16 +570,17 @@ class DGData:
 
     @classmethod
     def from_known_dataset(
-        cls, data_name: str, time_delta: TimeDeltaDG, **kwargs: Any
-    ) -> DGData:
+        cls,
+        data_name: str,
+        discretize_time_delta: TimeDeltaDG | str | None,
+        reduce_op: str | None,
+        **kwargs: Any,
+    ) -> Tuple[DGData, TimeDeltaDG]:
         if data_name.startswith('tgbl-') or data_name.startswith('tgbn-'):
-            data = cls.from_tgb(name=data_name, **kwargs)
+            data = cls.from_tgb(data_name, **kwargs)
             native_time_delta = TGB_TIME_DELTAS[data_name]
         else:
             raise ValueError(f'Unsupported dataset identifier: {data_name}')
 
-        return data.discretize(
-            old_time_granularity=native_time_delta,
-            new_time_granularity=time_delta,
-            reduce_op='first',
-        )
+        data = data.discretize(native_time_delta, discretize_time_delta, reduce_op)
+        return data, native_time_delta

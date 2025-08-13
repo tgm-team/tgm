@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from tgm import DGraph
+from tgm._storage import DGStorage
 from tgm.data import DGData
 from tgm.hooks import DeviceTransferHook
 
@@ -10,8 +11,9 @@ from tgm.hooks import DeviceTransferHook
 def dg():
     edge_index = torch.LongTensor([[1, 10], [1, 11], [1, 12], [1, 13]])
     edge_timestamps = torch.LongTensor([1, 1, 2, 2])
-    data = DGData.from_raw(edge_timestamps, edge_index)
-    return DGraph(data)
+    dg_data = DGData.from_raw(edge_timestamps, edge_index)
+    data = DGStorage(dg_data)
+    return DGraph(data, discretize_time_delta='r')
 
 
 def test_hook_dependancies():

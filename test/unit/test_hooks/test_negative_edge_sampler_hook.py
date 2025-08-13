@@ -2,15 +2,18 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm._storage import DGStorage
 from tgm.data import DGData
 from tgm.hooks import NegativeEdgeSamplerHook
 
 
 @pytest.fixture
-def data():
+def dg():
     edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
     edge_timestamps = torch.LongTensor([1, 5, 20])
-    return DGData.from_raw(edge_timestamps, edge_index)
+    dg_data = DGData.from_raw(edge_timestamps, edge_index)
+    data = DGStorage(dg_data)
+    return DGraph(data, discretize_time_delta='r')
 
 
 def test_hook_dependancies():
@@ -27,8 +30,7 @@ def test_bad_negative_edge_sampler_init():
         NegativeEdgeSamplerHook(low=0, high=1, neg_ratio=2)
 
 
-def test_negative_edge_sampler(data):
-    dg = DGraph(data)
+def test_negative_edge_sampler(dg):
     hook = NegativeEdgeSamplerHook(low=0, high=10)
     batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)

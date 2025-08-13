@@ -19,27 +19,31 @@ class DGraph:
 
     def __init__(
         self,
-        data: DGStorage | DGData | str,
-        time_delta: TimeDeltaDG | str = 'r',
+        data: DGStorage | str,
+        discretize_time_delta: TimeDeltaDG | str | None = None,
+        reduce_op: str | None = None,
         device: str | torch.device = 'cpu',
         **kwargs: Any,
     ) -> None:
-        if isinstance(time_delta, str):
-            time_delta = TimeDeltaDG(time_delta)
-        if not isinstance(time_delta, TimeDeltaDG):
-            raise ValueError(f'Bad time_delta type: {type(time_delta)}')
+        if isinstance(discretize_time_delta, str):
+            discretize_time_delta = TimeDeltaDG(discretize_time_delta)
 
-        if isinstance(data, DGStorage):
+        if isinstance(data, str):
+            dg_data, time_delta = DGData.from_known_dataset(
+                data, discretize_time_delta, reduce_op, **kwargs
+            )
+            self._storage = DGStorage(dg_data)
+            self._time_delta = time_delta
+        elif isinstance(data, DGStorage):
+            if discretize_time_delta is None:
+                raise RuntimeError(
+                    'Internally tried creating DGraph on existing storage without specifying a time_delta'
+                )
             self._storage = data
+            self._time_delta = discretize_time_delta
         else:
-            if not isinstance(data, (str, DGData)):
-                raise ValueError(f'bad dataset name type: {type(data)}')
-            if isinstance(data, str):
-                data = DGData.from_known_dataset(data, time_delta, **kwargs)
+            raise ValueError(f'Unsupported dataset type: {type(data)}')
 
-            self._storage = DGStorage(data)
-
-        self._time_delta = time_delta
         self._device = torch.device(device)
         self._slice = DGSliceTracker()
 
@@ -58,7 +62,8 @@ class DGraph:
         static_node_feats_file_path: str | pathlib.Path | None = None,
         static_node_feats_col: List[str] | None = None,
         native_time_delta: TimeDeltaDG | str = 'r',
-        time_delta: TimeDeltaDG | str = 'r',
+        discretize_time_delta: TimeDeltaDG | str | None = None,
+        reduce_op: str | None = None,
         device: str | torch.device = 'cpu',
     ) -> DGraph:
         r"""Constructs a DGraph from CSV files.
@@ -75,9 +80,16 @@ class DGraph:
             dynamic_node_feats_col (List[str] | None): List of column names for dynamic node features in the node file. Defaults to None.
             static_node_feats_file_path (str | pathlib.Path | None): Path to the static node features CSV file.
             static_node_feats_col (List[str] | None): List of column names for static node features in the static node features file.
-            native_time_delta (TimeDeltaDG | str): Native Time Delta for the graph.
-            time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
+            native_time_delta (TimeDeltaDG | str): Native Time Delta for the graph. Defaults to 'r' for ordered edgelist.
+            discretize_time_delta (TimeDeltaDG | str | None): If specified, determines the time to discretize the underlying data to.
+            reduce_op (str | None): If discretize_time_delta is specified, this determines what reduction to apply to the underlying data.
             device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
+
+        Note:
+            - If `discretize_time_delta` is specified:
+                1. `native_time_delta` must be an absolute time delta, **not** `'r'`.
+                2. The native time delta must be **finer** than `discretize_time_delta`.
+                3. A valid `reduce_op` is required.
         """
         data = DGData.from_csv(
             edge_file_path=edge_file_path,
@@ -92,12 +104,9 @@ class DGraph:
             static_node_feats_file_path=static_node_feats_file_path,
             static_node_feats_col=static_node_feats_col,
         )
-        data = data.discretize(
-            old_time_granularity=native_time_delta,
-            new_time_granularity=time_delta,
-            reduce_op='first',
-        )
-        return cls(data=data, time_delta=time_delta, device=device)
+        data = data.discretize(native_time_delta, discretize_time_delta, reduce_op)
+        storage = DGStorage(data)
+        return cls(storage, discretize_time_delta, device=device)
 
     @classmethod
     def from_raw(
@@ -110,7 +119,8 @@ class DGraph:
         dynamic_node_feats: Tensor | None = None,
         static_node_feats: Tensor | None = None,
         native_time_delta: TimeDeltaDG | str = 'r',
-        time_delta: TimeDeltaDG | str = 'r',
+        discretize_time_delta: TimeDeltaDG | str | None = None,
+        reduce_op: str | None = None,
         device: str | torch.device = 'cpu',
     ) -> DGraph:
         r"""Constructs DGraph from raw tensors.
@@ -123,8 +133,9 @@ class DGraph:
             node_ids (Tensor | None): Node ids tensor of shape (N,) or None if no node ids.
             dynamic_node_feats (Tensor | None): Dynamic node features tensor of shape (T, N, d_node_dynamic) or None if no dynamic node features.
             static_node_feats (Tensor | None): Static node features tensor of shape (N, d_node_static) or None if no static node features.
-            native_time_delta (TimeDeltaDG | str): Native Time Delta for the graph.
-            time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
+            native_time_delta (TimeDeltaDG | str): Native Time Delta for the graph. Defaults to 'r' for ordered edgelist.
+            discretize_time_delta (TimeDeltaDG | str | None): If specified, determines the time to discretize the underlying data to.
+            reduce_op (str | None): If discretize_time_delta is specified, this determines what reduction to apply to the underlying data.
             device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
         """
         data = DGData.from_raw(
@@ -136,12 +147,9 @@ class DGraph:
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
         )
-        data = data.discretize(
-            old_time_granularity=native_time_delta,
-            new_time_granularity=time_delta,
-            reduce_op='first',
-        )
-        return cls(data=data, time_delta=time_delta, device=device)
+        data = data.discretize(native_time_delta, discretize_time_delta, reduce_op)
+        storage = DGStorage(data)
+        return cls(storage, discretize_time_delta, device=device)
 
     @classmethod
     def from_pandas(
@@ -158,7 +166,8 @@ class DGraph:
         static_node_feats_df: 'pandas.DataFrame' | None = None,  # type: ignore
         static_node_feats_col: List[str] | None = None,
         native_time_delta: TimeDeltaDG | str = 'r',
-        time_delta: TimeDeltaDG | str = 'r',
+        discretize_time_delta: TimeDeltaDG | str | None = None,
+        reduce_op: str | None = None,
         device: str | torch.device = 'cpu',
     ) -> DGraph:
         r"""Constructs a DGraph from pandas DataFrames.
@@ -175,8 +184,9 @@ class DGraph:
             dynamic_node_feats_col (List[str] | None): List of column names for dynamic node features in the node DataFrame. Defaults to None.
             static_node_feats_df (pandas.DataFrame | None): DataFrame containing static node features.
             static_node_feats_col (List[str] | None): List of column names for static node features in the static node features DataFrame.
-            native_time_delta (TimeDeltaDG | str): Native Time Delta for the graph.
-            time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
+            native_time_delta (TimeDeltaDG | str): Native Time Delta for the graph. Defaults to 'r' for ordered edgelist.
+            discretize_time_delta (TimeDeltaDG | str | None): If specified, determines the time to discretize the underlying data to.
+            reduce_op (str | None): If discretize_time_delta is specified, this determines what reduction to apply to the underlying data.
             device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
         """
         data = DGData.from_pandas(
@@ -192,31 +202,36 @@ class DGraph:
             static_node_feats_df=static_node_feats_df,
             static_node_feats_col=static_node_feats_col,
         )
-        data = data.discretize(
-            old_time_granularity=native_time_delta,
-            new_time_granularity=time_delta,
-            reduce_op='first',
-        )
-        return cls(data=data, time_delta=time_delta, device=device)
+        data = data.discretize(native_time_delta, discretize_time_delta, reduce_op)
+        storage = DGStorage(data)
+        return cls(storage, discretize_time_delta, device=device)
 
     @classmethod
     def from_tgb(
         cls,
-        name: str,
+        data_name: str,
         split: str = 'all',
-        time_delta: TimeDeltaDG | str | None = None,
+        discretize_time_delta: TimeDeltaDG | str | None = None,
+        reduce_op: str | None = None,
         device: str | torch.device = 'cpu',
     ) -> DGraph:
         r"""Constructs a DGraph from a TGB dataset.
 
         Args:
-            name (str): Name of the TGB dataset.
+            data_name (str): Name of the TGB dataset.
             split (str): Split of the dataset to use. Defaults to 'all'.
-            time_delta (TimeDeltaDG | None): Time delta for the graph. If None, uses the default for the dataset.
+            discretize_time_delta (TimeDeltaDG | str | None): If specified, determines the time to discretize the underlying data to.
+            reduce_op (str | None): If discretize_time_delta is specified, this determines what reduction to apply to the underlying data.
             device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
         """
-        data = DGData.from_tgb(name=name, split=split, time_delta=time_delta)
-        return cls(data=data, device=device)
+        data, time_delta = DGData.from_known_dataset(
+            data_name=data_name,
+            split=split,
+            discretize_time_delta=discretize_time_delta,
+            reduce_op=reduce_op,
+        )
+        storage = DGStorage(data)
+        return cls(storage, time_delta, device=device)
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         r"""Materialize dense tensors: src, dst, time, and optionally {'node': dynamic_node_feats, node_times, node_ids, 'edge': edge_features}."""
@@ -235,7 +250,11 @@ class DGraph:
         if start_idx is not None and end_idx is not None and start_idx > end_idx:
             raise ValueError(f'start_idx ({start_idx}) must be <= end_idx ({end_idx})')
 
-        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
+        dg = DGraph(
+            data=self._storage,
+            discretize_time_delta=self.time_delta,
+            device=self.device,
+        )
         dg._slice.start_time = self._slice.start_time
         dg._slice.end_time = self._slice.end_time
         dg._slice.start_idx = self._maybe_max(start_idx, self._slice.start_idx)
@@ -253,7 +272,11 @@ class DGraph:
         if end_time is not None:
             end_time -= 1
 
-        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
+        dg = DGraph(
+            data=self._storage,
+            discretize_time_delta=self.time_delta,
+            device=self.device,
+        )
         dg._slice.start_time = self._maybe_max(start_time, self.start_time)
         dg._slice.end_time = self._maybe_min(end_time, self.end_time)
         dg._slice.start_idx = self._slice.start_idx

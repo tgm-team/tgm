@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm._storage import DGStorage
 from tgm.data import DGData
 from tgm.hooks import NeighborSamplerHook
 
@@ -33,7 +34,8 @@ def test_bad_neighbor_sampler_init():
 
 
 def test_neighbor_sampler_hook_link_pred(data):
-    dg = DGraph(data)
+    data = DGStorage(data)
+    dg = DGraph(data, discretize_time_delta='r')
     hook = NeighborSamplerHook(num_nbrs=[2])
     batch = dg.materialize()
 
@@ -49,7 +51,8 @@ def test_neighbor_sampler_hook_link_pred(data):
 
 
 def test_neighbor_sampler_hook_node_pred(data):
-    dg = DGraph(data)
+    data = DGStorage(data)
+    dg = DGraph(data, discretize_time_delta='r')
     hook = NeighborSamplerHook(num_nbrs=[2])
     batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)

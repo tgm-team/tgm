@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from tgm import DGraph
+from tgm._storage import DGStorage
 from tgm.data import DGData
 from tgm.hooks import DeduplicationHook
 
@@ -10,8 +11,9 @@ from tgm.hooks import DeduplicationHook
 def dg():
     edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
     edge_timestamps = torch.LongTensor([1, 5, 20])
-    data = DGData.from_raw(edge_timestamps, edge_index)
-    return DGraph(data)
+    dg_data = DGData.from_raw(edge_timestamps, edge_index)
+    data = DGStorage(dg_data)
+    return DGraph(data, discretize_time_delta='r')
 
 
 def test_hook_dependancies():
