@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, Generic, Optional, Tuple, TypeVar
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Final, Generic, Optional, Tuple, TypeVar
 
 import numpy as np
 import torch
 
 from tgm import DGraph
 from tgm.data import DGData
-from tgm.timedelta import TimeDeltaDG
+from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 T = TypeVar('T')
 
@@ -41,8 +41,7 @@ class _SplitsMixin(Generic[T]):
         return self.train, self.val, self.test
 
 
-@dataclass(frozen=True)
-class DGDataset(_SplitsMixin):
+class DGDataset(_SplitsMixin[DGraph]):
     r"""Immutable container storing some combination of train, validation and test DGraphs."""
 
     def __init__(
@@ -63,15 +62,12 @@ class DGDataset(_SplitsMixin):
                 f'got {train_ratio + val_ratio}'
             )
 
-        train, val, test = self._split_data(data, train_ratio, val_ratio)
-        if train is not None:
-            train = DGraph(data=train, time_delta=time_delta, device=device)
-        if val is not None:
-            val = DGraph(data=val, time_delta=time_delta, device=device)
-        if test is not None:
-            test = DGraph(data=test, time_delta=time_delta, device=device)
-
-        super().__init__(train=train, val=val, test=test)
+        train_data, val_data, test_data = self._split_data(data, train_ratio, val_ratio)
+        super().__init__(
+            train=DGraph(train_data, time_delta, device) if train_data else None,
+            val=DGraph(val_data, time_delta, device) if val_data else None,
+            test=DGraph(test_data, time_delta, device) if test_data else None,
+        )
 
     @staticmethod
     def _split_data(
@@ -97,28 +93,52 @@ class DGDataset(_SplitsMixin):
                 edge_feats=data.edge_feats[edge_mask]
                 if data.edge_feats is not None
                 else None,
-                node_event_idx=data.node_event_idx[node_mask]
+                node_event_idx=data.node_event_idx[node_mask]  # type: ignore
                 if node_mask is not None
                 else None,
-                node_ids=data.node_ids[node_mask] if node_mask is not None else None,
+                node_ids=data.node_ids[node_mask] if node_mask is not None else None,  # type: ignore
                 dynamic_node_feats=data.dynamic_node_feats[node_mask]
                 if node_mask is not None and data.dynamic_node_feats is not None
                 else None,
                 static_node_feats=data.static_node_feats,
             )
 
-        return (
-            slice_data(0, train_end),
-            slice_data(train_end, val_end),
-            slice_data(val_end, num_events),
+        train_data = slice_data(0, train_end)
+        val_data = slice_data(train_end, val_end)
+        test_data = slice_data(val_end, num_events)
+        return train_data, val_data, test_data
+
+
+class PreSplitDGDataset(_SplitsMixin[DGraph], ABC):
+    r"""Base class for datasets with predefined train/val/test splits."""
+
+    def __init__(
+        self,
+        time_delta: str | TimeDeltaDG = 'r',
+        device: str | torch.device = 'cpu',
+    ):
+        train_data, val_data, test_data = self._load_splits()
+
+        # TODO: Fix the discretization here from previous PR based on native_time_delta and user-requested
+        # time_delta (which is really a discretization time_delta. Also, need to add reduce_op)
+        super().__init__(
+            train=DGraph(train_data, time_delta, device) if train_data else None,
+            val=DGraph(val_data, time_delta, device) if val_data else None,
+            test=DGraph(test_data, time_delta, device) if test_data else None,
         )
 
+    @abstractmethod
+    def _load_splits(
+        self,
+    ) -> Tuple[Optional[DGData], Optional[DGData], Optional[DGData]]: ...
 
-@dataclass(frozen=True)
-class TGBDataset(_SplitsMixin):
-    name: str = ''
+    @property
+    @abstractmethod
+    def native_time_delta(self) -> TimeDeltaDG: ...
 
-    TGB_TIME_DELTAS: ClassVar[Dict[str, TimeDeltaDG]] = {
+
+class TGBDataset(PreSplitDGDataset):
+    TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
         'tgbl-wiki': TimeDeltaDG('s'),
         'tgbl-subreddit': TimeDeltaDG('s'),
         'tgbl-lastfm': TimeDeltaDG('s'),
@@ -139,11 +159,17 @@ class TGBDataset(_SplitsMixin):
         device: str | torch.device = 'cpu',
         **kwargs: Any,
     ) -> None:
-        data = self._load_full_tgb_dataset(name, **kwargs)
-        dataset = DGDataset(data, time_delta=time_delta, device=device)
-        super().__init__(train=dataset.train, val=dataset.val, test=dataset.test)
+        self.name = name
+        self.kwargs = kwargs
+        super().__init__(time_delta=time_delta, device=device)
 
-    def _load_full_tgb_dataset(self, name: str, **kwargs: Any) -> DGData:
+    @property
+    def native_time_delta(self) -> TimeDeltaDG:
+        return TGB_TIME_DELTAS[self.name]
+
+    def _load_splits(
+        self,
+    ) -> Tuple[Optional[DGData], Optional[DGData], Optional[DGData]]:
         def _check_tgb_import() -> tuple['LinkPropPredDataset', 'NodePropPredDataset']:  # type: ignore
             try:
                 from tgb.linkproppred.dataset import LinkPropPredDataset
@@ -156,78 +182,90 @@ class TGBDataset(_SplitsMixin):
 
         LinkPropPredDataset, NodePropPredDataset = _check_tgb_import()
 
-        if name.startswith('tgbl-'):
-            dataset = LinkPropPredDataset(name=name, **kwargs)  # type: ignore
-        elif name.startswith('tgbn-'):
-            dataset = NodePropPredDataset(name=name, **kwargs)  # type: ignore
+        if self.name.startswith('tgbl-'):
+            dataset = LinkPropPredDataset(name=self.name, **self.kwargs)  # type: ignore
+        elif self.name.startswith('tgbn-'):
+            dataset = NodePropPredDataset(name=self.name, **self.kwargs)  # type: ignore
         else:
-            raise ValueError(f'Unknown dataset: {name}')
+            raise ValueError(f'Unknown dataset: {self.name}')
 
         data = dataset.full_data
 
-        src = data['sources']
-        dst = data['destinations']
-        edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
-        timestamps = torch.from_numpy(data['timestamps']).long()
-        if data['edge_feat'] is None:
-            edge_feats = None
-        else:
-            edge_feats = torch.from_numpy(data['edge_feat'])
+        def _split_tgb_dataset(split: str) -> DGData:
+            mask = getattr(dataset, f'{split}_mask')
+            src = data['sources'][mask]
 
-        node_timestamps, node_ids, dynamic_node_feats = None, None, None
-        if name.startswith('tgbn-'):
-            if 'node_label_dict' in data:
-                # in TGB, after passing a batch of edges, you find the nearest node event batch in the past
-                # in tgbn-trade, validation edge starts at 2010 while the first node event batch starts at 2009.
-                # therefore we do (timestamps[0] - 1) to account for this behaviour
-                node_label_dict = {
-                    t: v
-                    for t, v in data['node_label_dict'].items()
-                    if (timestamps[0] - 1)
-                    <= t
-                    < timestamps[
-                        -1
-                    ]  # include the batch of labels even if they start before the edge events.
-                }
+            dst = data['destinations'][mask]
+            edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
+            timestamps = torch.from_numpy(data['timestamps'][mask]).long()
+            if data['edge_feat'] is None:
+                edge_feats = None
             else:
-                raise ValueError('please update your tgb package or install by source')
+                edge_feats = torch.from_numpy(data['edge_feat'][mask])
 
-            if len(node_label_dict):
-                # Node events could be missing from the current data split (e.g. validation)
-                num_node_events = 0
-                node_label_dim = 0
-                for t in node_label_dict:
-                    for node_id, label in node_label_dict[t].items():
-                        num_node_events += 1
-                        node_label_dim = label.shape[0]
+            node_timestamps, node_ids, dynamic_node_feats = None, None, None
+            if self.name.startswith('tgbn-'):
+                if 'node_label_dict' in data:
+                    # in TGB, after passing a batch of edges, you find the nearest node event batch in the past
+                    # in tgbn-trade, validation edge starts at 2010 while the first node event batch starts at 2009.
+                    # therefore we do (timestamps[0] - 1) to account for this behaviour
+                    node_label_dict = {
+                        t: v
+                        for t, v in data['node_label_dict'].items()
+                        if (timestamps[0] - 1)
+                        <= t
+                        < timestamps[
+                            -1
+                        ]  # include the batch of labels even if they start before the edge events.
+                    }
+                else:
+                    raise ValueError(
+                        'please update your tgb package or install by source'
+                    )
 
-                temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
-                temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
-                temp_dynamic_node_feats = np.zeros(
-                    (num_node_events, node_label_dim), dtype=np.float32
-                )
-                idx = 0
-                for t in node_label_dict:
-                    for node_id, label in node_label_dict[t].items():
-                        temp_node_timestamps[idx] = t
-                        temp_node_ids[idx] = node_id
-                        temp_dynamic_node_feats[idx] = label
-                        idx += 1
-                node_timestamps = torch.from_numpy(temp_node_timestamps).long()
-                node_ids = torch.from_numpy(temp_node_ids).long()
-                dynamic_node_feats = torch.from_numpy(temp_dynamic_node_feats).float()
+                if len(node_label_dict):
+                    # Node events could be missing from the current data split (e.g. validation)
+                    num_node_events = 0
+                    node_label_dim = 0
+                    for t in node_label_dict:
+                        for node_id, label in node_label_dict[t].items():
+                            num_node_events += 1
+                            node_label_dim = label.shape[0]
 
-        # Read static node features if they exist
-        static_node_feats = None
-        if dataset.node_feat is not None:
-            static_node_feats = torch.from_numpy(dataset.node_feat)
+                    temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
+                    temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
+                    temp_dynamic_node_feats = np.zeros(
+                        (num_node_events, node_label_dim), dtype=np.float32
+                    )
+                    idx = 0
+                    for t in node_label_dict:
+                        for node_id, label in node_label_dict[t].items():
+                            temp_node_timestamps[idx] = t
+                            temp_node_ids[idx] = node_id
+                            temp_dynamic_node_feats[idx] = label
+                            idx += 1
+                    node_timestamps = torch.from_numpy(temp_node_timestamps).long()
+                    node_ids = torch.from_numpy(temp_node_ids).long()
+                    dynamic_node_feats = torch.from_numpy(
+                        temp_dynamic_node_feats
+                    ).float()
 
-        return DGData.from_raw(
-            edge_timestamps=timestamps,
-            edge_index=edge_index,
-            edge_feats=edge_feats,
-            node_timestamps=node_timestamps,
-            node_ids=node_ids,
-            dynamic_node_feats=dynamic_node_feats,
-            static_node_feats=static_node_feats,
-        )
+            # Read static node features if they exist
+            static_node_feats = None
+            if dataset.node_feat is not None:
+                static_node_feats = torch.from_numpy(dataset.node_feat)
+
+            return DGData.from_raw(
+                edge_timestamps=timestamps,
+                edge_index=edge_index,
+                edge_feats=edge_feats,
+                node_timestamps=node_timestamps,
+                node_ids=node_ids,
+                dynamic_node_feats=dynamic_node_feats,
+                static_node_feats=static_node_feats,
+            )
+
+        train_data = _split_tgb_dataset('train')
+        val_data = _split_tgb_dataset('val')
+        test_data = _split_tgb_dataset('test')
+        return train_data, val_data, test_data
