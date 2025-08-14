@@ -12,7 +12,7 @@ from tgm.data import DGData
 from tgm.timedelta import TimeDeltaDG
 
 
-def test_init_dg_data_no_node_events():
+def test_init_dg_data():
     edge_index = torch.LongTensor([[2, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([1, 5])
     data = DGData.from_raw(edge_timestamps, edge_index)
@@ -24,6 +24,21 @@ def test_init_dg_data_no_node_events():
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
+
+
+def test_init_dg_data_with_time_delta():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_timestamps, edge_index, time_delta=TimeDeltaDG('s'))
+    assert data.time_delta == TimeDeltaDG('s')
+
+
+def test_init_dg_data_with_string_time_delta():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
+    assert data.time_delta == TimeDeltaDG('s')
 
 
 def test_init_dg_data_no_node_events_with_edge_features():
@@ -39,6 +54,7 @@ def test_init_dg_data_no_node_events_with_edge_features():
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_init_dg_data_node_events():
@@ -58,6 +74,7 @@ def test_init_dg_data_node_events():
     torch.testing.assert_close(data.node_ids, node_ids)
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_init_dg_data_node_events_and_node_features():
@@ -85,6 +102,7 @@ def test_init_dg_data_node_events_and_node_features():
     torch.testing.assert_close(data.node_ids, node_ids)
     torch.testing.assert_close(data.dynamic_node_feats, dynamic_node_feats)
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_init_dg_data_sort_required():
@@ -128,6 +146,7 @@ def test_init_dg_data_sort_required():
     torch.testing.assert_close(data.node_ids, exp_node_ids)
     torch.testing.assert_close(data.dynamic_node_feats, exp_dynamic_node_feats)
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_init_dg_data_bad_args_empty_graph():
@@ -348,6 +367,7 @@ def test_from_csv_with_edge_features():
         torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
         torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
         torch.testing.assert_close(data.edge_feats, recovered_data.edge_feats)
+        assert data.time_delta == TimeDeltaDG('r')
     except Exception as e:
         raise e
     finally:
@@ -418,6 +438,7 @@ def test_from_csv_with_node_events():
         torch.testing.assert_close(
             data.dynamic_node_feats, recovered_data.dynamic_node_feats
         )
+        assert data.time_delta == TimeDeltaDG('r')
     except Exception as e:
         raise e
     finally:
@@ -523,6 +544,7 @@ def test_from_csv_with_node_features():
         torch.testing.assert_close(
             data.static_node_feats, recovered_data.static_node_feats
         )
+        assert data.time_delta == TimeDeltaDG('r')
     except Exception as e:
         raise e
     finally:
@@ -553,6 +575,7 @@ def test_from_pandas_with_edge_features():
     torch.testing.assert_close(
         data.edge_feats.tolist(), events_df.edge_features.tolist()
     )
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_from_pandas_with_node_events():
@@ -577,6 +600,7 @@ def test_from_pandas_with_node_events():
     assert data.timestamps.tolist() == [3, 6, 1337, 1338]
     assert data.node_ids.tolist() == [7, 8]
     assert data.dynamic_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_from_pandas_with_node_features():
@@ -610,6 +634,7 @@ def test_from_pandas_with_node_features():
     torch.testing.assert_close(
         data.dynamic_node_feats.tolist(), node_df.node_features.tolist()
     )
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 @pytest.fixture
@@ -693,9 +718,9 @@ def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats
         mask = getattr(dataset, f'{split}_mask')
         return times[mask]
 
-    data, native_time_delta = DGData.from_tgb(name='tgbl-wiki', split=split)
+    data = DGData.from_tgb(name='tgbl-wiki', split=split)
     assert isinstance(data, DGData)
-    assert native_time_delta == mock_native_time_delta
+    assert data.time_delta == mock_native_time_delta
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
     np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
 
@@ -742,9 +767,9 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
         exp_times.sort()
         return exp_times
 
-    data, native_time_delta = DGData.from_tgb(name='tgbn-trade', split=split)
+    data = DGData.from_tgb(name='tgbn-trade', split=split)
     assert isinstance(data, DGData)
-    assert native_time_delta == mock_native_time_delta
+    assert data.time_delta == mock_native_time_delta
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
     np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
 
@@ -775,10 +800,3 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
-
-
-def test_from_known_dataset():
-    data = 'tgbl-mock'
-    with patch.object(DGData, 'from_tgb') as mock_tgb:
-        _ = DGData.from_known_dataset(data)
-        mock_tgb.assert_called_once_with(name=data)
