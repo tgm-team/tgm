@@ -165,14 +165,23 @@ seed_everything(args.seed)
 train_dg = DGraph(
     args.dataset,
     discretize_time_delta=args.time_gran,
+    reduce_op='first',
     split='train',
     device=args.device,
 )
 val_dg = DGraph(
-    args.dataset, discretize_time_delta=args.time_gran, split='val', device=args.device
+    args.dataset,
+    discretize_time_delta=args.time_gran,
+    reduce_op='first',
+    split='val',
+    device=args.device,
 )
 test_dg = DGraph(
-    args.dataset, discretize_time_delta=args.time_gran, split='test', device=args.device
+    args.dataset,
+    discretize_time_delta=args.time_gran,
+    reduce_op='first',
+    split='test',
+    device=args.device,
 )
 
 num_nodes = DGraph(args.dataset).num_nodes

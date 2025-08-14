@@ -16,7 +16,6 @@ from tqdm import tqdm
 from tgm.graph import DGBatch, DGraph
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -162,19 +161,22 @@ seed_everything(args.seed)
 
 train_dg = DGraph(
     args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
+    discretize_time_delta=args.time_gran,
+    reduce_op='first',
     split='train',
     device=args.device,
 )
 val_dg = DGraph(
     args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
+    discretize_time_delta=args.time_gran,
+    reduce_op='first',
     split='val',
     device=args.device,
 )
 test_dg = DGraph(
     args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
+    discretize_time_delta=args.time_gran,
+    reduce_op='first',
     split='test',
     device=args.device,
 )

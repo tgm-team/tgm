@@ -154,13 +154,25 @@ args = parser.parse_args()
 seed_everything(args.seed)
 
 train_dg = DGraph(
-    args.dataset, time_delta=args.time_gran, split='train', device=args.device
+    args.dataset,
+    discretize_time_delta=args.time_gran,
+    reduce_op='first',
+    split='train',
+    device=args.device,
 )
 val_dg = DGraph(
-    args.dataset, time_delta=args.time_gran, split='val', device=args.device
+    args.dataset,
+    discretize_time_delta=args.time_gran,
+    reduce_op='first',
+    split='val',
+    device=args.device,
 )
 test_dg = DGraph(
-    args.dataset, time_delta=args.time_gran, split='test', device=args.device
+    args.dataset,
+    discretize_time_delta=args.time_gran,
+    reduce_op='first',
+    split='test',
+    device=args.device,
 )
 
 train_loader = DGDataLoader(

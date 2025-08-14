@@ -233,13 +233,25 @@ val_dg = DGraph(args.dataset, split='val', device=args.device)
 test_dg = DGraph(args.dataset, split='test', device=args.device)
 
 train_snapshots = DGraph(
-    args.dataset, time_delta=args.shapshot_time_gran, split='train', device=args.device
+    args.dataset,
+    discretize_time_delta=args.shapshot_time_gran,
+    reduce_op='first',
+    split='train',
+    device=args.device,
 )
 val_snapshots = DGraph(
-    args.dataset, time_delta=args.shapshot_time_gran, split='val', device=args.device
+    args.dataset,
+    discretize_time_delta=args.shapshot_time_gran,
+    reduce_op='first',
+    split='val',
+    device=args.device,
 )
 test_snapshots = DGraph(
-    args.dataset, time_delta=args.shapshot_time_gran, split='test', device=args.device
+    args.dataset,
+    discretize_time_delta=args.shapshot_time_gran,
+    reduce_op='first',
+    split='test',
+    device=args.device,
 )
 
 train_loader = DGDataLoader(
