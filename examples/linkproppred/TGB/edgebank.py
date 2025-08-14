@@ -48,8 +48,8 @@ def eval(
             y_pred = model(query_src, query_dst)
             # compute MRR
             input_dict = {
-                'y_pred_pos': np.array([y_pred[0]]),
-                'y_pred_neg': np.array(y_pred[1:]),
+                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
+                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
