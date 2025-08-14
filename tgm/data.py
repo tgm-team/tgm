@@ -14,7 +14,7 @@ from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 @dataclass
 class DGData:
-    r"""Bundles dynamic graph dataset_name to be forwarded to DGStorage."""
+    r"""Bundles dynamic graph data to be forwarded to DGStorage."""
 
     timestamps: Tensor  # [num_events]
 
@@ -157,13 +157,13 @@ class DGData:
             if self.node_event_idx is not None:
                 self.node_event_idx = inverse_sort_idx[self.node_event_idx]
 
-            # Reorder edge-specific dataset_name
+            # Reorder edge-specific data
             edge_order = torch.argsort(self.edge_event_idx)
             self.edge_index = self.edge_index[edge_order]
             if self.edge_feats is not None:
                 self.edge_feats = self.edge_feats[edge_order]
 
-            # Reorder node-specific dataset_name
+            # Reorder node-specific data
             if self.node_event_idx is not None:
                 node_order = torch.argsort(self.node_event_idx)
                 self.node_ids = self.node_ids[node_order]  # type: ignore
@@ -228,7 +228,7 @@ class DGData:
             with open(fp, newline='') as f:
                 return list(csv.DictReader(f))
 
-        # Read in edge dataset_name
+        # Read in edge data
         edge_reader = _read_csv(edge_file_path)
         num_edges = len(edge_reader)
 
@@ -246,7 +246,7 @@ class DGData:
                 for j, col in enumerate(edge_feats_col):
                     edge_feats[i, j] = float(row[col])  # type: ignore
 
-        # Read in dynamic node dataset_name
+        # Read in dynamic node data
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if node_file_path is not None:
             if node_id_col is None or node_time_col is None:
@@ -270,7 +270,7 @@ class DGData:
                     for j, col in enumerate(dynamic_node_feats_col):
                         dynamic_node_feats[i, j] = float(row[col])  # type: ignore
 
-        # Read in static node dataset_name
+        # Read in static node data
         static_node_feats = None
         if static_node_feats_file_path is not None:
             if static_node_feats_col is None:
@@ -335,7 +335,7 @@ class DGData:
 
         _check_pandas_import()
 
-        # Read in edge dataset_name
+        # Read in edge data
         edge_index = torch.from_numpy(
             edge_df[[edge_src_col, edge_dst_col]].to_numpy()
         ).long()
@@ -344,7 +344,7 @@ class DGData:
         if edge_feats_col is not None:
             edge_feats = torch.Tensor(edge_df[edge_feats_col].tolist())
 
-        # Read in dynamic node dataset_name
+        # Read in dynamic node data
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if node_df is not None:
             if node_id_col is None or node_time_col is None:
@@ -358,7 +358,7 @@ class DGData:
                     node_df[dynamic_node_feats_col].tolist()
                 )
 
-        # Read in static node dataset_name
+        # Read in static node data
         static_node_feats = None
         if static_node_feats_df is not None:
             if static_node_feats_col is None:
@@ -401,7 +401,7 @@ class DGData:
             dataset = NodePropPredDataset(name=name, **kwargs)  # type: ignore
         else:
             raise ValueError(f'Unknown dataset: {name}')
-        dataset_name = dataset.full_data
+        data = dataset.full_data
 
         split_masks = {
             'train': dataset.train_mask,
@@ -416,24 +416,24 @@ class DGData:
         else:
             raise ValueError(f'Unknown split: {split}')
 
-        src = dataset_name['sources'][mask]
-        dst = dataset_name['destinations'][mask]
+        src = data['sources'][mask]
+        dst = data['destinations'][mask]
         edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
-        timestamps = torch.from_numpy(dataset_name['timestamps'][mask]).long()
-        if dataset_name['edge_feat'] is None:
+        timestamps = torch.from_numpy(data['timestamps'][mask]).long()
+        if data['edge_feat'] is None:
             edge_feats = None
         else:
-            edge_feats = torch.from_numpy(dataset_name['edge_feat'][mask])
+            edge_feats = torch.from_numpy(data['edge_feat'][mask])
 
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if name.startswith('tgbn-'):
-            if 'node_label_dict' in dataset_name:
+            if 'node_label_dict' in data:
                 # in TGB, after passing a batch of edges, you find the nearest node event batch in the past
                 # in tgbn-trade, validation edge starts at 2010 while the first node event batch starts at 2009.
                 # therefore we do (timestamps[0] - 1) to account for this behaviour
                 node_label_dict = {
                     t: v
-                    for t, v in dataset_name['node_label_dict'].items()
+                    for t, v in data['node_label_dict'].items()
                     if (timestamps[0] - 1)
                     <= t
                     < timestamps[
@@ -444,7 +444,7 @@ class DGData:
                 raise ValueError('please update your tgb package or install by source')
 
             if len(node_label_dict):
-                # Node events could be missing from the current dataset_name split (e.g. validation)
+                # Node events could be missing from the current data split (e.g. validation)
                 num_node_events = 0
                 node_label_dim = 0
                 for t in node_label_dict:
