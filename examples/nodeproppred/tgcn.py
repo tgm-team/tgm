@@ -159,14 +159,14 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(
-    args.dataset, discretize_time_delta=args.time_gran, reduce_op='first', split='train'
+train_dg = DGraph(args.dataset, split='train', device=args.device).discretize(
+    args.time_gran
 )
-val_dg = DGraph(
-    args.dataset, discretize_time_delta=args.time_gran, reduce_op='first', split='val'
+val_dg = DGraph(args.dataset, split='val', device=args.device).discretize(
+    args.time_gran
 )
-test_dg = DGraph(
-    args.dataset, discretize_time_delta=args.time_gran, reduce_op='first', split='test'
+test_dg = DGraph(args.dataset, split='val', device=args.device).discretize(
+    args.time_gran
 )
 
 num_nodes = DGraph(args.dataset).num_nodes
