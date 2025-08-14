@@ -1,5 +1,5 @@
 import random
-from typing import Any, Dict, List, Literal, Optional, Set, Tuple
+from typing import Dict, List, Literal, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
@@ -26,8 +26,6 @@ class DGStorageArrayBackend(DGStorageBase):
         new_time_granularity: TimeDeltaDG,
         reduce_op: Literal['first'],
     ) -> 'DGStorageBase':
-        # TODO: Vectorize this as a groupby([bucket, edge_ids].reduce(reduce_op))
-
         # We can assume that new granularity is coarser than old time granularity
         # since we checked args in the caller.
         time_factor = old_time_granularity.convert(new_time_granularity)
@@ -38,19 +36,12 @@ class DGStorageArrayBackend(DGStorageBase):
 
         def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
             event_buckets = buckets[event_idx]
-            seen: Set[Any] = set()
-            keep, prev_bucket = [], None
+            ids_flat = ids.view(ids.size(0), -1)
 
-            for i in range(event_idx.numel()):
-                bucket = int(event_buckets[i])
-                node_or_edge = tuple(ids[i].tolist()) if ids.ndim > 1 else int(ids[i])
-                if bucket != prev_bucket:
-                    seen.clear()
-                    prev_bucket = bucket
-                if node_or_edge not in seen:
-                    seen.add(node_or_edge)
-                    keep.append(i)
-            return torch.tensor(keep, dtype=torch.long)
+            combined = torch.cat([event_buckets.unsqueeze(1), ids_flat], dim=1)
+            keep_mask = torch.ones(combined.size(0), dtype=torch.bool)
+            keep_mask[1:] = (combined[1:] != combined[:-1]).any(dim=1)
+            return keep_mask.nonzero(as_tuple=False).squeeze(1)
 
         # Edge events
         edge_mask = _get_keep_indices(self._data.edge_event_idx, self._data.edge_index)
