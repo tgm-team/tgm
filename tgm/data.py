@@ -5,8 +5,11 @@ import pathlib
 from dataclasses import dataclass
 from typing import Any, List
 
+import numpy as np
 import torch
 from torch import Tensor
+
+from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
 @dataclass
@@ -375,3 +378,133 @@ class DGData:
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
         )
+
+    @classmethod
+    def from_tgb(
+        cls,
+        name: str,
+        split: str = 'all',
+        time_delta: TimeDeltaDG | None = None,
+        **kwargs: Any,
+    ) -> DGData:
+        def _check_tgb_import() -> tuple['LinkPropPredDataset', 'NodePropPredDataset']:  # type: ignore
+            try:
+                from tgb.linkproppred.dataset import LinkPropPredDataset
+                from tgb.nodeproppred.dataset import NodePropPredDataset
+
+                return LinkPropPredDataset, NodePropPredDataset
+            except ImportError:
+                err_msg = 'User requires tgb to initialize a DGraph from a tgb dataset '
+                raise ImportError(err_msg)
+
+        LinkPropPredDataset, NodePropPredDataset = _check_tgb_import()
+
+        if name.startswith('tgbl-'):
+            dataset = LinkPropPredDataset(name=name, **kwargs)  # type: ignore
+        elif name.startswith('tgbn-'):
+            dataset = NodePropPredDataset(name=name, **kwargs)  # type: ignore
+        else:
+            raise ValueError(f'Unknown dataset: {name}')
+        data = dataset.full_data
+
+        split_masks = {
+            'train': dataset.train_mask,
+            'val': dataset.val_mask,
+            'test': dataset.test_mask,
+        }
+
+        if split == 'all':
+            mask = slice(None)  # selects everything
+        elif split in split_masks:
+            mask = split_masks[split]
+        else:
+            raise ValueError(f'Unknown split: {split}')
+
+        src = data['sources'][mask]
+        dst = data['destinations'][mask]
+        edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
+        timestamps = torch.from_numpy(data['timestamps'][mask]).long()
+        if data['edge_feat'] is None:
+            edge_feats = None
+        else:
+            edge_feats = torch.from_numpy(data['edge_feat'][mask])
+
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None
+        if name.startswith('tgbn-'):
+            if 'node_label_dict' in data:
+                # in TGB, after passing a batch of edges, you find the nearest node event batch in the past
+                # in tgbn-trade, validation edge starts at 2010 while the first node event batch starts at 2009.
+                # therefore we do (timestamps[0] - 1) to account for this behaviour
+                node_label_dict = {
+                    t: v
+                    for t, v in data['node_label_dict'].items()
+                    if (timestamps[0] - 1)
+                    <= t
+                    < timestamps[
+                        -1
+                    ]  # include the batch of labels even if they start before the edge events.
+                }
+            else:
+                raise ValueError('please update your tgb package or install by source')
+
+            if len(node_label_dict):
+                # Node events could be missing from the current data split (e.g. validation)
+                num_node_events = 0
+                node_label_dim = 0
+                for t in node_label_dict:
+                    for node_id, label in node_label_dict[t].items():
+                        num_node_events += 1
+                        node_label_dim = label.shape[0]
+
+                temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
+                temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
+                temp_dynamic_node_feats = np.zeros(
+                    (num_node_events, node_label_dim), dtype=np.float32
+                )
+                idx = 0
+                for t in node_label_dict:
+                    for node_id, label in node_label_dict[t].items():
+                        temp_node_timestamps[idx] = t
+                        temp_node_ids[idx] = node_id
+                        temp_dynamic_node_feats[idx] = label
+                        idx += 1
+                node_timestamps = torch.from_numpy(temp_node_timestamps).long()
+                node_ids = torch.from_numpy(temp_node_ids).long()
+                dynamic_node_feats = torch.from_numpy(temp_dynamic_node_feats).float()
+
+        # Read static node features if they exist
+        static_node_feats = None
+        if dataset.node_feat is not None:
+            static_node_feats = torch.from_numpy(dataset.node_feat)
+
+        # Remap timestamps if a custom non-ordered time delta was supplied
+        if time_delta is not None and not time_delta.is_ordered:
+            tgb_time_delta = TGB_TIME_DELTAS[name]
+
+            if time_delta.is_coarser_than(tgb_time_delta):
+                raise ValueError(
+                    f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity, use an ordered time_delta ('r'), or coarsen the graph (dg.discretize() after construction)"
+                )
+
+            time_factor = int(tgb_time_delta.convert(time_delta))
+            timestamps *= time_factor
+            if node_timestamps is not None:
+                node_timestamps *= time_factor
+
+        return cls.from_raw(
+            edge_timestamps=timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            static_node_feats=static_node_feats,
+        )
+
+    @classmethod
+    def from_known_dataset(
+        cls, data: str, time_delta: TimeDeltaDG | None = None, **kwargs: Any
+    ) -> DGData:
+        if data.startswith('tgbl-') or data.startswith('tgbn-'):
+            return cls.from_tgb(name=data, time_delta=time_delta, **kwargs)
+        raise ValueError(f'Unsupported dataset identifier: {data}')
