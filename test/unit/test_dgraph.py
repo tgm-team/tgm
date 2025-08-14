@@ -107,27 +107,6 @@ def test_init_bad_args(data):
         _ = DGraph(data, time_delta='foo')
 
 
-def test_init_construct_data():
-    dataset_name = 'tgb-foo'
-    mock_dgdata, mock_native_time_delta = object(), object()
-    mock_return = (mock_dgdata, mock_native_time_delta)
-
-    with patch.object(DGData, 'from_known_dataset', return_value=mock_return) as mock:
-        _ = DGraph(dataset_name)
-        mock.assert_called_once_with(dataset_name)
-
-
-def test_init_construct_data_tried_to_use_custom_time_delta():
-    dataset_name = 'tgb-foo'
-    mock_dgdata, mock_native_time_delta = object(), object()
-    mock_return = (mock_dgdata, mock_native_time_delta)
-
-    with patch.object(DGData, 'from_known_dataset', return_value=mock_return) as mock:
-        with pytest.raises(UserWarning):
-            _ = DGraph(dataset_name, 's')
-            mock.assert_called_once_with(dataset_name)
-
-
 def test_dgraph_from_raw():
     edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
     edge_timestamps = torch.LongTensor([1, 5, 20])

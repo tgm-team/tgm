@@ -14,7 +14,7 @@ from tgb.nodeproppred.evaluate import Evaluator
 from torch_geometric.nn import GCNConv
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.util.seed import seed_everything
 
@@ -189,15 +189,14 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train', device=args.device).discretize(
-    args.time_gran
-)
-val_dg = DGraph(args.dataset, split='val', device=args.device).discretize(
-    args.time_gran
-)
-test_dg = DGraph(args.dataset, split='val', device=args.device).discretize(
-    args.time_gran
-)
+train_data, time_delta = DGData.from_tgb(args.dataset, split='train')
+train_dg = DGraph(train_data, time_delta, device=args.device).discretize(args.time_gran)
+
+val_data, time_delta = DGData.from_tgb(args.dataset, split='val')
+val_dg = DGraph(val_data, time_delta, device=args.device).discretize(args.time_gran)
+
+test_data, time_delta = DGData.from_tgb(args.dataset, split='test')
+test_dg = DGraph(test_data, time_delta, device=args.device).discretize(args.time_gran)
 
 dgraph = DGraph(args.dataset)
 num_nodes = dgraph.num_nodes

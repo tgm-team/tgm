@@ -6,7 +6,7 @@ from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGraph
+from tgm import DGData, DGraph
 from tgm.hooks import TGBNegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
@@ -69,9 +69,14 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='val')
-test_dg = DGraph(args.dataset, split='test')
+train_data, time_delta = DGData.from_tgb(args.dataset, split='train')
+train_dg = DGraph(train_data, time_delta)
+
+val_data, time_delta = DGData.from_tgb(args.dataset, split='val')
+val_dg = DGraph(val_data, time_delta)
+
+test_data, time_delta = DGData.from_tgb(args.dataset, split='test')
+test_dg = DGraph(test_data, time_delta)
 
 train_data = train_dg.materialize(materialize_features=False)
 val_loader = DGDataLoader(

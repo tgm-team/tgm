@@ -10,7 +10,7 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
 from tgm.hooks import DGHook, NegativeEdgeSamplerHook, RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
@@ -240,9 +240,14 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train', device=args.device)
-val_dg = DGraph(args.dataset, split='val', device=args.device)
-test_dg = DGraph(args.dataset, split='test', device=args.device)
+train_data, time_delta = DGData.from_tgb(args.dataset, split='train')
+train_dg = DGraph(train_data, time_delta, device=args.device)
+
+val_data, time_delta = DGData.from_tgb(args.dataset, split='val')
+val_dg = DGraph(val_data, time_delta, device=args.device)
+
+test_data, time_delta = DGData.from_tgb(args.dataset, split='test')
+test_dg = DGraph(test_data, time_delta, device=args.device)
 
 
 def _init_hooks(dg: DGraph, time_gap: int) -> List[DGHook]:
