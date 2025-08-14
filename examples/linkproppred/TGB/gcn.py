@@ -228,47 +228,14 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG('r'),
-    split='train',
-    device=args.device,
-)
+train_dg = DGraph(args.dataset, split='train', device=args.device)
+train_snapshots = train_dg.discretize(args.snapshot_time_gran)
 
-train_snapshots = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
-    split='train',
-    device=args.device,
-).discretize(args.snapshot_time_gran)
+val_dg = DGraph(args.dataset, split='val', device=args.device)
+val_snapshots = val_dg.discretize(args.snapshot_time_gran)
 
-val_dg = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG('r'),
-    split='val',
-    device=args.device,
-)
-
-val_snapshots = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
-    split='val',
-    device=args.device,
-).discretize(args.snapshot_time_gran)
-
-test_dg = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG('r'),
-    split='test',
-    device=args.device,
-)
-
-test_snapshots = DGraph(
-    args.dataset,
-    time_delta=TimeDeltaDG(args.time_gran),
-    split='test',
-    device=args.device,
-).discretize(args.snapshot_time_gran)
+test_dg = DGraph(args.dataset, split='test', device=args.device)
+test_snapshots = test_dg.discretize(args.snapshot_time_gran)
 
 train_loader = DGDataLoader(
     train_dg,
@@ -281,26 +248,19 @@ train_snapshots_loader = DGDataLoader(
     batch_unit=args.snapshot_time_gran,
 )
 
-
 val_loader = DGDataLoader(
     val_dg,
     hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')],
     batch_size=args.bsize,
 )
-val_snapshots_loader = DGDataLoader(
-    val_snapshots,
-    batch_unit=args.snapshot_time_gran,
-)
+val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time_gran)
 
 test_loader = DGDataLoader(
     test_dg,
     hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')],
     batch_size=args.bsize,
 )
-test_snapshots_loader = DGDataLoader(
-    test_snapshots,
-    batch_unit=args.snapshot_time_gran,
-)
+test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran)
 
 if train_dg.dynamic_node_feats_dim is not None:
     raise ValueError(

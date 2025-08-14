@@ -162,32 +162,23 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-# TODO: Fix discretize api
-train_dg = DGraph(args.dataset, time_delta='s', split='train', device=args.device)
-train_dg = train_dg.discretize(args.time_gran)
-
-val_dg = DGraph(args.dataset, time_delta='s', split='val', device=args.device)
-val_dg = val_dg.discretize(args.time_gran)
-
-test_dg = DGraph(args.dataset, time_delta='s', split='test', device=args.device)
-test_dg = test_dg.discretize(args.time_gran)
+train_dg = DGraph(args.dataset, split='train', device=args.device).discretize(
+    args.time_gran
+)
+val_dg = DGraph(args.dataset, split='val', device=args.device).discretize(
+    args.time_gran
+)
+test_dg = DGraph(args.dataset, split='val', device=args.device).discretize(
+    args.time_gran
+)
 
 num_nodes = DGraph(args.dataset).num_nodes
 label_dim = train_dg.dynamic_node_feats_dim
 evaluator = Evaluator(name=args.dataset)
 
-train_loader = DGDataLoader(
-    train_dg,
-    batch_unit=args.batch_time_gran,
-)
-val_loader = DGDataLoader(
-    val_dg,
-    batch_unit=args.batch_time_gran,
-)
-test_loader = DGDataLoader(
-    test_dg,
-    batch_unit=args.batch_time_gran,
-)
+train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran)
+val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran)
+test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran)
 
 # TODO: add static node features to DGraph
 args.node_dim = args.embed_dim
