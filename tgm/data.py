@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import pathlib
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Set
 
 import numpy as np
 import torch
@@ -173,6 +173,87 @@ class DGData:
                 self.node_ids = self.node_ids[node_order]  # type: ignore
                 if self.dynamic_node_feats is not None:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]
+
+    def discretize(
+        self, time_delta: TimeDeltaDG | str | None, reduce_op: str = 'first'
+    ) -> DGData:
+        if isinstance(time_delta, str):
+            time_delta = TimeDeltaDG(time_delta)
+
+        if time_delta is None or self.time_delta == time_delta:
+            return self  # TODO: Does not do a copy, clarify memory ownership
+        if self.time_delta.is_ordered or time_delta.is_ordered:  # type: ignore
+            raise ValueError('Cannot discretize a graph with ordered time granularity')
+        if self.time_delta.is_coarser_than(time_delta):  # type: ignore
+            raise ValueError(
+                f'Cannot discretize to {time_delta} which is strictly'
+                f'finer than the self.time_delta: {self.time_delta}'
+            )
+
+        valid_ops = ['first']
+        if reduce_op not in valid_ops:
+            raise ValueError(
+                f'Unknown reduce_op: {reduce_op}, expected one of: {valid_ops}'
+            )
+
+        # Note: If we simply return a new storage this will 2x our peak memory since the GC
+        # won't be able to clean up the current graph storage while `self` is alive.
+        time_factor = self.time_delta.convert(time_delta)  # type: ignore
+        buckets = (self.timestamps.float() * time_factor).floor().long()
+
+        def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
+            event_buckets = buckets[event_idx]
+            seen: Set[Any] = set()
+            keep, prev_bucket = [], None
+
+            for i in range(event_idx.numel()):
+                bucket = int(event_buckets[i])
+                node_or_edge = tuple(ids[i].tolist()) if ids.ndim > 1 else int(ids[i])
+                if bucket != prev_bucket:
+                    seen.clear()
+                    prev_bucket = bucket
+                if node_or_edge not in seen:
+                    seen.add(node_or_edge)
+                    keep.append(i)
+            return torch.tensor(keep, dtype=torch.long)
+
+        # Edge events
+        edge_mask = _get_keep_indices(self.edge_event_idx, self.edge_index)
+        edge_timestamps = buckets[self.edge_event_idx][edge_mask]
+        edge_index = self.edge_index[edge_mask]
+        edge_feats = None
+        if self.edge_feats is not None:
+            edge_feats = self.edge_feats[edge_mask]
+
+        # Node events
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None
+        if self.node_event_idx is not None:
+            node_mask = _get_keep_indices(
+                self.node_event_idx,
+                self.node_ids,  # type: ignore
+            )
+            node_timestamps = buckets[self.node_event_idx][node_mask]
+            node_ids = self.node_ids[node_mask]  # type: ignore
+            dynamic_node_feats = None
+            if self.dynamic_node_feats is not None:
+                dynamic_node_feats = self.dynamic_node_feats[node_mask]
+
+        static_node_feats = None
+        if self.static_node_feats is not None:  # Need a deep copy
+            static_node_feats = self.static_node_feats.clone()
+
+        # TODO: We should be clear: Do we create copies, or not
+        # For now, we are creating a copy here (but not at early exit...)
+        return DGData.from_raw(
+            time_delta=time_delta,  # new discretized time_delta
+            edge_timestamps=edge_timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            static_node_feats=static_node_feats,
+        )
 
     @classmethod
     def from_raw(
