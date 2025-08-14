@@ -671,9 +671,12 @@ def tgb_dataset_factory():
     [('train', False), ('train', True), ('val', True), ('test', True), ('all', True)],
 )
 @patch('tgb.linkproppred.dataset.LinkPropPredDataset')
+@patch.dict('tgm.timedelta.TGB_TIME_DELTAS', {'tgbl-wiki': TimeDeltaDG('D')})
 def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats):
     dataset = tgb_dataset_factory(split, with_node_feats)
     mock_dataset_cls.return_value = dataset
+
+    mock_native_time_delta = TimeDeltaDG('D')  # Patched value
 
     def _get_exp_edges():
         src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
@@ -690,8 +693,9 @@ def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats
         mask = getattr(dataset, f'{split}_mask')
         return times[mask]
 
-    data = DGData.from_tgb(name='tgbl-wiki', split=split)
+    data, native_time_delta = DGData.from_tgb(name='tgbl-wiki', split=split)
     assert isinstance(data, DGData)
+    assert native_time_delta == mock_native_time_delta
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
     np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
 
@@ -708,9 +712,12 @@ def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats
 
 @pytest.mark.parametrize('split', ['train', 'val', 'test', 'all'])
 @patch('tgb.nodeproppred.dataset.NodePropPredDataset')
+@patch.dict('tgm.timedelta.TGB_TIME_DELTAS', {'tgbn-trade': TimeDeltaDG('D')})
 def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
     dataset = tgb_dataset_factory(split)
     mock_dataset_cls.return_value = dataset
+
+    mock_native_time_delta = TimeDeltaDG('D')  # Patched value
 
     def _get_exp_edges():
         src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
@@ -735,8 +742,9 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
         exp_times.sort()
         return exp_times
 
-    data = DGData.from_tgb(name='tgbn-trade', split=split)
+    data, native_time_delta = DGData.from_tgb(name='tgbn-trade', split=split)
     assert isinstance(data, DGData)
+    assert native_time_delta == mock_native_time_delta
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
     np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
 
@@ -769,50 +777,8 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
 
 
-@patch('tgb.linkproppred.dataset.LinkPropPredDataset')
-def test_from_tgb_time_remap_required_coarser(mock_dataset_cls, tgb_dataset_factory):
-    dataset = tgb_dataset_factory()
-    mock_dataset_cls.return_value = dataset
-
-    custom_td = TimeDeltaDG('Y')
-    mock_td = {'tgbl-foo': TimeDeltaDG('s')}
-    with patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td):
-        with pytest.raises(ValueError):
-            DGData.from_tgb(name='tgbl-foo', time_delta=custom_td)
-
-
-@patch('tgb.linkproppred.dataset.LinkPropPredDataset')
-def test_from_tgb_time_remap_required_finer(mock_dataset_cls, tgb_dataset_factory):
-    dataset = tgb_dataset_factory()
-    mock_dataset_cls.return_value = dataset
-
-    # Save raw (unmapped timestamps) from the original dataset. We do a copy since
-    # TGB constructor modifies timestamp info on the underlying tgb array
-    raw_times = dataset.full_data['timestamps'].copy()
-
-    custom_td = TimeDeltaDG('s')
-    mock_td = {'tgbl-foo': TimeDeltaDG('Y')}
-    with patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td):
-        data = DGData.from_tgb(name='tgbl-foo', time_delta=custom_td)
-
-    def _get_exp_edges():
-        src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
-        return np.stack([src, dst], axis=1)
-
-    def _get_exp_times():
-        time_factor = int(mock_td['tgbl-foo'].convert(custom_td))
-        return raw_times * time_factor
-
-    assert isinstance(data, DGData)
-    np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
-    np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
-
-    # Confirm correct dataset instantiation
-    mock_dataset_cls.assert_called_once_with(name='tgbl-foo')
-
-
 def test_from_known_dataset():
     data = 'tgbl-mock'
     with patch.object(DGData, 'from_tgb') as mock_tgb:
         _ = DGData.from_known_dataset(data)
-        mock_tgb.assert_called_once_with(name=data, time_delta=None)
+        mock_tgb.assert_called_once_with(name=data)

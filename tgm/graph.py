@@ -20,25 +20,33 @@ class DGraph:
     def __init__(
         self,
         data: DGStorage | DGData | str,
-        time_delta: TimeDeltaDG | str = 'r',
+        time_delta: TimeDeltaDG | str | None = None,
         device: str | torch.device = 'cpu',
         **kwargs: Any,
     ) -> None:
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
-        if not isinstance(time_delta, TimeDeltaDG):
-            raise ValueError(f'Bad time_delta type: {type(time_delta)}')
 
-        if isinstance(data, DGStorage):
-            self._storage = data
+        if isinstance(data, str):
+            if time_delta is not None:
+                raise UserWarning(
+                    f"time_delta ({time_delta}) ignored: using dataset's ({data}) native granularity. "
+                    'Call .discretize() after creating the DGraph to change it.'
+                )
+            data, time_delta = DGData.from_known_dataset(data, **kwargs)
+            data = DGStorage(data)
         elif isinstance(data, DGData):
-            self._storage = DGStorage(data)
-        elif isinstance(data, str):
-            data = DGData.from_known_dataset(data, time_delta, **kwargs)
-            self._storage = DGStorage(data)
+            time_delta = time_delta or TimeDeltaDG('r')  # Default to ordered
+            data = DGStorage(data)
+        elif isinstance(data, DGStorage):
+            if time_delta is None:
+                raise RuntimeError(
+                    'Internally tried creating DGraph on existing storage without specifying a time_delta'
+                )
         else:
-            raise ValueError(f'bad dataset name type: {type(data)}')
+            raise ValueError(f'Unsupported dataset type: {type(data)}')
 
+        self._storage = data
         self._time_delta = time_delta
         self._device = torch.device(device)
         self._slice = DGSliceTracker()
@@ -177,25 +185,6 @@ class DGraph:
             static_node_feats_col=static_node_feats_col,
         )
         return cls(data=data, time_delta=time_delta, device=device)
-
-    @classmethod
-    def from_tgb(
-        cls,
-        name: str,
-        split: str = 'all',
-        time_delta: TimeDeltaDG | str | None = None,
-        device: str | torch.device = 'cpu',
-    ) -> DGraph:
-        r"""Constructs a DGraph from a TGB dataset.
-
-        Args:
-            name (str): Name of the TGB dataset.
-            split (str): Split of the dataset to use. Defaults to 'all'.
-            time_delta (TimeDeltaDG | None): Time delta for the graph. If None, uses the default for the dataset.
-            device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
-        """
-        data = DGData.from_tgb(name=name, split=split, time_delta=time_delta)  # type: ignore
-        return cls(data=data, device=device)
 
     def discretize(
         self, time_granularity: TimeDeltaDG | str, reduce_op: Literal['first'] = 'first'

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar, Dict
+from typing import ClassVar, Dict, Final
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +75,7 @@ class TimeDeltaDG:
         return value_ratio / unit_ratio if invert_unit else value_ratio * unit_ratio
 
 
-TGB_TIME_DELTAS = {
+TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
     'tgbl-wiki': TimeDeltaDG('s'),
     'tgbl-subreddit': TimeDeltaDG('s'),
     'tgbl-lastfm': TimeDeltaDG('s'),
