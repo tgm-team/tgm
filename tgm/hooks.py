@@ -271,16 +271,16 @@ class NeighborSamplerHook:
                     # leakage, making the prediction easier than it should be.
 
                     # Use generator to locall constrain rng for reproducability
-                    gen = torch.Generator(device=device)
-                    gen.manual_seed(0)
-                    fake_times = torch.randint(
-                        int(batch.time.min().item()),
-                        int(batch.time.max().item()) + 1,
-                        (batch.neg.size(0),),
-                        device=device,
-                        generator=gen,
-                    )
-                    times.append(fake_times)
+                    # gen = torch.Generator(device=device)
+                    # gen.manual_seed(0)
+                    # fake_times = torch.randint(
+                    #    int(batch.time.min().item()),
+                    #    int(batch.time.max().item()) + 1,
+                    #    (batch.neg.size(0),),
+                    #    device=device,
+                    #    generator=gen,
+                    # )
+                    times.append(batch.time)
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
             else:
@@ -365,16 +365,16 @@ class RecencyNeighborHook:
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
-                    seed.append(batch.neg_src)
+                    # seed.append(batch.neg_src)
 
                     # This is a heuristic. For our fake (negative) link times,
                     # we pick random time stamps within [batch.start_time, batch.end_time].
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
                     # Use generator to locall constrain rng for reproducability
-                    gen = torch.Generator(device=device)
-                    gen.manual_seed(0)
-                    fake_times = torch.ones_like(batch.neg) * int(batch.time.min())
+                    # gen = torch.Generator(device=device)
+                    # gen.manual_seed(0)
+                    fake_times = batch.time
                     # fake_times = torch.randint(
                     #    int(batch.time.min().item()),
                     #    int(batch.time.max().item()) + 1,
@@ -383,7 +383,7 @@ class RecencyNeighborHook:
                     #    generator=gen,
                     # )
                     times.append(fake_times)
-                    times.append(fake_times)
+                    # times.append(fake_times)
 
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
