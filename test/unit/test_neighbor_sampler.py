@@ -169,3 +169,66 @@ def test_init_basic_sampled_graph_1_hop():
     assert nbr_mask.shape == (1, 2, 1)
 
     # assert _batch_eq_nbrs(batch_2, batch)  # continue debug uniform here
+
+
+def _init_recency_buffer_graph():
+    """Initializes the following graph.
+    0 -> t=0 -> 1
+    0 -> t=1 -> 2
+    0 -> t=2 -> 3
+    0 -> t=3 -> 4
+    0 -> t=4 -> 5
+    -- 100 edges --.
+    """
+    src = [0] * 100
+    dst = list(range(1, 101))
+    edge_index = [src, dst]
+    edge_index = torch.LongTensor(edge_index)
+    edge_index = edge_index.transpose(0, 1)
+
+    edge_timestamps = torch.LongTensor(list(range(0, 100)))
+    edge_feats = torch.LongTensor(
+        list(range(1, 101))
+    )  # edge feat is simply summing the node IDs at two end points
+    edge_feats = edge_feats.view(-1, 1)  # 1 feature per edge
+    return edge_index, edge_timestamps, edge_feats
+
+
+def test_recency_exceed_buffer():
+    edge_index, edge_timestamps, edge_feats = _init_recency_buffer_graph()
+    data = DGData.from_raw(edge_timestamps, edge_index, edge_feats)
+    dg = DGraph(data)
+    n_nbrs = [2]  # 1 neighbor for each node
+    hook = _init_hooks(dg, 'recency', n_nbrs=n_nbrs)
+    loader = DGDataLoader(dg, hook=hook, batch_size=2)
+    assert loader._batch_size == 2
+
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_1)
+    assert nids.shape == (1, 4)
+    assert nbr_nids.shape == (1, 4, 2)
+    assert nbr_nids[0][0][0] == -1
+    assert nbr_nids[0][0][1] == -1
+    assert nbr_times.shape == (1, 4, 2)
+    assert nbr_times[0][0][0] == 0
+    assert nbr_times[0][0][1] == 0
+    assert nbr_feats.shape == (1, 4, 2, 1)  # 1 feature per edge
+
+    batch_2 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
+    assert nids.shape == (1, 4)
+    assert nbr_nids.shape == (1, 4, 2)
+    assert nbr_nids[0][0][0] == 1
+    assert nbr_nids[0][0][1] == 2
+    assert nbr_times.shape == (1, 4, 2)
+    assert nbr_times[0][0][0] == 0
+    assert nbr_times[0][0][1] == 1
+    assert nbr_feats.shape == (1, 4, 2, 1)  # 1 feature per edge
+
+    for batch in batch_iter:
+        nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch)
+        assert nbr_nids.shape == (1, 4, 2)
+        assert nbr_times.shape == (1, 4, 2)
+        assert nbr_nids[0][0][0] == nbr_times[0][0][0] + 1
+        assert nbr_nids[0][0][1] == nbr_times[0][0][1] + 1
