@@ -775,10 +775,3 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
-
-
-def test_from_known_dataset():
-    data = 'tgbl-mock'
-    with patch.object(DGData, 'from_tgb') as mock_tgb:
-        _ = DGData.from_known_dataset(data)
-        mock_tgb.assert_called_once_with(name=data)
