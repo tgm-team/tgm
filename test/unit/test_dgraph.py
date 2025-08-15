@@ -98,7 +98,7 @@ def test_init_gpu(data):
 
 def test_init_from_storage(data):
     dg_tmp = DGraph(data)
-    dg = DGraph(dg_tmp._storage)
+    dg = DGraph(dg_tmp._storage, 'r')
     assert id(dg_tmp._storage) == id(dg._storage)
 
 
@@ -108,10 +108,24 @@ def test_init_bad_args(data):
 
 
 def test_init_construct_data():
-    data = 'foo.csv'
-    with patch.object(DGData, 'from_known_dataset') as mock:
-        _ = DGraph(data)
-        mock.assert_called_once_with(data, TimeDeltaDG('r'))
+    dataset_name = 'tgb-foo'
+    mock_dgdata, mock_native_time_delta = object(), object()
+    mock_return = (mock_dgdata, mock_native_time_delta)
+
+    with patch.object(DGData, 'from_known_dataset', return_value=mock_return) as mock:
+        _ = DGraph(dataset_name)
+        mock.assert_called_once_with(dataset_name)
+
+
+def test_init_construct_data_tried_to_use_custom_time_delta():
+    dataset_name = 'tgb-foo'
+    mock_dgdata, mock_native_time_delta = object(), object()
+    mock_return = (mock_dgdata, mock_native_time_delta)
+
+    with patch.object(DGData, 'from_known_dataset', return_value=mock_return) as mock:
+        with pytest.raises(UserWarning):
+            _ = DGraph(dataset_name, 's')
+            mock.assert_called_once_with(dataset_name)
 
 
 def test_str(data):

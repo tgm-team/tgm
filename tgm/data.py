@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import pathlib
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Tuple
 
 import numpy as np
 import torch
@@ -381,12 +381,8 @@ class DGData:
 
     @classmethod
     def from_tgb(
-        cls,
-        name: str,
-        split: str = 'all',
-        time_delta: TimeDeltaDG | None = None,
-        **kwargs: Any,
-    ) -> DGData:
+        cls, name: str, split: str = 'all', **kwargs: Any
+    ) -> Tuple[DGData, TimeDeltaDG]:
         def _check_tgb_import() -> tuple['LinkPropPredDataset', 'NodePropPredDataset']:  # type: ignore
             try:
                 from tgb.linkproppred.dataset import LinkPropPredDataset
@@ -477,21 +473,7 @@ class DGData:
         if dataset.node_feat is not None:
             static_node_feats = torch.from_numpy(dataset.node_feat)
 
-        # Remap timestamps if a custom non-ordered time delta was supplied
-        if time_delta is not None and not time_delta.is_ordered:
-            tgb_time_delta = TGB_TIME_DELTAS[name]
-
-            if time_delta.is_coarser_than(tgb_time_delta):
-                raise ValueError(
-                    f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity, use an ordered time_delta ('r'), or coarsen the graph (dg.discretize() after construction)"
-                )
-
-            time_factor = int(tgb_time_delta.convert(time_delta))
-            timestamps *= time_factor
-            if node_timestamps is not None:
-                node_timestamps *= time_factor
-
-        return cls.from_raw(
+        data = cls.from_raw(
             edge_timestamps=timestamps,
             edge_index=edge_index,
             edge_feats=edge_feats,
@@ -500,11 +482,13 @@ class DGData:
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
         )
+        native_time_delta = TGB_TIME_DELTAS[name]
+        return data, native_time_delta
 
     @classmethod
     def from_known_dataset(
-        cls, data: str, time_delta: TimeDeltaDG | None = None, **kwargs: Any
-    ) -> DGData:
-        if data.startswith('tgbl-') or data.startswith('tgbn-'):
-            return cls.from_tgb(name=data, time_delta=time_delta, **kwargs)
-        raise ValueError(f'Unsupported dataset identifier: {data}')
+        cls, dataset_name: str, **kwargs: Any
+    ) -> Tuple[DGData, TimeDeltaDG]:
+        if dataset_name.startswith('tgbl-') or dataset_name.startswith('tgbn-'):
+            return cls.from_tgb(name=dataset_name, **kwargs)
+        raise ValueError(f'Unsupported dataset name: {dataset_name}')
