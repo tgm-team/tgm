@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import copy
 import csv
 import pathlib
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 from typing import Any, List, Set
 
 import numpy as np
@@ -177,11 +178,12 @@ class DGData:
     def discretize(
         self, time_delta: TimeDeltaDG | str | None, reduce_op: str = 'first'
     ) -> DGData:
+        r"""Returns a copy."""
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
 
         if time_delta is None or self.time_delta == time_delta:
-            return self  # TODO: Does not do a copy, clarify memory ownership
+            return self.clone()  # Deepcopy
         if self.time_delta.is_ordered or time_delta.is_ordered:  # type: ignore
             raise ValueError('Cannot discretize a graph with ordered time granularity')
         if self.time_delta.is_coarser_than(time_delta):  # type: ignore
@@ -242,8 +244,6 @@ class DGData:
         if self.static_node_feats is not None:  # Need a deep copy
             static_node_feats = self.static_node_feats.clone()
 
-        # TODO: We should be clear: Do we create copies, or not
-        # For now, we are creating a copy here (but not at early exit...)
         return DGData.from_raw(
             time_delta=time_delta,  # new discretized time_delta
             edge_timestamps=edge_timestamps,
@@ -254,6 +254,17 @@ class DGData:
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
         )
+
+    def clone(self) -> DGData:
+        cloned_fields = {}
+        for f in fields(self):
+            val = getattr(self, f.name)
+            if isinstance(val, torch.Tensor):
+                cloned_fields[f.name] = val.clone()
+            else:
+                cloned_fields[f.name] = copy.deepcopy(val)
+
+        return replace(self, **cloned_fields)  # type: ignore
 
     @classmethod
     def from_raw(
