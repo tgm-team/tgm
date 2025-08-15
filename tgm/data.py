@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import pathlib
 from dataclasses import dataclass
-from typing import Any, List, Tuple
+from typing import Any, List
 
 import numpy as np
 import torch
@@ -16,6 +16,7 @@ from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 class DGData:
     r"""Bundles dynamic graph data to be forwarded to DGStorage."""
 
+    time_delta: TimeDeltaDG | str
     timestamps: Tensor  # [num_events]
 
     edge_event_idx: Tensor  # [num_edge_events]
@@ -29,6 +30,9 @@ class DGData:
     static_node_feats: Tensor | None = None  # [num_nodes, D_node_static]
 
     def __post_init__(self) -> None:
+        if isinstance(self.time_delta, str):
+            self.time_delta = TimeDeltaDG(self.time_delta)
+
         def _assert_is_tensor(x: Any, name: str) -> None:
             if not isinstance(x, Tensor):
                 raise TypeError(f'{name} must be a Tensor, got: {type(x)}')
@@ -180,6 +184,7 @@ class DGData:
         node_ids: Tensor | None = None,
         dynamic_node_feats: Tensor | None = None,
         static_node_feats: Tensor | None = None,
+        time_delta: TimeDeltaDG | str = 'r',
     ) -> DGData:
         # Build unified event timeline
         timestamps = edge_timestamps
@@ -197,6 +202,7 @@ class DGData:
         )
 
         return cls(
+            time_delta=time_delta,
             timestamps=timestamps,
             edge_event_idx=edge_event_idx,
             edge_index=edge_index,
@@ -221,6 +227,7 @@ class DGData:
         dynamic_node_feats_col: List[str] | None = None,
         static_node_feats_file_path: str | pathlib.Path | None = None,
         static_node_feats_col: List[str] | None = None,
+        time_delta: TimeDeltaDG | str = 'r',
     ) -> DGData:
         def _read_csv(fp: str | pathlib.Path) -> List[dict]:
             # Assumes the whole things fits in memory
@@ -285,6 +292,7 @@ class DGData:
                     static_node_feats[i, j] = float(row[col])
 
         return cls.from_raw(
+            time_delta=time_delta,
             edge_timestamps=timestamps,
             edge_index=edge_index,
             edge_feats=edge_feats,
@@ -308,6 +316,7 @@ class DGData:
         dynamic_node_feats_col: List[str] | None = None,
         static_node_feats_df: 'pandas.DataFrame' | None = None,  # type: ignore
         static_node_feats_col: List[str] | None = None,
+        time_delta: TimeDeltaDG | str = 'r',
     ) -> DGData:
         def _check_pandas_import(min_version_number: str | None = None) -> None:
             try:
@@ -370,6 +379,7 @@ class DGData:
             )
 
         return cls.from_raw(
+            time_delta=time_delta,
             edge_timestamps=edge_timestamps,
             edge_index=edge_index,
             edge_feats=edge_feats,
@@ -380,9 +390,7 @@ class DGData:
         )
 
     @classmethod
-    def from_tgb(
-        cls, name: str, split: str = 'all', **kwargs: Any
-    ) -> Tuple[DGData, TimeDeltaDG]:
+    def from_tgb(cls, name: str, split: str = 'all', **kwargs: Any) -> DGData:
         def _check_tgb_import() -> tuple['LinkPropPredDataset', 'NodePropPredDataset']:  # type: ignore
             try:
                 from tgb.linkproppred.dataset import LinkPropPredDataset
@@ -473,7 +481,8 @@ class DGData:
         if dataset.node_feat is not None:
             static_node_feats = torch.from_numpy(dataset.node_feat)
 
-        data = cls.from_raw(
+        return cls.from_raw(
+            time_delta=TGB_TIME_DELTAS[name],
             edge_timestamps=timestamps,
             edge_index=edge_index,
             edge_feats=edge_feats,
@@ -482,5 +491,3 @@ class DGData:
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
         )
-        native_time_delta = TGB_TIME_DELTAS[name]
-        return data, native_time_delta

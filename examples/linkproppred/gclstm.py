@@ -153,14 +153,20 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_data, time_delta = DGData.from_tgb(args.dataset, split='train')
-train_dg = DGraph(train_data, time_delta, device=args.device).discretize(args.time_gran)
+train_data = DGData.from_tgb(args.dataset, split='train')
+train_dg = DGraph(train_data, train_data.time_delta, device=args.device).discretize(
+    args.time_gran
+)
 
-val_data, time_delta = DGData.from_tgb(args.dataset, split='val')
-val_dg = DGraph(val_data, time_delta, device=args.device).discretize(args.time_gran)
+val_data = DGData.from_tgb(args.dataset, split='val')
+val_dg = DGraph(val_data, val_data.time_delta, device=args.device).discretize(
+    args.time_gran
+)
 
-test_data, time_delta = DGData.from_tgb(args.dataset, split='test')
-test_dg = DGraph(test_data, time_delta, device=args.device).discretize(args.time_gran)
+test_data = DGData.from_tgb(args.dataset, split='test')
+test_dg = DGraph(test_data, test_data.time_delta, device=args.device).discretize(
+    args.time_gran
+)
 
 train_loader = DGDataLoader(
     train_dg,
