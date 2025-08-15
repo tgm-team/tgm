@@ -335,7 +335,8 @@ class RecencyNeighborHook:
         self._max_nbrs = max(num_nbrs)
 
         # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
-        self._nbr_nids = torch.full((num_nodes, self._max_nbrs), -1, dtype=torch.long)
+        # self._nbr_nids = torch.full((num_nodes, self._max_nbrs), -1, dtype=torch.long)
+        self._nbr_nids = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
         self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
         self._nbr_mask = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.bool)
         self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
