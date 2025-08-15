@@ -484,11 +484,3 @@ class DGData:
         )
         native_time_delta = TGB_TIME_DELTAS[name]
         return data, native_time_delta
-
-    @classmethod
-    def from_known_dataset(
-        cls, dataset_name: str, **kwargs: Any
-    ) -> Tuple[DGData, TimeDeltaDG]:
-        if dataset_name.startswith('tgbl-') or dataset_name.startswith('tgbn-'):
-            return cls.from_tgb(name=dataset_name, **kwargs)
-        raise ValueError(f'Unsupported dataset name: {dataset_name}')

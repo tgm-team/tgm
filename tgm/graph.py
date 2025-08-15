@@ -18,23 +18,14 @@ class DGraph:
 
     def __init__(
         self,
-        data: DGStorage | DGData | str,
+        data: DGStorage | DGData,
         time_delta: TimeDeltaDG | str | None = None,
         device: str | torch.device = 'cpu',
-        **kwargs: Any,
     ) -> None:
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
 
-        if isinstance(data, str):
-            if time_delta is not None:
-                raise UserWarning(
-                    f"time_delta ({time_delta}) ignored: using dataset's ({data}) native granularity. "
-                    'Call .discretize() after creating the DGraph to change it.'
-                )
-            data, time_delta = DGData.from_known_dataset(data, **kwargs)
-            data = DGStorage(data)
-        elif isinstance(data, DGData):
+        if isinstance(data, DGData):
             time_delta = time_delta or TimeDeltaDG('r')  # Default to ordered
             data = DGStorage(data)
         elif isinstance(data, DGStorage):

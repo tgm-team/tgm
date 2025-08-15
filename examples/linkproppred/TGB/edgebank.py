@@ -6,7 +6,7 @@ from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGraph
+from tgm import DGData, DGraph
 from tgm.hooks import TGBNegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
@@ -48,8 +48,8 @@ def eval(
             y_pred = model(query_src, query_dst)
             # compute MRR
             input_dict = {
-                'y_pred_pos': np.array([y_pred[0]]),
-                'y_pred_neg': np.array(y_pred[1:]),
+                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
+                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
@@ -69,9 +69,14 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='val')
-test_dg = DGraph(args.dataset, split='test')
+train_data, time_delta = DGData.from_tgb(args.dataset, split='train')
+train_dg = DGraph(train_data, time_delta)
+
+val_data, time_delta = DGData.from_tgb(args.dataset, split='val')
+val_dg = DGraph(val_data, time_delta)
+
+test_data, time_delta = DGData.from_tgb(args.dataset, split='test')
+test_dg = DGraph(test_data, time_delta)
 
 train_data = train_dg.materialize(materialize_features=False)
 val_loader = DGDataLoader(

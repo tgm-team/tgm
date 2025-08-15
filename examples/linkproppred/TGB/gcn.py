@@ -15,7 +15,7 @@ from tgb.linkproppred.evaluate import Evaluator
 from torch_geometric.nn import GCNConv
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
 from tgm.hooks import NegativeEdgeSamplerHook, TGBNegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
@@ -228,13 +228,16 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(args.dataset, split='train', device=args.device)
+train_data, time_delta = DGData.from_tgb(args.dataset, split='train')
+train_dg = DGraph(train_data, time_delta, device=args.device)
 train_snapshots = train_dg.discretize(args.snapshot_time_gran)
 
-val_dg = DGraph(args.dataset, split='val', device=args.device)
+val_data, time_delta = DGData.from_tgb(args.dataset, split='val')
+val_dg = DGraph(val_data, time_delta, device=args.device)
 val_snapshots = val_dg.discretize(args.snapshot_time_gran)
 
-test_dg = DGraph(args.dataset, split='test', device=args.device)
+test_data, time_delta = DGData.from_tgb(args.dataset, split='test')
+test_dg = DGraph(test_data, time_delta, device=args.device)
 test_snapshots = test_dg.discretize(args.snapshot_time_gran)
 
 train_loader = DGDataLoader(
