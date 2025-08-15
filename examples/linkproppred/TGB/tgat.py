@@ -641,7 +641,6 @@ class TGAT(nn.Module):
         self.node_feat_dim = self.node_raw_features.shape[1]
         self.edge_feat_dim = self.edge_raw_features.shape[1]
         self.num_layers = num_layers
-        print(self.num_layers, ' number of layers')
 
         self.time_encoder = TimeEncoder(time_dim=time_dim)
         self.temporal_conv_layers = nn.ModuleList(
@@ -1048,8 +1047,8 @@ val_dg = DGraph(args.dataset, split='val', device=args.device)
 test_dg = DGraph(args.dataset, split='test', device=args.device)
 
 # TODO: Read from graph
-NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
-STATIC_NODE_FEAT = torch.randn((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, 1  # CHANGED TO SINGLE FEATURE
+STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
 
 
 def _init_hooks(
@@ -1117,6 +1116,7 @@ opt = torch.optim.Adam(
 )
 
 print('encoder: ', encoder)
+print('decoder: ', decoder)
 for epoch in range(1, args.epochs + 1):
     # TODO: Need a clean way to clear nbr state across epochs
     train_loader = DGDataLoader(
