@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import pathlib
 from collections.abc import Iterable, Sized
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, List, Literal, Optional, Set, Tuple
+from typing import Any, Literal, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
@@ -50,141 +49,6 @@ class DGraph:
         self._time_delta = time_delta
         self._device = torch.device(device)
         self._slice = DGSliceTracker()
-
-    @classmethod
-    def from_csv(
-        cls,
-        edge_file_path: str | pathlib.Path,
-        edge_src_col: str,
-        edge_dst_col: str,
-        edge_time_col: str,
-        edge_feats_col: List[str] | None = None,
-        node_file_path: str | pathlib.Path | None = None,
-        node_id_col: str | None = None,
-        node_time_col: str | None = None,
-        dynamic_node_feats_col: List[str] | None = None,
-        static_node_feats_file_path: str | pathlib.Path | None = None,
-        static_node_feats_col: List[str] | None = None,
-        time_delta: TimeDeltaDG | str = 'r',
-        device: str | torch.device = 'cpu',
-    ) -> DGraph:
-        r"""Constructs a DGraph from CSV files.
-
-        Args:
-            edge_file_path (str | pathlib.Path): Path to the edge CSV file.
-            edge_src_col (str): Column name for source nodes in the edge file.
-            edge_dst_col (str): Column name for destination nodes in the edge file.
-            edge_time_col (str): Column name for edge timestamps in the edge file.
-            edge_feats_col (List[str] | None): List of column names for edge features in the edge file. Defaults to None.
-            node_file_path (str | pathlib.Path | None): Path to the node CSV file.
-            node_id_col (str | None): Column name for node ids in the node file.
-            node_time_col (str | None): Column name for node timestamps in the node file.
-            dynamic_node_feats_col (List[str] | None): List of column names for dynamic node features in the node file. Defaults to None.
-            static_node_feats_file_path (str | pathlib.Path | None): Path to the static node features CSV file.
-            static_node_feats_col (List[str] | None): List of column names for static node features in the static node features file.
-            time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
-            device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
-        """
-        data = DGData.from_csv(
-            edge_file_path=edge_file_path,
-            edge_src_col=edge_src_col,
-            edge_dst_col=edge_dst_col,
-            edge_time_col=edge_time_col,
-            edge_feats_col=edge_feats_col,
-            node_file_path=node_file_path,
-            node_id_col=node_id_col,
-            node_time_col=node_time_col,
-            dynamic_node_feats_col=dynamic_node_feats_col,
-            static_node_feats_file_path=static_node_feats_file_path,
-            static_node_feats_col=static_node_feats_col,
-        )
-        return cls(data=data, time_delta=time_delta, device=device)
-
-    @classmethod
-    def from_raw(
-        cls,
-        edge_timestamps: Tensor,
-        edge_index: Tensor,
-        edge_feats: Tensor | None = None,
-        node_timestamps: Tensor | None = None,
-        node_ids: Tensor | None = None,
-        dynamic_node_feats: Tensor | None = None,
-        static_node_feats: Tensor | None = None,
-        time_delta: TimeDeltaDG | str = 'r',
-        device: str | torch.device = 'cpu',
-    ) -> DGraph:
-        r"""Constructs DGraph from raw tensors.
-
-        Args:
-            edge_timestamps (Tensor): Timestamps of the edges.
-            edge_index (Tensor): Edge index tensor of shape (2, E) where E is the number of edges.
-            edge_feats (Tensor | None): Edge features tensor of shape (E, d_edge) or None if no edge features.
-            node_timestamps (Tensor | None): Node timestamps tensor of shape (N, T) or None if no node timestamps.
-            node_ids (Tensor | None): Node ids tensor of shape (N,) or None if no node ids.
-            dynamic_node_feats (Tensor | None): Dynamic node features tensor of shape (T, N, d_node_dynamic) or None if no dynamic node features.
-            static_node_feats (Tensor | None): Static node features tensor of shape (N, d_node_static) or None if no static node features.
-            time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
-            device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
-        """
-        data = DGData.from_raw(
-            edge_timestamps=edge_timestamps,
-            edge_index=edge_index,
-            edge_feats=edge_feats,
-            node_timestamps=node_timestamps,
-            node_ids=node_ids,
-            dynamic_node_feats=dynamic_node_feats,
-            static_node_feats=static_node_feats,
-        )
-        return cls(data=data, time_delta=time_delta, device=device)
-
-    @classmethod
-    def from_pandas(
-        cls,
-        edge_df: 'pandas.DataFrame',  # type: ignore
-        edge_src_col: str,
-        edge_dst_col: str,
-        edge_time_col: str,
-        edge_feats_col: List[str] | None = None,
-        node_df: 'pandas.DataFrame' | None = None,  # type: ignore
-        node_id_col: str | None = None,
-        node_time_col: str | None = None,
-        dynamic_node_feats_col: List[str] | None = None,
-        static_node_feats_df: 'pandas.DataFrame' | None = None,  # type: ignore
-        static_node_feats_col: List[str] | None = None,
-        time_delta: TimeDeltaDG | str = 'r',
-        device: str | torch.device = 'cpu',
-    ) -> DGraph:
-        r"""Constructs a DGraph from pandas DataFrames.
-
-        Args:
-            edge_df (pandas.DataFrame): DataFrame containing edges with columns for source, destination, and time.
-            edge_src_col (str): Column name for source nodes in the edge DataFrame.
-            edge_dst_col (str): Column name for destination nodes in the edge DataFrame.
-            edge_time_col (str): Column name for edge timestamps in the edge DataFrame.
-            edge_feats_col (List[str] | None): List of column names for edge features in the edge DataFrame. Defaults to None.
-            node_df (pandas.DataFrame | None): DataFrame containing nodes with columns for node ids and timestamps.
-            node_id_col (str | None): Column name for node ids in the node DataFrame.
-            node_time_col (str | None): Column name for node timestamps in the node DataFrame.
-            dynamic_node_feats_col (List[str] | None): List of column names for dynamic node features in the node DataFrame. Defaults to None.
-            static_node_feats_df (pandas.DataFrame | None): DataFrame containing static node features.
-            static_node_feats_col (List[str] | None): List of column names for static node features in the static node features DataFrame.
-            time_delta (TimeDeltaDG | str): Time delta for the graph. Defaults to 'r' for ordered edgelist.
-            device (str | torch.device): Device to store the graph on. Defaults to 'cpu'.
-        """
-        data = DGData.from_pandas(
-            edge_df=edge_df,
-            edge_src_col=edge_src_col,
-            edge_dst_col=edge_dst_col,
-            edge_time_col=edge_time_col,
-            edge_feats_col=edge_feats_col,
-            node_df=node_df,
-            node_id_col=node_id_col,
-            node_time_col=node_time_col,
-            dynamic_node_feats_col=dynamic_node_feats_col,
-            static_node_feats_df=static_node_feats_df,
-            static_node_feats_col=static_node_feats_col,
-        )
-        return cls(data=data, time_delta=time_delta, device=device)
 
     def discretize(
         self, time_granularity: TimeDeltaDG | str, reduce_op: Literal['first'] = 'first'
