@@ -499,10 +499,9 @@ class TGAT(nn.Module):
         is_negative=False,
         is_src=False,
     ):
-        print(
-            f'is_src: {is_src}, is_negative: {is_negative}, ids: {node_ids}, times: {node_interact_times}'
-        )
-        input()
+        # print(
+        #    f'is_src: {is_src}, is_negative: {is_negative}, ids: {node_ids}, times: {node_interact_times}'
+        # )
         assert current_layer_num >= 0
         device = self.node_raw_features.device
 
@@ -642,18 +641,17 @@ class TGAT(nn.Module):
 
             # temporal graph convolution
             # Tensor, output shape (batch_size, query_dim)
-            print('node features: ', node_conv_features)
-            input()
-            print('node time features: ', node_time_features)
-            input()
-            print('nbr features: ', neighbor_node_conv_features)
-            input()
-            print('nbr time features: ', neighbor_time_features)
-            input()
-            print('nbr edge features: ', neighbor_edge_features)
-            input()
-            print('nbr masks: ', neighbor_node_ids)
-            input()
+            # print('node features: ', node_conv_features)
+            # print('node time features: ', node_time_features)
+            # input()
+            # print('nbr features: ', neighbor_node_conv_features)
+            # input()
+            # print('nbr time features: ', neighbor_time_features)
+            # input()
+            # print('nbr edge features: ', neighbor_edge_features)
+            # input()
+            # print('nbr masks: ', neighbor_node_ids)
+            # input()
             output, _ = self.temporal_conv_layers[current_layer_num - 1](
                 node_features=node_conv_features,
                 node_time_features=node_time_features,
@@ -662,16 +660,16 @@ class TGAT(nn.Module):
                 neighbor_node_edge_features=neighbor_edge_features,
                 neighbor_masks=neighbor_node_ids,
             )
-            print('attention out: ', output)
-            input()
+            # print('attention out: ', output)
+            # input()
 
             # Tensor, output shape (batch_size, output_dim)
             # follow the TGAT paper, use merge layer to combine the attention results and node original feature
             output = self.merge_layers[current_layer_num - 1](
                 input_1=output, input_2=node_raw_features
             )
-            print('final out shape: ', output)
-            input()
+            # print('final out shape: ', output)
+            # input()
 
             return output
 
@@ -744,8 +742,8 @@ def train(
             is_negative=False,
         )
 
-        print('z_src: ', z_src[0][:5])
-        print('z_dst: ', z_dst[0][:5])
+        # print('z_src: ', z_src[0][:5])
+        # print('z_dst: ', z_dst[0][:5])
 
         # get temporal embedding of negative source and negative destination nodes
         # two Tensors, with shape (batch_size, output_dim)
@@ -758,9 +756,9 @@ def train(
             is_negative=True,
         )
         # z = encoder(batch)
-        print('z_neg_src: ', z_neg_src[0][:5])
-        print('z_neg_dst: ', z_neg_dst[0][:5])
-        input()
+        # print('z_neg_src: ', z_neg_src[0][:5])
+        # print('z_neg_dst: ', z_neg_dst[0][:5])
+        # input()
 
         # z_src = z[batch.global_to_local(batch.src)]
         # z_dst = z[batch.global_to_local(batch.dst)]

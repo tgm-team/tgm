@@ -179,6 +179,9 @@ class NegativeEdgeSamplerHook:
         batch.neg_src = torch.randint(  # type: ignore
             self.src_low, self.src_high + 1, size, dtype=torch.long, device=dg.device
         )
+
+        batch.neg_src = batch.src.clone().to(dg.device)
+        batch.neg = 888 * torch.ones_like(batch.src).to(dg.device)
         return batch
 
 
@@ -485,6 +488,7 @@ class RecencyNeighborHook:
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         device = dg.device
         self._device = device
+        self._update(batch)
 
         batch.nids, batch.times = [], []
         batch.nbr_nids, batch.nbr_times = [], []
@@ -499,15 +503,6 @@ class RecencyNeighborHook:
                     batch.neg = batch.neg.to(device)
                     seed_nodes = torch.cat([seed_nodes, batch.neg])
 
-                    # gen = torch.Generator(device=device)
-                    # gen.manual_seed(0)
-                    # fake_times = torch.randint(
-                    #    int(batch.time.min().item()),
-                    #    int(batch.time.max().item()) + 1,
-                    #    (batch.neg.size(0),),
-                    #    device=device,
-                    #    generator=gen,
-                    # )
                     fake_times = batch.time
                     seed_times = torch.cat([seed_times, fake_times])
             else:
@@ -526,13 +521,11 @@ class RecencyNeighborHook:
             batch.nbr_feats.append(nbr_feats)
             batch.nbr_mask.append(nbr_mask)
 
-        self._update(batch)
         return batch
 
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ):
-        """Return k most recent neighbors before query_time for each node."""
         num_nodes = node_ids.size(0)
         device = node_ids.device
 
@@ -560,10 +553,20 @@ class RecencyNeighborHook:
             nbr_feats[i, -len(valid) :] = torch.stack([x[2] for x in valid])
             nbr_mask[i, -len(valid) :] = True
 
+        # print('\n\n########################################################')
+        # print('---- Calling Recency with ----')
+        # print('Node ids: ', node_ids)
+        # print('Node times: ', query_times)
+
+        # print('===== RESULT =====')
+        # print('Node neighbor ids: ', nbr_nids)
+        ## print('Nodes edge ids: ', nbr_times)
+        # print('Nodes_neighbor_times: ', nbr_times)
+        # print('########################################################\n\n')
+
         return nbr_nids, nbr_times, nbr_feats, nbr_mask
 
     def _update(self, batch):
-        """Append new interactions to per-node history."""
         src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
         if batch.edge_feats is None:
             edge_feats = torch.zeros(
