@@ -445,7 +445,7 @@ class TGAT(nn.Module):
                         node_feat_dim=output_dim,
                         edge_feat_dim=self.edge_feat_dim,
                         time_feat_dim=time_dim,
-                        num_heads=self.num_heads,
+                        num_heads=num_heads,
                         dropout=dropout,
                     )
                 )
@@ -524,11 +524,13 @@ class TGAT(nn.Module):
             # print(node_ids.shape, node_interact_times.shape)
             # print('calling recursive forward for nodes')
             # input()
+            # print('recurse on node')
             node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=node_ids,
                 node_interact_times=node_interact_times,
                 current_layer_num=current_layer_num - 1,
                 num_neighbors=num_neighbors,
+                batch=batch,
                 is_negative=is_negative,
                 is_src=is_src,
             )
@@ -582,44 +584,44 @@ class TGAT(nn.Module):
             # print('calling recursive forward for nbrs')
             # print(neighbor_node_ids.shape)
             # input()
+            # print('recurse on nbr')
             neighbor_node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=neighbor_node_ids.flatten(),
                 node_interact_times=neighbor_times.flatten(),
                 current_layer_num=current_layer_num - 1,
                 num_neighbors=num_neighbors,
+                batch=batch,
                 is_negative=is_negative,
                 is_src=is_src,
             )
 
-            # print('nbr feats: ', neighbor_node_conv_features.shape)
-            # input()
             # shape (batch_size, num_neighbors, output_dim or node_feat_dim)
             neighbor_node_conv_features = neighbor_node_conv_features.reshape(
                 node_ids.shape[0], num_neighbors, neighbor_node_conv_features.shape[-1]
             )
 
-            print('nbr conv features: ', neighbor_node_conv_features)
-            input()
+            # print('nbr conv features: ', neighbor_node_conv_features)
+            # input()
             # input()
 
             # compute time interval between current time and historical interaction time
             # adarray, shape (batch_size, num_neighbors)
-            print('node interact times:', node_interact_times.astype(int))
-            print('neighbor times: ', neighbor_times.astype(int))
-            print('neighbor node_ids: ', neighbor_node_ids.astype(int))
-            input()
+            # print('node interact times:', node_interact_times.astype(int))
+            # print('neighbor times: ', neighbor_times.astype(int))
+            # print('neighbor node_ids: ', neighbor_node_ids.astype(int))
+            # input()
             neighbor_delta_times = node_interact_times[:, np.newaxis] - neighbor_times
 
-            print('DELTA TIMES: ', neighbor_delta_times.astype(int))
-            input()
+            # print('DELTA TIMES: ', neighbor_delta_times.astype(int))
+            # input()
 
             # shape (batch_size, num_neighbors, time_feat_dim)
             neighbor_time_features = self.time_encoder(
                 timestamps=torch.from_numpy(neighbor_delta_times).float().to(device)
             )
 
-            print('nbr time features: ', neighbor_time_features)
-            input()
+            # print('nbr time features: ', neighbor_time_features)
+            # input()
 
             # get edge features, shape (batch_size, num_neighbors, edge_feat_dim)
             # neighbor_edge_features = self.edge_raw_features[
@@ -633,13 +635,25 @@ class TGAT(nn.Module):
             else:
                 neighbor_edge_features = dst_nbr_feats
 
-            print('nbr edge features: ', neighbor_edge_features)
-            input()
+            # print('nbr edge features: ', neighbor_edge_features)
+            # input()
 
             # print('neighb edge features: ', neighbor_edge_features.shape)
 
             # temporal graph convolution
             # Tensor, output shape (batch_size, query_dim)
+            print('node features: ', node_conv_features)
+            input()
+            print('node time features: ', node_time_features)
+            input()
+            print('nbr features: ', neighbor_node_conv_features)
+            input()
+            print('nbr time features: ', neighbor_time_features)
+            input()
+            print('nbr edge features: ', neighbor_edge_features)
+            input()
+            print('nbr masks: ', neighbor_node_ids)
+            input()
             output, _ = self.temporal_conv_layers[current_layer_num - 1](
                 node_features=node_conv_features,
                 node_time_features=node_time_features,
@@ -648,16 +662,16 @@ class TGAT(nn.Module):
                 neighbor_node_edge_features=neighbor_edge_features,
                 neighbor_masks=neighbor_node_ids,
             )
-            # print('attention out shape: ', output.shape)
-            # input()
+            print('attention out: ', output)
+            input()
 
             # Tensor, output shape (batch_size, output_dim)
             # follow the TGAT paper, use merge layer to combine the attention results and node original feature
             output = self.merge_layers[current_layer_num - 1](
                 input_1=output, input_2=node_raw_features
             )
-            # print('final out shape: ', output.shape)
-            # input()
+            print('final out shape: ', output)
+            input()
 
             return output
 
