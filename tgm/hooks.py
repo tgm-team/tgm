@@ -355,6 +355,8 @@ class RecencyNeighborHook:
         device = dg.device
         self._move_queues_to_device_if_needed(device)  # No-op after first batch
 
+        self._update(batch)
+
         batch.nids, batch.times = [], []  # type: ignore
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
         batch.nbr_feats, batch.nbr_mask = [], []  # type: ignore
@@ -415,7 +417,7 @@ class RecencyNeighborHook:
             # print('Batch nbr_times', batch.nbr_times[0])
             # print('Batch mask', batch.nbr_mask[0])
             # input()
-        self._update(batch)
+        # self._update(batch)
         return batch
 
     def _get_recency_indices(self, node_ids: torch.Tensor, k: int) -> torch.Tensor:

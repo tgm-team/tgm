@@ -322,14 +322,13 @@ class MultiHeadAttention(nn.Module):
 
 class NeighborSampler:
     def __init__(self, adj_list: list):
-        # list of each node's neighbor ids, edge ids and interaction times, which are sorted by interaction times
         self.nodes_neighbor_ids = []
         self.nodes_edge_ids = []
         self.nodes_neighbor_times = []
 
         # the list at the first position in adj_list is empty, hence, sorted() will return an empty list for the first position
         # its corresponding value in self.nodes_neighbor_ids, self.nodes_edge_ids, self.nodes_neighbor_times will also be empty with length 0
-        for node_idx, per_node_neighbors in enumerate(adj_list):
+        for per_node_neighbors in adj_list:
             # per_node_neighbors is a list of tuples (neighbor_id, edge_id, timestamp)
             # sort the list based on timestamps, sorted() function is stable
             # Note that sort the list based on edge id is also correct, as the original data file ensures the interactions are chronological
@@ -344,36 +343,16 @@ class NeighborSampler:
                 np.array([x[2] for x in sorted_per_node_neighbors])
             )
 
-    def find_neighbors_before(self, node_id: int, interact_time: float):
-        # return index i, which satisfies list[i - 1] < v <= list[i]
-        # return 0 for the first position in self.nodes_neighbor_times since the value at the first position is empty
-        i = np.searchsorted(self.nodes_neighbor_times[node_id], interact_time)
-        return (
-            self.nodes_neighbor_ids[node_id][:i],
-            self.nodes_edge_ids[node_id][:i],
-            self.nodes_neighbor_times[node_id][:i],
-        )
-
     def get_historical_neighbors(
-        self,
-        node_ids: np.ndarray,
-        node_interact_times: np.ndarray,
-        num_neighbors: int = 20,
+        self, node_ids: np.ndarray, node_interact_times: np.ndarray, num_neighbors: int
     ):
-        assert num_neighbors > 0, (
-            'Number of sampled neighbors for each node should be greater than 0!'
-        )
         # All interactions described in the following three matrices are sorted in each row by time
         # each entry in position (i,j) represents the id of the j-th dst node of src node node_ids[i] with an interaction before node_interact_times[i]
         # ndarray, shape (batch_size, num_neighbors)
         nodes_neighbor_ids = np.zeros((len(node_ids), num_neighbors)).astype(
             np.longlong
         )
-        # each entry in position (i,j) represents the id of the edge with src node node_ids[i] and dst node nodes_neighbor_ids[i][j] with an interaction before node_interact_times[i]
-        # ndarray, shape (batch_size, num_neighbors)
         nodes_edge_ids = np.zeros((len(node_ids), num_neighbors)).astype(np.longlong)
-        # each entry in position (i,j) represents the interaction time between src node node_ids[i] and dst node nodes_neighbor_ids[i][j], before node_interact_times[i]
-        # ndarray, shape (batch_size, num_neighbors)
         nodes_neighbor_times = np.zeros((len(node_ids), num_neighbors)).astype(
             np.float32
         )
@@ -383,13 +362,10 @@ class NeighborSampler:
             zip(node_ids, node_interact_times)
         ):
             # find neighbors that interacted with node_id before time node_interact_time
-            (
-                node_neighbor_ids,
-                node_edge_ids,
-                node_neighbor_times,
-            ) = self.find_neighbors_before(
-                node_id=node_id, interact_time=node_interact_time
-            )
+            i = np.searchsorted(self.nodes_neighbor_times[node_id], node_interact_time)
+            node_neighbor_ids = self.nodes_neighbor_ids[node_id][:i]
+            node_edge_ids = self.nodes_edge_ids[node_id][:i]
+            node_neighbor_times = self.nodes_neighbor_times[node_id][:i]
 
             if len(node_neighbor_ids) > 0:
                 # Take most recent interactions with number num_neighbors
@@ -407,23 +383,8 @@ class NeighborSampler:
                 nodes_neighbor_times[
                     idx, num_neighbors - len(node_neighbor_times) :
                 ] = node_neighbor_times
-        # three ndarrays, with shape (batch_size, num_neighbors)
+
         return nodes_neighbor_ids, nodes_edge_ids, nodes_neighbor_times
-
-
-def get_neighbor_sampler(data: 'Data'):
-    max_node_id = max(data.src_node_ids.max(), data.dst_node_ids.max())
-    # the adjacency vector stores edges for each node (source or destination), undirected
-    # adj_list, list of list, where each element is a list of triple tuple (node_id, edge_id, timestamp)
-    # the list at the first position in adj_list is empty
-    adj_list = [[] for _ in range(max_node_id + 1)]
-    for src_node_id, dst_node_id, edge_id, node_interact_time in zip(
-        data.src_node_ids, data.dst_node_ids, data.edge_ids, data.node_interact_times
-    ):
-        adj_list[src_node_id].append((dst_node_id, edge_id, node_interact_time))
-        adj_list[dst_node_id].append((src_node_id, edge_id, node_interact_time))
-
-    return NeighborSampler(adj_list=adj_list)
 
 
 class TGAT(nn.Module):
@@ -764,7 +725,7 @@ def train(
             src_node_ids=batch_src_node_ids,
             dst_node_ids=batch_dst_node_ids,
             node_interact_times=batch_node_interact_times,
-            num_neighbors=20,
+            num_neighbors=NBRS,
             batch=batch,
             is_negative=False,
         )
@@ -778,7 +739,7 @@ def train(
             src_node_ids=batch_neg_src_node_ids,
             dst_node_ids=batch_neg_dst_node_ids,
             node_interact_times=batch_node_interact_times,
-            num_neighbors=20,
+            num_neighbors=NBRS,
             batch=batch,
             is_negative=True,
         )
@@ -874,6 +835,8 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
+NBRS = args.n_nbrs[0]
+
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
 eval_metric = dataset.eval_metric
 neg_sampler = dataset.negative_sampler
@@ -931,12 +894,23 @@ data = LinkPropPredDataset(
 edge_raw_features = data['edge_feat'].astype(np.float64)
 print(node_raw_features.shape, edge_raw_features.shape)
 
-# train_neighbor_sampler = get_neighbor_sampler(
-#    data=train_data,
-#    sample_neighbor_strategy=args.sample_neighbor_strategy,
-#    time_scaling_factor=args.time_scaling_factor,
-#    seed=0,
-# )
+# train_neighbor_sampler = get_neighbor_sampler(data=train_data)
+
+
+def get_neighbor_sampler(data: 'Data'):
+    max_node_id = max(data.src_node_ids.max(), data.dst_node_ids.max())
+    # the adjacency vector stores edges for each node (source or destination), undirected
+    # adj_list, list of list, where each element is a list of triple tuple (node_id, edge_id, timestamp)
+    # the list at the first position in adj_list is empty
+    adj_list = [[] for _ in range(max_node_id + 1)]
+    for src_node_id, dst_node_id, edge_id, node_interact_time in zip(
+        data.src_node_ids, data.dst_node_ids, data.edge_ids, data.node_interact_times
+    ):
+        adj_list[src_node_id].append((dst_node_id, edge_id, node_interact_time))
+        adj_list[dst_node_id].append((src_node_id, edge_id, node_interact_time))
+
+    return NeighborSampler(adj_list=adj_list)
+
 
 encoder = TGAT(
     node_raw_features=node_raw_features,
