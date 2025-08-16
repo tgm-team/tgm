@@ -219,11 +219,17 @@ class TGBNegativeEdgeSamplerHook:
         )
         queries = []
         tensor_batch_list = []
-        for neg_batch in neg_batch_list:
-            queries.append(neg_batch)
-            tensor_batch_list.append(
-                torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
-            )
+        #! only take the first edge from each batch for TGB evaluation
+        neg_batch = neg_batch_list[0]
+        queries.append(neg_batch)
+        tensor_batch_list.append(
+            torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+        )
+        # for neg_batch in neg_batch_list:
+        #     queries.append(neg_batch)
+        #     tensor_batch_list.append(
+        #         torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+        #     )
         unique_neg = np.unique(np.concatenate(queries))
         batch.neg = torch.tensor(unique_neg, dtype=torch.long, device=dg.device)  # type: ignore
         batch.neg_batch_list = tensor_batch_list  # type: ignore
@@ -390,6 +396,11 @@ class RecencyNeighborHookCircular:
                     #    generator=gen,
                     # )
                     times.append(fake_times)
+                    #! Andy: for testing only, hard code to see if the neg is from random neg (used for training) or TGB neg (used for inference)
+                    #! Andy: TGB neg we only test on first edge from each epoch for debugging for now
+                    TGB_time = batch.time.clone()
+                    TGB_time = batch.time[0]
+                    batch.neg_times = TGB_time
                     # times.append(fake_times)
 
                 seed_nodes = torch.cat(seed)

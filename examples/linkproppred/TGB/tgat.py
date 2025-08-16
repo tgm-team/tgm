@@ -900,15 +900,32 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+    batch_id = 0
     for batch in tqdm(loader):
         z = encoder(batch)
 
+        #! only evaluate for first edge in a batch for debugging purpose
         for idx, neg_batch in enumerate(batch.neg_batch_list):
+            if (idx > 0):
+                break
+
             dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
-            z_src = z[batch.global_to_local(src_ids)]
-            z_dst = z[batch.global_to_local(dst_ids)]
+            batch_src_node_ids = src_ids.cpu().numpy()
+            batch_dst_node_ids = dst_ids.cpu().numpy()
+            batch_node_interact_times = batch.time.cpu().numpy()
+
+            z_src, z_dst = encoder(
+                src_node_ids=batch_src_node_ids,
+                dst_node_ids=batch_dst_node_ids,
+                node_interact_times=batch_node_interact_times,
+                num_neighbors=NBRS,
+                batch=batch,
+                is_negative=False,
+                idx=idx,
+            )
+
             y_pred = decoder(z_src, z_dst)
 
             input_dict = {
@@ -916,7 +933,11 @@ def eval(
                 'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
-            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+            perf = evaluator.eval(input_dict)[eval_metric]
+            perf_list.append(perf)
+            print (f"batch ID: {batch_id}, first edge MRR, {perf}")
+
+        batch_id += 1
 
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
