@@ -39,6 +39,7 @@ def test_neighbor_sampler_hook_link_pred(data):
 
     # Link Prediction will add negative edges to seed nodes for sampling
     batch.neg = torch.LongTensor([0] * len(batch.dst))
+    batch.neg_time = torch.LongTensor([0] * len(batch.dst))
     batch = hook(dg, batch)
     assert isinstance(batch, DGBatch)
     assert hasattr(batch, 'nids')
