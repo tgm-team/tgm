@@ -853,9 +853,9 @@ def train(
             # print(f'BATCH {idx} Z_NEG', file=f)
             # print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-            lll = (predicts > 0.5).int().view(-1).cpu().detach().numpy()
-            print(f'BATCH {idx} PREDICTIONS', file=f)
-            print(' '.join(map(str, lll)), file=f)
+            # lll = (predicts > 0.5).int().view(-1).cpu().detach().numpy()
+            # print(f'BATCH {idx} PREDICTIONS', file=f)
+            # print(' '.join(map(str, lll)), file=f)
 
         loss = loss_func(input=predicts, target=labels)
         loss.backward()
