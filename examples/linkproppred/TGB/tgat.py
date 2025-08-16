@@ -914,7 +914,10 @@ def eval(
 
             batch_src_node_ids = src_ids.cpu().numpy()
             batch_dst_node_ids = dst_ids.cpu().numpy()
-            batch_node_interact_times = batch.time.cpu().numpy()
+
+            batch_node_interact_times = np.concatenate((batch.time[0].cpu().numpy(), batch.neg_times))
+            assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
+
 
             z_src, z_dst = encoder(
                 src_node_ids=batch_src_node_ids,
@@ -1055,7 +1058,7 @@ for epoch in range(1, args.epochs + 1):
         batch_size=args.bsize,
     )
     start_time = time.perf_counter()
-    loss = train(train_loader, encoder, decoder, opt)
+    # loss = train(train_loader, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
