@@ -775,8 +775,20 @@ def train(
         # loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         # loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         with open('tgm_out.txt', mode='a') as f:
-            lll = (predicts > 0.5).int().cpu().detach().numpy()
-            print(f'BATCH {idx}', file=f)
+            lll = z_src.view(-1).cpu().detach().numpy()
+            print(f'BATCH {idx} Z_SRC', file=f)
+            print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+            lll = z_dst.view(-1).cpu().detach().numpy()
+            print(f'BATCH {idx} Z_DST', file=f)
+            print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+            lll = z_neg_dst.view(-1).cpu().detach().numpy()
+            print(f'BATCH {idx} Z_NEG', file=f)
+            print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+            lll = (predicts > 0.5).int().view(-1).cpu().detach().numpy()
+            print(f'BATCH {idx} PREDICTIONS', file=f)
             print(' '.join(map(str, lll)), file=f)
 
         loss = loss_func(input=predicts, target=labels)
@@ -801,6 +813,9 @@ def train(
             }
         )
         # input()
+
+        if idx > 100:
+            break
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
     for metric_name in metrics[0].keys():
