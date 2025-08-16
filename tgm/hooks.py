@@ -165,7 +165,7 @@ class NegativeEdgeSamplerHook:
         batch.neg = torch.randint(  # type: ignore
             self.low, self.high, size, dtype=torch.long, device=dg.device
         )
-        batch.neg_time = batch.time
+        batch.neg_time = batch.time.clone()  # type: ignore
         return batch
 
 
@@ -217,13 +217,13 @@ class TGBNegativeEdgeSamplerHook:
         # Using random times on the whole graph will likely produce information
         # leakage, making the prediction easier than it should be.
 
-        # Use generator to locall constrain rng for reproducability
+        # Use generator to local constrain rng for reproducibility
         gen = torch.Generator(device=dg.device)
         gen.manual_seed(0)
-        batch.neg_time = torch.randint(
+        batch.neg_time = torch.randint(  # type: ignore
             int(batch.time.min().item()),
             int(batch.time.max().item()) + 1,
-            (batch.neg.size(0),),
+            (batch.neg.size(0),),  # type: ignore
             device=dg.device,
             generator=gen,
         )
@@ -268,7 +268,7 @@ class NeighborSamplerHook:
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
-                    times.append(batch.neg_time)
+                    times.append(batch.neg_time)  # type: ignore
 
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
@@ -354,7 +354,7 @@ class RecencyNeighborHook:
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
-                    times.append(batch.neg_time)
+                    times.append(batch.neg_time)  # type: ignore
 
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
