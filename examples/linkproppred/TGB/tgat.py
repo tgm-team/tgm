@@ -915,7 +915,7 @@ def eval(
             batch_src_node_ids = src_ids.cpu().numpy()
             batch_dst_node_ids = dst_ids.cpu().numpy()
 
-            batch_node_interact_times = np.concatenate((batch.time[0].cpu().numpy(), batch.neg_times))
+            batch_node_interact_times = torch.tensor([batch.time[0]]).repeat(batch_dst_node_ids.shape[0])
             assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
 
 

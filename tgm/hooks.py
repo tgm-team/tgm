@@ -208,14 +208,13 @@ class TGBNegativeEdgeSamplerHook:
             raise ValueError(
                 f'please run load_{split_mode}_ns() before using this hook'
             )
-
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # this might complain if the edge is not found in the negative sampler, which could happen if the user is not using the correct version of dataset
         neg_batch_list = self.neg_sampler.query_batch(  # type: ignore
-            batch.src, batch.dst, batch.time, split_mode=self.split_mode
+            np.array([batch.src[0]]), np.array([batch.dst[0]]), np.array([batch.time[0]]), split_mode=self.split_mode
         )
         queries = []
         tensor_batch_list = []
