@@ -608,7 +608,6 @@ class TGAT(nn.Module):
             # print('node interact times:', node_interact_times.astype(int))
             # print('neighbor times: ', neighbor_times.astype(int))
             # print('neighbor node_ids: ', neighbor_node_ids.astype(int))
-            # input()
             neighbor_delta_times = node_interact_times[:, np.newaxis] - neighbor_times
 
             # print('DELTA TIMES: ', neighbor_delta_times.astype(int))
@@ -660,7 +659,7 @@ class TGAT(nn.Module):
                 neighbor_node_edge_features=neighbor_edge_features,
                 neighbor_masks=neighbor_node_ids,
             )
-            # print('attention out: ', output)
+            # print('attention out: ', output[0])
             # input()
 
             # Tensor, output shape (batch_size, output_dim)
@@ -742,8 +741,8 @@ def train(
             is_negative=False,
         )
 
-        # print('z_src: ', z_src[0][:5])
-        # print('z_dst: ', z_dst[0][:5])
+        # print('z_src: ', z_src[0][0].item())
+        # print('z_dst: ', z_dst[0][0].item())
 
         # get temporal embedding of negative source and negative destination nodes
         # two Tensors, with shape (batch_size, output_dim)
@@ -756,19 +755,16 @@ def train(
             is_negative=True,
         )
         # z = encoder(batch)
-        # print('z_neg_src: ', z_neg_src[0][:5])
-        # print('z_neg_dst: ', z_neg_dst[0][:5])
+        # print('z_neg_src: ', z_neg_src[0][0].item())
+        # print('z_neg_dst: ', z_neg_dst[0][0].item())
         # input()
 
         # z_src = z[batch.global_to_local(batch.src)]
         # z_dst = z[batch.global_to_local(batch.dst)]
         # z_neg = z[batch.global_to_local(batch.neg)]
 
-        pos_out = decoder(z_src, z_dst)
-        neg_out = decoder(z_neg_src, z_neg_dst)
-
-        pos_prob = pos_out.sigmoid()
-        neg_prob = neg_out.sigmoid()
+        pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
+        neg_prob = decoder(z_neg_src, z_neg_dst).squeeze(dim=-1).sigmoid()
 
         loss_func = nn.BCELoss()
         predicts = torch.cat([pos_prob, neg_prob], dim=0)
@@ -778,6 +774,10 @@ def train(
 
         # loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         # loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
+        with open('tgm_out.txt', mode='a') as f:
+            lll = (predicts > 0.5).int().cpu().detach().numpy()
+            print(f'BATCH {idx}', file=f)
+            print(' '.join(map(str, lll)), file=f)
 
         loss = loss_func(input=predicts, target=labels)
         loss.backward()
@@ -800,6 +800,7 @@ def train(
                 ),
             }
         )
+        # input()
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
     for metric_name in metrics[0].keys():
