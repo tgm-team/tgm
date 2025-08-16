@@ -466,6 +466,7 @@ class TGAT(nn.Module):
         num_neighbors: int = 20,
         batch=None,
         is_negative=False,
+        idx=-1,
     ):
         # Tensor, shape (batch_size, output_dim)
         src_node_embeddings = self.compute_node_temporal_embeddings(
@@ -476,6 +477,7 @@ class TGAT(nn.Module):
             batch=batch,
             is_negative=is_negative,
             is_src=True,
+            idx=idx,
         )
         # Tensor, shape (batch_size, output_dim)
         dst_node_embeddings = self.compute_node_temporal_embeddings(
@@ -486,6 +488,7 @@ class TGAT(nn.Module):
             batch=batch,
             is_negative=is_negative,
             is_src=False,
+            idx=idx,
         )
         return src_node_embeddings, dst_node_embeddings
 
@@ -498,6 +501,7 @@ class TGAT(nn.Module):
         batch=None,
         is_negative=False,
         is_src=False,
+        idx=-1,
     ):
         # print(
         #    f'is_src: {is_src}, is_negative: {is_negative}, ids: {node_ids}, times: {node_interact_times}'
@@ -532,6 +536,7 @@ class TGAT(nn.Module):
                 batch=batch,
                 is_negative=is_negative,
                 is_src=is_src,
+                idx=idx,
             )
             # print('node conv feats: ', node_conv_features.shape)
 
@@ -592,6 +597,7 @@ class TGAT(nn.Module):
                 batch=batch,
                 is_negative=is_negative,
                 is_src=is_src,
+                idx=idx,
             )
 
             # shape (batch_size, num_neighbors, output_dim or node_feat_dim)
@@ -650,7 +656,51 @@ class TGAT(nn.Module):
             # print('nbr edge features: ', neighbor_edge_features)
             # input()
             # print('nbr masks: ', neighbor_node_ids)
-            # input()
+            # input(
+
+            with open('tgm_out.txt', mode='a') as f:
+                lll = node_conv_features.view(-1).cpu().detach().numpy()
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_FEATURES',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                lll = node_time_features.view(-1).cpu().detach().numpy()
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_TIME_FEATURES',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                lll = neighbor_node_conv_features.view(-1).cpu().detach().numpy()
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_FEATURES',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                lll = neighbor_time_features.view(-1).cpu().detach().numpy()
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_TIME_FEATURES',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                lll = neighbor_edge_features.view(-1).cpu().detach().numpy()
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_EDGE_FEATURES',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                lll = neighbor_node_ids.reshape(-1)
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_IDS',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
             output, _ = self.temporal_conv_layers[current_layer_num - 1](
                 node_features=node_conv_features,
                 node_time_features=node_time_features,
@@ -814,7 +864,7 @@ def train(
         )
         # input()
 
-        if idx > 100:
+        if idx > 5:
             break
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
