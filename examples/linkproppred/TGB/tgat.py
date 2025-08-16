@@ -1058,7 +1058,7 @@ for epoch in range(1, args.epochs + 1):
         batch_size=args.bsize,
     )
     start_time = time.perf_counter()
-    # loss = train(train_loader, encoder, decoder, opt)
+    loss = train(train_loader, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
