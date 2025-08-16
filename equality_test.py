@@ -29,11 +29,12 @@ def load_batches(filename):
     return batches
 
 
-def compare_batches(file_a, file_b, atol=1e-6, rtol=1e-6):
+def compare_batches(file_a, file_b, atol=1e-7, rtol=1e-6):
     a = load_batches(file_a)
     b = load_batches(file_b)
 
     for batch_idx in sorted(a.keys()):
+        bad_batch = False
         for desc in a[batch_idx].keys():
             if desc not in b[batch_idx]:
                 print(f"⚠️ Missing tensor '{desc}' in file B at batch {batch_idx}")
@@ -52,7 +53,9 @@ def compare_batches(file_a, file_b, atol=1e-6, rtol=1e-6):
                     f'   A={a[batch_idx][desc][idx].item()}, '
                     f'B={b[batch_idx][desc][idx].item()}'
                 )
-                return
+                bad_batch = True
+        if bad_batch:
+            return
     print('✅ All batches/tensors match within tolerance')
 
 

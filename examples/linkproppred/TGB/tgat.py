@@ -659,37 +659,23 @@ class TGAT(nn.Module):
             # input(
 
             with open('tgm_out.txt', mode='a') as f:
-                lll = node_conv_features.view(-1).cpu().detach().numpy()
+                lll = node_ids.reshape(-1)
                 print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_FEATURES',
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_IDS',
                     file=f,
                 )
                 print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-                lll = node_time_features.view(-1).cpu().detach().numpy()
+                lll = node_interact_times.reshape(-1)
                 print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_TIME_FEATURES',
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_TIMES',
                     file=f,
                 )
                 print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-                lll = neighbor_node_conv_features.view(-1).cpu().detach().numpy()
+                lll = neighbor_delta_times.reshape(-1)
                 print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_FEATURES',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                lll = neighbor_time_features.view(-1).cpu().detach().numpy()
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_TIME_FEATURES',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                lll = neighbor_edge_features.view(-1).cpu().detach().numpy()
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_EDGE_FEATURES',
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_DELTA_TIMES',
                     file=f,
                 )
                 print(' '.join(f'{x:.8f}' for x in lll), file=f)
@@ -700,6 +686,34 @@ class TGAT(nn.Module):
                     file=f,
                 )
                 print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                # lll = node_conv_features.view(-1).cpu().detach().numpy()
+                # print(
+                #    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_FEATURES',
+                #    file=f,
+                # )
+                # print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                # lll = node_time_features.view(-1).cpu().detach().numpy()
+                # print(
+                #    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_TIME_FEATURES',
+                #    file=f,
+                # )
+                # print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                # lll = neighbor_node_conv_features.view(-1).cpu().detach().numpy()
+                # print(
+                #    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_FEATURES',
+                #    file=f,
+                # )
+                # print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                # lll = neighbor_edge_features.view(-1).cpu().detach().numpy()
+                # print(
+                #    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_EDGE_FEATURES',
+                #    file=f,
+                # )
+                # print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
             output, _ = self.temporal_conv_layers[current_layer_num - 1](
                 node_features=node_conv_features,
@@ -789,6 +803,7 @@ def train(
             num_neighbors=NBRS,
             batch=batch,
             is_negative=False,
+            idx=idx,
         )
 
         # print('z_src: ', z_src[0][0].item())
@@ -803,6 +818,7 @@ def train(
             num_neighbors=NBRS,
             batch=batch,
             is_negative=True,
+            idx=idx,
         )
         # z = encoder(batch)
         # print('z_neg_src: ', z_neg_src[0][0].item())
@@ -826,16 +842,16 @@ def train(
         # loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         with open('tgm_out.txt', mode='a') as f:
             lll = z_src.view(-1).cpu().detach().numpy()
-            print(f'BATCH {idx} Z_SRC', file=f)
-            print(' '.join(f'{x:.8f}' for x in lll), file=f)
+            # print(f'BATCH {idx} Z_SRC', file=f)
+            # print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-            lll = z_dst.view(-1).cpu().detach().numpy()
-            print(f'BATCH {idx} Z_DST', file=f)
-            print(' '.join(f'{x:.8f}' for x in lll), file=f)
+            # lll = z_dst.view(-1).cpu().detach().numpy()
+            # print(f'BATCH {idx} Z_DST', file=f)
+            # print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-            lll = z_neg_dst.view(-1).cpu().detach().numpy()
-            print(f'BATCH {idx} Z_NEG', file=f)
-            print(' '.join(f'{x:.8f}' for x in lll), file=f)
+            # lll = z_neg_dst.view(-1).cpu().detach().numpy()
+            # print(f'BATCH {idx} Z_NEG', file=f)
+            # print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
             lll = (predicts > 0.5).int().view(-1).cpu().detach().numpy()
             print(f'BATCH {idx} PREDICTIONS', file=f)
@@ -863,9 +879,6 @@ def train(
             }
         )
         # input()
-
-        if idx > 5:
-            break
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
     for metric_name in metrics[0].keys():
