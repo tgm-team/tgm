@@ -1,13 +1,10 @@
 from dataclasses import asdict
-from unittest.mock import patch
 
 import pytest
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm._storage import DGStorage
 from tgm.data import DGData
-from tgm.timedelta import TimeDeltaDG
 
 
 @pytest.fixture
@@ -110,52 +107,6 @@ def test_init_bad_args(data):
 def test_str(data):
     dg = DGraph(data)
     assert isinstance(dg.__str__(), str)
-
-
-def test_discretize_bad_ordered_graph(data):
-    dg = DGraph(data)
-    with pytest.raises(ValueError):
-        dg.discretize(time_granularity='s')
-
-
-def test_discretize_bad_too_granular(data):
-    dg = DGraph(data, time_delta='m')
-    with pytest.raises(ValueError):
-        dg.discretize(time_granularity='s')
-
-
-def test_discretize_bad_reduce_op(data):
-    dg = DGraph(data, time_delta='s')
-    with pytest.raises(ValueError):
-        dg.discretize(time_granularity='m', reduce_op='foo')
-
-
-@pytest.mark.parametrize('reduce_op', ['first'])
-def test_discretize_api(data, reduce_op):
-    dg = DGraph(data, time_delta='s')
-    dg_coarse = dg.discretize(time_granularity='m', reduce_op=reduce_op)
-    assert isinstance(dg_coarse, DGraph)
-    assert id(dg._storage) != id(dg_coarse._storage)
-    assert dg_coarse.time_delta.unit == 'm'
-    assert dg_coarse.device == dg.device
-    assert dg_coarse.num_nodes == dg.num_nodes
-    assert dg_coarse.nodes == dg.nodes
-    torch.testing.assert_close(dg_coarse.static_node_feats, dg.static_node_feats)
-    assert id(dg_coarse.static_node_feats) != id(dg.static_node_feats)
-
-
-@pytest.mark.parametrize('reduce_op', ['first'])
-def test_discretize_reduce_first_call(data, reduce_op):
-    dg = DGraph(data, time_delta='s')
-    with patch.object(DGStorage, 'discretize') as mock:
-        mock.return_value = dg._storage
-
-        _ = dg.discretize(time_granularity='m', reduce_op=reduce_op)
-        mock.assert_called_once_with(
-            old_time_granularity=TimeDeltaDG('s'),
-            new_time_granularity=TimeDeltaDG('m'),
-            reduce_op='first',
-        )
 
 
 def test_materialize(data):

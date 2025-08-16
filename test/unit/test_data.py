@@ -800,3 +800,142 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
+
+
+def test_discretize_reduce_op_first():
+    edge_index = torch.LongTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_feats = torch.rand(5, 5)
+    static_node_feats = torch.rand(6, 11)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        static_node_feats=static_node_feats,
+        time_delta='m',
+    )
+    new_granularity = TimeDeltaDG('h')
+    coarse_data = data.discretize(new_granularity, reduce_op='first')
+
+    assert coarse_data.time_delta == new_granularity
+    assert data.time_delta == TimeDeltaDG('m')
+    assert id(coarse_data) != id(data)
+
+    exp_timestamps = torch.LongTensor([0, 0, 1, 1])
+    exp_edge_event_idx = torch.LongTensor([0, 1, 2, 3])
+    exp_edge_index = torch.LongTensor([[1, 2], [2, 3], [1, 2], [4, 5]])
+    exp_edge_feats = torch.stack(
+        [edge_feats[0], edge_feats[2], edge_feats[3], edge_feats[4]]
+    )
+    exp_static_node_feats = static_node_feats
+
+    torch.testing.assert_close(coarse_data.timestamps, exp_timestamps)
+    torch.testing.assert_close(coarse_data.edge_event_idx, exp_edge_event_idx)
+    torch.testing.assert_close(coarse_data.edge_index, exp_edge_index)
+    torch.testing.assert_close(coarse_data.edge_feats, exp_edge_feats)
+    torch.testing.assert_close(coarse_data.static_node_feats, exp_static_node_feats)
+
+    assert coarse_data.node_event_idx is None
+    assert coarse_data.node_ids is None
+    assert coarse_data.dynamic_node_feats is None
+
+
+def test_discretize_with_node_events_reduce_op_first():
+    edge_index = torch.LongTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_feats = torch.rand(5, 5)
+
+    node_ids = torch.LongTensor([6, 6, 7, 6, 6, 7])
+    node_timestamps = torch.LongTensor([10, 20, 30, 70, 80, 90])
+    dynamic_node_feats = torch.rand(6, 5)
+    static_node_feats = torch.rand(8, 11)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        node_timestamps,
+        node_ids,
+        dynamic_node_feats,
+        static_node_feats,
+        time_delta='m',
+    )
+
+    new_granularity = TimeDeltaDG('h')
+    coarse_data = data.discretize(new_granularity, reduce_op='first')
+
+    assert coarse_data.time_delta == new_granularity
+    assert data.time_delta == TimeDeltaDG('m')
+    assert id(coarse_data) != id(data)
+
+    exp_timestamps = torch.LongTensor([0, 0, 0, 0, 1, 1, 1, 1])
+    exp_edge_event_idx = torch.LongTensor([0, 1, 4, 5])
+    exp_edge_index = torch.LongTensor([[1, 2], [2, 3], [1, 2], [4, 5]])
+    exp_edge_feats = torch.stack(
+        [edge_feats[0], edge_feats[2], edge_feats[3], edge_feats[4]]
+    )
+    exp_static_node_feats = static_node_feats
+
+    exp_node_event_idx = torch.LongTensor([2, 3, 6, 7])
+    exp_node_ids = torch.LongTensor([6, 7, 6, 7])
+
+    exp_dynamic_node_feats = torch.stack(
+        [
+            dynamic_node_feats[0],
+            dynamic_node_feats[2],
+            dynamic_node_feats[3],
+            dynamic_node_feats[5],
+        ]
+    )
+
+    torch.testing.assert_close(coarse_data.timestamps, exp_timestamps)
+    torch.testing.assert_close(coarse_data.edge_event_idx, exp_edge_event_idx)
+    torch.testing.assert_close(coarse_data.edge_index, exp_edge_index)
+    torch.testing.assert_close(coarse_data.edge_feats, exp_edge_feats)
+    torch.testing.assert_close(coarse_data.static_node_feats, exp_static_node_feats)
+
+    torch.testing.assert_close(coarse_data.node_event_idx, exp_node_event_idx)
+    torch.testing.assert_close(coarse_data.node_ids, exp_node_ids)
+    torch.testing.assert_close(coarse_data.dynamic_node_feats, exp_dynamic_node_feats)
+
+
+def test_discretize_no_op():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    coarse_data = data.discretize('r')
+    assert id(data) != id(coarse_data)  # No Shared memory
+
+    data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
+    coarse_data = data.discretize('s')
+    assert id(data) != id(coarse_data)  # No Shared memory
+
+
+def test_discretize_bad_args():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(edge_timestamps, edge_index, time_delta='r')
+        data.discretize('s')  # Cannot reduce from ordered
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(edge_timestamps, edge_index, time_delta='h')
+        data.discretize('s')  # Cannot reduce into more granular time
+
+
+def test_clone():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+
+    dg1 = DGData.from_raw(edge_timestamps, edge_index)
+    dg2 = dg1.clone()
+
+    assert dg1 is not dg2
+
+    for name, val in dg1.__dict__.items():
+        if isinstance(val, torch.Tensor):
+            val2 = getattr(dg2, name)
+            assert val is not val2
+            assert torch.equal(val, val2)
+
+    assert dg1.time_delta == dg2.time_delta
+    assert dg1.time_delta is not dg2.time_delta

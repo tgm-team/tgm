@@ -404,7 +404,7 @@ test_loader = DGDataLoader(
 )
 
 # Get global number of nodes for TGN Memory
-full_data, _ = DGData.from_tgb(args.dataset)
+full_data = DGData.from_tgb(args.dataset)
 num_nodes = DGraph(full_data).num_nodes
 
 model = TGN(
