@@ -56,6 +56,11 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         ValueError: If the batch_unit and dg time unit are not both ordered or both not ordered.
         ValueError: If the batch_unit and dg time unit are both ordered but the graph is coarser than the batch.
         ValueError: If an empty batch was encountered an on_empty='raise'.
+
+    Note:
+        The length returned by `len(DGDataLoader)` may be inaccurate when using a non-ordered
+        `batch_unit` with `on_empty='skip'`. The reported length counts all batches, including
+        those that would be skipped due to being empty.
     """
 
     def __init__(

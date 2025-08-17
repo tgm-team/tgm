@@ -172,3 +172,51 @@ def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
     with pytest.raises(ValueError):
         # Seconds are too granular of an iteration unit for DG with 'every 30 seconds' time granularity
         _ = DGDataLoader(dg, batch_unit='s')
+
+
+def test_iteration_with_empty_batch():
+    edge_index = torch.LongTensor([[2, 3], [2, 3]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta='s')
+
+    loader = DGDataLoader(dg, batch_unit='s')
+    assert len(loader) == 5  # Includes skipped batches
+
+    num_yielded = 0
+    for _ in loader:
+        num_yielded += 1
+        continue
+    assert num_yielded == 2
+
+
+def test_iteration_with_empty_batch_process_empty():
+    edge_index = torch.LongTensor([[2, 3], [2, 3]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta='s')
+
+    loader = DGDataLoader(dg, batch_unit='s', on_empty=None)
+    assert len(loader) == 5  # Includes skipped batches
+
+    num_yielded = 0
+    for _ in loader:
+        num_yielded += 1
+        continue
+    assert num_yielded == 5
+
+
+def test_iteration_with_empty_batch_raise():
+    edge_index = torch.LongTensor([[2, 3], [2, 3]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data, time_delta='s')
+
+    loader = DGDataLoader(dg, batch_unit='s', on_empty='raise')
+    assert len(loader) == 5  # Includes skipped batches
+
+    it = iter(loader)
+    next(it)  # First batch should yield correctly
+
+    with pytest.raises(ValueError):
+        next(it)
