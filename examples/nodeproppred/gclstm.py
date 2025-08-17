@@ -108,10 +108,6 @@ def train(
     h_0, c_0 = None, None
     criterion = torch.nn.CrossEntropyLoss()
     for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
-
         opt.zero_grad()
         label = batch.dynamic_node_feats
         if label is None:
@@ -137,9 +133,6 @@ def eval(
     eval_metric = 'ndcg'
     total_score = 0
     for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
         label = batch.dynamic_node_feats
         if label is None:
             continue
