@@ -63,7 +63,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         dg: DGraph,
         batch_size: int = 1,
         batch_unit: str = 'r',
-        on_empty: Literal['skip', 'raise', None] = None,
+        on_empty: Literal['skip', 'raise', None] = 'skip',
         hook: HookManager | DGHook | List[DGHook] | None = None,
         **kwargs: Any,
     ) -> None:
