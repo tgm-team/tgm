@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import is_dataclass
 from collections import defaultdict, deque
+from dataclasses import is_dataclass
 from typing import Any, List, Protocol, Set, runtime_checkable
 
 import numpy as np
@@ -123,6 +123,7 @@ class DeduplicationHook:
         if hasattr(batch, 'neg'):
             batch.neg = batch.neg.to(batch.src.device)
             nids.append(batch.neg)
+        if hasattr(batch, 'neg_src'):
             nids.append(batch.neg_src)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
@@ -214,15 +215,20 @@ class TGBNegativeEdgeSamplerHook:
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # this might complain if the edge is not found in the negative sampler, which could happen if the user is not using the correct version of dataset
         neg_batch_list = self.neg_sampler.query_batch(  # type: ignore
-            np.array([batch.src[0]]), np.array([batch.dst[0]]), np.array([batch.time[0]]), split_mode=self.split_mode
+            np.array([batch.src[0]]) - 1,
+            np.array([batch.dst[0]]) - 1,
+            np.array([batch.time[0]]),
+            split_mode=self.split_mode,
         )
         queries = []
         tensor_batch_list = []
         #! only take the first edge from each batch for TGB evaluation
         neg_batch = neg_batch_list[0]
         queries.append(neg_batch)
+
+        #! manually add and substract 1 due to DyGLib problems
         tensor_batch_list.append(
-            torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+            torch.tensor(neg_batch, dtype=torch.long, device=dg.device) + 1
         )
         # for neg_batch in neg_batch_list:
         #     queries.append(neg_batch)

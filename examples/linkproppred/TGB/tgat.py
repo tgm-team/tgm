@@ -194,9 +194,9 @@ class MultiHeadAttention(nn.Module):
         else:
             self.pad_dim = 0
 
-        assert self.query_dim % num_heads == 0, (
-            'The sum of node_feat_dim and time_feat_dim should be divided by num_heads!'
-        )
+        assert (
+            self.query_dim % num_heads == 0
+        ), 'The sum of node_feat_dim and time_feat_dim should be divided by num_heads!'
 
         self.head_dim = self.query_dim // num_heads
 
@@ -581,8 +581,6 @@ class TGAT(nn.Module):
             # print('Nbr_times: ', neighbor_times.shape)
             # input()
 
-            neighbor_edge_ids = None
-
             # get neighbor features from previous layers
             # shape (batch_size * num_neighbors, output_dim or node_feat_dim)
             # print('calling recursive forward for nbrs')
@@ -841,7 +839,7 @@ def train(
         # loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         # loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         with open('tgm_out.txt', mode='a') as f:
-            lll = z_src.view(-1).cpu().detach().numpy()
+            z_src.view(-1).cpu().detach().numpy()
             # print(f'BATCH {idx} Z_SRC', file=f)
             # print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
@@ -902,11 +900,9 @@ def eval(
     perf_list = []
     batch_id = 0
     for batch in tqdm(loader):
-        z = encoder(batch)
-
         #! only evaluate for first edge in a batch for debugging purpose
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            if (idx > 0):
+            if idx > 0:
                 break
 
             dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
@@ -915,9 +911,10 @@ def eval(
             batch_src_node_ids = src_ids.cpu().numpy()
             batch_dst_node_ids = dst_ids.cpu().numpy()
 
-            batch_node_interact_times = torch.tensor([batch.time[0]]).repeat(batch_dst_node_ids.shape[0])
+            batch_node_interact_times = torch.tensor([batch.time[0]]).repeat(
+                batch_dst_node_ids.shape[0]
+            )
             assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
-
 
             z_src, z_dst = encoder(
                 src_node_ids=batch_src_node_ids,
@@ -938,7 +935,7 @@ def eval(
             }
             perf = evaluator.eval(input_dict)[eval_metric]
             perf_list.append(perf)
-            print (f"batch ID: {batch_id}, first edge MRR, {perf}")
+            print(f'batch ID: {batch_id}, first edge MRR, {perf}')
 
         batch_id += 1
 
