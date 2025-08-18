@@ -563,12 +563,12 @@ class TGAT(nn.Module):
             #    print(f'hop: {i}, nbr_feats: {batch.nbr_feats[i].shape}')
             # input()
 
-            if len(node_ids) == 2:
+            if len(node_ids) == batch.src.numel():
                 # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
                 nbr_nids = batch.nids[1]
                 nbr_times = batch.times[1]
                 nbr_feats = batch.nbr_feats[0]
-            elif len(node_ids) == 10:
+            elif len(node_ids) == batch.src.numel() * num_neighbors:
                 # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
                 nbr_nids = batch.nbr_nids[1].flatten()
                 nbr_times = batch.nbr_times[1].flatten()
@@ -903,8 +903,6 @@ def train(
             }
         )
         # input()
-        if idx > 5:
-            break
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
     for metric_name in metrics[0].keys():
