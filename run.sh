@@ -12,7 +12,7 @@ python examples/linkproppred/TGB/tgat.py \
     --lr 0.0001 \
     --dropout 0 \
     --n-heads 2 \
-    --n-nbrs 20 \
+    --n-nbrs 20 20 \
     --time-dim 100 \
     --embed-dim 172 \
     --sampling recency

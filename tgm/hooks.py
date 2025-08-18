@@ -209,6 +209,7 @@ class TGBNegativeEdgeSamplerHook:
             raise ValueError(
                 f'please run load_{split_mode}_ns() before using this hook'
             )
+
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
 
@@ -401,11 +402,6 @@ class RecencyNeighborHookCircular:
                     #    generator=gen,
                     # )
                     times.append(fake_times)
-                    #! Andy: for testing only, hard code to see if the neg is from random neg (used for training) or TGB neg (used for inference)
-                    #! Andy: TGB neg we only test on first edge from each epoch for debugging for now
-                    TGB_time = batch.time.clone()
-                    TGB_time = batch.time[0]
-                    batch.neg_times = TGB_time
                     # times.append(fake_times)
 
                 seed_nodes = torch.cat(seed)
@@ -522,13 +518,19 @@ class RecencyNeighborHook:
                     fake_times = batch.time
                     seed_times = torch.cat([seed_times, fake_times])
             else:
-                mask = batch.nbr_mask[hop - 1].bool()
-                seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()
-                seed_times = batch.nbr_times[hop - 1][mask].flatten()
+                batch.nbr_mask[hop - 1].bool()
+                # TODO:: figure out mask
+                # seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()
+                # seed_times = batch.nbr_times[hop - 1][mask].flatten()
+                seed_nodes = batch.nbr_nids[hop - 1].flatten()
+                seed_times = batch.nbr_times[hop - 1].flatten()
 
+            # print(f'\nHop: {hop}, Trying to get neighbor for seed nodes: ', seed_nodes)
             nbr_nids, nbr_times, nbr_feats, nbr_mask = self._get_recency_neighbors(
                 seed_nodes, seed_times, num_nbrs
             )
+            # print('Got: nbr ids: ', nbr_nids)
+            # print('Got: nbr mask: ', nbr_mask)
 
             batch.nids.append(seed_nodes)
             batch.times.append(seed_times)
