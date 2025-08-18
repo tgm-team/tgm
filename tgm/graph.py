@@ -22,11 +22,8 @@ class DGraph:
         time_delta: TimeDeltaDG | str | None = None,
         device: str | torch.device = 'cpu',
     ) -> None:
-        if isinstance(time_delta, str):
-            time_delta = TimeDeltaDG(time_delta)
-
         if isinstance(data, DGData):
-            time_delta = time_delta or TimeDeltaDG('r')  # Default to ordered
+            time_delta = data.time_delta
             data = DGStorage(data)
         elif isinstance(data, DGStorage):
             if time_delta is None:
@@ -35,6 +32,9 @@ class DGraph:
                 )
         else:
             raise ValueError(f'Unsupported dataset type: {type(data)}')
+
+        if isinstance(time_delta, str):
+            time_delta = TimeDeltaDG(time_delta)
 
         self._storage = data
         self._time_delta = time_delta

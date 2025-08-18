@@ -369,9 +369,9 @@ seed_everything(args.seed)
 data = DGData.from_tgb(args.dataset)
 train_data, val_data, test_data = data.split()
 
-train_dg = DGraph(train_data, train_data.time_delta, device=args.device)
-val_dg = DGraph(val_data, val_data.time_delta, device=args.device)
-test_dg = DGraph(test_data, test_data.time_delta, device=args.device)
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
 
 # TODO: Read from graph
 NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
