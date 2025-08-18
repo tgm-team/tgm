@@ -399,8 +399,11 @@ class TGAT(nn.Module):
         num_heads: int = 2,
         dropout: float = 0.1,
         device: str = 'cpu',
+        num_nbrs=None,
     ):
         super().__init__()
+
+        self.num_nbrs = num_nbrs
 
         self.node_raw_features = torch.from_numpy(
             node_raw_features.astype(np.float32)
@@ -503,6 +506,7 @@ class TGAT(nn.Module):
         is_src=False,
         idx=-1,
     ):
+        # print(f'\n[{current_layer_num}]', ' ids: ', node_ids)
         # print(
         #    f'is_src: {is_src}, is_negative: {is_negative}, ids: {node_ids}, times: {node_interact_times}'
         # )
@@ -532,13 +536,13 @@ class TGAT(nn.Module):
                 node_ids=node_ids,
                 node_interact_times=node_interact_times,
                 current_layer_num=current_layer_num - 1,
-                num_neighbors=num_neighbors,
+                num_neighbors=self.num_nbrs[-current_layer_num],
                 batch=batch,
                 is_negative=is_negative,
                 is_src=is_src,
                 idx=idx,
             )
-            # print('node conv feats: ', node_conv_features.shape)
+            # print(f'[{current_layer_num}] node conv feats: ', node_conv_features.shape)
 
             # get temporal neighbors, including neighbor ids, edge ids and time information
             # neighbor_node_ids, ndarray, shape (batch_size, num_neighbors)
@@ -553,9 +557,25 @@ class TGAT(nn.Module):
             #        num_neighbors=num_neighbors,
             #    )
             # )
-            nbr_nids = batch.nbr_nids[0]
-            nbr_times = batch.nbr_times[0]
-            nbr_feats = batch.nbr_feats[0]
+            # print('Current layer: ', current_layer_num)
+            # for i in range(len(batch.nbr_nids)):
+            #    print(f'hop: {i}, nbr_shape: {batch.nbr_nids[i].shape}')
+            #    print(f'hop: {i}, nbr_feats: {batch.nbr_feats[i].shape}')
+            # input()
+
+            if len(node_ids) == 2:
+                # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
+                nbr_nids = batch.nids[1]
+                nbr_times = batch.times[1]
+                nbr_feats = batch.nbr_feats[0]
+            elif len(node_ids) == 10:
+                # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
+                nbr_nids = batch.nbr_nids[1].flatten()
+                nbr_times = batch.nbr_times[1].flatten()
+                nbr_feats = batch.nbr_feats[1]
+            else:
+                # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
+                assert False
 
             src_nbr_nids, dst_nbr_nids, neg_nbr_nids = torch.chunk(
                 nbr_nids, chunks=3, dim=0
@@ -570,25 +590,27 @@ class TGAT(nn.Module):
             if is_src:
                 neighbor_node_ids = src_nbr_nids.cpu().numpy()
                 neighbor_times = src_nbr_times.cpu().numpy()
+                neighbor_edge_features = src_nbr_feats
             elif is_negative:
                 neighbor_node_ids = neg_nbr_nids.cpu().numpy()
                 neighbor_times = neg_nbr_times.cpu().numpy()
+                neighbor_edge_features = neg_nbr_feats
             else:
                 neighbor_node_ids = dst_nbr_nids.cpu().numpy()
                 neighbor_times = dst_nbr_times.cpu().numpy()
+                neighbor_edge_features = dst_nbr_feats
 
-            # print('Nbr_nids: ', neighbor_node_ids.shape)
-            # print('Nbr_times: ', neighbor_times.shape)
+            neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
+            neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
+            # print(f'[{current_layer_num}] Nbr_nids: ', neighbor_node_ids.shape)
+            # print(f'[{current_layer_num}] Nbr_edge: ', neighbor_edge_features.shape)
             # input()
-
-            neighbor_edge_ids = None
 
             # get neighbor features from previous layers
             # shape (batch_size * num_neighbors, output_dim or node_feat_dim)
             # print('calling recursive forward for nbrs')
             # print(neighbor_node_ids.shape)
             # input()
-            # print('recurse on nbr')
             neighbor_node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=neighbor_node_ids.flatten(),
                 node_interact_times=neighbor_times.flatten(),
@@ -600,13 +622,20 @@ class TGAT(nn.Module):
                 idx=idx,
             )
 
+            # print(
+            #    f'[{current_layer_num}] got recurse feats: ',
+            #    neighbor_node_conv_features.shape,
+            # )
+            # input()
             # shape (batch_size, num_neighbors, output_dim or node_feat_dim)
             neighbor_node_conv_features = neighbor_node_conv_features.reshape(
-                node_ids.shape[0], num_neighbors, neighbor_node_conv_features.shape[-1]
+                node_ids.shape[0], num_neighbors, -1
             )
 
-            # print('nbr conv features: ', neighbor_node_conv_features)
-            # input()
+            # print(
+            #    f'[{current_layer_num}] after reshape: ',
+            #    neighbor_node_conv_features.shape,
+            # )
             # input()
 
             # compute time interval between current time and historical interaction time
@@ -616,7 +645,9 @@ class TGAT(nn.Module):
             # print('neighbor node_ids: ', neighbor_node_ids.astype(int))
             neighbor_delta_times = node_interact_times[:, np.newaxis] - neighbor_times
 
-            # print('DELTA TIMES: ', neighbor_delta_times.astype(int))
+            # print(
+            #    f'[{current_layer_num}] DELTA TIMES: ', neighbor_delta_times.astype(int)
+            # )
             # input()
 
             # shape (batch_size, num_neighbors, time_feat_dim)
@@ -631,16 +662,6 @@ class TGAT(nn.Module):
             # neighbor_edge_features = self.edge_raw_features[
             #    torch.from_numpy(neighbor_edge_ids)
             # ]
-
-            if is_src:
-                neighbor_edge_features = src_nbr_feats
-            elif is_negative:
-                neighbor_edge_features = neg_nbr_feats
-            else:
-                neighbor_edge_features = dst_nbr_feats
-
-            # print('nbr edge features: ', neighbor_edge_features)
-            # input()
 
             # print('neighb edge features: ', neighbor_edge_features.shape)
 
@@ -715,6 +736,11 @@ class TGAT(nn.Module):
                 # )
                 # print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
+                # print(
+                #    f'[{current_layer_num}] attention node_features ({node_conv_features.shape}), time features ({node_time_features.shape}), nbr node features ({neighbor_node_conv_features.shape}), nbr time features ({neighbor_time_features.shape}), nbr edge features ({neighbor_edge_features.shape}), nbr mask ({neighbor_node_ids.shape})'
+                # )
+                # input()
+
             output, _ = self.temporal_conv_layers[current_layer_num - 1](
                 node_features=node_conv_features,
                 node_time_features=node_time_features,
@@ -723,15 +749,13 @@ class TGAT(nn.Module):
                 neighbor_node_edge_features=neighbor_edge_features,
                 neighbor_masks=neighbor_node_ids,
             )
-            # print('attention out: ', output[0])
-            # input()
 
             # Tensor, output shape (batch_size, output_dim)
             # follow the TGAT paper, use merge layer to combine the attention results and node original feature
             output = self.merge_layers[current_layer_num - 1](
                 input_1=output, input_2=node_raw_features
             )
-            # print('final out shape: ', output)
+            # print(f'[{current_layer_num}] final out shape: ', output.shape)
             # input()
 
             return output
@@ -879,6 +903,8 @@ def train(
             }
         )
         # input()
+        if idx > 5:
+            break
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
     for metric_name in metrics[0].keys():
@@ -900,35 +926,15 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    batch_id = 0
     for batch in tqdm(loader):
         z = encoder(batch)
 
-        #! only evaluate for first edge in a batch for debugging purpose
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            if (idx > 0):
-                break
-
             dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
-            batch_src_node_ids = src_ids.cpu().numpy()
-            batch_dst_node_ids = dst_ids.cpu().numpy()
-
-            batch_node_interact_times = torch.tensor([batch.time[0]]).repeat(batch_dst_node_ids.shape[0])
-            assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
-
-
-            z_src, z_dst = encoder(
-                src_node_ids=batch_src_node_ids,
-                dst_node_ids=batch_dst_node_ids,
-                node_interact_times=batch_node_interact_times,
-                num_neighbors=NBRS,
-                batch=batch,
-                is_negative=False,
-                idx=idx,
-            )
-
+            z_src = z[batch.global_to_local(src_ids)]
+            z_dst = z[batch.global_to_local(dst_ids)]
             y_pred = decoder(z_src, z_dst)
 
             input_dict = {
@@ -936,11 +942,7 @@ def eval(
                 'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
-            perf = evaluator.eval(input_dict)[eval_metric]
-            perf_list.append(perf)
-            print (f"batch ID: {batch_id}, first edge MRR, {perf}")
-
-        batch_id += 1
+            perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
@@ -1037,6 +1039,7 @@ encoder = TGAT(
     num_heads=args.n_heads,
     dropout=float(args.dropout),
     device=args.device,
+    num_nbrs=args.n_nbrs,
 ).to(args.device)
 decoder = LinkPredictor(dim=args.embed_dim).to(args.device)
 opt = torch.optim.Adam(
