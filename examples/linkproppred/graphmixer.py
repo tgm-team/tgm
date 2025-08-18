@@ -240,13 +240,10 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_data = DGData.from_tgb(args.dataset, split='train')
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+
 train_dg = DGraph(train_data, train_data.time_delta, device=args.device)
-
-val_data = DGData.from_tgb(args.dataset, split='val')
 val_dg = DGraph(val_data, val_data.time_delta, device=args.device)
-
-test_data = DGData.from_tgb(args.dataset, split='test')
 test_dg = DGraph(test_data, test_data.time_delta, device=args.device)
 
 

@@ -46,10 +46,9 @@ def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> dic
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_data = DGData.from_tgb(args.dataset, split='train')
-train_dg = DGraph(train_data, train_data.time_delta)
+train_data, _, test_data = DGData.from_tgb(args.dataset).split()
 
-test_data = DGData.from_tgb(args.dataset, split='test')
+train_dg = DGraph(train_data, train_data.time_delta)
 test_dg = DGraph(test_data, test_data.time_delta)
 
 train_data = train_dg.materialize(materialize_features=False)

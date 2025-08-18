@@ -366,13 +366,11 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> dict:
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_data = DGData.from_tgb(args.dataset, split='train')
+data = DGData.from_tgb(args.dataset)
+train_data, val_data, test_data = data.split()
+
 train_dg = DGraph(train_data, train_data.time_delta, device=args.device)
-
-val_data = DGData.from_tgb(args.dataset, split='val')
 val_dg = DGraph(val_data, val_data.time_delta, device=args.device)
-
-test_data = DGData.from_tgb(args.dataset, split='test')
 test_dg = DGraph(test_data, test_data.time_delta, device=args.device)
 
 # TODO: Read from graph
@@ -404,8 +402,7 @@ test_loader = DGDataLoader(
 )
 
 # Get global number of nodes for TGN Memory
-full_data = DGData.from_tgb(args.dataset)
-num_nodes = DGraph(full_data).num_nodes
+num_nodes = DGraph(data).num_nodes
 
 model = TGN(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,

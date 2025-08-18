@@ -228,21 +228,21 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_data = DGData.from_tgb(args.dataset, split='train')
+
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+
 train_data_discretized = train_data.discretize(args.snapshot_time_gran)
 train_dg = DGraph(train_data, train_data.time_delta, device=args.device)
 train_snapshots = DGraph(
     train_data_discretized, train_data_discretized.time_delta, device=args.device
 )
 
-val_data = DGData.from_tgb(args.dataset, split='val')
 val_data_discretized = val_data.discretize(args.snapshot_time_gran)
 val_dg = DGraph(val_data, val_data.time_delta, device=args.device)
 val_snapshots = DGraph(
     val_data_discretized, val_data_discretized.time_delta, device=args.device
 )
 
-test_data = DGData.from_tgb(args.dataset, split='test')
 test_data_discretized = test_data.discretize(args.snapshot_time_gran)
 test_dg = DGraph(test_data, test_data.time_delta, device=args.device)
 test_snapshots = DGraph(

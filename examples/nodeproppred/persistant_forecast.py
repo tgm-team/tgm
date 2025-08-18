@@ -80,14 +80,13 @@ def eval(loader: DGDataLoader, model: PersistantForecaster) -> dict:
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_data = DGData.from_tgb(args.dataset, split='train').discretize(args.time_gran)
-train_dg = DGraph(train_data, train_data.time_delta)
 
-val_data = DGData.from_tgb(args.dataset, split='val').discretize(args.time_gran)
-val_dg = DGraph(val_data, val_data.time_delta)
+data = DGData.from_tgb(args.dataset).discretize(args.time_gran)
+train_data, val_data, test_data = data.split()
 
-test_data = DGData.from_tgb(args.dataset, split='test').discretize(args.time_gran)
-test_dg = DGraph(test_data, test_data.time_delta)
+train_dg = DGraph(train_data, train_data.time_delta, device=args.device)
+val_dg = DGraph(val_data, val_data.time_delta, device=args.device)
+test_dg = DGraph(test_data, test_data.time_delta, device=args.device)
 
 train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran)
