@@ -470,6 +470,7 @@ class TGAT(nn.Module):
         batch=None,
         is_negative=False,
         idx=-1,
+        inference=False,
     ):
         # Tensor, shape (batch_size, output_dim)
         src_node_embeddings = self.compute_node_temporal_embeddings(
@@ -481,6 +482,7 @@ class TGAT(nn.Module):
             is_negative=is_negative,
             is_src=True,
             idx=idx,
+            inference=inference,
         )
         # Tensor, shape (batch_size, output_dim)
         dst_node_embeddings = self.compute_node_temporal_embeddings(
@@ -492,6 +494,7 @@ class TGAT(nn.Module):
             is_negative=is_negative,
             is_src=False,
             idx=idx,
+            inference=inference,
         )
         return src_node_embeddings, dst_node_embeddings
 
@@ -505,6 +508,7 @@ class TGAT(nn.Module):
         is_negative=False,
         is_src=False,
         idx=-1,
+        inference=False,
     ):
         # print(f'\n[{current_layer_num}]', ' ids: ', node_ids)
         # print(
@@ -541,6 +545,7 @@ class TGAT(nn.Module):
                 is_negative=is_negative,
                 is_src=is_src,
                 idx=idx,
+                inference=inference,
             )
             # print(f'[{current_layer_num}] node conv feats: ', node_conv_features.shape)
 
@@ -573,19 +578,45 @@ class TGAT(nn.Module):
                 nbr_nids = batch.nbr_nids[1].flatten()
                 nbr_times = batch.nbr_times[1].flatten()
                 nbr_feats = batch.nbr_feats[1]
+            elif len(node_ids) == (batch.neg.numel()):
+                nbr_nids = batch.nids[1]
+                nbr_times = batch.times[1]
+                nbr_feats = batch.nbr_feats[0]
+            elif len(node_ids) == (batch.neg.numel()) * num_neighbors:
+                nbr_nids = batch.nbr_nids[1].flatten()
+                nbr_times = batch.nbr_times[1].flatten()
+                nbr_feats = batch.nbr_feats[1]
             else:
                 # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
                 assert False
 
-            src_nbr_nids, dst_nbr_nids, neg_nbr_nids = torch.chunk(
-                nbr_nids, chunks=3, dim=0
-            )
-            src_nbr_times, dst_nbr_times, neg_nbr_times = torch.chunk(
-                nbr_times, chunks=3, dim=0
-            )
-            src_nbr_feats, dst_nbr_feats, neg_nbr_feats = torch.chunk(
-                nbr_feats, chunks=3, dim=0
-            )
+            #! equal chunks during training
+            if not inference:
+                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = torch.chunk(
+                    nbr_nids, chunks=3, dim=0
+                )
+                src_nbr_times, dst_nbr_times, neg_nbr_times = torch.chunk(
+                    nbr_times, chunks=3, dim=0
+                )
+                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = torch.chunk(
+                    nbr_feats, chunks=3, dim=0
+                )
+            else:
+                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = (
+                    nbr_nids[0:20],
+                    nbr_nids[20:40],
+                    nbr_nids[40:],
+                )
+                src_nbr_times, dst_nbr_times, neg_nbr_times = (
+                    nbr_times[0:20],
+                    nbr_times[20:40],
+                    nbr_times[40:],
+                )
+                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
+                    nbr_feats[0:20],
+                    nbr_feats[20:40],
+                    nbr_feats[40:],
+                )
 
             if is_src:
                 neighbor_node_ids = src_nbr_nids.cpu().numpy()
@@ -602,6 +633,7 @@ class TGAT(nn.Module):
 
             neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
             neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
+
             # print(f'[{current_layer_num}] Nbr_nids: ', neighbor_node_ids.shape)
             # print(f'[{current_layer_num}] Nbr_edge: ', neighbor_edge_features.shape)
             # input()
@@ -611,6 +643,9 @@ class TGAT(nn.Module):
             # print('calling recursive forward for nbrs')
             # print(neighbor_node_ids.shape)
             # input()
+            print('---------------------')
+            print(neighbor_node_ids.shape, neighbor_times.shape)
+
             neighbor_node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=neighbor_node_ids.flatten(),
                 node_interact_times=neighbor_times.flatten(),
@@ -628,6 +663,10 @@ class TGAT(nn.Module):
             # )
             # input()
             # shape (batch_size, num_neighbors, output_dim or node_feat_dim)
+
+            print(neighbor_node_conv_features.shape, node_ids.shape, num_neighbors)
+            print('---------------------')
+
             neighbor_node_conv_features = neighbor_node_conv_features.reshape(
                 node_ids.shape[0], num_neighbors, -1
             )
@@ -924,20 +963,23 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+    batch_id = 0
     for batch in tqdm(loader):
         #! only evaluate for first edge in a batch for debugging purpose
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             if idx > 0:
                 break
 
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src_ids = batch.src[idx].repeat(len(dst_ids))
+            batch_src_node_ids = np.asarray([batch.src[idx]]).reshape(-1)
+            batch_dst_node_ids = np.asarray([batch.dst[idx]]).reshape(-1)
+            batch_neg_dst_node_ids = np.asarray(neg_batch)
+            batch_neg_src_node_ids = batch.src[idx].repeat(len(batch_neg_dst_node_ids))
 
-            batch_src_node_ids = src_ids.cpu().numpy()
-            batch_dst_node_ids = dst_ids.cpu().numpy()
-
-            batch_node_interact_times = torch.tensor([batch.time[0]]).repeat(
-                batch_dst_node_ids.shape[0]
+            batch_node_interact_times = (
+                torch.tensor([batch.time[0]])
+                .repeat(batch_dst_node_ids.shape[0])
+                .cpu()
+                .numpy()
             )
             assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
 
@@ -949,18 +991,36 @@ def eval(
                 batch=batch,
                 is_negative=False,
                 idx=idx,
+                inference=True,
             )
 
-            y_pred = decoder(z_src, z_dst)
+            neg_batch_node_interact_times = torch.tensor([batch.time[0]]).repeat(
+                batch_neg_dst_node_ids.shape[0]
+            )
+
+            z_neg_src, z_neg_dst = encoder(
+                src_node_ids=batch_neg_src_node_ids,
+                dst_node_ids=batch_neg_dst_node_ids,
+                node_interact_times=neg_batch_node_interact_times,
+                num_neighbors=NBRS,
+                batch=batch,
+                is_negative=True,
+                idx=idx,
+                inference=True,
+            )
+
+            positive_probabilities = decoder(z_src, z_dst)
+            negative_probabilities = decoder(z_neg_src, z_neg_dst)
 
             input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'y_pred_pos': positive_probabilities[0].detach().cpu().numpy(),
+                'y_pred_neg': negative_probabilities.detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
             perf = evaluator.eval(input_dict)[eval_metric]
             perf_list.append(perf)
             print(f'batch ID: {batch_id}, first edge MRR, {perf}')
+            batch_id += 1
 
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
@@ -1079,7 +1139,7 @@ for epoch in range(1, args.epochs + 1):
         batch_size=args.bsize,
     )
     start_time = time.perf_counter()
-    loss = train(train_loader, encoder, decoder, opt)
+    # loss = train(train_loader, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
