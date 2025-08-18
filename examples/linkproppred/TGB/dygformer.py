@@ -29,12 +29,12 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbn-genre', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=250, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--max_sequence_length',
     type=int,
-    default=16,
+    default=32,
     help='maximal length of the input sequence of each node',
 )
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
@@ -47,7 +47,7 @@ parser.add_argument(
     default=50,
     help='dimension of each channel embedding',
 )
-parser.add_argument('--patch-size', type=int, default=8, help='patch size')
+parser.add_argument('--patch-size', type=int, default=1, help='patch size')
 parser.add_argument('--num_layers', type=int, default=2, help='number of model layers')
 parser.add_argument(
     '--num_heads', type=int, default=2, help='number of heads used in attention layer'
@@ -206,8 +206,8 @@ def train(
         opt.zero_grad()
         pos_out, neg_out = model(batch)
 
-        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
-        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
+        loss = F.binary_cross_entropy(pos_out, torch.ones_like(pos_out))
+        loss += F.binary_cross_entropy(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -322,16 +322,16 @@ for epoch in range(1, args.epochs + 1):
         batch_size=args.bsize,
     )
 
-    val_results = eval(evaluator, val_loader, model, eval_metric)
     start_time = time.perf_counter()
     loss = train(train_loader, model, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
-
+    # val_results = eval(evaluator, val_loader, model, eval_metric)
+    val_results = {}
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
-test_results = eval(test_loader, encoder, decoder, eval_metric, evaluator)
+test_results = eval(evaluator, test_loader, model, eval_metric)
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

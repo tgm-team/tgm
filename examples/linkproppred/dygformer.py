@@ -159,6 +159,7 @@ def train(
     loader: DGDataLoader,
     model: nn.Module,
     opt: torch.optim.Optimizer,
+    metrics: Metric,
 ) -> float:
     model.train()
     total_loss = 0
@@ -166,12 +167,24 @@ def train(
         opt.zero_grad()
         pos_out, neg_out = model(batch)
 
-        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
-        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
+        loss = F.binary_cross_entropy(pos_out, torch.ones_like(pos_out))
+        loss += F.binary_cross_entropy(neg_out, torch.zeros_like(neg_out))
+
+        y_pred = torch.cat([pos_out, neg_out], dim=0).float()
+        y_true = (
+            torch.cat(
+                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
+            )
+            .long()
+            .to(y_pred.device)
+        )
+        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
+        metrics(y_pred, y_true, indexes=indexes)
+
         loss.backward()
         opt.step()
         total_loss += float(loss)
-    return total_loss
+    return total_loss, metrics.compute()
 
 
 @torch.no_grad()
@@ -260,6 +273,7 @@ if __name__ == '__main__':
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
     evaluator = Evaluator(name=args.dataset)
     metrics = [BinaryAveragePrecision(), BinaryAUROC()]
+    train_metrics = MetricCollection(metrics, prefix='Train')
     val_metrics = MetricCollection(metrics, prefix='Validation')
     test_metrics = MetricCollection(metrics, prefix='Test')
 
@@ -277,7 +291,7 @@ if __name__ == '__main__':
         )
 
         start_time = time.perf_counter()
-        loss = train(train_loader, model, opt)
+        loss, train_results = train(train_loader, model, opt, train_metrics)
         end_time = time.perf_counter()
         latency = end_time - start_time
 
@@ -285,6 +299,7 @@ if __name__ == '__main__':
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
             + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+            + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
         )
 
     test_results = eval(evaluator, test_loader, model, test_metrics)
