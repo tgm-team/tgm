@@ -82,6 +82,10 @@ def _init_basic_sample_graph():
 
 
 def test_init_basic_sampled_graph_1_hop():
+    """The goal of this test is to provide a simple TG with 1-hop neighbors
+    and test the basic functionality of the neighbor sampler.
+    also make sure recency and uniform samplers return the same output.
+    """
     edge_index, edge_timestamps, edge_feats = _init_basic_sample_graph()
     data = DGData.from_raw(edge_timestamps, edge_index, edge_feats)
     dg = DGraph(data)
@@ -161,14 +165,23 @@ def test_init_basic_sampled_graph_1_hop():
 
     batch = next(iter(loader))
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch)
-
     assert nids.shape == (1, 2)
     assert nbr_nids.shape == (1, 2, 1)
     assert nbr_times.shape == (1, 2, 1)
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_mask.shape == (1, 2, 1)
+    assert _batch_eq_nbrs(
+        batch_1, batch
+    )  # test recency and uniform return the same output
 
-    # assert _batch_eq_nbrs(batch_2, batch)  # continue debug uniform here
+    batch = next(iter(loader))
+    assert _batch_eq_nbrs(batch_2, batch)
+
+    batch = next(iter(loader))
+    assert _batch_eq_nbrs(batch_3, batch)
+
+    batch = next(iter(loader))
+    assert _batch_eq_nbrs(batch_4, batch)
 
 
 def _init_recency_buffer_graph():
@@ -194,10 +207,13 @@ def _init_recency_buffer_graph():
 
 
 def test_recency_exceed_buffer():
+    """The goal of this test is to test if the recency neighbor sampler would be able to update correctly when exceeding its max size.
+    The test only has a single source node connecting to various destination nodes.
+    """
     edge_index, edge_timestamps, edge_feats = _init_recency_buffer_graph()
     data = DGData.from_raw(edge_timestamps, edge_index, edge_feats)
     dg = DGraph(data)
-    n_nbrs = [2]  # 1 neighbor for each node
+    n_nbrs = [2]  # 2 neighbors for each node
     hook = _init_hooks(dg, 'recency', n_nbrs=n_nbrs)
     loader = DGDataLoader(dg, hook=hook, batch_size=2)
     assert loader._batch_size == 2
