@@ -277,7 +277,6 @@ test_loader = DGDataLoader(
 )
 test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran)
 
-
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
 else:
