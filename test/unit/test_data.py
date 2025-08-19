@@ -691,14 +691,11 @@ def tgb_dataset_factory():
     return _make_dataset
 
 
-@pytest.mark.parametrize(
-    'split,with_node_feats',
-    [('train', False), ('train', True), ('val', True), ('test', True), ('all', True)],
-)
+@pytest.mark.parametrize('with_node_feats', [True, False])
 @patch('tgb.linkproppred.dataset.LinkPropPredDataset')
 @patch.dict('tgm.timedelta.TGB_TIME_DELTAS', {'tgbl-wiki': TimeDeltaDG('D')})
-def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats):
-    dataset = tgb_dataset_factory(split, with_node_feats)
+def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, with_node_feats):
+    dataset = tgb_dataset_factory(with_node_feats)
     mock_dataset_cls.return_value = dataset
 
     mock_native_time_delta = TimeDeltaDG('D')  # Patched value

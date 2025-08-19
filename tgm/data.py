@@ -571,7 +571,7 @@ class DGData:
 
         data._split_strategy = TGBSplit(
             train_mask=torch.from_numpy(dataset.train_mask),
-            val_mask=torch.from_numpy(dataset.train_mask),
-            test_mask=torch.from_numpy(dataset.train_mask),
+            val_mask=torch.from_numpy(dataset.val_mask),
+            test_mask=torch.from_numpy(dataset.test_mask),
         )
         return data
