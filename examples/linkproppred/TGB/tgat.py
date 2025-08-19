@@ -249,6 +249,9 @@ class MultiHeadAttention(nn.Module):
             query.shape[0], query.shape[1], self.num_heads, self.head_dim
         )
 
+        # if (len(neighbor_node_edge_features.shape) < 3):
+        #     neighbor_node_edge_features = neighbor_node_edge_features.unsqueeze(dim=0)
+
         # Tensor, shape (batch_size, num_neighbors, node_feat_dim + edge_feat_dim + time_feat_dim)
         key = value = torch.cat(
             [
@@ -602,21 +605,29 @@ class TGAT(nn.Module):
                     nbr_feats, chunks=3, dim=0
                 )
             else:
+                bsize = node_ids.shape[0] * num_neighbors
                 src_nbr_nids, dst_nbr_nids, neg_nbr_nids = (
-                    nbr_nids[0:20],
-                    nbr_nids[20:40],
-                    nbr_nids[40:],
+                    nbr_nids[0:bsize],
+                    nbr_nids[bsize : 2 * bsize],
+                    nbr_nids[2 * bsize :],
                 )
                 src_nbr_times, dst_nbr_times, neg_nbr_times = (
-                    nbr_times[0:20],
-                    nbr_times[20:40],
-                    nbr_times[40:],
+                    nbr_times[0:bsize],
+                    nbr_times[bsize : 2 * bsize],
+                    nbr_times[2 * bsize :],
                 )
                 src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
-                    nbr_feats[0:20],
-                    nbr_feats[20:40],
-                    nbr_feats[40:],
+                    nbr_feats[0],
+                    nbr_feats[1],
+                    nbr_feats[2:],
                 )
+                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
+                    src_nbr_feats.unsqueeze(0),
+                    dst_nbr_feats.unsqueeze(0),
+                    neg_nbr_feats,
+                )
+            # print (f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}, src_nbr_nids: {src_nbr_nids.shape}, dst_nbr_nids: {dst_nbr_nids.shape}, neg_nbr_nids: {neg_nbr_nids.shape}')
+            # print (f'[{current_layer_num}] getting nbrs feat for node: {node_ids.shape}, src_nbr_feats: {src_nbr_feats.shape}, dst_nbr_feats: {dst_nbr_feats.shape}, neg_nbr_feats: {neg_nbr_feats.shape}')
 
             if is_src:
                 neighbor_node_ids = src_nbr_nids.cpu().numpy()
@@ -631,6 +642,9 @@ class TGAT(nn.Module):
                 neighbor_times = dst_nbr_times.cpu().numpy()
                 neighbor_edge_features = dst_nbr_feats
 
+            print(node_ids.shape)
+            print(f'[{current_layer_num}] nbr_nids: ', neighbor_node_ids.shape)
+            print(f'[{current_layer_num}] nbr_times: ', neighbor_times.shape)
             neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
             neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
 
@@ -643,8 +657,8 @@ class TGAT(nn.Module):
             # print('calling recursive forward for nbrs')
             # print(neighbor_node_ids.shape)
             # input()
-            print('---------------------')
-            print(neighbor_node_ids.shape, neighbor_times.shape)
+            # print('---------------------')
+            # print(neighbor_node_ids.shape, neighbor_times.shape)
 
             neighbor_node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=neighbor_node_ids.flatten(),
@@ -664,12 +678,20 @@ class TGAT(nn.Module):
             # input()
             # shape (batch_size, num_neighbors, output_dim or node_feat_dim)
 
-            print(neighbor_node_conv_features.shape, node_ids.shape, num_neighbors)
-            print('---------------------')
+            # print(neighbor_node_conv_features.shape)
+            # print('---------------------')
 
+            neighbor_edge_features.shape[2]
+            # neighbor_node_conv_features = neighbor_node_conv_features.reshape(
+            #     node_ids.shape[0], num_neighbors, -1
+            # )
+            # print (neighbor_node_conv_features.shape)
             neighbor_node_conv_features = neighbor_node_conv_features.reshape(
                 node_ids.shape[0], num_neighbors, -1
             )
+            # neighbor_node_conv_features = neighbor_node_conv_features.reshape(
+            #     -1, num_neighbors, edge_feat_dim
+            # )
 
             # print(
             #    f'[{current_layer_num}] after reshape: ',
