@@ -6,13 +6,13 @@ source .venv/bin/activate
 
 python examples/linkproppred/TGB/tgat.py \
     --dataset tgbl-wiki \
-    --bsize 1 \
+    --bsize 200 \
     --device cpu \
     --epochs 1 \
     --lr 0.0001 \
     --dropout 0 \
     --n-heads 2 \
-    --n-nbrs 5 5 \
+    --n-nbrs 20 20 \
     --time-dim 100 \
     --embed-dim 172 \
     --sampling recency
