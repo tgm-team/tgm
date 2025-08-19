@@ -194,9 +194,9 @@ class MultiHeadAttention(nn.Module):
         else:
             self.pad_dim = 0
 
-        assert (
-            self.query_dim % num_heads == 0
-        ), 'The sum of node_feat_dim and time_feat_dim should be divided by num_heads!'
+        assert self.query_dim % num_heads == 0, (
+            'The sum of node_feat_dim and time_feat_dim should be divided by num_heads!'
+        )
 
         self.head_dim = self.query_dim // num_heads
 
@@ -513,10 +513,13 @@ class TGAT(nn.Module):
         idx=-1,
         inference=False,
     ):
-        # print(f'\n[{current_layer_num}]', ' ids: ', node_ids)
-        # print(
-        #    f'is_src: {is_src}, is_negative: {is_negative}, ids: {node_ids}, times: {node_interact_times}'
-        # )
+        print(
+            f'\n[{current_layer_num}]',
+            ' ids: ',
+            node_ids.shape,
+            f'is_src: {is_src} ',
+            f'is_neg: {is_negative}',
+        )
         assert current_layer_num >= 0
         device = self.node_raw_features.device
 
@@ -566,26 +569,44 @@ class TGAT(nn.Module):
             #    )
             # )
             # print('Current layer: ', current_layer_num)
+            # print(f'src: {batch.src.shape}')
+            # print(f'neg: {batch.neg.shape}')
             # for i in range(len(batch.nbr_nids)):
+            #    print(f'hop: {i}, nids: {batch.nids[i].shape}')
             #    print(f'hop: {i}, nbr_shape: {batch.nbr_nids[i].shape}')
             #    print(f'hop: {i}, nbr_feats: {batch.nbr_feats[i].shape}')
             # input()
 
             if len(node_ids) == batch.src.numel():
-                # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
+                # print(
+                #    f'[{current_layer_num}] (1) getting nbrs for node: {node_ids.shape}'
+                # )
                 nbr_nids = batch.nids[1]
                 nbr_times = batch.times[1]
                 nbr_feats = batch.nbr_feats[0]
             elif len(node_ids) == batch.src.numel() * num_neighbors:
-                # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
+                # print(
+                # f'[{current_layer_num}] (2) getting nbrs for node: {node_ids.shape}'
+                #    )
+                # print('----')
+                # print(batch.nbr_nids[1].shape, batch.nbr_feats[1].shape)
+                # input()
+
                 nbr_nids = batch.nbr_nids[1].flatten()
                 nbr_times = batch.nbr_times[1].flatten()
                 nbr_feats = batch.nbr_feats[1]
+
             elif len(node_ids) == (batch.neg.numel()):
+                # print(
+                #       f'[{current_layer_num}] (3) getting nbrs for node: {node_ids.shape}'
+                # )
                 nbr_nids = batch.nids[1]
                 nbr_times = batch.times[1]
                 nbr_feats = batch.nbr_feats[0]
             elif len(node_ids) == (batch.neg.numel()) * num_neighbors:
+                # print(
+                #       f'[{current_layer_num}] (4) getting nbrs for node: {node_ids.shape}'
+                # )
                 nbr_nids = batch.nbr_nids[1].flatten()
                 nbr_times = batch.nbr_times[1].flatten()
                 nbr_feats = batch.nbr_feats[1]
@@ -595,6 +616,7 @@ class TGAT(nn.Module):
 
             #! equal chunks during training
             if not inference:
+                assert False
                 src_nbr_nids, dst_nbr_nids, neg_nbr_nids = torch.chunk(
                     nbr_nids, chunks=3, dim=0
                 )
@@ -605,7 +627,14 @@ class TGAT(nn.Module):
                     nbr_feats, chunks=3, dim=0
                 )
             else:
-                bsize = node_ids.shape[0] * num_neighbors
+                print('Trying to chunk')
+                print('nbr nids: ', nbr_nids.shape)
+                print('nbr feats: ', nbr_feats.shape)
+                input()
+                if is_negative:
+                    bsize = 1 * num_neighbors
+                else:
+                    bsize = node_ids.shape[0] * num_neighbors
                 src_nbr_nids, dst_nbr_nids, neg_nbr_nids = (
                     nbr_nids[0:bsize],
                     nbr_nids[bsize : 2 * bsize],
@@ -616,41 +645,78 @@ class TGAT(nn.Module):
                     nbr_times[bsize : 2 * bsize],
                     nbr_times[2 * bsize :],
                 )
-                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
-                    nbr_feats[0],
-                    nbr_feats[1],
-                    nbr_feats[2:],
-                )
-                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
-                    src_nbr_feats.unsqueeze(0),
-                    dst_nbr_feats.unsqueeze(0),
-                    neg_nbr_feats,
-                )
-            # print (f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}, src_nbr_nids: {src_nbr_nids.shape}, dst_nbr_nids: {dst_nbr_nids.shape}, neg_nbr_nids: {neg_nbr_nids.shape}')
-            # print (f'[{current_layer_num}] getting nbrs feat for node: {node_ids.shape}, src_nbr_feats: {src_nbr_feats.shape}, dst_nbr_feats: {dst_nbr_feats.shape}, neg_nbr_feats: {neg_nbr_feats.shape}')
 
-            if is_src:
-                neighbor_node_ids = src_nbr_nids.cpu().numpy()
-                neighbor_times = src_nbr_times.cpu().numpy()
-                neighbor_edge_features = src_nbr_feats
-            elif is_negative:
-                neighbor_node_ids = neg_nbr_nids.cpu().numpy()
-                neighbor_times = neg_nbr_times.cpu().numpy()
-                neighbor_edge_features = neg_nbr_feats
+                nbr_feats = nbr_feats.reshape(-1, nbr_feats.size(-1))
+                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
+                    # nbr_feats[0],
+                    # nbr_feats[1],
+                    # nbr_feats[2:],
+                    nbr_feats[0:bsize],
+                    nbr_feats[bsize : 2 * bsize],
+                    nbr_feats[2 * bsize :],
+                )
+                # src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
+                #    src_nbr_feats.unsqueeze(0),
+                #    dst_nbr_feats.unsqueeze(0),
+                #    neg_nbr_feats.unsqueeze(0),
+                # )
+                print('Done chunking')
+            print(
+                f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}, src_nbr_nids: {src_nbr_nids.shape}, dst_nbr_nids: {dst_nbr_nids.shape}, neg_nbr_nids: {neg_nbr_nids.shape}'
+            )
+            print(
+                f'[{current_layer_num}] getting nbrs feat for node: {node_ids.shape}, src_nbr_feats: {src_nbr_feats.shape}, dst_nbr_feats: {dst_nbr_feats.shape}, neg_nbr_feats: {neg_nbr_feats.shape}'
+            )
+            input()
+
+            if inference:
+                if is_negative:
+                    neighbor_node_ids = neg_nbr_nids.cpu().numpy()
+                    neighbor_times = neg_nbr_times.cpu().numpy()
+                    neighbor_edge_features = neg_nbr_feats
+                elif is_src:
+                    neighbor_node_ids = src_nbr_nids.cpu().numpy()
+                    neighbor_times = src_nbr_times.cpu().numpy()
+                    neighbor_edge_features = src_nbr_feats
+                else:
+                    neighbor_node_ids = dst_nbr_nids.cpu().numpy()
+                    neighbor_times = dst_nbr_times.cpu().numpy()
+                    neighbor_edge_features = dst_nbr_feats
             else:
-                neighbor_node_ids = dst_nbr_nids.cpu().numpy()
-                neighbor_times = dst_nbr_times.cpu().numpy()
-                neighbor_edge_features = dst_nbr_feats
+                if is_src:
+                    neighbor_node_ids = src_nbr_nids.cpu().numpy()
+                    neighbor_times = src_nbr_times.cpu().numpy()
+                    neighbor_edge_features = src_nbr_feats
+                elif is_negative:
+                    neighbor_node_ids = neg_nbr_nids.cpu().numpy()
+                    neighbor_times = neg_nbr_times.cpu().numpy()
+                    neighbor_edge_features = neg_nbr_feats
+                else:
+                    neighbor_node_ids = dst_nbr_nids.cpu().numpy()
+                    neighbor_times = dst_nbr_times.cpu().numpy()
+                    neighbor_edge_features = dst_nbr_feats
 
-            print(node_ids.shape)
-            print(f'[{current_layer_num}] nbr_nids: ', neighbor_node_ids.shape)
-            print(f'[{current_layer_num}] nbr_times: ', neighbor_times.shape)
+            print(
+                'trying to reshape: ',
+                neighbor_node_ids.shape,
+                ' into ',
+                node_ids.shape[0],
+                -1,
+            )
+            input()
             neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
             neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
 
-            # print(f'[{current_layer_num}] Nbr_nids: ', neighbor_node_ids.shape)
-            # print(f'[{current_layer_num}] Nbr_edge: ', neighbor_edge_features.shape)
-            # input()
+            # TODO: Ensure this doesnt break train
+            if inference:
+                edge_feat_dim = neighbor_edge_features.shape[-1]
+                neighbor_edge_features = neighbor_edge_features.reshape(
+                    node_ids.shape[0], -1, edge_feat_dim
+                )
+
+            print(f'[{current_layer_num}] Nbr_nids: ', neighbor_node_ids.shape)
+            print(f'[{current_layer_num}] Nbr_edge: ', neighbor_edge_features.shape)
+            input()
 
             # get neighbor features from previous layers
             # shape (batch_size * num_neighbors, output_dim or node_feat_dim)
@@ -669,19 +735,19 @@ class TGAT(nn.Module):
                 is_negative=is_negative,
                 is_src=is_src,
                 idx=idx,
+                inference=inference,
             )
 
-            # print(
-            #    f'[{current_layer_num}] got recurse feats: ',
-            #    neighbor_node_conv_features.shape,
-            # )
-            # input()
+            print(
+                f'[{current_layer_num}] got recurse feats: ',
+                neighbor_node_conv_features.shape,
+            )
+            input()
             # shape (batch_size, num_neighbors, output_dim or node_feat_dim)
 
             # print(neighbor_node_conv_features.shape)
             # print('---------------------')
 
-            neighbor_edge_features.shape[2]
             # neighbor_node_conv_features = neighbor_node_conv_features.reshape(
             #     node_ids.shape[0], num_neighbors, -1
             # )
@@ -797,10 +863,10 @@ class TGAT(nn.Module):
                 # )
                 # print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-                # print(
-                #    f'[{current_layer_num}] attention node_features ({node_conv_features.shape}), time features ({node_time_features.shape}), nbr node features ({neighbor_node_conv_features.shape}), nbr time features ({neighbor_time_features.shape}), nbr edge features ({neighbor_edge_features.shape}), nbr mask ({neighbor_node_ids.shape})'
-                # )
-                # input()
+            print(
+                f'[{current_layer_num}] attention node_features ({node_conv_features.shape}), time features ({node_time_features.shape}), nbr node features ({neighbor_node_conv_features.shape}), nbr time features ({neighbor_time_features.shape}), nbr edge features ({neighbor_edge_features.shape}), nbr mask ({neighbor_node_ids.shape})'
+            )
+            input()
 
             output, _ = self.temporal_conv_layers[current_layer_num - 1](
                 node_features=node_conv_features,
@@ -995,7 +1061,9 @@ def eval(
             batch_src_node_ids = np.asarray([batch.src[idx]]).reshape(-1)
             batch_dst_node_ids = np.asarray([batch.dst[idx]]).reshape(-1)
             batch_neg_dst_node_ids = np.asarray(neg_batch)
-            batch_neg_src_node_ids = batch.src[idx].repeat(len(batch_neg_dst_node_ids))
+            batch_neg_src_node_ids = (
+                batch.src[idx].repeat(len(batch_neg_dst_node_ids)).cpu().numpy()
+            )
 
             batch_node_interact_times = (
                 torch.tensor([batch.time[0]])
@@ -1016,9 +1084,15 @@ def eval(
                 inference=True,
             )
 
-            neg_batch_node_interact_times = torch.tensor([batch.time[0]]).repeat(
-                batch_neg_dst_node_ids.shape[0]
+            neg_batch_node_interact_times = (
+                torch.tensor([batch.time[0]])
+                .repeat(batch_neg_dst_node_ids.shape[0])
+                .cpu()
+                .numpy()
             )
+
+            print('======== NEGATIVES ===========')
+            input()
 
             z_neg_src, z_neg_dst = encoder(
                 src_node_ids=batch_neg_src_node_ids,
