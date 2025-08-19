@@ -133,8 +133,6 @@ class TGBSplit(SplitStrategy):
     def apply(self, data: 'DGData') -> Tuple['DGData', 'DGData', 'DGData']:  # type: ignore
         splits = []
         for mask in (self.train_mask, self.val_mask, self.test_mask):
-            if not mask.any():
-                continue
             edge_mask = mask
             node_mask = None
             if data.node_ids is not None:
