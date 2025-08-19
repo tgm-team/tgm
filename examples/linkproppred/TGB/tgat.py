@@ -487,6 +487,7 @@ class TGAT(nn.Module):
             idx=idx,
             inference=inference,
         )
+        # print('src: ', src_node_embeddings[0, :5])
         # Tensor, shape (batch_size, output_dim)
         dst_node_embeddings = self.compute_node_temporal_embeddings(
             node_ids=dst_node_ids,
@@ -499,6 +500,9 @@ class TGAT(nn.Module):
             idx=idx,
             inference=inference,
         )
+        # print('dst: ', dst_node_embeddings[0, :5])
+        if inference:
+            exit()
         return src_node_embeddings, dst_node_embeddings
 
     def compute_node_temporal_embeddings(
@@ -730,6 +734,8 @@ class TGAT(nn.Module):
             # input()
             # print('---------------------')
             # print(neighbor_node_ids.shape, neighbor_times.shape)
+            print(f'is_src: {is_src}, nbrs: {neighbor_node_ids}')
+            input()
 
             neighbor_node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=neighbor_node_ids.flatten(),
@@ -812,33 +818,36 @@ class TGAT(nn.Module):
             # input(
 
             with open('tgm_out.txt', mode='a') as f:
-                lll = node_ids.reshape(-1)
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_IDS',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+                import sys
 
-                lll = node_interact_times.reshape(-1)
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_TIMES',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+                if inference:
+                    lll = node_ids.reshape(-1)
+                    print(
+                        f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_IDS',
+                        file=f,
+                    )
+                    print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-                lll = neighbor_delta_times.reshape(-1)
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_DELTA_TIMES',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+                    lll = node_interact_times.reshape(-1)
+                    print(
+                        f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_TIMES',
+                        file=f,
+                    )
+                    print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-                lll = neighbor_node_ids.reshape(-1)
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_IDS',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
+                    lll = neighbor_delta_times.reshape(-1)
+                    print(
+                        f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_DELTA_TIMES',
+                        file=f,
+                    )
+                    print(' '.join(f'{x:.8f}' for x in lll), file=f)
+
+                    lll = neighbor_node_ids.reshape(-1)
+                    print(
+                        f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_IDS',
+                        file=f,
+                    )
+                    print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
                 # lll = node_conv_features.view(-1).cpu().detach().numpy()
                 # print(
@@ -1034,9 +1043,8 @@ def train(
                 ),
             }
         )
-        # input()
 
-        if idx > 1:
+        if idx > 0:
             break
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
@@ -1061,10 +1069,10 @@ def eval(
     batch_id = 0
     for batch in tqdm(loader):
         #! only evaluate for first edge in a batch for debugging purpose
+        # print(batch.src)
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            if idx > 0:
-                break
-
+            # print(neg_batch)
+            # input()
             batch_src_node_ids = np.asarray([batch.src[idx]]).reshape(-1)
             batch_dst_node_ids = np.asarray([batch.dst[idx]]).reshape(-1)
             batch_neg_dst_node_ids = np.asarray(neg_batch)
@@ -1073,12 +1081,15 @@ def eval(
             )
 
             batch_node_interact_times = (
-                torch.tensor([batch.time[0]])
+                torch.tensor([batch.time[idx]])
                 .repeat(batch_dst_node_ids.shape[0])
                 .cpu()
                 .numpy()
             )
             assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
+
+            # print(batch_src_node_ids, batch_dst_node_ids)
+            # input()
 
             z_src, z_dst = encoder(
                 src_node_ids=batch_src_node_ids,
@@ -1091,8 +1102,12 @@ def eval(
                 inference=True,
             )
 
+            print(f'z src: {z_src[0, :5]}, z dst: {z_dst[0, :5]}')
+            exit()
+            input()
+
             neg_batch_node_interact_times = (
-                torch.tensor([batch.time[0]])
+                torch.tensor([batch.time[idx]])
                 .repeat(batch_neg_dst_node_ids.shape[0])
                 .cpu()
                 .numpy()
@@ -1108,22 +1123,30 @@ def eval(
                 idx=idx,
                 inference=True,
             )
+            print(z_neg_src.shape, z_neg_dst.shape)
+            print(f'z src neg: {z_neg_src[0, :5]}, z dst neg: {z_neg_dst[0, :5]}')
+            input()
 
-            positive_probabilities = decoder(z_src, z_dst)
-            negative_probabilities = decoder(z_neg_src, z_neg_dst)
+            pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
+            neg_prob = decoder(z_neg_src, z_neg_dst).squeeze(dim=-1).sigmoid()
 
             input_dict = {
-                'y_pred_pos': positive_probabilities[0].detach().cpu().numpy(),
-                'y_pred_neg': negative_probabilities.detach().cpu().numpy(),
+                'y_pred_pos': pos_prob[0].detach().cpu().numpy(),
+                'y_pred_neg': neg_prob.detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
+            print(f'Predicting for: {batch.src}, got: {input_dict}')
             perf = evaluator.eval(input_dict)[eval_metric]
             perf_list.append(perf)
-            print(f'batch ID: {batch_id}, first edge MRR, {perf}')
+            print(f'---\nbatch ID: {batch_id}, MRR, {perf}---\n')
             batch_id += 1
+
+            if batch_id > 1000:
+                break
 
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
+    print(metric_dict)
     return metric_dict
 
 
@@ -1148,17 +1171,26 @@ NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, 1  # CHANGED TO SINGLE FEATURE
 STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
 
 
+# TODO: trying to share this between hook managers
+SHARED_NBR_HOOK = RecencyNeighborHook(
+    num_nbrs=args.n_nbrs,
+    num_nodes=test_dg.num_nodes,
+    edge_feats_dim=test_dg.edge_feats_dim,
+)
+
+
 def _init_hooks(
     dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
 ) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(
-            num_nbrs=args.n_nbrs,
-            num_nodes=dg.num_nodes,
-            edge_feats_dim=dg.edge_feats_dim,
-        )
+        # nbr_hook = RecencyNeighborHook(
+        #    num_nbrs=args.n_nbrs,
+        #    num_nodes=dg.num_nodes,
+        #    edge_feats_dim=dg.edge_feats_dim,
+        # )
+        nbr_hook = SHARED_NBR_HOOK
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -1224,8 +1256,6 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
-print('encoder: ', encoder)
-print('decoder: ', decoder)
 for epoch in range(1, args.epochs + 1):
     # TODO: Need a clean way to clear nbr state across epochs
     train_loader = DGDataLoader(
@@ -1240,7 +1270,11 @@ for epoch in range(1, args.epochs + 1):
         batch_size=1,
     )
     start_time = time.perf_counter()
+    print(f'&&&&: {len(train_loader._hook.hooks[1]._history)}')
     loss = train(train_loader, encoder, decoder, opt)
+    print(f'&&&& after training: {len(train_loader._hook.hooks[1]._history)}')
+
+    print(f'&&&& val loader shared:  {len(val_loader._hook.hooks[1]._history)}')
     end_time = time.perf_counter()
     latency = end_time - start_time
 
