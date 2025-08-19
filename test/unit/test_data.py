@@ -9,6 +9,7 @@ import pytest
 import torch
 
 from tgm.data import DGData
+from tgm.split import RatioSplit, TGBSplit
 from tgm.timedelta import TimeDeltaDG
 
 
@@ -896,6 +897,69 @@ def test_discretize_bad_args():
     with pytest.raises(ValueError):
         data = DGData.from_raw(edge_timestamps, edge_index, time_delta='h')
         data.discretize('s')  # Cannot reduce into more granular time
+
+
+def test_split_default_calls_ratio_split(monkeypatch):
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
+    mock_strategy = MagicMock()
+    mock_strategy.apply.return_value = expected
+    monkeypatch.setattr('tgm.data.RatioSplit', lambda: mock_strategy)
+
+    result = data.split()
+    mock_strategy.apply.assert_called_once_with(data)
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    assert all(isinstance(x, DGData) for x in result)
+
+
+def test_split_with_explicit_ratio_split():
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    strategy = RatioSplit(0.5, 0.25, 0.25)
+    expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
+    strategy.apply = MagicMock(return_value=expected)
+
+    result = data.split(strategy=strategy)
+    strategy.apply.assert_called_once_with(data)
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    assert all(isinstance(x, DGData) for x in result)
+
+
+def test_split_uses_tgb_split_when_present():
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
+    mock_strategy = MagicMock(spec=TGBSplit)
+    mock_strategy.apply.return_value = expected
+    data._split_strategy = mock_strategy
+
+    result = data.split()
+    mock_strategy.apply.assert_called_once_with(data)
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    assert all(isinstance(x, DGData) for x in result)
+
+
+def test_split_cannot_override_tgb_split():
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    train_mask = torch.tensor([1], dtype=torch.bool)
+    val_mask = torch.tensor([0], dtype=torch.bool)
+    test_mask = torch.tensor([0], dtype=torch.bool)
+    data._split_strategy = TGBSplit(train_mask, val_mask, test_mask)
+
+    with pytest.raises(ValueError):
+        data.split(strategy=RatioSplit())
 
 
 def test_clone():
