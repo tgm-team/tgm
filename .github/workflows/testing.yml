@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev --frozen
 
+      - name: Clean pytest caches
+        run: rm -rf .pytest_cache
+
       - name: Test non-gpu tests with pytest
         run: uv run pytest test -m "not gpu and not integration" --cov=tgm --cov-report=xml --cov-append -vvv
 
