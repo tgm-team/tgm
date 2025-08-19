@@ -182,8 +182,8 @@ def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
 def test_iteration_with_empty_batch():
     edge_index = torch.LongTensor([[2, 3], [2, 3]])
     edge_timestamps = torch.LongTensor([1, 5])
-    data = DGData.from_raw(edge_timestamps, edge_index)
-    dg = DGraph(data, time_delta='s')
+    data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
+    dg = DGraph(data)
 
     loader = DGDataLoader(dg, batch_unit='s')
     assert len(loader) == 5  # Includes skipped batches
@@ -198,8 +198,8 @@ def test_iteration_with_empty_batch():
 def test_iteration_with_empty_batch_process_empty():
     edge_index = torch.LongTensor([[2, 3], [2, 3]])
     edge_timestamps = torch.LongTensor([1, 5])
-    data = DGData.from_raw(edge_timestamps, edge_index)
-    dg = DGraph(data, time_delta='s')
+    data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
+    dg = DGraph(data)
 
     loader = DGDataLoader(dg, batch_unit='s', on_empty=None)
     assert len(loader) == 5  # Includes skipped batches
@@ -214,8 +214,8 @@ def test_iteration_with_empty_batch_process_empty():
 def test_iteration_with_empty_batch_raise():
     edge_index = torch.LongTensor([[2, 3], [2, 3]])
     edge_timestamps = torch.LongTensor([1, 5])
-    data = DGData.from_raw(edge_timestamps, edge_index)
-    dg = DGraph(data, time_delta='s')
+    data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
+    dg = DGraph(data)
 
     loader = DGDataLoader(dg, batch_unit='s', on_empty='raise')
     assert len(loader) == 5  # Includes skipped batches
