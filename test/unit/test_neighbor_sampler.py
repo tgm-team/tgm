@@ -232,7 +232,6 @@ def test_recency_exceed_buffer():
 
     batch_2 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, _ = _nbrs_2_np(batch_2)
-    print(nbr_nids[0][0])
     assert nids.shape == (1, 4)
     assert nbr_nids.shape == (1, 4, 2)
     assert nbr_nids[0][0][0] == 1
@@ -248,3 +247,80 @@ def test_recency_exceed_buffer():
         assert nbr_times.shape == (1, 4, 2)
         assert nbr_nids[0][0][0] == nbr_times[0][0][0] + 1
         assert nbr_nids[0][0][1] == nbr_times[0][0][1] + 1
+        assert nbr_feats[0][0][0][0] == nbr_times[0][0][0] + 1
+        assert nbr_feats[0][0][1][0] == nbr_times[0][0][1] + 1
+
+
+def _init_2_hop_basic_graph():
+    """Initializes the following 2 hop graph.
+
+    0 -> t=1 -> 1
+                |
+                v
+              t=2
+                |
+                v
+    3 -> t=3 -> 2
+    4 -> t=4 -> 2
+    """
+    edge_index = torch.LongTensor([[0, 1], [1, 2], [3, 2], [4, 2]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 4])
+    edge_feats = torch.LongTensor(
+        [[1], [3], [5], [6]]
+    )  # edge feat is simply summing the node IDs at two end points
+    return edge_index, edge_timestamps, edge_feats
+
+
+def test_2_hop_graph():
+    edge_index, edge_timestamps, edge_feats = _init_2_hop_basic_graph()
+    data = DGData.from_raw(edge_timestamps, edge_index, edge_feats)
+    dg = DGraph(data)
+    n_nbrs = [1, 1]  # 1 neighbor for each node
+    hook = _init_hooks(dg, 'recency', n_nbrs=n_nbrs)
+    loader = DGDataLoader(dg, hook=hook, batch_size=1)
+    assert loader._batch_size == 1
+
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_1)
+    assert nids.shape == (2, 2)  # 2 hop, each has 2 node
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+    assert nbr_mask.shape == (2, 2, 1)
+
+    batch_2 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
+    assert nids.shape == (2, 2)
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+    assert nbr_mask.shape == (2, 2, 1)
+    assert nbr_nids[0][0][0] == 0  # first hop, node 1 has neighbor 0
+    assert nbr_nids[1][0][0] == -1  # no second hop neighbors
+
+    batch_3 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_3)
+    assert nids.shape == (2, 2)
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+    assert nbr_mask.shape == (2, 2, 1)
+    assert nbr_nids[0][0][0] == -1  # first hop, node 3 has no neighbor yet
+    assert nbr_nids[0][1][0] == 1  # first hop, node 2 has neighbor 1
+    assert nbr_nids[1][1][0] == 0  # second hop, node 2 has neighbor 0
+
+    batch_4 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_4)
+    assert nids.shape == (2, 2)
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+    assert nbr_mask.shape == (2, 2, 1)
+    assert nbr_nids[0][0][0] == -1  # first hop, node 4 has no neighbor yet
+    assert (
+        nbr_nids[0][1][0] == 3
+    )  # first hop, node 2 has neighbor 3 (replaced 1 as it is pushed out of cache)
+    assert (
+        nbr_nids[1][1][0] == -1
+    )  # second hop, node 2 has no neighbor now (as 1 is pushed out of cache)
