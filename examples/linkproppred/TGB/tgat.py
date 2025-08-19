@@ -627,12 +627,19 @@ class TGAT(nn.Module):
                     nbr_feats, chunks=3, dim=0
                 )
             else:
-                print('Trying to chunk')
+                print(
+                    f'[{current_layer_num}] Trying to chunk with node ids: ',
+                    node_ids.shape,
+                )
                 print('nbr nids: ', nbr_nids.shape)
                 print('nbr feats: ', nbr_feats.shape)
                 input()
                 if is_negative:
-                    bsize = 1 * num_neighbors
+                    # TODO: Sketchy hardcode
+                    if node_ids.shape[0] == 999:
+                        bsize = num_neighbors
+                    else:
+                        bsize = num_neighbors * num_neighbors
                 else:
                     bsize = node_ids.shape[0] * num_neighbors
                 src_nbr_nids, dst_nbr_nids, neg_nbr_nids = (
