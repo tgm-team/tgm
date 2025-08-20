@@ -20,11 +20,7 @@ class DGraph:
         if not isinstance(data, DGData):
             raise TypeError(f'DGraph must be initialized with DGData, got {type(data)}')
 
-        if isinstance(data.time_delta, str):
-            self._time_delta = TimeDeltaDG(data.time_delta)
-        else:
-            self._time_delta = data.time_delta
-
+        self._time_delta = data.time_delta
         self._storage = DGStorage(data)
         self._device = torch.device(device)
         self._slice = DGSliceTracker()
@@ -80,7 +76,7 @@ class DGraph:
 
     @property
     def time_delta(self) -> TimeDeltaDG:
-        return self._time_delta
+        return self._time_delta  # type: ignore
 
     def to(self, device: str | torch.device) -> DGraph:
         device = torch.device(device)
