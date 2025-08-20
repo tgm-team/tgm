@@ -95,18 +95,20 @@ def test_init_gpu(data):
 
 def test_init_from_storage(data):
     dg_tmp = DGraph(data)
-    dg = DGraph(dg_tmp._storage, 'r')
+    dg = DGraph._from_storage(
+        dg_tmp._storage, dg_tmp.time_delta, dg_tmp.device, dg_tmp._slice
+    )
     assert id(dg_tmp._storage) == id(dg._storage)
-
-
-def test_init_bad_args(data):
-    with pytest.raises(ValueError):
-        _ = DGraph(data, time_delta='foo')
 
 
 def test_str(data):
     dg = DGraph(data)
     assert isinstance(dg.__str__(), str)
+
+
+def test_init_bad_data():
+    with pytest.raises(TypeError):
+        DGraph('foo')
 
 
 def test_materialize(data):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sized
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cached_property
 from typing import Any, Optional, Set, Tuple
 
@@ -16,28 +16,12 @@ from tgm.timedelta import TimeDeltaDG
 class DGraph:
     r"""Dynamic Graph Object provides a 'view' over a DGStorage backend."""
 
-    def __init__(
-        self,
-        data: DGStorage | DGData,
-        time_delta: TimeDeltaDG | str | None = None,
-        device: str | torch.device = 'cpu',
-    ) -> None:
-        if isinstance(time_delta, str):
-            time_delta = TimeDeltaDG(time_delta)
+    def __init__(self, data: DGData, device: str | torch.device = 'cpu') -> None:
+        if not isinstance(data, DGData):
+            raise TypeError(f'DGraph must be initialized with DGData, got {type(data)}')
 
-        if isinstance(data, DGData):
-            time_delta = time_delta or TimeDeltaDG('r')  # Default to ordered
-            data = DGStorage(data)
-        elif isinstance(data, DGStorage):
-            if time_delta is None:
-                raise RuntimeError(
-                    'Internally tried creating DGraph on existing storage without specifying a time_delta'
-                )
-        else:
-            raise ValueError(f'Unsupported dataset type: {type(data)}')
-
-        self._storage = data
-        self._time_delta = time_delta
+        self._time_delta = data.time_delta
+        self._storage = DGStorage(data)
         self._device = torch.device(device)
         self._slice = DGSliceTracker()
 
@@ -58,12 +42,10 @@ class DGraph:
         if start_idx is not None and end_idx is not None and start_idx > end_idx:
             raise ValueError(f'start_idx ({start_idx}) must be <= end_idx ({end_idx})')
 
-        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
-        dg._slice.start_time = self._slice.start_time
-        dg._slice.end_time = self._slice.end_time
-        dg._slice.start_idx = self._maybe_max(start_idx, self._slice.start_idx)
-        dg._slice.end_idx = self._maybe_min(end_idx, self._slice.end_idx)
-        return dg
+        slice = replace(self._slice)
+        slice.start_idx = self._maybe_max(start_idx, slice.start_idx)
+        slice.end_idx = self._maybe_min(end_idx, slice.end_idx)
+        return DGraph._from_storage(self._storage, self.time_delta, self.device, slice)
 
     def slice_time(
         self, start_time: Optional[int] = None, end_time: Optional[int] = None
@@ -76,12 +58,10 @@ class DGraph:
         if end_time is not None:
             end_time -= 1
 
-        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
-        dg._slice.start_time = self._maybe_max(start_time, self.start_time)
-        dg._slice.end_time = self._maybe_min(end_time, self.end_time)
-        dg._slice.start_idx = self._slice.start_idx
-        dg._slice.end_idx = self._slice.end_idx
-        return dg
+        slice = replace(self._slice)
+        slice.start_time = self._maybe_max(start_time, slice.start_time)
+        slice.end_time = self._maybe_min(end_time, slice.end_time)
+        return DGraph._from_storage(self._storage, self.time_delta, self.device, slice)
 
     def __len__(self) -> int:
         r"""The number of timestamps in the dynamic graph."""
@@ -96,10 +76,12 @@ class DGraph:
 
     @property
     def time_delta(self) -> TimeDeltaDG:
-        return self._time_delta
+        return self._time_delta  # type: ignore
 
     def to(self, device: str | torch.device) -> DGraph:
-        return DGraph(data=self._storage, time_delta=self.time_delta, device=device)
+        device = torch.device(device)
+        slice = replace(self._slice)
+        return DGraph._from_storage(self._storage, self.time_delta, device, slice)
 
     @cached_property
     def start_time(self) -> Optional[int]:
@@ -205,6 +187,21 @@ class DGraph:
         if a is not None and b is not None:
             return min(a, b)
         return a if b is None else b if a is None else None
+
+    @classmethod
+    def _from_storage(
+        cls,
+        storage: DGStorage,
+        time_delta: TimeDeltaDG,
+        device: torch.device,
+        slice: DGSliceTracker,
+    ) -> DGraph:
+        obj = cls.__new__(cls)
+        obj._storage = storage
+        obj._time_delta = time_delta
+        obj._device = device
+        obj._slice = slice
+        return obj
 
 
 @dataclass
