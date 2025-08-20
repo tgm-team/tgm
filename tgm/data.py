@@ -127,13 +127,17 @@ class DGData:
 
         if self.static_node_feats is not None:
             _assert_is_tensor(self.static_node_feats, 'static_node_feats')
-            if (
-                self.static_node_feats.ndim != 2
-                or self.static_node_feats.shape[0] != num_nodes
-            ):
+            if self.static_node_feats.ndim != 2:
                 raise ValueError(
-                    'static_node_feats must have shape [num_nodes, D_node_static], '
-                    f'got {num_nodes} nodes and shape {self.static_node_feats.shape}'
+                    f'static_node_feats must be a 2D tensor of shape [N, D_node_static], '
+                    f'but got ndim={self.static_node_feats.ndim} with shape {self.static_node_feats.shape}'
+                )
+
+            if self.static_node_feats.shape[0] < num_nodes:
+                raise ValueError(
+                    f'static_node_feats has shape {self.static_node_feats.shape}, '
+                    f'but the data requires features for at least {num_nodes} nodes. '
+                    f'The first dimension ({self.static_node_feats.shape[0]}) must be >= num_nodes ({num_nodes}).'
                 )
 
         # Validate timestamps

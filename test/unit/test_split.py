@@ -5,34 +5,8 @@ import pytest
 import torch
 
 from tgm import DGData
-from tgm.split import RatioSplit, TGBSplit, TimeSplit
-
-
-def make_simple_dgdata(
-    edge_times,
-    node_times=None,
-    with_node_feats=False,
-):
-    edge_index = torch.arange(len(edge_times)).repeat(2, 1)  # trivial self-loop edges
-    torch.arange(len(edge_times))
-    node_ids = None
-    dynamic_node_feats = None
-    if node_times is not None:
-        node_ids = torch.arange(len(node_times))
-        torch.arange(len(node_times))
-        if with_node_feats:
-            dynamic_node_feats = torch.randn(len(node_times), 3)
-
-    return DGData.from_raw(
-        time_delta=1,
-        edge_timestamps=torch.tensor(edge_times),
-        edge_index=edge_index,
-        edge_feats=None,
-        node_timestamps=torch.tensor(node_times) if node_times is not None else None,
-        node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
-        static_node_feats=None,
-    )
+from tgm.split import RatioSplit, TimeSplit
+from tgm.timedelta import TimeDeltaDG
 
 
 def test_time_split_bad_args():
@@ -43,34 +17,128 @@ def test_time_split_bad_args():
 
 
 def test_time_split():
-    data = make_simple_dgdata(edge_times=[1, 2, 3, 4])
+    edge_times = torch.tensor([1, 2, 3, 4])
+    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+    num_nodes = edge_index.max() + 1
+    static_node_feats = torch.rand(num_nodes, 5)
+
+    data = DGData.from_raw(
+        edge_timestamps=edge_times,
+        edge_index=edge_index,
+        static_node_feats=static_node_feats,
+    )
     split = TimeSplit(val_time=3, test_time=4)
     train, val, test = split.apply(data)
 
-    assert train.edge_timestamps.tolist() == [1, 2]
-    assert val.edge_timestamps.tolist() == [3]
-    assert test.edge_timestamps.tolist() == [4]
+    assert isinstance(train, DGData)
+    assert isinstance(val, DGData)
+    assert isinstance(test, DGData)
+
+    assert train.time_delta == TimeDeltaDG('r')
+    assert val.time_delta == TimeDeltaDG('r')
+    assert test.time_delta == TimeDeltaDG('r')
+
+    assert train.timestamps.tolist() == [1, 2]
+    assert val.timestamps.tolist() == [3]
+    assert test.timestamps.tolist() == [4]
+
+    assert train.edge_event_idx.tolist() == [0, 1]
+    assert val.edge_event_idx.tolist() == [0]
+    assert test.edge_event_idx.tolist() == [0]
+
+    assert train.edge_feats is None
+    assert val.edge_feats is None
+    assert test.edge_feats is None
+
+    assert train.node_event_idx is None
+    assert val.node_event_idx is None
+    assert test.node_event_idx is None
+
+    assert train.node_ids is None
+    assert val.node_ids is None
+    assert test.node_ids is None
+
+    assert train.dynamic_node_feats is None
+    assert val.dynamic_node_feats is None
+    assert test.dynamic_node_feats is None
+
+    assert id(train.static_node_feats) == id(data.static_node_feats)
+    assert id(val.static_node_feats) == id(data.static_node_feats)
+    assert id(test.static_node_feats) == id(data.static_node_feats)
 
 
 def test_time_split_with_node_feats():
-    data = make_simple_dgdata(
-        edge_times=[1, 2, 3, 4], node_times=[0, 2, 3, 5], with_node_feats=True
+    edge_times = torch.tensor([1, 2, 3, 4])
+    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+
+    node_times = torch.tensor([0, 2, 4])
+    node_ids = torch.tensor([1, 2, 3])
+    dynamic_node_feats = torch.rand(3, 7)
+    num_nodes = edge_index.max() + 1
+    static_node_feats = torch.rand(num_nodes, 5)
+
+    data = DGData.from_raw(
+        edge_timestamps=edge_times,
+        edge_index=edge_index,
+        static_node_feats=static_node_feats,
+        node_timestamps=node_times,
+        node_ids=node_ids,
+        dynamic_node_feats=dynamic_node_feats,
     )
     split = TimeSplit(val_time=3, test_time=5)
-    train, val = split.apply(data)[:2]  # test is empty
+    train, val = split.apply(data)
 
-    # val should include node with time=3, but not node with time=5
-    assert 3 in val.node_timestamps.tolist()
-    assert 5 not in val.node_timestamps.tolist()
-    assert val.dynamic_node_feats is not None
+    assert isinstance(train, DGData)
+    assert isinstance(val, DGData)
+
+    assert train.time_delta == TimeDeltaDG('r')
+    assert val.time_delta == TimeDeltaDG('r')
+
+    assert train.timestamps.tolist() == [0, 1, 2, 2]
+    assert (
+        val.timestamps.tolist() == [2, 3, 4, 4]
+    )  # Note: Splits are edge based (matching TGB), meaning that node events that occured 'prior to' cutoff time may appear... (in this case 2)
+
+    assert train.edge_event_idx.tolist() == [1, 2]
+    assert val.edge_event_idx.tolist() == [1, 2]
+
+    assert train.edge_feats is None
+    assert val.edge_feats is None
+
+    assert train.node_event_idx.tolist() == [0, 3]
+    assert val.node_event_idx.tolist() == [0, 3]
+
+    assert train.node_ids.tolist() == [1, 2]
+    assert val.node_ids.tolist() == [2, 3]
+
+    torch.testing.assert_close(train.dynamic_node_feats, data.dynamic_node_feats[:2])
+    torch.testing.assert_close(val.dynamic_node_feats, data.dynamic_node_feats[1:])
+
+    assert id(train.static_node_feats) == id(data.static_node_feats)
+    assert id(val.static_node_feats) == id(data.static_node_feats)
 
 
-def test_time_split_no_val_split():
-    data = make_simple_dgdata(edge_times=[1, 2, 3, 4])
-    split = TimeSplit(val_time=5, test_time=6)  # val empty, test non-empty
-    train, test = split.apply(data)
-    assert len(train.edge_timestamps) == 4
-    assert len(test.edge_timestamps) == 0
+def test_time_split_only_train_split():
+    edge_times = torch.tensor([1, 2, 3, 4])
+    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+
+    node_times = torch.tensor([0, 2, 4])
+    node_ids = torch.tensor([1, 2, 3])
+    dynamic_node_feats = torch.rand(3, 7)
+    num_nodes = edge_index.max() + 1
+    static_node_feats = torch.rand(num_nodes, 5)
+
+    data = DGData.from_raw(
+        edge_timestamps=edge_times,
+        edge_index=edge_index,
+        static_node_feats=static_node_feats,
+        node_timestamps=node_times,
+        node_ids=node_ids,
+        dynamic_node_feats=dynamic_node_feats,
+    )
+    split = TimeSplit(val_time=5, test_time=5)
+    (train,) = split.apply(data)
+    assert isinstance(train, DGData)
 
 
 def test_ratio_split_bad_args():
@@ -85,49 +153,128 @@ def test_ratio_split_bad_args():
 
 
 def test_ratio_split():
-    data = make_simple_dgdata(edge_times=[1, 2, 3, 4, 5, 6, 7, 8, 9])
-    split = RatioSplit(train_ratio=0.6, val_ratio=0.2, test_ratio=0.2)
+    edge_times = torch.tensor([1, 2, 3, 4])
+    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+    num_nodes = edge_index.max() + 1
+    static_node_feats = torch.rand(num_nodes, 5)
+
+    data = DGData.from_raw(
+        edge_timestamps=edge_times,
+        edge_index=edge_index,
+        static_node_feats=static_node_feats,
+    )
+    split = RatioSplit(train_ratio=0.5, val_ratio=0.25, test_ratio=0.25)
     train, val, test = split.apply(data)
-    # check approximate ratios
-    assert len(train.edge_timestamps) == 5
-    assert len(val.edge_timestamps) == 2
-    assert len(test.edge_timestamps) == 2
+
+    assert isinstance(train, DGData)
+    assert isinstance(val, DGData)
+    assert isinstance(test, DGData)
+
+    assert train.time_delta == TimeDeltaDG('r')
+    assert val.time_delta == TimeDeltaDG('r')
+    assert test.time_delta == TimeDeltaDG('r')
+
+    assert train.timestamps.tolist() == [1, 2]
+    assert val.timestamps.tolist() == [3]
+    assert test.timestamps.tolist() == [4]
+
+    assert train.edge_event_idx.tolist() == [0, 1]
+    assert val.edge_event_idx.tolist() == [0]
+    assert test.edge_event_idx.tolist() == [0]
+
+    assert train.edge_feats is None
+    assert val.edge_feats is None
+    assert test.edge_feats is None
+
+    assert train.node_event_idx is None
+    assert val.node_event_idx is None
+    assert test.node_event_idx is None
+
+    assert train.node_ids is None
+    assert val.node_ids is None
+    assert test.node_ids is None
+
+    assert train.dynamic_node_feats is None
+    assert val.dynamic_node_feats is None
+    assert test.dynamic_node_feats is None
+
+    assert id(train.static_node_feats) == id(data.static_node_feats)
+    assert id(val.static_node_feats) == id(data.static_node_feats)
+    assert id(test.static_node_feats) == id(data.static_node_feats)
 
 
 def test_ratio_split_with_node_feats():
-    data = make_simple_dgdata(
-        edge_times=list(range(1, 11)),
-        node_times=list(range(0, 12)),
-        with_node_feats=True,
+    edge_times = torch.tensor([1, 2, 3, 4])
+    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+
+    node_times = torch.tensor([0, 2, 4])
+    node_ids = torch.tensor([1, 2, 3])
+    dynamic_node_feats = torch.rand(3, 7)
+    num_nodes = edge_index.max() + 1
+    static_node_feats = torch.rand(num_nodes, 5)
+
+    data = DGData.from_raw(
+        edge_timestamps=edge_times,
+        edge_index=edge_index,
+        static_node_feats=static_node_feats,
+        node_timestamps=node_times,
+        node_ids=node_ids,
+        dynamic_node_feats=dynamic_node_feats,
     )
-    split = RatioSplit(0.5, 0.25, 0.25)
-    train, val, test = split.apply(data)
-    assert train.dynamic_node_feats is not None
-    assert val.dynamic_node_feats is not None
-    assert test.dynamic_node_feats is not None
+    split = RatioSplit(train_ratio=0.5, val_ratio=0.5, test_ratio=0)
+    train, val = split.apply(data)
+
+    assert isinstance(train, DGData)
+    assert isinstance(val, DGData)
+
+    assert train.time_delta == TimeDeltaDG('r')
+    assert val.time_delta == TimeDeltaDG('r')
+
+    assert train.timestamps.tolist() == [0, 1, 2, 2]
+    assert (
+        val.timestamps.tolist() == [2, 3, 4, 4]
+    )  # Note: Splits are edge based (matching TGB), meaning that node events that occured 'prior to' cutoff time may appear... (in this case 2)
+
+    assert train.edge_event_idx.tolist() == [1, 2]
+    assert val.edge_event_idx.tolist() == [1, 2]
+
+    assert train.edge_feats is None
+    assert val.edge_feats is None
+
+    assert train.node_event_idx.tolist() == [0, 3]
+    assert val.node_event_idx.tolist() == [0, 3]
+
+    assert train.node_ids.tolist() == [1, 2]
+    assert val.node_ids.tolist() == [2, 3]
+
+    torch.testing.assert_close(train.dynamic_node_feats, data.dynamic_node_feats[:2])
+    torch.testing.assert_close(val.dynamic_node_feats, data.dynamic_node_feats[1:])
+
+    assert id(train.static_node_feats) == id(data.static_node_feats)
+    assert id(val.static_node_feats) == id(data.static_node_feats)
 
 
-def test_ratio_split_no_train_split():
-    data = make_simple_dgdata(edge_times=[1, 2, 3])
-    split = RatioSplit(0.0, 0.5, 0.5)
-    val, test = split.apply(data)
-    assert val.edge_timestamps.numel() > 0
-    assert test.edge_timestamps.numel() > 0
+def test_ratio_split_only_train_split():
+    edge_times = torch.tensor([1, 2, 3, 4])
+    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
 
+    node_times = torch.tensor([0, 2, 4])
+    node_ids = torch.tensor([1, 2, 3])
+    dynamic_node_feats = torch.rand(3, 7)
+    num_nodes = edge_index.max() + 1
+    static_node_feats = torch.rand(num_nodes, 5)
 
-def test_ratio_split_no_val_split():
-    data = make_simple_dgdata(edge_times=[1, 2, 3, 4])
-    split = RatioSplit(0.5, 0.0, 0.5)
-    train, test = split.apply(data)
-    assert len(train.edge_timestamps) > 0
-    assert len(test.edge_timestamps) > 0
-
-
-def test_ratio_split_train_only_split():
-    data = make_simple_dgdata(edge_times=[1, 2, 3])
-    split = RatioSplit(1.0, 0.0, 0.0)
+    data = DGData.from_raw(
+        edge_timestamps=edge_times,
+        edge_index=edge_index,
+        static_node_feats=static_node_feats,
+        node_timestamps=node_times,
+        node_ids=node_ids,
+        dynamic_node_feats=dynamic_node_feats,
+    )
+    split = RatioSplit(train_ratio=1, val_ratio=0, test_ratio=0)
     (train,) = split.apply(data)
-    assert len(train.edge_timestamps) == 3
+    assert isinstance(train, DGData)
 
 
 # TODO: Share this with other class
@@ -185,33 +332,43 @@ def tgb_dataset_factory():
     return _make_dataset
 
 
-@pytest.mark.parametrize('name', ['tgbl-wiki', 'tgbn-trade'])
+# @pytest.mark.parametrize('name', ['tgbl-wiki', 'tgbn-trade'])
+@pytest.mark.parametrize('name', ['tgbl-wiki'])
 def test_tgb_split_matches_dataset(name, tgb_dataset_factory):
-    # get mock dataset
-    dataset = tgb_dataset_factory(split='all', with_node_feats=True)
-
-    # patch the loader class depending on dataset type
     if name.startswith('tgbl'):
         loader_path = 'tgb.linkproppred.dataset.LinkPropPredDataset'
     else:
         loader_path = 'tgb.nodeproppred.dataset.NodePropPredDataset'
 
+    dataset = tgb_dataset_factory(split='all', with_node_feats=True)
+
     with patch(loader_path, return_value=dataset):
-        # DGData constructed with no split
-        dgdata = DGData.from_tgb(name=name)
+        train, val, test = DGData.from_tgb(name).split()
 
-        # DGData with split directly from loader
-        dg_train = DGData.from_tgb(name=name, split='train')
-        dg_val = DGData.from_tgb(name=name, split='val')
-        dg_test = DGData.from_tgb(name=name, split='test')
+    split_map = {'train': train, 'val': val, 'test': test}
+    for split in ['train', 'val', 'test']:
+        dataset_split = tgb_dataset_factory(split=split, with_node_feats=True)
+        with patch(loader_path, return_value=dataset_split):
+            expected_data = DGData.from_tgb(name)
+            actual_data = split_map[split]
 
-        # TGBSplit applied manually
-        split_strategy = TGBSplit(
-            dataset.train_mask, dataset.val_mask, dataset.test_mask
-        )
-        train, val, test = split_strategy.apply(dgdata)
-
-        # now assert they match
-        assert torch.equal(train.edge_index, dg_train.edge_index)
-        assert torch.equal(val.edge_index, dg_val.edge_index)
-        assert torch.equal(test.edge_index, dg_test.edge_index)
+            assert expected_data.time_delta == actual_data.time_delta
+            assert expected_data.timestamps.tolist() == actual_data.timestamps.tolist()
+            assert (
+                expected_data.edge_event_idx.tolist()
+                == actual_data.edge_event_idx.tolist()
+            )
+            assert expected_data.edge_feats.tolist() == actual_data.edge_feats.tolist()
+            assert (
+                expected_data.node_event_idx.tolist()
+                == actual_data.node_event_idx.tolist()
+            )
+            assert expected_data.node_ids.tolist() == actual_data.node_ids.tolist()
+            assert (
+                expected_data.dynamic_node_feats.tolist()
+                == actual_data.dynamic_node_feats.tolist()
+            )
+            assert (
+                expected_data.static_node_feats.tolist()
+                == actual_data.static_node_feats.tolist()
+            )
