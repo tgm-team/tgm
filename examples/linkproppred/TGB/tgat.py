@@ -52,72 +52,6 @@ parser.add_argument(
 )
 
 
-class TGATTGM(nn.Module):
-    def __init__(
-        self,
-        edge_dim: int,
-        time_dim: int,
-        embed_dim: int,
-        num_layers: int,
-        n_heads: int = 2,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.num_layers = num_layers
-        self.embed_dim = embed_dim
-        self.time_encoder = Time2Vec(time_dim=time_dim)
-        self.attn = nn.ModuleList(
-            [
-                TemporalAttention(
-                    n_heads=n_heads,
-                    node_dim=embed_dim,
-                    edge_dim=edge_dim,
-                    time_dim=time_dim,
-                    out_dim=embed_dim,
-                    dropout=dropout,
-                )
-                for _ in range(num_layers)
-            ]
-        )
-
-    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        device = batch.src.device
-        z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
-
-        for hop in reversed(range(self.num_layers)):
-            seed_nodes = batch.nids[hop]
-            nbrs = batch.nbr_nids[hop]
-            nbr_mask = batch.nbr_mask[hop].bool()
-            if seed_nodes.numel() == 0:
-                continue
-
-            # TODO: Check and read static node features
-            node_feat = STATIC_NODE_FEAT[seed_nodes]
-            node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
-
-            # If next next hops embeddings exist, use them instead of raw features
-            nbr_feat = STATIC_NODE_FEAT[nbrs]
-            if hop < self.num_layers - 1:
-                valid_nbrs = nbrs[nbr_mask]
-                nbr_feat[nbr_mask] = z[batch.global_to_local(valid_nbrs)]
-
-            delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
-            delta_time = delta_time.masked_fill(~nbr_mask, 0)
-
-            nbr_time_feat = self.time_encoder(delta_time)
-
-            out = self.attn[hop](
-                node_feat=node_feat,
-                time_feat=node_time_feat,
-                edge_feat=batch.nbr_feats[hop],
-                nbr_node_feat=nbr_feat,
-                nbr_time_feat=nbr_time_feat,
-                nbr_mask=nbr_mask,
-            )
-            z[batch.global_to_local(seed_nodes)] = out
-        return z
-
-
 ##########################################################
 class TimeEncoder(nn.Module):
     def __init__(self, time_dim: int, parameter_requires_grad: bool = True):
@@ -323,79 +257,12 @@ class MultiHeadAttention(nn.Module):
 ######################################################
 
 
-class NeighborSampler:
-    def __init__(self, adj_list: list):
-        self.nodes_neighbor_ids = []
-        self.nodes_edge_ids = []
-        self.nodes_neighbor_times = []
-
-        # the list at the first position in adj_list is empty, hence, sorted() will return an empty list for the first position
-        # its corresponding value in self.nodes_neighbor_ids, self.nodes_edge_ids, self.nodes_neighbor_times will also be empty with length 0
-        for per_node_neighbors in adj_list:
-            # per_node_neighbors is a list of tuples (neighbor_id, edge_id, timestamp)
-            # sort the list based on timestamps, sorted() function is stable
-            # Note that sort the list based on edge id is also correct, as the original data file ensures the interactions are chronological
-            sorted_per_node_neighbors = sorted(per_node_neighbors, key=lambda x: x[2])
-            self.nodes_neighbor_ids.append(
-                np.array([x[0] for x in sorted_per_node_neighbors])
-            )
-            self.nodes_edge_ids.append(
-                np.array([x[1] for x in sorted_per_node_neighbors])
-            )
-            self.nodes_neighbor_times.append(
-                np.array([x[2] for x in sorted_per_node_neighbors])
-            )
-
-    def get_historical_neighbors(
-        self, node_ids: np.ndarray, node_interact_times: np.ndarray, num_neighbors: int
-    ):
-        # All interactions described in the following three matrices are sorted in each row by time
-        # each entry in position (i,j) represents the id of the j-th dst node of src node node_ids[i] with an interaction before node_interact_times[i]
-        # ndarray, shape (batch_size, num_neighbors)
-        nodes_neighbor_ids = np.zeros((len(node_ids), num_neighbors)).astype(
-            np.longlong
-        )
-        nodes_edge_ids = np.zeros((len(node_ids), num_neighbors)).astype(np.longlong)
-        nodes_neighbor_times = np.zeros((len(node_ids), num_neighbors)).astype(
-            np.float32
-        )
-
-        # extracts all neighbors ids, edge ids and interaction times of nodes in node_ids, which happened before the corresponding time in node_interact_times
-        for idx, (node_id, node_interact_time) in enumerate(
-            zip(node_ids, node_interact_times)
-        ):
-            # find neighbors that interacted with node_id before time node_interact_time
-            i = np.searchsorted(self.nodes_neighbor_times[node_id], node_interact_time)
-            node_neighbor_ids = self.nodes_neighbor_ids[node_id][:i]
-            node_edge_ids = self.nodes_edge_ids[node_id][:i]
-            node_neighbor_times = self.nodes_neighbor_times[node_id][:i]
-
-            if len(node_neighbor_ids) > 0:
-                # Take most recent interactions with number num_neighbors
-                node_neighbor_ids = node_neighbor_ids[-num_neighbors:]
-                node_edge_ids = node_edge_ids[-num_neighbors:]
-                node_neighbor_times = node_neighbor_times[-num_neighbors:]
-
-                # put the neighbors' information at the back positions
-                nodes_neighbor_ids[idx, num_neighbors - len(node_neighbor_ids) :] = (
-                    node_neighbor_ids
-                )
-                nodes_edge_ids[idx, num_neighbors - len(node_edge_ids) :] = (
-                    node_edge_ids
-                )
-                nodes_neighbor_times[
-                    idx, num_neighbors - len(node_neighbor_times) :
-                ] = node_neighbor_times
-
-        return nodes_neighbor_ids, nodes_edge_ids, nodes_neighbor_times
-
-
 class TGAT(nn.Module):
     def __init__(
         self,
         node_raw_features: np.ndarray,
         edge_raw_features: np.ndarray,
-        neighbor_sampler: NeighborSampler,
+        neighbor_sampler,
         time_dim: int,
         output_dim: int = 172,
         num_layers: int = 2,
@@ -517,13 +384,6 @@ class TGAT(nn.Module):
         idx=-1,
         inference=False,
     ):
-        # print(
-        #    f'\n[{current_layer_num}]',
-        #    ' ids: ',
-        #    node_ids.shape,
-        #    f'is_src: {is_src} ',
-        #    f'is_neg: {is_negative}',
-        # )
         assert current_layer_num >= 0
         device = self.node_raw_features.device
 
@@ -542,10 +402,6 @@ class TGAT(nn.Module):
         else:
             # get source node representations by aggregating embeddings from the previous (current_layer_num - 1)-th layer
             # Tensor, shape (batch_size, output_dim or node_feat_dim)
-            # print(node_ids.shape, node_interact_times.shape)
-            # print('calling recursive forward for nodes')
-            # input()
-            # print('recurse on node')
             node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=node_ids,
                 node_interact_times=node_interact_times,
@@ -557,35 +413,13 @@ class TGAT(nn.Module):
                 idx=idx,
                 inference=inference,
             )
-            # print(f'[{current_layer_num}] node conv feats: ', node_conv_features.shape)
 
             # get temporal neighbors, including neighbor ids, edge ids and time information
             # neighbor_node_ids, ndarray, shape (batch_size, num_neighbors)
             # neighbor_edge_ids, ndarray, shape (batch_size, num_neighbors)
             # neighbor_times, ndarray, shape (batch_size, num_neighbors)
 
-            # TODO: Use batch
-            # neighbor_node_ids, neighbor_edge_ids, neighbor_times = (
-            #    self.neighbor_sampler.get_historical_neighbors(
-            #        node_ids=node_ids,
-            #        node_interact_times=node_interact_times,
-            #        num_neighbors=num_neighbors,
-            #    )
-            # )
-            # print('Current layer: ', current_layer_num)
-            # print(f'src: {batch.src.shape}')
-            # print(f'neg: {batch.neg.shape}')
-            # for i in range(len(batch.nbr_nids)):
-            #    print(f'hop: {i}, nids: {batch.nids[i].shape}')
-            #    print(f'hop: {i}, nbr_shape: {batch.nbr_nids[i].shape}')
-            #    print(f'hop: {i}, nbr_feats: {batch.nbr_feats[i].shape}')
-            # input()
-
             if len(node_ids) == batch.src.numel():
-                # if inference and is_negative:
-                #    print(
-                #        f'[{current_layer_num}] (1) getting nbrs for node: {node_ids[:5]}'
-                #    )
                 nbr_nids = batch.nids[1]
                 if inference and is_negative:
                     print('GRABBING TIMES')
@@ -595,29 +429,10 @@ class TGAT(nn.Module):
                     nbr_times = batch.times[1]
                 nbr_feats = batch.nbr_feats[0]
             elif len(node_ids) == batch.src.numel() * num_neighbors:
-                # print(
-                # f'[{current_layer_num}] (2) getting nbrs for node: {node_ids.shape}'
-                #    )
-                # print('----')
-                # print(batch.nbr_nids[1].shape, batch.nbr_feats[1].shape)
-                # input()
-                # if inference and is_negative:
-                #    print(
-                #        f'[{current_layer_num}] (2) getting nbrs for node: {node_ids[:5]}'
-                #    )
-
                 nbr_nids = batch.nbr_nids[1].flatten()
                 nbr_times = batch.nbr_times[1].flatten()
                 nbr_feats = batch.nbr_feats[1]
-
             elif len(node_ids) == (batch.neg.numel()):
-                # print(
-                #       f'[{current_layer_num}] (3) getting nbrs for node: {node_ids.shape}'
-                # )
-                # if inference and is_negative:
-                #    print(
-                #        f'[{current_layer_num}] (3) getting nbrs for node: {node_ids[:5]}'
-                #    )
                 nbr_nids = batch.nids[1]
 
                 if inference and is_negative:
@@ -628,22 +443,11 @@ class TGAT(nn.Module):
 
                 nbr_feats = batch.nbr_feats[0]
             elif len(node_ids) == (batch.neg.numel()) * num_neighbors:
-                # print(
-                #       f'[{current_layer_num}] (4) getting nbrs for node: {node_ids.shape}'
-                # )
-                # if inference and is_negative:
-                #    print(
-                #        f'[{current_layer_num}] (4) getting nbrs for node: {node_ids[:5]}'
-                #    )
                 nbr_nids = batch.nbr_nids[1].flatten()
                 nbr_times = batch.nbr_times[1].flatten()
                 nbr_feats = batch.nbr_feats[1]
             else:
-                # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
                 assert False
-
-                # if inference and is_negative:
-                #    print('full nbr_nids: ', nbr_nids.shape, nbr_nids[:5])
 
             #! equal chunks during training
             if not inference:
@@ -673,8 +477,6 @@ class TGAT(nn.Module):
                 else:
                     bsize = node_ids.shape[0] * num_neighbors
 
-                    # if inference and is_negative:
-                    #    print('trying batch size: ', bsize, ' on ', nbr_nids.shape)
                 src_nbr_nids, dst_nbr_nids, neg_nbr_nids = (
                     nbr_nids[0:bsize],
                     nbr_nids[bsize : 2 * bsize],
@@ -688,62 +490,24 @@ class TGAT(nn.Module):
 
                 nbr_feats = nbr_feats.reshape(-1, nbr_feats.size(-1))
                 src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
-                    # nbr_feats[0],
-                    # nbr_feats[1],
-                    # nbr_feats[2:],
                     nbr_feats[0:bsize],
                     nbr_feats[bsize : 2 * bsize],
                     nbr_feats[2 * bsize :],
                 )
 
-                # src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
-                #    src_nbr_feats.unsqueeze(0),
-                #    dst_nbr_feats.unsqueeze(0),
-                #    neg_nbr_feats.unsqueeze(0),
-                # )
-                # print(
-                #    f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}, src_nbr_nids: {src_nbr_nids.shape}, dst_nbr_nids: {dst_nbr_nids.shape}, neg_nbr_nids: {neg_nbr_nids.shape}'
-                # )
-                # print(
-                #    f'[{current_layer_num}] getting nbrs feat for node: {node_ids.shape}, src_nbr_feats: {src_nbr_feats.shape}, dst_nbr_feats: {dst_nbr_feats.shape}, neg_nbr_feats: {neg_nbr_feats.shape}'
-                # )
-                # input()
-
-            if inference and False:
-                if is_negative:
-                    neighbor_node_ids = neg_nbr_nids.cpu().numpy()
-                    neighbor_times = neg_nbr_times.cpu().numpy()
-                    neighbor_edge_features = neg_nbr_feats
-                elif is_src:
-                    neighbor_node_ids = src_nbr_nids.cpu().numpy()
-                    neighbor_times = src_nbr_times.cpu().numpy()
-                    neighbor_edge_features = src_nbr_feats
-                else:
-                    neighbor_node_ids = dst_nbr_nids.cpu().numpy()
-                    neighbor_times = dst_nbr_times.cpu().numpy()
-                    neighbor_edge_features = dst_nbr_feats
+            if is_src:
+                neighbor_node_ids = src_nbr_nids.cpu().numpy()
+                neighbor_times = src_nbr_times.cpu().numpy()
+                neighbor_edge_features = src_nbr_feats
+            elif is_negative:
+                neighbor_node_ids = neg_nbr_nids.cpu().numpy()
+                neighbor_times = neg_nbr_times.cpu().numpy()
+                neighbor_edge_features = neg_nbr_feats
             else:
-                if is_src:
-                    neighbor_node_ids = src_nbr_nids.cpu().numpy()
-                    neighbor_times = src_nbr_times.cpu().numpy()
-                    neighbor_edge_features = src_nbr_feats
-                elif is_negative:
-                    neighbor_node_ids = neg_nbr_nids.cpu().numpy()
-                    neighbor_times = neg_nbr_times.cpu().numpy()
-                    neighbor_edge_features = neg_nbr_feats
-                else:
-                    neighbor_node_ids = dst_nbr_nids.cpu().numpy()
-                    neighbor_times = dst_nbr_times.cpu().numpy()
-                    neighbor_edge_features = dst_nbr_feats
+                neighbor_node_ids = dst_nbr_nids.cpu().numpy()
+                neighbor_times = dst_nbr_times.cpu().numpy()
+                neighbor_edge_features = dst_nbr_feats
 
-                # print(
-                #    'trying to reshape: ',
-                #    neighbor_node_ids.shape,
-                #    ' into ',
-                #    node_ids.shape[0],
-                #    -1,
-                # )
-                # input()
             neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
             neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
             if inference and is_negative:
@@ -773,13 +537,6 @@ class TGAT(nn.Module):
 
             # get neighbor features from previous layers
             # shape (batch_size * num_neighbors, output_dim or node_feat_dim)
-            # print('calling recursive forward for nbrs')
-            # print(neighbor_node_ids.shape)
-            # input()
-            # print('---------------------')
-            # print(neighbor_node_ids.shape, neighbor_times.shape)
-            # print(f'is_src: {is_src}, nbrs: {neighbor_node_ids}')
-            # input()
 
             neighbor_node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=neighbor_node_ids.flatten(),
@@ -800,25 +557,10 @@ class TGAT(nn.Module):
             # input()
             # shape (batch_size, num_neighbors, output_dim or node_feat_dim)
 
-            # print(neighbor_node_conv_features.shape)
-            # print('---------------------')
-
-            # neighbor_node_conv_features = neighbor_node_conv_features.reshape(
-            #     node_ids.shape[0], num_neighbors, -1
-            # )
             # print (neighbor_node_conv_features.shape)
             neighbor_node_conv_features = neighbor_node_conv_features.reshape(
                 node_ids.shape[0], num_neighbors, -1
             )
-            # neighbor_node_conv_features = neighbor_node_conv_features.reshape(
-            #     -1, num_neighbors, edge_feat_dim
-            # )
-
-            # print(
-            #    f'[{current_layer_num}] after reshape: ',
-            #    neighbor_node_conv_features.shape,
-            # )
-            # input()
 
             # compute time interval between current time and historical interaction time
             # adarray, shape (batch_size, num_neighbors)
@@ -827,99 +569,47 @@ class TGAT(nn.Module):
             # print('neighbor node_ids: ', neighbor_node_ids.astype(int))
             neighbor_delta_times = node_interact_times[:, np.newaxis] - neighbor_times
 
-            # print(
-            #    f'[{current_layer_num}] DELTA TIMES: ', neighbor_delta_times.astype(int)
-            # )
-            # input()
-
             # shape (batch_size, num_neighbors, time_feat_dim)
             neighbor_time_features = self.time_encoder(
                 timestamps=torch.from_numpy(neighbor_delta_times).float().to(device)
             )
-
-            # print('nbr time features: ', neighbor_time_features)
-            # input()
 
             # get edge features, shape (batch_size, num_neighbors, edge_feat_dim)
             # neighbor_edge_features = self.edge_raw_features[
             #    torch.from_numpy(neighbor_edge_ids)
             # ]
 
-            # print('neighb edge features: ', neighbor_edge_features.shape)
-
             # temporal graph convolution
             # Tensor, output shape (batch_size, query_dim)
-            # print('node features: ', node_conv_features)
-            # print('node time features: ', node_time_features)
-            # input()
-            # print('nbr features: ', neighbor_node_conv_features)
-            # input()
-            # print('nbr time features: ', neighbor_time_features)
-            # input()
-            # print('nbr edge features: ', neighbor_edge_features)
-            # input()
-            # print('nbr masks: ', neighbor_node_ids)
-            # input(
 
             with open('tgm_out.txt', mode='a') as f:
-                import sys
+                lll = node_ids.reshape(-1)
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_IDS',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-                if inference:
-                    lll = node_ids.reshape(-1)
-                    print(
-                        f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_IDS',
-                        file=f,
-                    )
-                    print(' '.join(f'{x:.8f}' for x in lll), file=f)
+                lll = node_interact_times.reshape(-1)
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_TIMES',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-                    lll = node_interact_times.reshape(-1)
-                    print(
-                        f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_TIMES',
-                        file=f,
-                    )
-                    print(' '.join(f'{x:.8f}' for x in lll), file=f)
+                lll = neighbor_delta_times.reshape(-1)
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_DELTA_TIMES',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-                    lll = neighbor_delta_times.reshape(-1)
-                    print(
-                        f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_DELTA_TIMES',
-                        file=f,
-                    )
-                    print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                    lll = neighbor_node_ids.reshape(-1)
-                    print(
-                        f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_IDS',
-                        file=f,
-                    )
-                    print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                # lll = node_conv_features.view(-1).cpu().detach().numpy()
-                # print(
-                #    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_FEATURES',
-                #    file=f,
-                # )
-                # print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                # lll = node_time_features.view(-1).cpu().detach().numpy()
-                # print(
-                #    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_TIME_FEATURES',
-                #    file=f,
-                # )
-                # print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                # lll = neighbor_node_conv_features.view(-1).cpu().detach().numpy()
-                # print(
-                #    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_FEATURES',
-                #    file=f,
-                # )
-                # print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                # lll = neighbor_edge_features.view(-1).cpu().detach().numpy()
-                # print(
-                #    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_EDGE_FEATURES',
-                #    file=f,
-                # )
-                # print(' '.join(f'{x:.8f}' for x in lll), file=f)
+                lll = neighbor_node_ids.reshape(-1)
+                print(
+                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_IDS',
+                    file=f,
+                )
+                print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
                 # print(
                 #    f'[{current_layer_num}] attention node_features ({node_conv_features.shape}), time features ({node_time_features.shape}), nbr node features ({neighbor_node_conv_features.shape}), nbr time features ({neighbor_time_features.shape}), nbr edge features ({neighbor_edge_features.shape}), nbr mask ({neighbor_node_ids.shape})'
@@ -941,22 +631,11 @@ class TGAT(nn.Module):
                 input_1=output, input_2=node_raw_features
             )
             # print(f'[{current_layer_num}] final out shape: ', output.shape)
-            # input()
-
             return output
 
 
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
-        # E    super().__init__()
-        # E    self.lin_src = nn.Linear(dim, dim)
-        # E    self.lin_dst = nn.Linear(dim, dim)
-        # E    self.lin_out = nn.Linear(dim, 1)
-
-        # Edef forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        # E    h = self.lin_src(z_src) + self.lin_dst(z_dst)
-        # E    h = h.relu()
-        # E    return self.lin_out(h).sigmoid().view(-1)
         super().__init__()
 
         input_dim1 = input_dim2 = hidden_dim = dim
@@ -994,10 +673,6 @@ def train(
         batch_dst_node_ids = batch.dst.cpu().numpy()
         batch_node_interact_times = batch.time.cpu().numpy()
 
-        #        _, batch_neg_dst_node_ids = train_neg_edge_sampler.sample(
-        #            size=len(batch_src_node_ids)
-        #        )
-        #        batch_neg_src_node_ids = batch_src_node_ids
         batch_neg_dst_node_ids = batch.neg.cpu().numpy()
         batch_neg_src_node_ids = batch_src_node_ids
 
@@ -1015,9 +690,6 @@ def train(
             idx=idx,
         )
 
-        # print('z_src: ', z_src[0][0].item())
-        # print('z_dst: ', z_dst[0][0].item())
-
         # get temporal embedding of negative source and negative destination nodes
         # two Tensors, with shape (batch_size, output_dim)
         z_neg_src, z_neg_dst = encoder(
@@ -1029,14 +701,6 @@ def train(
             is_negative=True,
             idx=idx,
         )
-        # z = encoder(batch)
-        # print('z_neg_src: ', z_neg_src[0][0].item())
-        # print('z_neg_dst: ', z_neg_dst[0][0].item())
-        # input()
-
-        # z_src = z[batch.global_to_local(batch.src)]
-        # z_dst = z[batch.global_to_local(batch.dst)]
-        # z_neg = z[batch.global_to_local(batch.neg)]
 
         pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
         neg_prob = decoder(z_neg_src, z_neg_dst).squeeze(dim=-1).sigmoid()
@@ -1046,25 +710,6 @@ def train(
         labels = torch.cat(
             [torch.ones_like(pos_prob), torch.zeros_like(neg_prob)], dim=0
         )
-
-        # loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
-        # loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
-        with open('tgm_out.txt', mode='a') as f:
-            z_src.view(-1).cpu().detach().numpy()
-            # print(f'BATCH {idx} Z_SRC', file=f)
-            # print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-            # lll = z_dst.view(-1).cpu().detach().numpy()
-            # print(f'BATCH {idx} Z_DST', file=f)
-            # print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-            # lll = z_neg_dst.view(-1).cpu().detach().numpy()
-            # print(f'BATCH {idx} Z_NEG', file=f)
-            # print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-            # lll = (predicts > 0.5).int().view(-1).cpu().detach().numpy()
-            # print(f'BATCH {idx} PREDICTIONS', file=f)
-            # print(' '.join(map(str, lll)), file=f)
 
         loss = loss_func(input=predicts, target=labels)
         loss.backward()
@@ -1114,8 +759,6 @@ def eval(
     for batch in tqdm(loader):
         #! only evaluate for first edge in a batch for debugging purpose
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            # print(neg_batch)
-            # input()
             batch_src_node_ids = np.asarray([batch.src[idx]]).reshape(-1)
             batch_dst_node_ids = np.asarray([batch.dst[idx]]).reshape(-1)
             batch_neg_dst_node_ids = np.asarray(neg_batch)
@@ -1255,23 +898,6 @@ data = LinkPropPredDataset(
     name=args.dataset, root='datasets', preprocess=True
 ).full_data
 edge_raw_features = data['edge_feat'].astype(np.float64)
-
-# train_neighbor_sampler = get_neighbor_sampler(data=train_data)
-
-
-def get_neighbor_sampler(data: 'Data'):
-    max_node_id = max(data.src_node_ids.max(), data.dst_node_ids.max())
-    # the adjacency vector stores edges for each node (source or destination), undirected
-    # adj_list, list of list, where each element is a list of triple tuple (node_id, edge_id, timestamp)
-    # the list at the first position in adj_list is empty
-    adj_list = [[] for _ in range(max_node_id + 1)]
-    for src_node_id, dst_node_id, edge_id, node_interact_time in zip(
-        data.src_node_ids, data.dst_node_ids, data.edge_ids, data.node_interact_times
-    ):
-        adj_list[src_node_id].append((dst_node_id, edge_id, node_interact_time))
-        adj_list[dst_node_id].append((src_node_id, edge_id, node_interact_time))
-
-    return NeighborSampler(adj_list=adj_list)
 
 
 encoder = TGAT(
