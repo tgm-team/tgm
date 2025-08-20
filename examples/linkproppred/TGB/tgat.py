@@ -476,19 +476,22 @@ class TGAT(nn.Module):
         inference=False,
     ):
         # Tensor, shape (batch_size, output_dim)
-        src_node_embeddings = self.compute_node_temporal_embeddings(
-            node_ids=src_node_ids,
-            node_interact_times=node_interact_times,
-            current_layer_num=self.num_layers,
-            num_neighbors=num_neighbors,
-            batch=batch,
-            is_negative=is_negative,
-            is_src=True,
-            idx=idx,
-            inference=inference,
-        )
-        # print('src: ', src_node_embeddings[0, :5])
-        # Tensor, shape (batch_size, output_dim)
+        if inference and is_negative:
+            # TODO: Going to copy from z_src (positive)
+            src_node_embeddings = None
+        else:
+            src_node_embeddings = self.compute_node_temporal_embeddings(
+                node_ids=src_node_ids,
+                node_interact_times=node_interact_times,
+                current_layer_num=self.num_layers,
+                num_neighbors=num_neighbors,
+                batch=batch,
+                is_negative=is_negative,
+                is_src=True,
+                idx=idx,
+                inference=inference,
+            )
+
         dst_node_embeddings = self.compute_node_temporal_embeddings(
             node_ids=dst_node_ids,
             node_interact_times=node_interact_times,
@@ -500,9 +503,6 @@ class TGAT(nn.Module):
             idx=idx,
             inference=inference,
         )
-        # print('dst: ', dst_node_embeddings[0, :5])
-        if inference:
-            exit()
         return src_node_embeddings, dst_node_embeddings
 
     def compute_node_temporal_embeddings(
@@ -582,11 +582,17 @@ class TGAT(nn.Module):
             # input()
 
             if len(node_ids) == batch.src.numel():
-                # print(
-                #    f'[{current_layer_num}] (1) getting nbrs for node: {node_ids.shape}'
-                # )
+                # if inference and is_negative:
+                #    print(
+                #        f'[{current_layer_num}] (1) getting nbrs for node: {node_ids[:5]}'
+                #    )
                 nbr_nids = batch.nids[1]
-                nbr_times = batch.times[1]
+                if inference and is_negative:
+                    print('GRABBING TIMES')
+                    nbr_times = batch.nbr_times[0].flatten()
+                    print(nbr_times)
+                else:
+                    nbr_times = batch.times[1]
                 nbr_feats = batch.nbr_feats[0]
             elif len(node_ids) == batch.src.numel() * num_neighbors:
                 # print(
@@ -595,6 +601,10 @@ class TGAT(nn.Module):
                 # print('----')
                 # print(batch.nbr_nids[1].shape, batch.nbr_feats[1].shape)
                 # input()
+                # if inference and is_negative:
+                #    print(
+                #        f'[{current_layer_num}] (2) getting nbrs for node: {node_ids[:5]}'
+                #    )
 
                 nbr_nids = batch.nbr_nids[1].flatten()
                 nbr_times = batch.nbr_times[1].flatten()
@@ -604,19 +614,36 @@ class TGAT(nn.Module):
                 # print(
                 #       f'[{current_layer_num}] (3) getting nbrs for node: {node_ids.shape}'
                 # )
+                # if inference and is_negative:
+                #    print(
+                #        f'[{current_layer_num}] (3) getting nbrs for node: {node_ids[:5]}'
+                #    )
                 nbr_nids = batch.nids[1]
-                nbr_times = batch.times[1]
+
+                if inference and is_negative:
+                    print('GRABBING TIMES batch.neg')
+                    nbr_times = batch.nbr_times[0].flatten()
+                else:
+                    nbr_times = batch.times[1].flatten()
+
                 nbr_feats = batch.nbr_feats[0]
             elif len(node_ids) == (batch.neg.numel()) * num_neighbors:
                 # print(
                 #       f'[{current_layer_num}] (4) getting nbrs for node: {node_ids.shape}'
                 # )
+                # if inference and is_negative:
+                #    print(
+                #        f'[{current_layer_num}] (4) getting nbrs for node: {node_ids[:5]}'
+                #    )
                 nbr_nids = batch.nbr_nids[1].flatten()
                 nbr_times = batch.nbr_times[1].flatten()
                 nbr_feats = batch.nbr_feats[1]
             else:
                 # print(f'[{current_layer_num}] getting nbrs for node: {node_ids.shape}')
                 assert False
+
+                # if inference and is_negative:
+                #    print('full nbr_nids: ', nbr_nids.shape, nbr_nids[:5])
 
             #! equal chunks during training
             if not inference:
@@ -645,6 +672,9 @@ class TGAT(nn.Module):
                         bsize = num_neighbors * num_neighbors
                 else:
                     bsize = node_ids.shape[0] * num_neighbors
+
+                    # if inference and is_negative:
+                    #    print('trying batch size: ', bsize, ' on ', nbr_nids.shape)
                 src_nbr_nids, dst_nbr_nids, neg_nbr_nids = (
                     nbr_nids[0:bsize],
                     nbr_nids[bsize : 2 * bsize],
@@ -665,6 +695,7 @@ class TGAT(nn.Module):
                     nbr_feats[bsize : 2 * bsize],
                     nbr_feats[2 * bsize :],
                 )
+
                 # src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
                 #    src_nbr_feats.unsqueeze(0),
                 #    dst_nbr_feats.unsqueeze(0),
@@ -678,7 +709,7 @@ class TGAT(nn.Module):
                 # )
                 # input()
 
-            if inference:
+            if inference and False:
                 if is_negative:
                     neighbor_node_ids = neg_nbr_nids.cpu().numpy()
                     neighbor_times = neg_nbr_times.cpu().numpy()
@@ -715,6 +746,19 @@ class TGAT(nn.Module):
                 # input()
             neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
             neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
+            if inference and is_negative:
+                print(
+                    f'\n[{current_layer_num}]',
+                    ' ids: ',
+                    node_ids.shape,
+                    f'  {node_ids[-10:]}  is_src: {is_src} ',
+                    f'is_neg: {is_negative}',
+                    f'nbrs: {neighbor_node_ids[-10:]}',
+                    f'nbr times: {neighbor_times}',
+                )
+                print(batch.nids[0][-3:])
+                print(batch.nids[1][-3 * 5 :])
+                input()
 
             # TODO: Ensure this doesnt break train
             if inference:
@@ -734,8 +778,8 @@ class TGAT(nn.Module):
             # input()
             # print('---------------------')
             # print(neighbor_node_ids.shape, neighbor_times.shape)
-            print(f'is_src: {is_src}, nbrs: {neighbor_node_ids}')
-            input()
+            # print(f'is_src: {is_src}, nbrs: {neighbor_node_ids}')
+            # input()
 
             neighbor_node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=neighbor_node_ids.flatten(),
@@ -1069,7 +1113,6 @@ def eval(
     batch_id = 0
     for batch in tqdm(loader):
         #! only evaluate for first edge in a batch for debugging purpose
-        # print(batch.src)
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             # print(neg_batch)
             # input()
@@ -1088,9 +1131,6 @@ def eval(
             )
             assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
 
-            # print(batch_src_node_ids, batch_dst_node_ids)
-            # input()
-
             z_src, z_dst = encoder(
                 src_node_ids=batch_src_node_ids,
                 dst_node_ids=batch_dst_node_ids,
@@ -1102,10 +1142,6 @@ def eval(
                 inference=True,
             )
 
-            print(f'z src: {z_src[0, :5]}, z dst: {z_dst[0, :5]}')
-            exit()
-            input()
-
             neg_batch_node_interact_times = (
                 torch.tensor([batch.time[idx]])
                 .repeat(batch_neg_dst_node_ids.shape[0])
@@ -1113,7 +1149,7 @@ def eval(
                 .numpy()
             )
 
-            z_neg_src, z_neg_dst = encoder(
+            _, z_neg_dst = encoder(
                 src_node_ids=batch_neg_src_node_ids,
                 dst_node_ids=batch_neg_dst_node_ids,
                 node_interact_times=neg_batch_node_interact_times,
@@ -1123,9 +1159,8 @@ def eval(
                 idx=idx,
                 inference=True,
             )
-            print(z_neg_src.shape, z_neg_dst.shape)
-            print(f'z src neg: {z_neg_src[0, :5]}, z dst neg: {z_neg_dst[0, :5]}')
-            input()
+
+            z_neg_src = z_src.repeat(z_neg_dst.shape[0], 1)
 
             pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
             neg_prob = decoder(z_neg_src, z_neg_dst).squeeze(dim=-1).sigmoid()
@@ -1135,18 +1170,19 @@ def eval(
                 'y_pred_neg': neg_prob.detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
-            print(f'Predicting for: {batch.src}, got: {input_dict}')
             perf = evaluator.eval(input_dict)[eval_metric]
             perf_list.append(perf)
+            print(input_dict['y_pred_pos'], input_dict['y_pred_neg'][:3])
             print(f'---\nbatch ID: {batch_id}, MRR, {perf}---\n')
-            batch_id += 1
+            input()
 
-            if batch_id > 1000:
-                break
+        batch_id += 1
+        if batch_id > 5:
+            break
 
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
-    print(metric_dict)
+    print(f'validate {eval_metric}, {np.mean([metric_dict[eval_metric]])}')
     return metric_dict
 
 
@@ -1180,17 +1216,17 @@ SHARED_NBR_HOOK = RecencyNeighborHook(
 
 
 def _init_hooks(
-    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
+    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str, nbr_hook=None
 ) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        # nbr_hook = RecencyNeighborHook(
-        #    num_nbrs=args.n_nbrs,
-        #    num_nodes=dg.num_nodes,
-        #    edge_feats_dim=dg.edge_feats_dim,
-        # )
-        nbr_hook = SHARED_NBR_HOOK
+        if nbr_hook is None:
+            nbr_hook = RecencyNeighborHook(
+                num_nbrs=args.n_nbrs,
+                num_nodes=dg.num_nodes,
+                edge_feats_dim=dg.edge_feats_dim,
+            )
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -1219,7 +1255,6 @@ data = LinkPropPredDataset(
     name=args.dataset, root='datasets', preprocess=True
 ).full_data
 edge_raw_features = data['edge_feat'].astype(np.float64)
-print(node_raw_features.shape, edge_raw_features.shape)
 
 # train_neighbor_sampler = get_neighbor_sampler(data=train_data)
 
@@ -1263,22 +1298,40 @@ for epoch in range(1, args.epochs + 1):
         hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
         batch_size=args.bsize,
     )
+
+    # Reset the nbr hook, then loop through the entire training data to fill up it's state
+    SHARED_NBR_HOOK = RecencyNeighborHook(
+        num_nbrs=args.n_nbrs,
+        num_nodes=test_dg.num_nodes,
+        edge_feats_dim=test_dg.edge_feats_dim,
+    )
+    foo_train_loader = DGDataLoader(
+        train_dg,
+        hook=_init_hooks(
+            test_dg, args.sampling, neg_sampler, 'train', nbr_hook=SHARED_NBR_HOOK
+        ),
+        batch_size=200,
+        drop_last=False,
+    )
+    print('filling up neighbor hook in preperation for validation')
+    for batch in tqdm(foo_train_loader):
+        continue
+
     val_loader = DGDataLoader(
         val_dg,
-        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
+        hook=_init_hooks(
+            test_dg, args.sampling, neg_sampler, 'val', nbr_hook=SHARED_NBR_HOOK
+        ),
         # batch_size=args.bsize,
         batch_size=1,
     )
     start_time = time.perf_counter()
-    print(f'&&&&: {len(train_loader._hook.hooks[1]._history)}')
     loss = train(train_loader, encoder, decoder, opt)
-    print(f'&&&& after training: {len(train_loader._hook.hooks[1]._history)}')
-
-    print(f'&&&& val loader shared:  {len(val_loader._hook.hooks[1]._history)}')
     end_time = time.perf_counter()
     latency = end_time - start_time
 
     val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
+    exit()
 
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
