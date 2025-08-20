@@ -112,11 +112,7 @@ class TemporalRatioSplit(SplitStrategy):
             )
 
     def apply(self, data: 'DGData') -> Tuple['DGData', ...]:  # type: ignore
-        edge_times = data.timestamps[data.edge_event_idx]
-        if edge_times.numel() == 0:
-            return tuple()  # no edges
-
-        min_time, max_time = int(edge_times.min()), int(edge_times.max())
+        min_time, max_time = data.timestamps[0], data.timestamps[-1]  # it's sorted
         total_span = max_time - min_time + 1
 
         val_time = min_time + int(total_span * self.train_ratio)
