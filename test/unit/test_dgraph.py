@@ -106,6 +106,11 @@ def test_str(data):
     assert isinstance(dg.__str__(), str)
 
 
+def test_init_bad_data():
+    with pytest.raises(TypeError):
+        DGraph('foo')
+
+
 def test_materialize(data):
     dg = DGraph(data)
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
