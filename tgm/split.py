@@ -57,7 +57,7 @@ class SplitStrategy(ABC):
 
 
 @dataclass
-class TimeSplit(SplitStrategy):
+class TemporalSplit(SplitStrategy):
     val_time: int
     test_time: int
 
@@ -69,35 +69,33 @@ class TimeSplit(SplitStrategy):
 
     def apply(self, data: 'DGData') -> Tuple['DGData', ...]:  # type: ignore
         edge_times = data.timestamps[data.edge_event_idx]
-        train_mask = edge_times < self.val_time
-        val_mask = (edge_times >= self.val_time) & (edge_times < self.test_time)
-        test_mask = edge_times >= self.test_time
-
-        node_mask = None
+        node_times = None
         if data.node_ids is not None:
             node_times = data.timestamps[data.node_event_idx]
-            node_mask = node_times < self.test_time  # keep all nodes before end of test
+
+        ranges = {
+            'train': (-float('inf'), self.val_time),
+            'val': (self.val_time, self.test_time),
+            'test': (self.test_time, float('inf')),
+        }
 
         splits = []
-        for mask in (train_mask, val_mask, test_mask):
-            if not mask.any():
+        for start, end in ranges.values():
+            edge_mask = (edge_times >= start) & (edge_times < end)
+            if not edge_mask.any():
                 continue
+
             node_mask = None
-            if data.node_ids is not None:
-                node_times = data.timestamps[data.node_event_idx]
-                # include nodes between first edge-1 and last edge
-                first_edge = edge_times[mask].min()
-                last_edge = edge_times[mask].max()
-                node_mask = (node_times >= (first_edge - 1)) & (
-                    node_times < last_edge + 1
-                )
-            splits.append(self._masked_copy(data, mask, node_mask))
+            if node_times is not None:
+                node_mask = (node_times >= start) & (node_times < end)
+
+            splits.append(self._masked_copy(data, edge_mask, node_mask))
 
         return tuple(splits)
 
 
 @dataclass
-class RatioSplit(SplitStrategy):
+class TemporalRatioSplit(SplitStrategy):
     train_ratio: float = 0.7
     val_ratio: float = 0.15
     test_ratio: float = 0.15
@@ -124,7 +122,7 @@ class RatioSplit(SplitStrategy):
         val_time = min_time + int(total_span * self.train_ratio)
         test_time = val_time + int(total_span * self.val_ratio)
 
-        time_split = TimeSplit(val_time=val_time, test_time=test_time)
+        time_split = TemporalSplit(val_time=val_time, test_time=test_time)
         return time_split.apply(data)
 
 

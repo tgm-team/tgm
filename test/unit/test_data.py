@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from tgm.data import DGData
-from tgm.split import RatioSplit, TGBSplit
+from tgm.split import TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TimeDeltaDG
 
 
@@ -652,7 +652,6 @@ def tgb_dataset_factory():
         edge_feat = None
 
         train_mask = np.zeros(num_events, dtype=bool)
-        train_mask = np.zeros(num_events, dtype=bool)
         val_mask = np.zeros(num_events, dtype=bool)
         test_mask = np.zeros(num_events, dtype=bool)
 
@@ -907,7 +906,7 @@ def test_split_default_calls_ratio_split(monkeypatch):
     expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
     mock_strategy = MagicMock()
     mock_strategy.apply.return_value = expected
-    monkeypatch.setattr('tgm.data.RatioSplit', lambda: mock_strategy)
+    monkeypatch.setattr('tgm.data.TemporalRatioSplit', lambda: mock_strategy)
 
     result = data.split()
     mock_strategy.apply.assert_called_once_with(data)
@@ -921,7 +920,7 @@ def test_split_with_explicit_ratio_split():
     data = DGData.__new__(DGData)
     data._split_strategy = None
 
-    strategy = RatioSplit(0.5, 0.25, 0.25)
+    strategy = TemporalRatioSplit(0.5, 0.25, 0.25)
     expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
     strategy.apply = MagicMock(return_value=expected)
 
@@ -955,7 +954,7 @@ def test_split_cannot_override_tgb_split():
     data._split_strategy = TGBSplit({})
 
     with pytest.raises(ValueError):
-        data.split(strategy=RatioSplit())
+        data.split(strategy=TemporalRatioSplit())
 
 
 def test_clone():

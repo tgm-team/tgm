@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from tgm.split import RatioSplit, SplitStrategy, TGBSplit
+from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
@@ -183,7 +183,7 @@ class DGData:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]
 
     def split(self, strategy: SplitStrategy | None = None) -> Tuple[DGData, ...]:
-        strategy = strategy or self._split_strategy or RatioSplit()
+        strategy = strategy or self._split_strategy or TemporalRatioSplit()
 
         if (
             isinstance(self._split_strategy, TGBSplit)
@@ -563,9 +563,14 @@ class DGData:
             static_node_feats = torch.from_numpy(dataset.node_feat)
 
         raw_times = torch.from_numpy(data['timestamps'])
-        train_times = raw_times[dataset.train_mask]
-        val_times = raw_times[dataset.val_mask]
-        test_times = raw_times[dataset.test_mask]
+        split_bounds = {}
+        for split_name, mask in {
+            'train': dataset.train_mask,
+            'val': dataset.val_mask,
+            'test': dataset.test_mask,
+        }.items():
+            times = raw_times[mask]
+            split_bounds[split_name] = (int(times.min()), int(times.max()))
 
         data = cls.from_raw(
             time_delta=TGB_TIME_DELTAS[name],
@@ -578,10 +583,5 @@ class DGData:
             static_node_feats=static_node_feats,
         )
 
-        split_bounds = {
-            'train': (int(train_times.min().item()), int(train_times.max().item())),
-            'val': (int(val_times.min().item()), int(val_times.max().item())),
-            'test': (int(test_times.min().item()), int(test_times.max().item())),
-        }
         data._split_strategy = TGBSplit(split_bounds)
         return data
