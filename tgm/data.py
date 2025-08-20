@@ -539,8 +539,11 @@ class DGData:
 
             if len(node_label_dict):
                 # Node events could be missing from the current data split (e.g. validation)
-                num_node_events = sum(len(v) for v in node_label_dict.values())
-                node_label_dim = next(iter(node_label_dict.values()))[0].shape[0]
+                num_node_events, node_label_dim = 0, 0
+                for t in node_label_dict:
+                    for node_id, label in node_label_dict[t].items():
+                        num_node_events += 1
+                        node_label_dim = label.shape[0]
                 temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
                 temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
                 temp_dynamic_node_feats = np.zeros(

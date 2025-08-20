@@ -84,9 +84,9 @@ seed_everything(args.seed)
 data = DGData.from_tgb(args.dataset).discretize(args.time_gran)
 train_data, val_data, test_data = data.split()
 
-train_dg = DGraph(train_data, device=args.device)
-val_dg = DGraph(val_data, device=args.device)
-test_dg = DGraph(test_data, device=args.device)
+train_dg = DGraph(train_data)
+val_dg = DGraph(val_data)
+test_dg = DGraph(test_data)
 
 train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran)
