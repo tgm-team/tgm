@@ -19,6 +19,10 @@ def test_hook_dependancies():
     assert DeduplicationHook.produces == {'unique_nids', 'global_to_local'}
 
 
+def test_hook_reset_state():
+    assert DeduplicationHook.has_state == False
+
+
 def test_dedup(dg):
     hook = DeduplicationHook()
     batch = dg.materialize()
