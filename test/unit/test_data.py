@@ -652,6 +652,7 @@ def tgb_dataset_factory():
         edge_feat = None
 
         train_mask = np.zeros(num_events, dtype=bool)
+        train_mask = np.zeros(num_events, dtype=bool)
         val_mask = np.zeros(num_events, dtype=bool)
         test_mask = np.zeros(num_events, dtype=bool)
 
@@ -951,12 +952,7 @@ def test_split_uses_tgb_split_when_present():
 
 def test_split_cannot_override_tgb_split():
     data = DGData.__new__(DGData)
-    data._split_strategy = None
-
-    train_mask = torch.tensor([1], dtype=torch.bool)
-    val_mask = torch.tensor([0], dtype=torch.bool)
-    test_mask = torch.tensor([0], dtype=torch.bool)
-    data._split_strategy = TGBSplit(train_mask, val_mask, test_mask)
+    data._split_strategy = TGBSplit({})
 
     with pytest.raises(ValueError):
         data.split(strategy=RatioSplit())

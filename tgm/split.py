@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Dict, Tuple
 
 import torch
 from torch import Tensor
@@ -39,6 +39,10 @@ class SplitStrategy(ABC):
 
         # Static features are shared across splits, do not clone
         static_node_feats = data.static_node_feats
+
+        # In case we masked out to the point of empty node events, change to None
+        if node_ids is not None and node_ids.numel() == 0:
+            node_ids = node_timestamps = dynamic_node_feats = None
 
         return DGData.from_raw(
             time_delta=data.time_delta,
@@ -126,23 +130,24 @@ class RatioSplit(SplitStrategy):
 
 @dataclass
 class TGBSplit(SplitStrategy):
-    train_mask: Tensor
-    val_mask: Tensor
-    test_mask: Tensor
+    split_bounds: Dict[str, Tuple[int, int]]  # min/max edge times for each split
 
     def apply(self, data: 'DGData') -> Tuple['DGData', 'DGData', 'DGData']:  # type: ignore
         splits = []
-        for mask in (self.train_mask, self.val_mask, self.test_mask):
-            edge_mask = mask
+        for split_name in ['train', 'val', 'test']:
+            edge_start_time, edge_end_time = self.split_bounds[split_name]
+            edge_mask = (data.timestamps[data.edge_event_idx] >= edge_start_time) & (
+                data.timestamps[data.edge_event_idx] <= edge_end_time
+            )
+
             node_mask = None
             if data.node_ids is not None:
                 node_times = data.timestamps[data.node_event_idx]
-                edge_times = data.timestamps[data.edge_event_idx][mask]
-                if edge_times.numel() > 0:
-                    first_edge = edge_times.min()
-                    last_edge = edge_times.max()
-                    node_mask = (node_times >= (first_edge - 1)) & (
-                        node_times <= last_edge
+                if edge_mask.any():
+                    node_mask = (node_times >= (edge_start_time - 1)) & (
+                        node_times <= edge_end_time
                     )
+
             splits.append(self._masked_copy(data, edge_mask, node_mask))
+
         return tuple(splits)

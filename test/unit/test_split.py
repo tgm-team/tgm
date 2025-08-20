@@ -277,51 +277,88 @@ def test_ratio_split_only_train_split():
     assert isinstance(train, DGData)
 
 
-# TODO: Share this with other class
 @pytest.fixture
 def tgb_dataset_factory():
     def _make_dataset(split: str = 'all', with_node_feats: bool = False):
-        num_events, num_train, num_val = 10, 7, 2
-        train_indices = np.arange(0, num_train)
-        val_indices = np.arange(num_train, num_train + num_val)
-        test_indices = np.arange(num_train + num_val, num_events)
+        splits = {'train': 7, 'val': 2, 'test': 1, 'all': 10}
+        num_events = splits['all']
 
         sources = np.random.randint(0, 1000, size=num_events)
         destinations = np.random.randint(0, 1000, size=num_events)
         timestamps = np.arange(num_events)
-        edge_feat = None
 
-        train_mask = np.zeros(num_events, dtype=bool)
-        val_mask = np.zeros(num_events, dtype=bool)
-        test_mask = np.zeros(num_events, dtype=bool)
+        train_indices = np.arange(0, splits['train'])
+        val_indices = np.arange(splits['train'], splits['train'] + splits['val'])
+        test_indices = np.arange(splits['train'] + splits['val'], num_events)
 
-        train_mask[train_indices] = True
-        val_mask[val_indices] = True
-        test_mask[test_indices] = True
+        train_mask_full = np.zeros(num_events, dtype=bool)
+        val_mask_full = np.zeros(num_events, dtype=bool)
+        test_mask_full = np.zeros(num_events, dtype=bool)
+        train_mask_full[train_indices] = True
+        val_mask_full[val_indices] = True
+        test_mask_full[test_indices] = True
 
         mock_dataset = MagicMock()
-        mock_dataset.train_mask = train_mask
-        mock_dataset.val_mask = val_mask
-        mock_dataset.test_mask = test_mask
         mock_dataset.num_edges = num_events
-        mock_dataset.full_data = {
-            'sources': sources,
-            'destinations': destinations,
-            'timestamps': timestamps,
-            'edge_feat': edge_feat,
-        }
 
+        if split == 'all':
+            # Full dataset view
+            data = {
+                'sources': sources,
+                'destinations': destinations,
+                'timestamps': timestamps,
+                'edge_feat': None,
+            }
+            # keep true masks
+            mock_dataset.train_mask = train_mask_full
+            mock_dataset.val_mask = val_mask_full
+            mock_dataset.test_mask = test_mask_full
+
+        else:
+            # Slice the subset
+            mask_map = {
+                'train': train_mask_full,
+                'val': val_mask_full,
+                'test': test_mask_full,
+            }
+            mask = mask_map[split]
+
+            data = {
+                'sources': sources[mask],
+                'destinations': destinations[mask],
+                'timestamps': timestamps[mask],
+                'edge_feat': None,
+            }
+
+            n = len(data['timestamps'])
+            # fabricate dummy masks that match this sliced view
+            train_mask = np.ones(n, dtype=bool)
+            val_mask = np.ones(n, dtype=bool)
+            test_mask = np.ones(n, dtype=bool)
+
+            if split == 'train':
+                train_mask[:] = True
+            elif split == 'val':
+                val_mask[:] = True
+            elif split == 'test':
+                test_mask[:] = True
+
+            mock_dataset.train_mask = train_mask
+            mock_dataset.val_mask = val_mask
+            mock_dataset.test_mask = test_mask
+
+        mock_dataset.full_data = data
+
+        # Node count depends on what’s visible
         if split == 'all':
             num_nodes = 1 + max(np.max(sources), np.max(destinations))
         else:
-            mask = {'train': train_mask, 'val': val_mask, 'test': test_mask}[split]
-            valid_src, valid_dst = sources[mask], destinations[mask]
+            valid_src, valid_dst = data['sources'], data['destinations']
             num_nodes = 1 + max(np.max(valid_src), np.max(valid_dst))
 
-        if with_node_feats:
-            mock_dataset.node_feat = np.random.rand(num_nodes, 10)
-        else:
-            mock_dataset.node_feat = None
+        mock_dataset.node_feat = (
+            np.random.rand(num_nodes, 10) if with_node_feats else None
+        )
 
         mock_dataset.full_data['node_label_dict'] = {}
         for i in range(5):
@@ -332,18 +369,14 @@ def tgb_dataset_factory():
     return _make_dataset
 
 
-# @pytest.mark.parametrize('name', ['tgbl-wiki', 'tgbn-trade'])
-@pytest.mark.parametrize('name', ['tgbl-wiki'])
-def test_tgb_split_matches_dataset(name, tgb_dataset_factory):
-    if name.startswith('tgbl'):
-        loader_path = 'tgb.linkproppred.dataset.LinkPropPredDataset'
-    else:
-        loader_path = 'tgb.nodeproppred.dataset.NodePropPredDataset'
+def test_tgbl_split_matches(tgb_dataset_factory):
+    name = 'tgbl-wiki'
+    loader_path = 'tgb.linkproppred.dataset.LinkPropPredDataset'
 
     dataset = tgb_dataset_factory(split='all', with_node_feats=True)
-
     with patch(loader_path, return_value=dataset):
-        train, val, test = DGData.from_tgb(name).split()
+        data = DGData.from_tgb(name)
+        train, val, test = data.split()
 
     split_map = {'train': train, 'val': val, 'test': test}
     for split in ['train', 'val', 'test']:
@@ -358,17 +391,48 @@ def test_tgb_split_matches_dataset(name, tgb_dataset_factory):
                 expected_data.edge_event_idx.tolist()
                 == actual_data.edge_event_idx.tolist()
             )
-            assert expected_data.edge_feats.tolist() == actual_data.edge_feats.tolist()
-            assert (
-                expected_data.node_event_idx.tolist()
-                == actual_data.node_event_idx.tolist()
+            torch.testing.assert_close(
+                data.static_node_feats, actual_data.static_node_feats
             )
-            assert expected_data.node_ids.tolist() == actual_data.node_ids.tolist()
+
+
+def test_tgbn_split_matches(tgb_dataset_factory):
+    name = 'tgbn-trade'
+    loader_path = 'tgb.nodeproppred.dataset.NodePropPredDataset'
+
+    dataset = tgb_dataset_factory(split='all', with_node_feats=True)
+    with patch(loader_path, return_value=dataset):
+        data = DGData.from_tgb(name)
+        train, val, test = data.split()
+
+    split_map = {'train': train, 'val': val, 'test': test}
+    for split in ['train', 'val', 'test']:
+        dataset_split = tgb_dataset_factory(split=split, with_node_feats=True)
+        with patch(loader_path, return_value=dataset_split):
+            expected_data = DGData.from_tgb(name)
+            actual_data = split_map[split]
+
+            assert expected_data.time_delta == actual_data.time_delta
+            assert expected_data.timestamps.tolist() == actual_data.timestamps.tolist()
             assert (
-                expected_data.dynamic_node_feats.tolist()
-                == actual_data.dynamic_node_feats.tolist()
+                expected_data.edge_event_idx.tolist()
+                == actual_data.edge_event_idx.tolist()
             )
-            assert (
-                expected_data.static_node_feats.tolist()
-                == actual_data.static_node_feats.tolist()
+            torch.testing.assert_close(
+                data.static_node_feats, actual_data.static_node_feats
             )
+
+            if split == 'train':
+                assert (
+                    expected_data.node_event_idx.tolist()
+                    == actual_data.node_event_idx.tolist()
+                )
+                assert expected_data.node_ids.tolist() == actual_data.node_ids.tolist()
+                assert (
+                    expected_data.dynamic_node_feats.tolist()
+                    == actual_data.dynamic_node_feats.tolist()
+                )
+            else:
+                assert actual_data.node_event_idx is None
+                assert actual_data.node_ids is None
+                assert actual_data.dynamic_node_feats is None

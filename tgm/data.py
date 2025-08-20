@@ -562,6 +562,11 @@ class DGData:
         if dataset.node_feat is not None:
             static_node_feats = torch.from_numpy(dataset.node_feat)
 
+        raw_times = torch.from_numpy(data['timestamps'])
+        train_times = raw_times[dataset.train_mask]
+        val_times = raw_times[dataset.val_mask]
+        test_times = raw_times[dataset.test_mask]
+
         data = cls.from_raw(
             time_delta=TGB_TIME_DELTAS[name],
             edge_timestamps=timestamps,
@@ -573,9 +578,10 @@ class DGData:
             static_node_feats=static_node_feats,
         )
 
-        data._split_strategy = TGBSplit(
-            train_mask=torch.from_numpy(dataset.train_mask),
-            val_mask=torch.from_numpy(dataset.val_mask),
-            test_mask=torch.from_numpy(dataset.test_mask),
-        )
+        split_bounds = {
+            'train': (int(train_times.min().item()), int(train_times.max().item())),
+            'val': (int(val_times.min().item()), int(val_times.max().item())),
+            'test': (int(test_times.min().item()), int(test_times.max().item())),
+        }
+        data._split_strategy = TGBSplit(split_bounds)
         return data
