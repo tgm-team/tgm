@@ -497,5 +497,7 @@ for epoch in range(1, args.epochs + 1):
     encoder.memory.clear_msgs(list(range(test_dg.num_nodes)))
 
 
-test_results = eval(test_loader, encoder, decoder, eval_metric, evaluator)
+test_results = eval(
+    test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+)
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

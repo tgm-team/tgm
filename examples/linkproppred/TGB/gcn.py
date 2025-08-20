@@ -134,10 +134,10 @@ class LinkPredictor(nn.Module):
 def train_in_batches(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
-    static_node_feat: torch.Tensor,
     conversion_rate: int,
 ) -> float:
     encoder.train()
@@ -146,10 +146,10 @@ def train_in_batches(
     criterion = torch.nn.MSELoss()
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
-    embeddings = encoder(snapshot_batch, static_node_feat)
+    embeddings = encoder(snapshot_batch, static_node_feats)
     for batch in tqdm(loader):
         opt.zero_grad()
-        embeddings = encoder(snapshot_batch, static_node_feat)
+        embeddings = encoder(snapshot_batch, static_node_feats)
         pos_out = decoder(embeddings[batch.src], embeddings[batch.dst])
         neg_out = decoder(embeddings[batch.src], embeddings[batch.neg])
         loss = criterion(pos_out, torch.ones_like(pos_out))
@@ -173,12 +173,12 @@ def train_in_batches(
 def eval(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
+    z: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     eval_metric: str,
     evaluator: Evaluator,
-    static_node_feat: torch.Tensor,
-    z: torch.Tensor,
     conversion_rate: int,
 ) -> dict:
     encoder.eval()
@@ -207,7 +207,7 @@ def eval(
         while (
             batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate
         ):  # if batch timestamps greater than snapshot, process the snapshot
-            z = encoder(snapshot_batch, static_node_feat).detach()
+            z = encoder(snapshot_batch, static_node_feats).detach()
             try:
                 snapshot_batch = next(snapshots_iterator)
             except StopIteration:
@@ -305,10 +305,10 @@ for epoch in range(1, args.epochs + 1):
     loss, z = train_in_batches(
         train_loader,
         train_snapshots_loader,
+        static_node_feats,
         encoder,
         decoder,
         opt,
-        static_node_feats,
         conversion_rate,
     )
     end_time = time.perf_counter()
@@ -318,12 +318,12 @@ for epoch in range(1, args.epochs + 1):
     val_results = eval(
         val_loader,
         val_snapshots_loader,
+        static_node_feats,
+        z,
         encoder,
         decoder,
         eval_metric,
         evaluator,
-        static_node_feats,
-        z,
         conversion_rate,
     )
     print(
@@ -334,12 +334,12 @@ for epoch in range(1, args.epochs + 1):
 test_results = eval(
     test_loader,
     test_snapshots_loader,
+    static_node_feats,
+    z,
     encoder,
     decoder,
     eval_metric,
     evaluator,
-    static_node_feats,
-    z,
     conversion_rate,
 )
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
