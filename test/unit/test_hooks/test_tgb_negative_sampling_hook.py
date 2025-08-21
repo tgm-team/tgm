@@ -20,6 +20,10 @@ def test_hook_dependancies():
     assert TGBNegativeEdgeSamplerHook.produces == {'neg', 'neg_batch_list', 'neg_time'}
 
 
+def test_hook_reset_state():
+    assert TGBNegativeEdgeSamplerHook.has_state == False
+
+
 class FakeNegSampler:
     def query_batch(self, src, dst, time, split_mode='val'):
         return []

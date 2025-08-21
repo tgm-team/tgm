@@ -18,6 +18,10 @@ def test_hook_dependancies():
     assert NegativeEdgeSamplerHook.produces == {'neg', 'neg_time'}
 
 
+def test_hook_reset_state():
+    assert NegativeEdgeSamplerHook.has_state == False
+
+
 def test_bad_negative_edge_sampler_init():
     with pytest.raises(ValueError):
         NegativeEdgeSamplerHook(low=0, high=0)

@@ -25,6 +25,10 @@ def test_hook_dependancies():
     }
 
 
+def test_hook_reset_state():
+    assert NeighborSamplerHook.has_state == False
+
+
 def test_bad_neighbor_sampler_init():
     with pytest.raises(ValueError):
         NeighborSamplerHook(num_nbrs=[])

@@ -31,6 +31,9 @@ parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
+    '--node-dim', type=int, default=100, help='node feat dimension if not provided'
+)
+parser.add_argument(
     '--time-gran',
     type=str,
     default='s',
@@ -128,9 +131,9 @@ class NodePredictor(torch.nn.Module):
 
 def train(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     model: nn.Module,
     opt: torch.optim.Optimizer,
-    node_feat: torch.Tensor,
 ) -> float:
     model.train()
     total_loss = 0
@@ -140,7 +143,7 @@ def train(
         label = batch.dynamic_node_feats
         if label is None:
             continue
-        pred = model(batch, node_feat)
+        pred = model(batch, static_node_feats)
         loss = criterion(pred, label)
         loss.backward()
         opt.step()
@@ -151,8 +154,8 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     model: nn.Module,
-    node_feat: torch.Tensor,
     evaluator: Evaluator,
 ) -> dict:
     model.eval()
@@ -162,7 +165,7 @@ def eval(
         label = batch.dynamic_node_feats
         if label is None:
             continue
-        pred = model(batch, node_feat)
+        pred = model(batch, static_node_feats)
 
         np_pred = pred.cpu().detach().numpy()
         np_true = label.cpu().detach().numpy()
@@ -206,12 +209,15 @@ if train_dg.static_node_feats is not None:
         'node features are not supported yet, make sure to incorporate them in the model'
     )
 
-# TODO: add static node features to DGraph
-args.node_dim = args.embed_dim
-static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.node_dim), device=args.device
+    )
 
 model = GCN(
-    in_channels=args.embed_dim,
+    in_channels=static_node_feats.shape[1],
     embed_dim=args.embed_dim,
     num_layers=args.n_layers,
     dropout=float(args.dropout),
@@ -222,15 +228,15 @@ opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
     start_time = time.perf_counter()
-    loss = train(train_loader, model, opt, static_node_feats)
+    loss = train(train_loader, static_node_feats, model, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results = eval(val_loader, model, static_node_feats, evaluator)
+    val_results = eval(val_loader, static_node_feats, model, evaluator)
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
-test_results = eval(test_loader, model, static_node_feats, evaluator)
+test_results = eval(test_loader, static_node_feats, model, evaluator)
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

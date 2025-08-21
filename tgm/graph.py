@@ -133,7 +133,10 @@ class DGraph:
 
     @cached_property
     def static_node_feats(self) -> Optional[Tensor]:
-        r"""If static node features exist, returns a dense Tensor(num_nodes x d_node_static)."""
+        r"""If static node features exist, returns a dense Tensor(num_nodes_global x d_node_static).
+        num_nodes_global is the global number of nodes from the underlying DGData and it will be independent of the slice.
+        This means that it won't be necessarily the same as the number of nodes in the current slice.
+        """
         feats = self._storage.get_static_node_feats()
         if feats is not None:
             feats = feats.to(self.device)
