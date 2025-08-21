@@ -320,7 +320,6 @@ class NeighborSamplerHook(StatelessHook):
 class RecencyNeighborHook(StatefulHook):
     requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats', 'nbr_mask'}
-    has_state: bool = True
 
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
