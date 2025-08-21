@@ -396,7 +396,6 @@ class TGAT(nn.Module):
                 )
             else:
                 if is_negative:
-                    # TODO: Sketchy hardcode
                     if node_ids.shape[0] == 999:
                         bsize = num_neighbors
                     else:
@@ -541,8 +540,7 @@ def train(
     total_loss = 0
     losses, metrics = [], []
 
-    tt = tqdm(loader, ncols=120)
-    for idx, batch in enumerate(tt):
+    for idx, batch in enumerate(tqdm(loader)):
         opt.zero_grad()
 
         batch_src_node_ids = batch.src.cpu().numpy()
@@ -552,10 +550,6 @@ def train(
         batch_neg_dst_node_ids = batch.neg.cpu().numpy()
         batch_neg_src_node_ids = batch_src_node_ids
 
-        # we need to compute for positive and negative edges respectively, because the new sampling strategy (for evaluation) allows the negative source nodes to be
-        # different from the source nodes, this is different from previous works that just replace destination nodes with negative destination nodes
-        # get temporal embedding of source and destination nodes
-        # two Tensors, with shape (batch_size, output_dim)
         z_src, z_dst = encoder(
             src_node_ids=batch_src_node_ids,
             dst_node_ids=batch_dst_node_ids,
@@ -565,10 +559,7 @@ def train(
             is_negative=False,
             idx=idx,
         )
-
-        # get temporal embedding of negative source and negative destination nodes
-        # two Tensors, with shape (batch_size, output_dim)
-        z_neg_src, z_neg_dst = encoder(
+        _, z_neg_dst = encoder(
             src_node_ids=batch_neg_src_node_ids,
             dst_node_ids=batch_neg_dst_node_ids,
             node_interact_times=batch_node_interact_times,
@@ -579,7 +570,7 @@ def train(
         )
 
         pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
-        neg_prob = decoder(z_neg_src, z_neg_dst).squeeze(dim=-1).sigmoid()
+        neg_prob = decoder(z_src, z_neg_dst).squeeze(dim=-1).sigmoid()
 
         loss_func = nn.BCELoss()
         predicts = torch.cat([pos_prob, neg_prob], dim=0)
@@ -592,9 +583,6 @@ def train(
         opt.step()
         total_loss += float(loss)
 
-        tt.set_description(
-            f'Epoch: {1}, train for the {idx + 1}-th batch, train loss: {loss.item()}'
-        )
         losses.append(loss.item())
         metrics.append(
             {
