@@ -35,6 +35,12 @@ class StatelessHook:
         pass
 
 
+class StatefulHook:
+    requires: Set[str] = set()
+    produces: Set[str] = set()
+    has_state: bool = True
+
+
 class HookManager:
     def __init__(self, dg: DGraph, hooks: List[DGHook]) -> None:
         if not isinstance(hooks, list):
@@ -311,7 +317,7 @@ class NeighborSamplerHook(StatelessHook):
         return batch
 
 
-class RecencyNeighborHook:
+class RecencyNeighborHook(StatefulHook):
     requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats', 'nbr_mask'}
     has_state: bool = True
