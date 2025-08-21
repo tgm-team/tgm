@@ -422,9 +422,7 @@ class TGAT(nn.Module):
             if len(node_ids) == batch.src.numel():
                 nbr_nids = batch.nids[1]
                 if inference and is_negative:
-                    print('GRABBING TIMES')
                     nbr_times = batch.nbr_times[0].flatten()
-                    print(nbr_times)
                 else:
                     nbr_times = batch.times[1]
                 nbr_feats = batch.nbr_feats[0]
@@ -436,7 +434,6 @@ class TGAT(nn.Module):
                 nbr_nids = batch.nids[1]
 
                 if inference and is_negative:
-                    print('GRABBING TIMES batch.neg')
                     nbr_times = batch.nbr_times[0].flatten()
                 else:
                     nbr_times = batch.times[1].flatten()
@@ -510,19 +507,18 @@ class TGAT(nn.Module):
 
             neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
             neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
-            if inference and is_negative:
-                print(
-                    f'\n[{current_layer_num}]',
-                    ' ids: ',
-                    node_ids.shape,
-                    f'  {node_ids[-10:]}  is_src: {is_src} ',
-                    f'is_neg: {is_negative}',
-                    f'nbrs: {neighbor_node_ids[-10:]}',
-                    f'nbr times: {neighbor_times}',
-                )
-                print(batch.nids[0][-3:])
-                print(batch.nids[1][-3 * 5 :])
-                input()
+            # print(
+            #    f'\n[{current_layer_num}]',
+            #    ' ids: ',
+            #    node_ids.shape,
+            #    f'  {node_ids[-10:]}  is_src: {is_src} ',
+            #    f'is_neg: {is_negative}',
+            #    f'nbrs: {neighbor_node_ids[-10:]}',
+            #    f'nbr times: {neighbor_times}',
+            # )
+            # print(batch.nids[0][-3:])
+            # print(batch.nids[1][-3 * 5 :])
+            # input()
 
             # TODO: Ensure this doesnt break train
             if inference:
@@ -530,6 +526,15 @@ class TGAT(nn.Module):
                 neighbor_edge_features = neighbor_edge_features.reshape(
                     node_ids.shape[0], -1, edge_feat_dim
                 )
+
+            if inference and is_negative and not is_src:
+                print(f'Queried: {node_ids} at {node_interact_times}')
+                print(f'Received: {neighbor_node_ids} at {neighbor_times}')
+                print('-----')
+                # for i in range(len(batch.nids)):
+                #    print(f'{i} ids {batch.nids[i]}')
+                #    print(f'{i} nbr ids {batch.nbr_nids[i]}')
+                input()
 
             # print(f'[{current_layer_num}] Nbr_nids: ', neighbor_node_ids.shape)
             # print(f'[{current_layer_num}] Nbr_edge: ', neighbor_edge_features.shape)
@@ -757,6 +762,9 @@ def eval(
     perf_list = []
     batch_id = 0
     for batch in tqdm(loader):
+        print('First batch in val loader: ')
+        print(batch.time)
+        input()
         #! only evaluate for first edge in a batch for debugging purpose
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             batch_src_node_ids = np.asarray([batch.src[idx]]).reshape(-1)
@@ -772,6 +780,7 @@ def eval(
                 .cpu()
                 .numpy()
             )
+            print('eval batch node times; ', batch.time[idx])
             assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
 
             z_src, z_dst = encoder(
@@ -942,6 +951,8 @@ for epoch in range(1, args.epochs + 1):
     print('filling up neighbor hook in preperation for validation')
     for batch in tqdm(foo_train_loader):
         continue
+
+    # SHARED_NBR_HOOK.set_verbose()
 
     val_loader = DGDataLoader(
         val_dg,

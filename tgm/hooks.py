@@ -223,19 +223,20 @@ class TGBNegativeEdgeSamplerHook:
         )
         queries = []
         tensor_batch_list = []
-        #! only take the first edge from each batch for TGB evaluation
-        neg_batch = neg_batch_list[0]
-        queries.append(neg_batch)
+        ##! only take the first edge from each batch for TGB evaluation
+        # neg_batch = neg_batch_list[0]
+        # queries.append(neg_batch)
 
         #! manually add and substract 1 due to DyGLib problems
-        tensor_batch_list.append(
-            torch.tensor(neg_batch, dtype=torch.long, device=dg.device) + 1
-        )
-        # for neg_batch in neg_batch_list:
-        #     queries.append(neg_batch)
-        #     tensor_batch_list.append(
-        #         torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
-        #     )
+        # tensor_batch_list.append(
+        #    torch.tensor(neg_batch, dtype=torch.long, device=dg.device) + 1
+        # )
+        for neg_batch in neg_batch_list:
+            neg_batch = [x + 1 for x in neg_batch]
+            queries.append(neg_batch)
+            tensor_batch_list.append(
+                torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+            )
         unique_neg = np.unique(np.concatenate(queries))
         batch.neg = torch.tensor(unique_neg, dtype=torch.long, device=dg.device)  # type: ignore
         batch.neg_batch_list = tensor_batch_list  # type: ignore
@@ -345,14 +346,39 @@ class RecencyNeighborHook:
 
         self._device = torch.device('cpu')
 
+        self.verbose = False
+
     @property
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
+    def set_verbose(self):
+        self.verbose = True
+
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        if self.verbose:
+            print('Calling nbr sampler with: ')
+            print(batch.src, batch.dst, batch.neg)
+
+            print('History of 8228:')
+            i = 0
+            for ff in reversed(self._history[8228]):
+                print(f'8228-{ff[0]} @ {ff[1]}')
+                i += 1
+                if i > 6:
+                    break
         device = dg.device
         self._device = device
         self._update(batch)
+
+        if self.verbose:
+            print('History of 8228 AFTER UPDATE:')
+            i = 0
+            for ff in reversed(self._history[8228]):
+                print(f'8228-{ff[0]} @ {ff[1]}')
+                i += 1
+                if i > 6:
+                    break
 
         batch.nids, batch.times = [], []
         batch.nbr_nids, batch.nbr_times = [], []
@@ -368,7 +394,7 @@ class RecencyNeighborHook:
                     seed_nodes = torch.cat([seed_nodes, batch.neg])
 
                     # TODO: THIS
-                    fake_times = batch.time
+                    fake_times = batch.time.repeat(len(batch.neg))
                     seed_times = torch.cat([seed_times, fake_times])
             else:
                 batch.nbr_mask[hop - 1].bool()
@@ -378,9 +404,17 @@ class RecencyNeighborHook:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()
                 seed_times = batch.nbr_times[hop - 1].flatten()
 
+            if self.verbose:
+                print('Trying to get recency neighours with: ')
+                print(seed_nodes[2:6], seed_times[2:6])
+
             nbr_nids, nbr_times, nbr_feats, nbr_mask = self._get_recency_neighbors(
                 seed_nodes, seed_times, num_nbrs
             )
+
+            if self.verbose:
+                print('Received: ')
+                print(nbr_nids[2:6], nbr_times[2:6])
 
             batch.nids.append(seed_nodes)
             batch.times.append(seed_times)
