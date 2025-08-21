@@ -69,14 +69,10 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_data = DGData.from_tgb(args.dataset, split='train')
-train_dg = DGraph(train_data, train_data.time_delta)
-
-val_data = DGData.from_tgb(args.dataset, split='val')
-val_dg = DGraph(val_data, val_data.time_delta)
-
-test_data = DGData.from_tgb(args.dataset, split='test')
-test_dg = DGraph(test_data, test_data.time_delta)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+train_dg = DGraph(train_data)
+val_dg = DGraph(val_data)
+test_dg = DGraph(test_data)
 
 train_data = train_dg.materialize(materialize_features=False)
 val_loader = DGDataLoader(

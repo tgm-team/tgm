@@ -9,6 +9,7 @@ import pytest
 import torch
 
 from tgm.data import DGData
+from tgm.split import TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TimeDeltaDG
 
 
@@ -691,34 +692,23 @@ def tgb_dataset_factory():
     return _make_dataset
 
 
-@pytest.mark.parametrize(
-    'split,with_node_feats',
-    [('train', False), ('train', True), ('val', True), ('test', True), ('all', True)],
-)
+@pytest.mark.parametrize('with_node_feats', [True, False])
 @patch('tgb.linkproppred.dataset.LinkPropPredDataset')
 @patch.dict('tgm.timedelta.TGB_TIME_DELTAS', {'tgbl-wiki': TimeDeltaDG('D')})
-def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats):
-    dataset = tgb_dataset_factory(split, with_node_feats)
+def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, with_node_feats):
+    dataset = tgb_dataset_factory(with_node_feats=with_node_feats)
     mock_dataset_cls.return_value = dataset
 
     mock_native_time_delta = TimeDeltaDG('D')  # Patched value
 
     def _get_exp_edges():
         src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
-        edges = np.stack([src, dst], axis=1)
-        if split == 'all':
-            return edges
-        mask = getattr(dataset, f'{split}_mask')
-        return edges[mask]
+        return np.stack([src, dst], axis=1)
 
     def _get_exp_times():
-        times = dataset.full_data['timestamps']
-        if split == 'all':
-            return times
-        mask = getattr(dataset, f'{split}_mask')
-        return times[mask]
+        return dataset.full_data['timestamps']
 
-    data = DGData.from_tgb(name='tgbl-wiki', split=split)
+    data = DGData.from_tgb(name='tgbl-wiki')
     assert isinstance(data, DGData)
     assert data.time_delta == mock_native_time_delta
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
@@ -735,30 +725,21 @@ def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats
         assert data.static_node_feats is None
 
 
-@pytest.mark.parametrize('split', ['train', 'val', 'test', 'all'])
 @patch('tgb.nodeproppred.dataset.NodePropPredDataset')
 @patch.dict('tgm.timedelta.TGB_TIME_DELTAS', {'tgbn-trade': TimeDeltaDG('D')})
-def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
-    dataset = tgb_dataset_factory(split)
+def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
+    dataset = tgb_dataset_factory()
     mock_dataset_cls.return_value = dataset
 
     mock_native_time_delta = TimeDeltaDG('D')  # Patched value
 
     def _get_exp_edges():
         src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
-        edges = np.stack([src, dst], axis=1)
-        if split == 'all':
-            return edges
-        mask = getattr(dataset, f'{split}_mask')
-        return edges[mask]
+        return np.stack([src, dst], axis=1)
 
     def _get_exp_times():
         times = dataset.full_data['timestamps']
-        if split == 'all':
-            edge_times = times
-        else:
-            mask = getattr(dataset, f'{split}_mask')
-            edge_times = times[mask]
+        edge_times = times
 
         # Node times get integrated into the global timestamp array
         node_times = list(dataset.full_data['node_label_dict'].keys())
@@ -767,7 +748,7 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
         exp_times.sort()
         return exp_times
 
-    data = DGData.from_tgb(name='tgbn-trade', split=split)
+    data = DGData.from_tgb(name='tgbn-trade')
     assert isinstance(data, DGData)
     assert data.time_delta == mock_native_time_delta
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
@@ -775,11 +756,7 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
 
     # Assert valid node-centric data
     times = dataset.full_data['timestamps']
-    if split == 'all':
-        edge_times = times
-    else:
-        mask = getattr(dataset, f'{split}_mask')
-        edge_times = times[mask]
+    edge_times = times
 
     full_node_dict = dataset.full_data['node_label_dict']
     split_node_dict = {
@@ -920,6 +897,64 @@ def test_discretize_bad_args():
     with pytest.raises(ValueError):
         data = DGData.from_raw(edge_timestamps, edge_index, time_delta='h')
         data.discretize('s')  # Cannot reduce into more granular time
+
+
+def test_split_default_calls_ratio_split(monkeypatch):
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
+    mock_strategy = MagicMock()
+    mock_strategy.apply.return_value = expected
+    monkeypatch.setattr('tgm.data.TemporalRatioSplit', lambda: mock_strategy)
+
+    result = data.split()
+    mock_strategy.apply.assert_called_once_with(data)
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    assert all(isinstance(x, DGData) for x in result)
+
+
+def test_split_with_explicit_ratio_split():
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    strategy = TemporalRatioSplit(0.5, 0.25, 0.25)
+    expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
+    strategy.apply = MagicMock(return_value=expected)
+
+    result = data.split(strategy=strategy)
+    strategy.apply.assert_called_once_with(data)
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    assert all(isinstance(x, DGData) for x in result)
+
+
+def test_split_uses_tgb_split_when_present():
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
+    mock_strategy = MagicMock(spec=TGBSplit)
+    mock_strategy.apply.return_value = expected
+    data._split_strategy = mock_strategy
+
+    result = data.split()
+    mock_strategy.apply.assert_called_once_with(data)
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    assert all(isinstance(x, DGData) for x in result)
+
+
+def test_split_cannot_override_tgb_split():
+    data = DGData.__new__(DGData)
+    data._split_strategy = TGBSplit({})
+
+    with pytest.raises(ValueError):
+        data.split(strategy=TemporalRatioSplit())
 
 
 def test_clone():
