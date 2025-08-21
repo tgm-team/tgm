@@ -18,6 +18,11 @@ def test_hook_dependancies():
     }
 
 
+@pytest.mark.skip('TODO: Add recency nbr tests')
+def test_hook_reset_state():
+    assert RecencyNeighborHook.has_state == True
+
+
 def test_bad_neighbor_sampler_init():
     with pytest.raises(ValueError):
         RecencyNeighborHook(num_nbrs=[0], num_nodes=2, edge_feats_dim=1)
