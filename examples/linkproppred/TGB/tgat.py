@@ -77,7 +77,7 @@ class MultiHeadAttention(nn.Module):
         n_heads: int = 2,
         dropout: float = 0.1,
     ):
-        super(MultiHeadAttention, self).__init__()
+        super().__init__()
 
         self.node_feat_dim = node_feat_dim
         self.edge_feat_dim = edge_feat_dim
@@ -87,9 +87,7 @@ class MultiHeadAttention(nn.Module):
         self.key_dim = node_feat_dim + edge_feat_dim + time_feat_dim
 
         if self.query_dim % n_heads != 0:
-            print(
-                'warning: the query_dim cannot be divided by n_heads, perform padding to support the computation'
-            )
+            print('warning: query_dim cannot be divided by n_heads, padding')
             self.pad_dim = n_heads - self.query_dim % n_heads
             self.query_dim += self.pad_dim
         else:
@@ -208,9 +206,7 @@ class MultiHeadAttention(nn.Module):
 
         # Tensor, shape (batch_size, query_dim)
         output = output.squeeze(dim=1)
-        # Tensor, shape (batch_size, n_heads, num_neighbors)
-        attention_scores = attention_scores.squeeze(dim=2)
-        return output, attention_scores
+        return output
 
 
 class TGAT(nn.Module):
@@ -295,7 +291,6 @@ class TGAT(nn.Module):
     ):
         # Tensor, shape (batch_size, output_dim)
         if inference and is_negative:
-            # TODO: Going to copy from z_src (positive)
             src_node_embeddings = None
         else:
             src_node_embeddings = self.compute_node_temporal_embeddings(
@@ -334,7 +329,6 @@ class TGAT(nn.Module):
         idx=-1,
         inference=False,
     ):
-        assert current_layer_num >= 0
         device = self.node_raw_features.device
 
         # query (source) node always has the start time with time interval == 0
@@ -444,7 +438,6 @@ class TGAT(nn.Module):
             neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
             neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
 
-            # TODO: Ensure this doesnt break train
             if inference:
                 edge_feat_dim = neighbor_edge_features.shape[-1]
                 neighbor_edge_features = neighbor_edge_features.reshape(
@@ -507,7 +500,7 @@ class TGAT(nn.Module):
 
             # temporal graph convolution
             # Tensor, output shape (batch_size, query_dim)
-            output, _ = self.temporal_conv_layers[current_layer_num - 1](
+            output = self.temporal_conv_layers[current_layer_num - 1](
                 node_features=node_conv_features,
                 node_time_features=node_time_features,
                 neighbor_node_features=neighbor_node_conv_features,
