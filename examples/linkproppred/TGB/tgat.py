@@ -52,7 +52,6 @@ parser.add_argument(
 )
 
 
-##########################################################
 class TimeEncoder(nn.Module):
     def __init__(self, time_dim: int, parameter_requires_grad: bool = True):
         super().__init__()
@@ -254,15 +253,11 @@ class MultiHeadAttention(nn.Module):
         return output, attention_scores
 
 
-######################################################
-
-
 class TGAT(nn.Module):
     def __init__(
         self,
         node_raw_features: np.ndarray,
         edge_raw_features: np.ndarray,
-        neighbor_sampler,
         time_dim: int,
         output_dim: int = 172,
         num_layers: int = 2,
@@ -282,7 +277,6 @@ class TGAT(nn.Module):
             edge_raw_features.astype(np.float32)
         ).to(device)
 
-        self.neighbor_sampler = neighbor_sampler
         self.node_feat_dim = self.node_raw_features.shape[1]
         self.edge_feat_dim = self.edge_raw_features.shape[1]
         self.num_layers = num_layers
@@ -458,13 +452,6 @@ class TGAT(nn.Module):
                     nbr_feats, chunks=3, dim=0
                 )
             else:
-                # print(
-                #    f'[{current_layer_num}] Trying to chunk with node ids: ',
-                #    node_ids.shape,
-                # )
-                # print('nbr nids: ', nbr_nids.shape)
-                # print('nbr feats: ', nbr_feats.shape)
-                # input()
                 if is_negative:
                     # TODO: Sketchy hardcode
                     if node_ids.shape[0] == 999:
@@ -507,18 +494,6 @@ class TGAT(nn.Module):
 
             neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
             neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
-            # print(
-            #    f'\n[{current_layer_num}]',
-            #    ' ids: ',
-            #    node_ids.shape,
-            #    f'  {node_ids[-10:]}  is_src: {is_src} ',
-            #    f'is_neg: {is_negative}',
-            #    f'nbrs: {neighbor_node_ids[-10:]}',
-            #    f'nbr times: {neighbor_times}',
-            # )
-            # print(batch.nids[0][-3:])
-            # print(batch.nids[1][-3 * 5 :])
-            # input()
 
             # TODO: Ensure this doesnt break train
             if inference:
@@ -527,22 +502,8 @@ class TGAT(nn.Module):
                     node_ids.shape[0], -1, edge_feat_dim
                 )
 
-            if inference and is_negative and not is_src:
-                print(f'Queried: {node_ids} at {node_interact_times}')
-                print(f'Received: {neighbor_node_ids} at {neighbor_times}')
-                print('-----')
-                # for i in range(len(batch.nids)):
-                #    print(f'{i} ids {batch.nids[i]}')
-                #    print(f'{i} nbr ids {batch.nbr_nids[i]}')
-                input()
-
-            # print(f'[{current_layer_num}] Nbr_nids: ', neighbor_node_ids.shape)
-            # print(f'[{current_layer_num}] Nbr_edge: ', neighbor_edge_features.shape)
-            # input()
-
             # get neighbor features from previous layers
             # shape (batch_size * num_neighbors, output_dim or node_feat_dim)
-
             neighbor_node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=neighbor_node_ids.flatten(),
                 node_interact_times=neighbor_times.flatten(),
@@ -555,34 +516,19 @@ class TGAT(nn.Module):
                 inference=inference,
             )
 
-            # print(
-            #    f'[{current_layer_num}] got recurse feats: ',
-            #    neighbor_node_conv_features.shape,
-            # )
-            # input()
             # shape (batch_size, num_neighbors, output_dim or node_feat_dim)
-
-            # print (neighbor_node_conv_features.shape)
             neighbor_node_conv_features = neighbor_node_conv_features.reshape(
                 node_ids.shape[0], num_neighbors, -1
             )
 
             # compute time interval between current time and historical interaction time
             # adarray, shape (batch_size, num_neighbors)
-            # print('node interact times:', node_interact_times.astype(int))
-            # print('neighbor times: ', neighbor_times.astype(int))
-            # print('neighbor node_ids: ', neighbor_node_ids.astype(int))
             neighbor_delta_times = node_interact_times[:, np.newaxis] - neighbor_times
 
             # shape (batch_size, num_neighbors, time_feat_dim)
             neighbor_time_features = self.time_encoder(
                 timestamps=torch.from_numpy(neighbor_delta_times).float().to(device)
             )
-
-            # get edge features, shape (batch_size, num_neighbors, edge_feat_dim)
-            # neighbor_edge_features = self.edge_raw_features[
-            #    torch.from_numpy(neighbor_edge_ids)
-            # ]
 
             # temporal graph convolution
             # Tensor, output shape (batch_size, query_dim)
@@ -635,7 +581,6 @@ class TGAT(nn.Module):
             output = self.merge_layers[current_layer_num - 1](
                 input_1=output, input_2=node_raw_features
             )
-            # print(f'[{current_layer_num}] final out shape: ', output.shape)
             return output
 
 
@@ -762,10 +707,6 @@ def eval(
     perf_list = []
     batch_id = 0
     for batch in tqdm(loader):
-        print('First batch in val loader: ')
-        print(batch.time)
-        input()
-        #! only evaluate for first edge in a batch for debugging purpose
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             batch_src_node_ids = np.asarray([batch.src[idx]]).reshape(-1)
             batch_dst_node_ids = np.asarray([batch.dst[idx]]).reshape(-1)
@@ -780,7 +721,6 @@ def eval(
                 .cpu()
                 .numpy()
             )
-            print('eval batch node times; ', batch.time[idx])
             assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
 
             z_src, z_dst = encoder(
@@ -912,7 +852,6 @@ edge_raw_features = data['edge_feat'].astype(np.float64)
 encoder = TGAT(
     node_raw_features=node_raw_features,
     edge_raw_features=edge_raw_features,
-    neighbor_sampler=None,
     time_dim=args.time_dim,
     output_dim=args.embed_dim,
     num_layers=len(args.n_nbrs),
@@ -951,8 +890,6 @@ for epoch in range(1, args.epochs + 1):
     print('filling up neighbor hook in preperation for validation')
     for batch in tqdm(foo_train_loader):
         continue
-
-    # SHARED_NBR_HOOK.set_verbose()
 
     val_loader = DGDataLoader(
         val_dg,

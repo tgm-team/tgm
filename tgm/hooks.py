@@ -157,8 +157,6 @@ class NegativeEdgeSamplerHook:
         self,
         low: int,
         high: int,
-        src_low: int = -1,
-        src_high: int = -1,
         neg_ratio: float = 1.0,
     ) -> None:
         if not 0 < neg_ratio <= 1:
@@ -169,16 +167,11 @@ class NegativeEdgeSamplerHook:
         self.high = high
         self.neg_ratio = neg_ratio
 
-        self.src_low, self.src_high = src_low, src_high
-
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.dst.size(0)),)
         batch.neg = torch.randint(  # type: ignore
             self.low, self.high, size, dtype=torch.long, device=dg.device
-        )
-        batch.neg_src = torch.randint(  # type: ignore
-            self.src_low, self.src_high + 1, size, dtype=torch.long, device=dg.device
         )
 
         batch.neg_src = batch.src.clone().to(dg.device)
