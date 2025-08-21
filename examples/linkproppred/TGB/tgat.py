@@ -71,68 +71,40 @@ class MergeLayer(nn.Module):
 class TGAT(nn.Module):
     def __init__(
         self,
-        node_raw_features: np.ndarray,
+        node_dim: int,
         edge_dim: int,
         time_dim: int,
         embed_dim: int,
         num_layers: int,
         n_heads: int = 2,
         dropout: float = 0.1,
-        device: str = 'cpu',
         num_nbrs=None,
     ) -> None:
         super().__init__()
-
-        self.num_nbrs = num_nbrs
-        self.node_raw_features = torch.from_numpy(
-            node_raw_features.astype(np.float32)
-        ).to(device)
-
-        self.node_feat_dim = self.node_raw_features.shape[1]
-        self.edge_feat_dim = edge_dim
         self.num_layers = num_layers
+        self.num_nbrs = num_nbrs
         self.time_encoder = Time2Vec(time_dim=time_dim)
-        self.attn = nn.ModuleList(
-            [
+
+        self.attn, self.merge_layers = nn.ModuleList(), nn.ModuleList()
+        for i in range(num_layers):
+            in_dim = node_dim if i == 0 else embed_dim
+            self.attn.append(
                 TemporalAttention(
-                    node_dim=self.node_feat_dim,
-                    edge_dim=self.edge_feat_dim,
+                    node_dim=in_dim,
+                    edge_dim=edge_dim,
                     time_dim=time_dim,
                     n_heads=n_heads,
                     dropout=dropout,
                 )
-            ]
-        )
-        self.merge_layers = nn.ModuleList(
-            [
+            )
+            self.merge_layers.append(
                 MergeLayer(
                     input_dim1=self.attn[-1].query_dim,
-                    input_dim2=self.node_feat_dim,
+                    input_dim2=node_dim,
                     hidden_dim=embed_dim,
                     output_dim=embed_dim,
                 )
-            ]
-        )
-
-        if num_layers > 1:
-            for _ in range(num_layers - 1):
-                self.attn.append(
-                    TemporalAttention(
-                        node_dim=embed_dim,
-                        edge_dim=self.edge_feat_dim,
-                        time_dim=time_dim,
-                        n_heads=n_heads,
-                        dropout=dropout,
-                    )
-                )
-                self.merge_layers.append(
-                    MergeLayer(
-                        input_dim1=self.attn[-1].query_dim,
-                        input_dim2=self.node_feat_dim,
-                        hidden_dim=embed_dim,
-                        output_dim=embed_dim,
-                    )
-                )
+            )
 
     def forward(
         self,
@@ -145,9 +117,9 @@ class TGAT(nn.Module):
         inference=False,
     ):
         if inference and is_negative:
-            src_node_embeddings = None
+            z_src = None
         else:
-            src_node_embeddings = self.compute_node_temporal_embeddings(
+            z_src = self.compute_embeddings(
                 node_ids=src_node_ids,
                 node_interact_times=node_interact_times,
                 current_layer_num=self.num_layers,
@@ -158,7 +130,7 @@ class TGAT(nn.Module):
                 idx=idx,
                 inference=inference,
             )
-        dst_node_embeddings = self.compute_node_temporal_embeddings(
+        z_dst = self.compute_embeddings(
             node_ids=dst_node_ids,
             node_interact_times=node_interact_times,
             current_layer_num=self.num_layers,
@@ -169,31 +141,31 @@ class TGAT(nn.Module):
             idx=idx,
             inference=inference,
         )
-        return src_node_embeddings, dst_node_embeddings
+        return z_src, z_dst
 
-    def compute_node_temporal_embeddings(
+    def compute_embeddings(
         self,
         node_ids: np.ndarray,
         node_interact_times: np.ndarray,
         current_layer_num: int,
-        num_neighbors: int = 20,
+        num_neighbors: int,
         batch=None,
         is_negative=False,
         is_src=False,
         idx=-1,
         inference=False,
     ):
-        device = self.node_raw_features.device
+        device = STATIC_NODE_FEAT.device
 
         node_time_features = self.time_encoder(
             torch.zeros(node_interact_times.shape).unsqueeze(dim=1).to(device)
         )
-        node_raw_features = self.node_raw_features[torch.from_numpy(node_ids)]
+        node_raw_features = STATIC_NODE_FEAT[torch.from_numpy(node_ids)]
 
         if current_layer_num == 0:
             return node_raw_features
         else:
-            node_conv_features = self.compute_node_temporal_embeddings(
+            node_conv_features = self.compute_embeddings(
                 node_ids=node_ids,
                 node_interact_times=node_interact_times,
                 current_layer_num=current_layer_num - 1,
@@ -270,32 +242,32 @@ class TGAT(nn.Module):
                 )
 
             if is_src:
-                neighbor_node_ids = src_nbr_nids.cpu().numpy()
-                neighbor_times = src_nbr_times.cpu().numpy()
-                neighbor_edge_features = src_nbr_feats
+                nbr_node_ids = src_nbr_nids.cpu().numpy()
+                nbr_time = src_nbr_times.cpu().numpy()
+                nbr_edge_feat = src_nbr_feats
             elif is_negative:
-                neighbor_node_ids = neg_nbr_nids.cpu().numpy()
-                neighbor_times = neg_nbr_times.cpu().numpy()
-                neighbor_edge_features = neg_nbr_feats
+                nbr_node_ids = neg_nbr_nids.cpu().numpy()
+                nbr_time = neg_nbr_times.cpu().numpy()
+                nbr_edge_feat = neg_nbr_feats
             else:
-                neighbor_node_ids = dst_nbr_nids.cpu().numpy()
-                neighbor_times = dst_nbr_times.cpu().numpy()
-                neighbor_edge_features = dst_nbr_feats
+                nbr_node_ids = dst_nbr_nids.cpu().numpy()
+                nbr_time = dst_nbr_times.cpu().numpy()
+                nbr_edge_feat = dst_nbr_feats
 
-            neighbor_node_ids = neighbor_node_ids.reshape(node_ids.shape[0], -1)
-            neighbor_times = neighbor_times.reshape(node_ids.shape[0], -1)
+            nbr_node_ids = nbr_node_ids.reshape(node_ids.shape[0], -1)
+            nbr_time = nbr_time.reshape(node_ids.shape[0], -1)
 
             if inference:
-                edge_feat_dim = neighbor_edge_features.shape[-1]
-                neighbor_edge_features = neighbor_edge_features.reshape(
+                edge_feat_dim = nbr_edge_feat.shape[-1]
+                nbr_edge_feat = nbr_edge_feat.reshape(
                     node_ids.shape[0], -1, edge_feat_dim
                 )
 
             # get neighbor features from previous layers
             # shape (batch_size * num_neighbors, output_dim or node_feat_dim)
-            neighbor_node_conv_features = self.compute_node_temporal_embeddings(
-                node_ids=neighbor_node_ids.flatten(),
-                node_interact_times=neighbor_times.flatten(),
+            nbr_feat = self.compute_embeddings(
+                node_ids=nbr_node_ids.flatten(),
+                node_interact_times=nbr_time.flatten(),
                 current_layer_num=current_layer_num - 1,
                 num_neighbors=num_neighbors,
                 batch=batch,
@@ -305,30 +277,25 @@ class TGAT(nn.Module):
                 inference=inference,
             )
 
-            # shape (batch_size, num_neighbors, output_dim or node_feat_dim)
-            neighbor_node_conv_features = neighbor_node_conv_features.reshape(
-                node_ids.shape[0], num_neighbors, -1
-            )
-            # adarray, shape (batch_size, num_neighbors)
-            neighbor_delta_times = node_interact_times[:, np.newaxis] - neighbor_times
+            # (batch_size, num_neighbors, output_dim or node_feat_dim)
+            nbr_feat = nbr_feat.reshape(node_ids.shape[0], num_neighbors, -1)
 
+            # (batch_size, num_neighbors)
+            delta_time = node_interact_times[:, np.newaxis] - nbr_time
             # shape (batch_size, num_neighbors, time_feat_dim)
-            neighbor_time_features = self.time_encoder(
-                torch.from_numpy(neighbor_delta_times).float().to(device)
+            nbr_time_feat = self.time_encoder(
+                torch.from_numpy(delta_time).float().to(device)
             )
 
-            output = self.attn[current_layer_num - 1](
+            out = self.attn[current_layer_num - 1](
                 node_feat=node_conv_features,
                 time_feat=node_time_features,
-                nbr_node_feat=neighbor_node_conv_features,
-                nbr_time_feat=neighbor_time_features,
-                nbr_edge_feat=neighbor_edge_features,
-                nbr_mask=neighbor_node_ids,
+                nbr_node_feat=nbr_feat,
+                nbr_time_feat=nbr_time_feat,
+                nbr_edge_feat=nbr_edge_feat,
+                nbr_mask=nbr_node_ids,
             )
-            output = self.merge_layers[current_layer_num - 1](
-                input_1=output, input_2=node_raw_features
-            )
-            return output
+            return self.merge_layers[current_layer_num - 1](out, node_raw_features)
 
 
 class LinkPredictor(nn.Module):
@@ -353,30 +320,23 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    losses, metrics = [], []
+    idx, losses, metrics = 0, [], []
 
-    for idx, batch in enumerate(tqdm(loader)):
+    for batch in tqdm(loader):
         opt.zero_grad()
 
-        batch_src_node_ids = batch.src.cpu().numpy()
-        batch_dst_node_ids = batch.dst.cpu().numpy()
-        batch_node_interact_times = batch.time.cpu().numpy()
-
-        batch_neg_dst_node_ids = batch.neg.cpu().numpy()
-        batch_neg_src_node_ids = batch_src_node_ids
-
         z_src, z_dst = encoder(
-            src_node_ids=batch_src_node_ids,
-            dst_node_ids=batch_dst_node_ids,
-            node_interact_times=batch_node_interact_times,
+            src_node_ids=batch.src.cpu().numpy(),
+            dst_node_ids=batch.dst.cpu().numpy(),
+            node_interact_times=batch.time.cpu().numpy(),
             batch=batch,
             is_negative=False,
             idx=idx,
         )
         _, z_neg_dst = encoder(
-            src_node_ids=batch_neg_src_node_ids,
-            dst_node_ids=batch_neg_dst_node_ids,
-            node_interact_times=batch_node_interact_times,
+            src_node_ids=batch.src.cpu().numpy(),
+            dst_node_ids=batch.neg.cpu().numpy(),
+            node_interact_times=batch.time.cpu().numpy(),
             batch=batch,
             is_negative=True,
             idx=idx,
@@ -412,6 +372,7 @@ def train(
 
         if idx > 5:
             break
+        idx += 1
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
     for metric_name in metrics[0].keys():
@@ -442,41 +403,32 @@ def eval(
                 batch.src[idx].repeat(len(batch_neg_dst_node_ids)).cpu().numpy()
             )
 
-            batch_node_interact_times = (
-                torch.tensor([batch.time[idx]])
-                .repeat(batch_dst_node_ids.shape[0])
-                .cpu()
-                .numpy()
+            batch_node_interact_times = torch.tensor([batch.time[idx]]).repeat(
+                batch_dst_node_ids.shape[0]
             )
-            assert batch_node_interact_times.shape[0] == len(batch_src_node_ids)
+            neg_batch_node_interact_times = torch.tensor([batch.time[idx]]).repeat(
+                batch_neg_dst_node_ids.shape[0]
+            )
 
             z_src, z_dst = encoder(
                 src_node_ids=batch_src_node_ids,
                 dst_node_ids=batch_dst_node_ids,
-                node_interact_times=batch_node_interact_times,
+                node_interact_times=batch_node_interact_times.cpu().numpy(),
                 batch=batch,
                 is_negative=False,
                 idx=idx,
                 inference=True,
             )
 
-            neg_batch_node_interact_times = (
-                torch.tensor([batch.time[idx]])
-                .repeat(batch_neg_dst_node_ids.shape[0])
-                .cpu()
-                .numpy()
-            )
-
             _, z_neg_dst = encoder(
                 src_node_ids=batch_neg_src_node_ids,
                 dst_node_ids=batch_neg_dst_node_ids,
-                node_interact_times=neg_batch_node_interact_times,
+                node_interact_times=neg_batch_node_interact_times.cpu().numpy(),
                 batch=batch,
                 is_negative=True,
                 idx=idx,
                 inference=True,
             )
-
             z_neg_src = z_src.repeat(z_neg_dst.shape[0], 1)
 
             pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
@@ -552,14 +504,13 @@ test_loader = DGDataLoader(
 
 
 encoder = TGAT(
-    node_raw_features=STATIC_NODE_FEAT.cpu().numpy(),
+    node_dim=NODE_FEAT_DIM,
     edge_dim=train_dg.edge_feats_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
-    device=args.device,
     num_nbrs=args.n_nbrs,
 ).to(args.device)
 decoder = LinkPredictor(dim=args.embed_dim).to(args.device)
