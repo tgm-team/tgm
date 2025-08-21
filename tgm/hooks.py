@@ -358,8 +358,6 @@ class RecencyNeighborHook:
                     # we pick random time stamps within [batch.start_time, batch.end_time].
                     # Using random times on the whole graph will likely produce information
                     # leakage, making the prediction easier than it should be.
-
-                    # Use generator to local constrain rng for reproducibility
                     fake_times = batch.time.repeat(len(batch.neg))
                     times.append(fake_times)
                 seed_nodes = torch.cat(seed)
@@ -395,7 +393,6 @@ class RecencyNeighborHook:
         for i in range(num_nodes):
             nid, qtime = int(node_ids[i]), int(query_times[i])
             history = self._history[nid]
-            # Filter neighbors strictly before the query time
             valid = [(nbr, t, f) for (nbr, t, f) in history if t < qtime]
             if not valid:
                 continue
@@ -426,7 +423,8 @@ class RecencyNeighborHook:
             self._history[d].append((s, t, f.clone()))  # undirected
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
-        self._device = device
+        if device != self._device:
+            self._device = device
 
 
 def _apply_to_tensors_inplace(obj: Any, fn: Any) -> Any:

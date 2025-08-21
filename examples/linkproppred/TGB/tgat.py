@@ -271,7 +271,6 @@ def train(
     decoder.train()
     total_loss = 0
     idx, losses, metrics = 0, [], []
-
     for batch in tqdm(loader):
         opt.zero_grad()
 
@@ -298,7 +297,6 @@ def train(
         labels = torch.cat(
             [torch.ones_like(pos_prob), torch.zeros_like(neg_prob)], dim=0
         )
-
         loss = loss_func(input=predicts, target=labels)
         loss.backward()
         opt.step()
@@ -471,13 +469,11 @@ for epoch in range(1, args.epochs + 1):
     _, dst, _ = test_dg.edges
     min_dst, max_dst = int(dst.min()), int(dst.max())
     neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
-    for _ in tqdm(
-        DGDataLoader(
-            train_dg, hook=[neg_hook, SHARED_NBR_HOOK], batch_size=2000, drop_last=False
-        )
-    ):
+    foo_loader = DGDataLoader(
+        train_dg, hook=[neg_hook, SHARED_NBR_HOOK], batch_size=2000, drop_last=False
+    )
+    for _ in tqdm(foo_loader):
         pass
-
     neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
     val_loader = DGDataLoader(val_dg, hook=[neg_hook, SHARED_NBR_HOOK], batch_size=1)
     val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
