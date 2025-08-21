@@ -316,34 +316,6 @@ class TGAT(nn.Module):
             neighbor_time_features = self.time_encoder(
                 torch.from_numpy(neighbor_delta_times).float().to(device)
             )
-            with open('tgm_out.txt', mode='a') as f:
-                lll = node_ids.reshape(-1)
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_IDS',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                lll = node_interact_times.reshape(-1)
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NODE_TIMES',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                lll = neighbor_delta_times.reshape(-1)
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_DELTA_TIMES',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
-
-                lll = neighbor_node_ids.reshape(-1)
-                print(
-                    f'BATCH {idx} IS_SRC_{is_src}_IS_NEG_{is_negative}_NBR_IDS',
-                    file=f,
-                )
-                print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
             output = self.attn[current_layer_num - 1](
                 node_feat=node_conv_features,
@@ -602,6 +574,10 @@ for epoch in range(1, args.epochs + 1):
         hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
         batch_size=args.bsize,
     )
+    start_time = time.perf_counter()
+    loss = train(train_loader, encoder, decoder, opt)
+    end_time = time.perf_counter()
+    latency = end_time - start_time
 
     SHARED_NBR_HOOK = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
@@ -627,10 +603,6 @@ for epoch in range(1, args.epochs + 1):
         ),
         batch_size=1,
     )
-    start_time = time.perf_counter()
-    loss = train(train_loader, encoder, decoder, opt)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
 
     val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
     exit()

@@ -328,7 +328,6 @@ class RecencyNeighborHook:
         self._max_nbrs = max(num_nbrs)
         self._edge_feats_dim = edge_feats_dim
 
-        # For each node: list of (nbr_id, time, feat)
         self._history = defaultdict(lambda: deque())
 
         self._device = torch.device('cpu')
@@ -391,16 +390,15 @@ class RecencyNeighborHook:
         nbr_feats = torch.zeros((num_nodes, k, self._edge_feats_dim), device=device)
         nbr_mask = torch.zeros((num_nodes, k), dtype=torch.bool, device=device)
 
-        for i, (nid, qtime) in enumerate(zip(node_ids.tolist(), query_times.tolist())):
+        for i in range(num_nodes):
+            nid, qtime = int(node_ids[i]), int(query_times[i])
             history = self._history[nid]
             # Filter neighbors strictly before the query time
             valid = [(nbr, t, f) for (nbr, t, f) in history if t < qtime]
             if not valid:
                 continue
-            # Take the most recent k
-            valid = valid[-k:]
+            valid = valid[-k:]  # most recent k
 
-            # Fill in from the back
             nbr_nids[i, -len(valid) :] = torch.tensor(
                 [x[0] for x in valid], dtype=torch.long, device=device
             )
@@ -422,7 +420,7 @@ class RecencyNeighborHook:
             edge_feats = batch.edge_feats
 
         for s, d, t, f in zip(src, dst, time, edge_feats):
-            self._history[s].append((d, t, f.clone()))
+            self._history[s].append((d, t, f.clone()))  # may need to f.clone()
             self._history[d].append((s, t, f.clone()))  # undirected
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:

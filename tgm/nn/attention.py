@@ -27,13 +27,10 @@ class TemporalAttention(torch.nn.Module):
         out_dim = node_dim + time_dim
         if any((x <= 0 for x in [n_heads, node_dim, edge_dim, time_dim, out_dim])):
             raise ValueError('n_heads,node_dim,edge_dim,time_dim,out_dim must be > 0')
-        if out_dim % n_heads != 0:
-            raise ValueError(f'out_dim: ({out_dim}) % n_heads: ({n_heads}) != 0')
 
         self.n_heads = n_heads
         self.out_dim = node_dim + time_dim
         self.key_dim = node_dim + edge_dim + time_dim
-        self.query_dim = self.out_dim
 
         if self.out_dim % n_heads != 0:
             self.pad_dim = n_heads - self.out_dim % n_heads
@@ -41,6 +38,7 @@ class TemporalAttention(torch.nn.Module):
         else:
             self.pad_dim = 0
 
+        self.query_dim = self.out_dim
         self.head_dim = self.out_dim // n_heads
         self.W_Q = torch.nn.Linear(self.out_dim, n_heads * self.head_dim, bias=False)
         self.W_K = torch.nn.Linear(self.key_dim, n_heads * self.head_dim, bias=False)
