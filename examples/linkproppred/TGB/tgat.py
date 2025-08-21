@@ -181,11 +181,7 @@ class TGAT(nn.Module):
             else:
                 assert False
 
-            if not inference:
-                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = torch.chunk(nbr_nids, 3)
-                src_nbr_times, dst_nbr_times, neg_nbr_times = torch.chunk(nbr_times, 3)
-                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = torch.chunk(nbr_feats, 3)
-            else:
+            if inference:
                 if is_negative:
                     bsize = num_nbrs if node_ids.shape[0] == 999 else num_nbrs**2
                 else:
@@ -193,12 +189,17 @@ class TGAT(nn.Module):
 
                 def _split(x):
                     return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
+            else:
 
-                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = _split(nbr_nids)
-                src_nbr_times, dst_nbr_times, neg_nbr_times = _split(nbr_times)
+                def _split(x):
+                    return torch.chunk(x, 3)
 
+            src_nbr_nids, dst_nbr_nids, neg_nbr_nids = _split(nbr_nids)
+            src_nbr_times, dst_nbr_times, neg_nbr_times = _split(nbr_times)
+
+            if inference:
                 nbr_feats = nbr_feats.reshape(-1, nbr_feats.size(-1))
-                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = _split(nbr_feats)
+            src_nbr_feats, dst_nbr_feats, neg_nbr_feats = _split(nbr_feats)
 
             def _to_np(x):
                 return x.cpu().numpy()
@@ -216,12 +217,7 @@ class TGAT(nn.Module):
             nbr_node_ids = nbr_node_ids.reshape(node_ids.shape[0], -1)
             nbr_time = nbr_time.reshape(node_ids.shape[0], -1)
 
-            if inference:
-                nbr_edge_feat = nbr_edge_feat.reshape(
-                    node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
-                )
-
-            # shape (batch_size * num_nbrs, output_dim or node_feat_dim)
+            # (batch_size * num_nbrs, output_dim or node_feat_dim)
             nbr_feat = self.compute_embeddings(
                 node_ids=nbr_node_ids.flatten(),
                 node_interact_times=nbr_time.flatten(),
@@ -239,6 +235,10 @@ class TGAT(nn.Module):
             delta_time = node_interact_times[:, np.newaxis] - nbr_time
             delta_time = torch.from_numpy(delta_time).float().to(device)
             nbr_time_feat = self.time_encoder(delta_time)
+            if inference:
+                nbr_edge_feat = nbr_edge_feat.reshape(
+                    node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
+                )
 
             out = self.attn[hop - 1](
                 node_feat=node_conv_features,
@@ -306,30 +306,20 @@ def train(
         loss.backward()
         opt.step()
         total_loss += float(loss)
-
         losses.append(loss.item())
-        metrics.append(
-            {
-                'average_precision': average_precision_score(
-                    y_true=labels.cpu().numpy(),
-                    y_score=predicts.cpu().detach().numpy(),
-                ),
-                'roc_auc': roc_auc_score(
-                    y_true=labels.cpu().numpy(),
-                    y_score=predicts.cpu().detach().numpy(),
-                ),
-            }
-        )
-
+        labels = labels.cpu().numpy()
+        predicts = predicts.cpu().detach().numpy()
+        d = {}
+        d['ap'] = average_precision_score(y_true=labels, y_score=predicts)
+        d['roc_auc'] = roc_auc_score(y_true=labels, y_score=predicts)
+        metrics.append(d)
         if idx > 5:
             break
         idx += 1
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
-    for metric_name in metrics[0].keys():
-        print(
-            f'train {metric_name}, {np.mean([train_metric[metric_name] for train_metric in metrics]):.4f}'
-        )
+    print(f'ap, {np.mean([x["ap"] for x in metrics]):.4f}')
+    print(f'roc, {np.mean([x["roc_auc"] for x in metrics]):.4f}')
     return total_loss
 
 
