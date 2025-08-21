@@ -95,7 +95,7 @@ class TGAT(nn.Module):
         self.edge_feat_dim = self.edge_raw_features.shape[1]
         self.num_layers = num_layers
         self.time_encoder = Time2Vec(time_dim=time_dim)
-        self.temporal_conv_layers = nn.ModuleList(
+        self.attn = nn.ModuleList(
             [
                 TemporalAttention(
                     node_dim=self.node_feat_dim,
@@ -109,7 +109,7 @@ class TGAT(nn.Module):
         self.merge_layers = nn.ModuleList(
             [
                 MergeLayer(
-                    input_dim1=self.temporal_conv_layers[-1].query_dim,
+                    input_dim1=self.attn[-1].query_dim,
                     input_dim2=self.node_feat_dim,
                     hidden_dim=embed_dim,
                     output_dim=embed_dim,
@@ -119,7 +119,7 @@ class TGAT(nn.Module):
 
         if num_layers > 1:
             for _ in range(num_layers - 1):
-                self.temporal_conv_layers.append(
+                self.attn.append(
                     TemporalAttention(
                         node_dim=embed_dim,
                         edge_dim=self.edge_feat_dim,
@@ -130,7 +130,7 @@ class TGAT(nn.Module):
                 )
                 self.merge_layers.append(
                     MergeLayer(
-                        input_dim1=self.temporal_conv_layers[-1].query_dim,
+                        input_dim1=self.attn[-1].query_dim,
                         input_dim2=self.node_feat_dim,
                         hidden_dim=embed_dim,
                         output_dim=embed_dim,
@@ -148,7 +148,6 @@ class TGAT(nn.Module):
         idx=-1,
         inference=False,
     ):
-        # Tensor, shape (batch_size, output_dim)
         if inference and is_negative:
             src_node_embeddings = None
         else:
@@ -358,13 +357,13 @@ class TGAT(nn.Module):
 
             # temporal graph convolution
             # Tensor, output shape (batch_size, query_dim)
-            output = self.temporal_conv_layers[current_layer_num - 1](
-                node_features=node_conv_features,
-                node_time_features=node_time_features,
-                neighbor_node_features=neighbor_node_conv_features,
-                neighbor_node_time_features=neighbor_time_features,
-                neighbor_node_edge_features=neighbor_edge_features,
-                neighbor_masks=neighbor_node_ids,
+            output = self.attn[current_layer_num - 1](
+                node_feat=node_conv_features,
+                time_feat=node_time_features,
+                nbr_node_feat=neighbor_node_conv_features,
+                nbr_time_feat=neighbor_time_features,
+                nbr_edge_feat=neighbor_edge_features,
+                nbr_mask=neighbor_node_ids,
             )
 
             # Tensor, output shape (batch_size, output_dim)
@@ -657,7 +656,6 @@ for epoch in range(1, args.epochs + 1):
         hook=_init_hooks(
             test_dg, args.sampling, neg_sampler, 'val', nbr_hook=SHARED_NBR_HOOK
         ),
-        # batch_size=args.bsize,
         batch_size=1,
     )
     start_time = time.perf_counter()

@@ -24,6 +24,11 @@ class TemporalAttention(torch.nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
+        out_dim = node_dim + time_dim
+        if any((x <= 0 for x in [n_heads, node_dim, edge_dim, time_dim, out_dim])):
+            raise ValueError('n_heads,node_dim,edge_dim,time_dim,out_dim must be > 0')
+        if out_dim % n_heads != 0:
+            raise ValueError(f'out_dim: ({out_dim}) % n_heads: ({n_heads}) != 0')
 
         self.node_feat_dim = node_dim
         self.edge_feat_dim = edge_dim
@@ -31,17 +36,13 @@ class TemporalAttention(torch.nn.Module):
         self.n_heads = n_heads
         self.out_dim = node_dim + time_dim
         self.key_dim = node_dim + edge_dim + time_dim
+        self.query_dim = self.out_dim
 
         if self.out_dim % n_heads != 0:
-            print('warning: out_dim cannot be divided by n_heads, padding')
             self.pad_dim = n_heads - self.out_dim % n_heads
             self.out_dim += self.pad_dim
         else:
             self.pad_dim = 0
-
-        assert self.out_dim % n_heads == 0, (
-            'The sum of node_feat_dim and time_feat_dim should be divided by n_heads!'
-        )
 
         self.head_dim = self.out_dim // n_heads
         self.query_projection = torch.nn.Linear(
@@ -61,30 +62,30 @@ class TemporalAttention(torch.nn.Module):
 
     def forward(
         self,
-        node_features: torch.Tensor,
-        node_time_features: torch.Tensor,
-        neighbor_node_features: torch.Tensor,
-        neighbor_node_time_features: torch.Tensor,
-        neighbor_node_edge_features: torch.Tensor,
-        neighbor_masks: np.ndarray,
+        node_feat: torch.Tensor,  # (batch_size, node_dim)
+        time_feat: torch.Tensor,  # (batch_size, time_dim)
+        nbr_node_feat: torch.Tensor,  # (batch_size, num_nbrs, time_dim)
+        nbr_time_feat: torch.Tensor,  # (batch_size, num_nbrs, node_dim)
+        nbr_edge_feat: torch.Tensor,  # (batch_size, num_nbrs, node_dim)
+        nbr_mask: np.ndarray,  # (batch_size, num_nbrs)
     ):
         # Tensor, shape (batch_size, 1, node_feat_dim)
-        node_features = torch.unsqueeze(node_features, dim=1)
+        node_feat = torch.unsqueeze(node_feat, dim=1)
 
         # we need to pad for the inputs
         if self.pad_dim != 0:
-            node_features = torch.cat(
+            node_feat = torch.cat(
                 [
-                    node_features,
+                    node_feat,
                     torch.zeros(
-                        node_features.shape[0], node_features.shape[1], self.pad_dim
-                    ).to(node_features.device),
+                        node_feat.shape[0], node_feat.shape[1], self.pad_dim
+                    ).to(node_feat.device),
                 ],
                 dim=2,
             )
 
         # Tensor, shape (batch_size, 1, out_dim)
-        query = residual = torch.cat([node_features, node_time_features], dim=2)
+        query = residual = torch.cat([node_feat, time_feat], dim=2)
         # shape (batch_size, 1, n_heads, self.head_dim)
         query = self.query_projection(query).reshape(
             query.shape[0], query.shape[1], self.n_heads, self.head_dim
@@ -93,9 +94,9 @@ class TemporalAttention(torch.nn.Module):
         # Tensor, shape (batch_size, num_neighbors, node_feat_dim + edge_feat_dim + time_feat_dim)
         key = value = torch.cat(
             [
-                neighbor_node_features,
-                neighbor_node_edge_features,
-                neighbor_node_time_features,
+                nbr_node_feat,
+                nbr_edge_feat,
+                nbr_time_feat,
             ],
             dim=2,
         )
@@ -122,7 +123,7 @@ class TemporalAttention(torch.nn.Module):
 
         # Tensor, shape (batch_size, 1, num_neighbors)
         attention_mask = (
-            torch.from_numpy(neighbor_masks).to(node_features.device).unsqueeze(dim=1)
+            torch.from_numpy(nbr_mask).to(node_feat.device).unsqueeze(dim=1)
         )
         attention_mask = attention_mask == 0
         # Tensor, shape (batch_size, self.n_heads, 1, num_neighbors)
@@ -131,7 +132,7 @@ class TemporalAttention(torch.nn.Module):
         )
 
         # Tensor, shape (batch_size, self.n_heads, 1, num_neighbors)
-        # note that if a node has no valid neighbor (whose neighbor_masks are all zero), directly set the masks to -np.inf will make the
+        # note that if a node has no valid neighbor (whose nbr_mask are all zero), directly set the masks to -np.inf will make the
         # attention scores after softmax be nan. Therefore, we choose a very large negative number (-1e10 following TGAT) instead of -np.inf to tackle this case
         attention = attention.masked_fill(attention_mask, -1e10)
 
