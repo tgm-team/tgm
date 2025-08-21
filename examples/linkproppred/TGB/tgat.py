@@ -54,16 +54,14 @@ parser.add_argument(
 
 
 class MergeLayer(nn.Module):
-    def __init__(
-        self, input_dim1: int, input_dim2: int, hidden_dim: int, output_dim: int
-    ):
+    def __init__(self, in_dim1: int, in_dim2: int, hidden_dim: int, output_dim: int):
         super().__init__()
-        self.fc1 = nn.Linear(input_dim1 + input_dim2, hidden_dim)
+        self.fc1 = nn.Linear(in_dim1 + in_dim2, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, output_dim)
         self.act = nn.ReLU()
 
-    def forward(self, input_1: torch.Tensor, input_2: torch.Tensor):
-        x = torch.cat([input_1, input_2], dim=1)
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor):
+        x = torch.cat([x1, x2], dim=1)
         h = self.fc2(self.act(self.fc1(x)))
         return h
 
@@ -99,8 +97,8 @@ class TGAT(nn.Module):
             )
             self.merge_layers.append(
                 MergeLayer(
-                    input_dim1=self.attn[-1].query_dim,
-                    input_dim2=node_dim,
+                    in_dim1=self.attn[-1].query_dim,
+                    in_dim2=node_dim,
                     hidden_dim=embed_dim,
                     output_dim=embed_dim,
                 )
@@ -150,7 +148,6 @@ class TGAT(nn.Module):
     ):
         device = STATIC_NODE_FEAT.device
         num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
-
         node_time_features = self.time_encoder(
             torch.zeros(node_interact_times.shape).unsqueeze(dim=1).to(device)
         )
@@ -343,14 +340,12 @@ def eval(
             batch_neg_src_node_ids = (
                 batch.src[idx].repeat(len(batch_neg_dst_node_ids)).cpu().numpy()
             )
-
             batch_node_interact_times = torch.tensor([batch.time[idx]]).repeat(
                 batch_dst_node_ids.shape[0]
             )
             neg_batch_node_interact_times = torch.tensor([batch.time[idx]]).repeat(
                 batch_neg_dst_node_ids.shape[0]
             )
-
             z_src, z_dst = encoder(
                 src_node_ids=batch_src_node_ids,
                 dst_node_ids=batch_dst_node_ids,
@@ -359,7 +354,6 @@ def eval(
                 is_negative=False,
                 inference=True,
             )
-
             _, z_neg_dst = encoder(
                 src_node_ids=batch_neg_src_node_ids,
                 dst_node_ids=batch_neg_dst_node_ids,
@@ -411,17 +405,16 @@ STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
 
 
 def _init_hooks(
-    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str, nbr_hook=None
+    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
 ) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        if nbr_hook is None:
-            nbr_hook = RecencyNeighborHook(
-                num_nbrs=args.n_nbrs,
-                num_nodes=dg.num_nodes,
-                edge_feats_dim=dg.edge_feats_dim,
-            )
+        nbr_hook = RecencyNeighborHook(
+            num_nbrs=args.n_nbrs,
+            num_nodes=dg.num_nodes,
+            edge_feats_dim=dg.edge_feats_dim,
+        )
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -475,26 +468,18 @@ for epoch in range(1, args.epochs + 1):
         edge_feats_dim=test_dg.edge_feats_dim,
     )
     print('filling up neighbor hook in preperation for validation')
+    _, dst, _ = test_dg.edges
+    min_dst, max_dst = int(dst.min()), int(dst.max())
+    neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
     for _ in tqdm(
         DGDataLoader(
-            train_dg,
-            hook=_init_hooks(
-                test_dg, args.sampling, neg_sampler, 'train', nbr_hook=SHARED_NBR_HOOK
-            ),
-            batch_size=2000,
-            drop_last=False,
+            train_dg, hook=[neg_hook, SHARED_NBR_HOOK], batch_size=2000, drop_last=False
         )
     ):
         pass
 
-    val_loader = DGDataLoader(
-        val_dg,
-        hook=_init_hooks(
-            test_dg, args.sampling, neg_sampler, 'val', nbr_hook=SHARED_NBR_HOOK
-        ),
-        batch_size=1,
-    )
-
+    neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
+    val_loader = DGDataLoader(val_dg, hook=[neg_hook, SHARED_NBR_HOOK], batch_size=1)
     val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
     exit()
 
