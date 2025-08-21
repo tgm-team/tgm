@@ -30,9 +30,6 @@ class TemporalAttention(torch.nn.Module):
         if out_dim % n_heads != 0:
             raise ValueError(f'out_dim: ({out_dim}) % n_heads: ({n_heads}) != 0')
 
-        self.node_feat_dim = node_dim
-        self.edge_feat_dim = edge_dim
-        self.time_feat_dim = time_dim
         self.n_heads = n_heads
         self.out_dim = node_dim + time_dim
         self.key_dim = node_dim + edge_dim + time_dim
@@ -45,9 +42,7 @@ class TemporalAttention(torch.nn.Module):
             self.pad_dim = 0
 
         self.head_dim = self.out_dim // n_heads
-        self.query_projection = torch.nn.Linear(
-            self.out_dim, n_heads * self.head_dim, bias=False
-        )
+        self.W_Q = torch.nn.Linear(self.out_dim, n_heads * self.head_dim, bias=False)
         self.W_K = torch.nn.Linear(self.key_dim, n_heads * self.head_dim, bias=False)
         self.W_V = torch.nn.Linear(self.key_dim, n_heads * self.head_dim, bias=False)
 
@@ -59,54 +54,34 @@ class TemporalAttention(torch.nn.Module):
         self,
         node_feat: torch.Tensor,  # (batch_size, node_dim)
         time_feat: torch.Tensor,  # (batch_size, time_dim)
-        nbr_node_feat: torch.Tensor,  # (batch_size, num_nbrs, time_dim)
-        nbr_time_feat: torch.Tensor,  # (batch_size, num_nbrs, node_dim)
-        nbr_edge_feat: torch.Tensor,  # (batch_size, num_nbrs, node_dim)
+        nbr_node_feat: torch.Tensor,  # (batch_size, num_nbrs, node_dim)
+        nbr_time_feat: torch.Tensor,  # (batch_size, num_nbrs, time_dim)
+        nbr_edge_feat: torch.Tensor,  # (batch_size, num_nbrs, edge_dim)
         nbr_mask: np.ndarray,  # (batch_size, num_nbrs)
     ):
-        # Tensor, shape (batch_size, 1, node_feat_dim)
-        node_feat = torch.unsqueeze(node_feat, dim=1)
+        node_feat = torch.unsqueeze(node_feat, dim=1)  # (batch_size, 1, node_dim)
 
-        # we need to pad for the inputs
-        if self.pad_dim != 0:
-            node_feat = torch.cat(
-                [
-                    node_feat,
-                    torch.zeros(
-                        node_feat.shape[0], node_feat.shape[1], self.pad_dim
-                    ).to(node_feat.device),
-                ],
-                dim=2,
-            )
+        if self.pad_dim != 0:  # pad for the inputs
+            z = torch.zeros(node_feat.shape[0], node_feat.shape[1], self.pad_dim)
+            z = z.to(node_feat.device)
+            node_feat = torch.cat([node_feat, z], dim=2)
 
-        # Tensor, shape (batch_size, 1, out_dim)
-        query = residual = torch.cat([node_feat, time_feat], dim=2)
-        # shape (batch_size, 1, n_heads, self.head_dim)
-        query = self.query_projection(query).reshape(
-            query.shape[0], query.shape[1], self.n_heads, self.head_dim
-        )
+        # (batch_size, 1, out_dim)
+        Q = residual = torch.cat([node_feat, time_feat], dim=2)
+        # (batch_size, 1, n_heads, self.head_dim)
+        Q = self.W_Q(Q).reshape(Q.shape[0], Q.shape[1], self.n_heads, self.head_dim)
 
         # Tensor, shape (batch_size, num_neighbors, node_feat_dim + edge_feat_dim + time_feat_dim)
-        key = value = torch.cat([nbr_node_feat, nbr_edge_feat, nbr_time_feat], dim=2)
-        # Tensor, shape (batch_size, num_neighbors, n_heads, self.head_dim)
-        self.W_K(key)
-        key = self.W_K(key).reshape(
-            key.shape[0], key.shape[1], self.n_heads, self.head_dim
-        )
-        # Tensor, shape (batch_size, num_neighbors, n_heads, self.head_dim)
-        value = self.W_V(value).reshape(
-            value.shape[0], value.shape[1], self.n_heads, self.head_dim
-        )
+        K = V = torch.cat([nbr_node_feat, nbr_edge_feat, nbr_time_feat], dim=2)
+        K = self.W_K(K).reshape(K.shape[0], K.shape[1], self.n_heads, self.head_dim)
+        V = self.W_V(V).reshape(V.shape[0], V.shape[1], self.n_heads, self.head_dim)
 
-        # Tensor, shape (batch_size, n_heads, 1, self.head_dim)
-        query = query.permute(0, 2, 1, 3)
-        # Tensor, shape (batch_size, n_heads, num_neighbors, self.head_dim)
-        key = key.permute(0, 2, 1, 3)
-        # Tensor, shape (batch_size, n_heads, num_neighbors, self.head_dim)
-        value = value.permute(0, 2, 1, 3)
+        Q = Q.permute(0, 2, 1, 3)  # (batch_size, n_heads, 1, self.head_dim)
+        K = K.permute(0, 2, 1, 3)  # (batch_size, n_heads, num_nbrs, self.head_dim)
+        V = V.permute(0, 2, 1, 3)  # (batch_size, n_heads, num_nbrs, self.head_dim)
 
         # Tensor, shape (batch_size, n_heads, 1, num_neighbors)
-        A = torch.einsum('bhld,bhnd->bhln', query, key)
+        A = torch.einsum('bhld,bhnd->bhln', Q, K)
         A *= self.head_dim**-0.5
 
         # Tensor, shape (batch_size, 1, num_neighbors)
@@ -115,15 +90,12 @@ class TemporalAttention(torch.nn.Module):
         # Tensor, shape (batch_size, self.n_heads, 1, num_neighbors)
         attn_mask = torch.stack([attn_mask for _ in range(self.n_heads)], dim=1)
 
-        # (batch_size, self.n_heads, 1, num_neighbors)
+        # If a node has no neighbors (nbr_mask all zero), setting masks to -np.inf will cause softmax nans
+        # Choose a very large negative number (-1e10 following TGAT) instead
         A = A.masked_fill(attn_mask, -1e10)
-
-        # (batch_size, n_heads, 1, num_neighbors)
         A = self.dropout(torch.softmax(A, dim=-1))
 
-        # (batch_size, n_heads, 1, self.head_dim)
-        O = torch.einsum('bhln,bhnd->bhld', A, value)
-
+        O = torch.einsum('bhln,bhnd->bhld', A, V)  # (batch, n_heads, 1, head_dim)
         # (batch_size, 1, n_heads * self.head_dim), where n_heads * self.head_dim is equal to out_dim
         O = O.permute(0, 2, 1, 3).flatten(start_dim=2)
 
