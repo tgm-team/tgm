@@ -48,14 +48,9 @@ class TemporalAttention(torch.nn.Module):
         self.query_projection = torch.nn.Linear(
             self.out_dim, n_heads * self.head_dim, bias=False
         )
-        self.key_projection = torch.nn.Linear(
-            self.key_dim, n_heads * self.head_dim, bias=False
-        )
-        self.value_projection = torch.nn.Linear(
-            self.key_dim, n_heads * self.head_dim, bias=False
-        )
+        self.W_K = torch.nn.Linear(self.key_dim, n_heads * self.head_dim, bias=False)
+        self.W_V = torch.nn.Linear(self.key_dim, n_heads * self.head_dim, bias=False)
 
-        self.scaling_factor = self.head_dim**-0.5
         self.layer_norm = torch.nn.LayerNorm(self.out_dim)
         self.residual_fc = torch.nn.Linear(n_heads * self.head_dim, self.out_dim)
         self.dropout = torch.nn.Dropout(dropout)
@@ -92,21 +87,14 @@ class TemporalAttention(torch.nn.Module):
         )
 
         # Tensor, shape (batch_size, num_neighbors, node_feat_dim + edge_feat_dim + time_feat_dim)
-        key = value = torch.cat(
-            [
-                nbr_node_feat,
-                nbr_edge_feat,
-                nbr_time_feat,
-            ],
-            dim=2,
-        )
+        key = value = torch.cat([nbr_node_feat, nbr_edge_feat, nbr_time_feat], dim=2)
         # Tensor, shape (batch_size, num_neighbors, n_heads, self.head_dim)
-        self.key_projection(key)
-        key = self.key_projection(key).reshape(
+        self.W_K(key)
+        key = self.W_K(key).reshape(
             key.shape[0], key.shape[1], self.n_heads, self.head_dim
         )
         # Tensor, shape (batch_size, num_neighbors, n_heads, self.head_dim)
-        value = self.value_projection(value).reshape(
+        value = self.W_V(value).reshape(
             value.shape[0], value.shape[1], self.n_heads, self.head_dim
         )
 
@@ -118,39 +106,28 @@ class TemporalAttention(torch.nn.Module):
         value = value.permute(0, 2, 1, 3)
 
         # Tensor, shape (batch_size, n_heads, 1, num_neighbors)
-        attention = torch.einsum('bhld,bhnd->bhln', query, key)
-        attention = attention * self.scaling_factor
+        A = torch.einsum('bhld,bhnd->bhln', query, key)
+        A *= self.head_dim**-0.5
 
         # Tensor, shape (batch_size, 1, num_neighbors)
-        attention_mask = (
-            torch.from_numpy(nbr_mask).to(node_feat.device).unsqueeze(dim=1)
-        )
-        attention_mask = attention_mask == 0
+        attn_mask = torch.from_numpy(nbr_mask).to(node_feat.device).unsqueeze(dim=1)
+        attn_mask = attn_mask == 0
         # Tensor, shape (batch_size, self.n_heads, 1, num_neighbors)
-        attention_mask = torch.stack(
-            [attention_mask for _ in range(self.n_heads)], dim=1
-        )
+        attn_mask = torch.stack([attn_mask for _ in range(self.n_heads)], dim=1)
 
-        # Tensor, shape (batch_size, self.n_heads, 1, num_neighbors)
-        # note that if a node has no valid neighbor (whose nbr_mask are all zero), directly set the masks to -np.inf will make the
-        # attention scores after softmax be nan. Therefore, we choose a very large negative number (-1e10 following TGAT) instead of -np.inf to tackle this case
-        attention = attention.masked_fill(attention_mask, -1e10)
+        # (batch_size, self.n_heads, 1, num_neighbors)
+        A = A.masked_fill(attn_mask, -1e10)
 
-        # Tensor, shape (batch_size, n_heads, 1, num_neighbors)
-        attention_scores = self.dropout(torch.softmax(attention, dim=-1))
+        # (batch_size, n_heads, 1, num_neighbors)
+        A = self.dropout(torch.softmax(A, dim=-1))
 
-        # Tensor, shape (batch_size, n_heads, 1, self.head_dim)
-        attention_output = torch.einsum('bhln,bhnd->bhld', attention_scores, value)
+        # (batch_size, n_heads, 1, self.head_dim)
+        O = torch.einsum('bhln,bhnd->bhld', A, value)
 
-        # Tensor, shape (batch_size, 1, n_heads * self.head_dim), where n_heads * self.head_dim is equal to out_dim
-        attention_output = attention_output.permute(0, 2, 1, 3).flatten(start_dim=2)
+        # (batch_size, 1, n_heads * self.head_dim), where n_heads * self.head_dim is equal to out_dim
+        O = O.permute(0, 2, 1, 3).flatten(start_dim=2)
 
-        # Tensor, shape (batch_size, 1, out_dim)
-        output = self.dropout(self.residual_fc(attention_output))
-
-        # Tensor, shape (batch_size, 1, out_dim)
-        output = self.layer_norm(output + residual)
-
-        # Tensor, shape (batch_size, out_dim)
-        output = output.squeeze(dim=1)
-        return output
+        out = self.dropout(self.residual_fc(O))  # (batch_size, 1, out_dim)
+        out = self.layer_norm(out + residual)
+        out = out.squeeze(dim=1)  # (batch_size, out_dim)
+        return out

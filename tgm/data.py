@@ -423,9 +423,7 @@ class DGData:
         src = data['sources'][mask]
         dst = data['destinations'][mask]
 
-        # TODO: Debugging exact match to dyglib
-        src = src + 1
-        dst = dst + 1
+        src, dst = src + 1, dst + 1  # TODO: Debugging exact match to Dylib
 
         edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
         timestamps = torch.from_numpy(data['timestamps'][mask]).long()

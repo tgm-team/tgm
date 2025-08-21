@@ -72,7 +72,7 @@ class TGAT(nn.Module):
     def __init__(
         self,
         node_raw_features: np.ndarray,
-        edge_raw_features: np.ndarray,
+        edge_dim: int,
         time_dim: int,
         embed_dim: int,
         num_layers: int,
@@ -87,12 +87,9 @@ class TGAT(nn.Module):
         self.node_raw_features = torch.from_numpy(
             node_raw_features.astype(np.float32)
         ).to(device)
-        self.edge_raw_features = torch.from_numpy(
-            edge_raw_features.astype(np.float32)
-        ).to(device)
 
         self.node_feat_dim = self.node_raw_features.shape[1]
-        self.edge_feat_dim = self.edge_raw_features.shape[1]
+        self.edge_feat_dim = edge_dim
         self.num_layers = num_layers
         self.time_encoder = Time2Vec(time_dim=time_dim)
         self.attn = nn.ModuleList(
@@ -612,7 +609,7 @@ edge_raw_features = data['edge_feat'].astype(np.float64)
 
 encoder = TGAT(
     node_raw_features=node_raw_features,
-    edge_raw_features=edge_raw_features,
+    edge_dim=edge_raw_features.shape[1],
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
     num_layers=len(args.n_nbrs),
