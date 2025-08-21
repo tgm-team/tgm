@@ -172,19 +172,18 @@ def test_init_basic_sampled_graph_1_hop():
     assert nbr_times.shape == (1, 2, 1)
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_mask.shape == (1, 2, 1)
-    # perform the following test when uniform sampler is updated
-    # assert _batch_eq_nbrs(
-    #     batch_1, batch
-    # )  # test recency and uniform return the same output
+    assert _batch_eq_nbrs(
+        batch_1, batch
+    )  # test recency and uniform return the same output
 
-    # batch = next(iter(loader))
-    # assert _batch_eq_nbrs(batch_2, batch)
+    batch = next(iter(loader))
+    assert _batch_eq_nbrs(batch_2, batch)
 
-    # batch = next(iter(loader))
-    # assert _batch_eq_nbrs(batch_3, batch)
+    batch = next(iter(loader))
+    assert _batch_eq_nbrs(batch_3, batch)
 
-    # batch = next(iter(loader))
-    # assert _batch_eq_nbrs(batch_4, batch)
+    batch = next(iter(loader))
+    assert _batch_eq_nbrs(batch_4, batch)
 
 
 def _init_recency_buffer_graph():
