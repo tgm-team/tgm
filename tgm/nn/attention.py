@@ -46,9 +46,9 @@ class TemporalAttention(torch.nn.Module):
         self.W_K = torch.nn.Linear(self.key_dim, n_heads * self.head_dim, bias=False)
         self.W_V = torch.nn.Linear(self.key_dim, n_heads * self.head_dim, bias=False)
 
-        self.layer_norm = torch.nn.LayerNorm(self.out_dim)
-        self.residual_fc = torch.nn.Linear(n_heads * self.head_dim, self.out_dim)
+        self.W_O = torch.nn.Linear(n_heads * self.head_dim, self.out_dim)
         self.dropout = torch.nn.Dropout(dropout)
+        self.layer_norm = torch.nn.LayerNorm(self.out_dim)
 
     def forward(
         self,
@@ -66,8 +66,7 @@ class TemporalAttention(torch.nn.Module):
             z = z.to(node_feat.device)
             node_feat = torch.cat([node_feat, z], dim=2)
 
-        # (batch_size, 1, out_dim)
-        Q = residual = torch.cat([node_feat, time_feat], dim=2)
+        Q = residual = torch.cat([node_feat, time_feat], dim=2)  # (batch, 1, out_dim)
         # (batch_size, 1, n_heads, self.head_dim)
         Q = self.W_Q(Q).reshape(Q.shape[0], Q.shape[1], self.n_heads, self.head_dim)
 
@@ -80,8 +79,7 @@ class TemporalAttention(torch.nn.Module):
         K = K.permute(0, 2, 1, 3)  # (batch_size, n_heads, num_nbrs, self.head_dim)
         V = V.permute(0, 2, 1, 3)  # (batch_size, n_heads, num_nbrs, self.head_dim)
 
-        # Tensor, shape (batch_size, n_heads, 1, num_neighbors)
-        A = torch.einsum('bhld,bhnd->bhln', Q, K)
+        A = torch.einsum('bhld,bhnd->bhln', Q, K)  # (batch, n_heads, 1, num_nbrs)
         A *= self.head_dim**-0.5
 
         # Tensor, shape (batch_size, 1, num_neighbors)
@@ -93,13 +91,14 @@ class TemporalAttention(torch.nn.Module):
         # If a node has no neighbors (nbr_mask all zero), setting masks to -np.inf will cause softmax nans
         # Choose a very large negative number (-1e10 following TGAT) instead
         A = A.masked_fill(attn_mask, -1e10)
-        A = self.dropout(torch.softmax(A, dim=-1))
+        A = torch.softmax(A, dim=-1)
+        A = self.dropout(A)
 
         O = torch.einsum('bhln,bhnd->bhld', A, V)  # (batch, n_heads, 1, head_dim)
-        # (batch_size, 1, n_heads * self.head_dim), where n_heads * self.head_dim is equal to out_dim
-        O = O.permute(0, 2, 1, 3).flatten(start_dim=2)
+        O = O.permute(0, 2, 1, 3).flatten(start_dim=2)  # (batch, 1, out_dim)
 
-        out = self.dropout(self.residual_fc(O))  # (batch_size, 1, out_dim)
+        out = self.W_O(O)  # (batch_size, 1, out_dim)
+        out = self.dropout(out)
         out = self.layer_norm(out + residual)
         out = out.squeeze(dim=1)  # (batch_size, out_dim)
         return out
