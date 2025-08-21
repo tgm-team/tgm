@@ -53,31 +53,6 @@ parser.add_argument(
 )
 
 
-class TimeEncoder(nn.Module):
-    def __init__(self, time_dim: int, parameter_requires_grad: bool = True):
-        super().__init__()
-
-        self.time_dim = time_dim
-        self.w = nn.Linear(1, time_dim)
-        self.w.weight = nn.Parameter(
-            (
-                torch.from_numpy(
-                    1 / 10 ** np.linspace(0, 9, time_dim, dtype=np.float32)
-                )
-            ).reshape(time_dim, -1)
-        )
-        self.w.bias = nn.Parameter(torch.zeros(time_dim))
-
-        if not parameter_requires_grad:
-            self.w.weight.requires_grad = False
-            self.w.bias.requires_grad = False
-
-    def forward(self, timestamps: torch.Tensor):
-        timestamps = timestamps.unsqueeze(dim=2)
-        output = torch.cos(self.w(timestamps))
-        return output
-
-
 class MergeLayer(nn.Module):
     def __init__(
         self, input_dim1: int, input_dim2: int, hidden_dim: int, output_dim: int
@@ -88,9 +63,7 @@ class MergeLayer(nn.Module):
         self.act = nn.ReLU()
 
     def forward(self, input_1: torch.Tensor, input_2: torch.Tensor):
-        # Tensor, shape (*, input_dim1 + input_dim2)
         x = torch.cat([input_1, input_2], dim=1)
-        # Tensor, shape (*, output_dim)
         h = self.fc2(self.act(self.fc1(x)))
         return h
 
@@ -247,7 +220,7 @@ class TGAT(nn.Module):
         node_raw_features: np.ndarray,
         edge_raw_features: np.ndarray,
         time_dim: int,
-        output_dim: int = 172,
+        embed_dim: int,
         num_layers: int = 2,
         num_heads: int = 2,
         dropout: float = 0.1,
@@ -267,7 +240,7 @@ class TGAT(nn.Module):
         self.node_feat_dim = self.node_raw_features.shape[1]
         self.edge_feat_dim = self.edge_raw_features.shape[1]
         self.num_layers = num_layers
-        self.time_encoder = TimeEncoder(time_dim=time_dim)
+        self.time_encoder = Time2Vec(time_dim=time_dim)
         self.temporal_conv_layers = nn.ModuleList(
             [
                 MultiHeadAttention(
@@ -285,8 +258,8 @@ class TGAT(nn.Module):
                 MergeLayer(
                     input_dim1=self.temporal_conv_layers[-1].query_dim,
                     input_dim2=self.node_feat_dim,
-                    hidden_dim=output_dim,
-                    output_dim=output_dim,
+                    hidden_dim=embed_dim,
+                    output_dim=embed_dim,
                 )
             ]
         )
@@ -295,7 +268,7 @@ class TGAT(nn.Module):
             for _ in range(num_layers - 1):
                 self.temporal_conv_layers.append(
                     MultiHeadAttention(
-                        node_feat_dim=output_dim,
+                        node_feat_dim=embed_dim,
                         edge_feat_dim=self.edge_feat_dim,
                         time_feat_dim=time_dim,
                         num_heads=num_heads,
@@ -306,8 +279,8 @@ class TGAT(nn.Module):
                     MergeLayer(
                         input_dim1=self.temporal_conv_layers[-1].query_dim,
                         input_dim2=self.node_feat_dim,
-                        hidden_dim=output_dim,
-                        output_dim=output_dim,
+                        hidden_dim=embed_dim,
+                        output_dim=embed_dim,
                     )
                 )
 
@@ -370,9 +343,7 @@ class TGAT(nn.Module):
         # query (source) node always has the start time with time interval == 0
         # Tensor, shape (batch_size, 1, time_feat_dim)
         node_time_features = self.time_encoder(
-            timestamps=torch.zeros(node_interact_times.shape)
-            .unsqueeze(dim=1)
-            .to(device)
+            torch.zeros(node_interact_times.shape).unsqueeze(dim=1).to(device)
         )
         # Tensor, shape (batch_size, node_feat_dim)
         node_raw_features = self.node_raw_features[torch.from_numpy(node_ids)]
@@ -395,9 +366,6 @@ class TGAT(nn.Module):
             )
 
             # get temporal neighbors, including neighbor ids, edge ids and time information
-            # neighbor_node_ids, ndarray, shape (batch_size, num_neighbors)
-            # neighbor_edge_ids, ndarray, shape (batch_size, num_neighbors)
-            # neighbor_times, ndarray, shape (batch_size, num_neighbors)
             if len(node_ids) == batch.src.numel():
                 nbr_nids = batch.nids[1]
                 if inference and is_negative:
@@ -425,7 +393,6 @@ class TGAT(nn.Module):
             else:
                 assert False
 
-            #! equal chunks during training
             if not inference:
                 src_nbr_nids, dst_nbr_nids, neg_nbr_nids = torch.chunk(
                     nbr_nids, chunks=3, dim=0
@@ -505,19 +472,13 @@ class TGAT(nn.Module):
             neighbor_node_conv_features = neighbor_node_conv_features.reshape(
                 node_ids.shape[0], num_neighbors, -1
             )
-
-            # compute time interval between current time and historical interaction time
             # adarray, shape (batch_size, num_neighbors)
             neighbor_delta_times = node_interact_times[:, np.newaxis] - neighbor_times
 
             # shape (batch_size, num_neighbors, time_feat_dim)
             neighbor_time_features = self.time_encoder(
-                timestamps=torch.from_numpy(neighbor_delta_times).float().to(device)
+                torch.from_numpy(neighbor_delta_times).float().to(device)
             )
-
-            # temporal graph convolution
-            # Tensor, output shape (batch_size, query_dim)
-
             with open('tgm_out.txt', mode='a') as f:
                 lll = node_ids.reshape(-1)
                 print(
@@ -547,6 +508,8 @@ class TGAT(nn.Module):
                 )
                 print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
+            # temporal graph convolution
+            # Tensor, output shape (batch_size, query_dim)
             output, _ = self.temporal_conv_layers[current_layer_num - 1](
                 node_features=node_conv_features,
                 node_time_features=node_time_features,
@@ -567,18 +530,14 @@ class TGAT(nn.Module):
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-
-        input_dim1 = input_dim2 = hidden_dim = dim
-        output_dim = 1
-
-        self.fc1 = nn.Linear(input_dim1 + input_dim2, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
         self.act = nn.ReLU()
 
-    def forward(self, input_1: torch.Tensor, input_2: torch.Tensor):
-        x = torch.cat([input_1, input_2], dim=1)
-        h = self.fc2(self.act(self.fc1(x)))
-        return h
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
+        h = h.relu()
+        return self.fc2(h)
 
 
 def train(
@@ -590,8 +549,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    losses = []
-    metrics = []
+    losses, metrics = [], []
 
     tt = tqdm(loader, ncols=120)
     for idx, batch in enumerate(tt):
@@ -661,7 +619,7 @@ def train(
             }
         )
 
-        if idx > 0:
+        if idx > 5:
             break
 
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
@@ -770,14 +728,8 @@ val_dg = DGraph(args.dataset, split='val', device=args.device)
 test_dg = DGraph(args.dataset, split='test', device=args.device)
 
 # TODO: Read from graph
-NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, 1  # CHANGED TO SINGLE FEATURE
+NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, 1
 STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
-
-SHARED_NBR_HOOK = RecencyNeighborHook(
-    num_nbrs=args.n_nbrs,
-    num_nodes=test_dg.num_nodes,
-    edge_feats_dim=test_dg.edge_feats_dim,
-)
 
 
 def _init_hooks(
@@ -826,7 +778,7 @@ encoder = TGAT(
     node_raw_features=node_raw_features,
     edge_raw_features=edge_raw_features,
     time_dim=args.time_dim,
-    output_dim=args.embed_dim,
+    embed_dim=args.embed_dim,
     num_layers=len(args.n_nbrs),
     num_heads=args.n_heads,
     dropout=float(args.dropout),
@@ -846,7 +798,6 @@ for epoch in range(1, args.epochs + 1):
         batch_size=args.bsize,
     )
 
-    # Reset the nbr hook, then loop through the entire training data to fill up it's state
     SHARED_NBR_HOOK = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=test_dg.num_nodes,

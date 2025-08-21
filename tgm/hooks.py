@@ -338,6 +338,7 @@ class RecencyNeighborHook:
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        # TODO: Consider the case where no edge features exist
         device = dg.device
         self._move_queues_to_device_if_needed(device)  # No-op after first batch
         self._update(batch)
