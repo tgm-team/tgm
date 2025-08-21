@@ -139,7 +139,6 @@ class TGAT(nn.Module):
         src_node_ids: np.ndarray,
         dst_node_ids: np.ndarray,
         node_interact_times: np.ndarray,
-        num_neighbors: int = 20,
         batch=None,
         is_negative=False,
         idx=-1,
@@ -152,7 +151,7 @@ class TGAT(nn.Module):
                 node_ids=src_node_ids,
                 node_interact_times=node_interact_times,
                 current_layer_num=self.num_layers,
-                num_neighbors=num_neighbors,
+                num_neighbors=self.num_nbrs[0],
                 batch=batch,
                 is_negative=is_negative,
                 is_src=True,
@@ -163,7 +162,7 @@ class TGAT(nn.Module):
             node_ids=dst_node_ids,
             node_interact_times=node_interact_times,
             current_layer_num=self.num_layers,
-            num_neighbors=num_neighbors,
+            num_neighbors=self.num_nbrs[0],
             batch=batch,
             is_negative=is_negative,
             is_src=False,
@@ -186,19 +185,14 @@ class TGAT(nn.Module):
     ):
         device = self.node_raw_features.device
 
-        # query (source) node always has the start time with time interval == 0
-        # Tensor, shape (batch_size, 1, time_feat_dim)
         node_time_features = self.time_encoder(
             torch.zeros(node_interact_times.shape).unsqueeze(dim=1).to(device)
         )
-        # Tensor, shape (batch_size, node_feat_dim)
         node_raw_features = self.node_raw_features[torch.from_numpy(node_ids)]
 
         if current_layer_num == 0:
             return node_raw_features
         else:
-            # get source node representations by aggregating embeddings from the previous (current_layer_num - 1)-th layer
-            # Tensor, shape (batch_size, output_dim or node_feat_dim)
             node_conv_features = self.compute_node_temporal_embeddings(
                 node_ids=node_ids,
                 node_interact_times=node_interact_times,
@@ -211,7 +205,6 @@ class TGAT(nn.Module):
                 inference=inference,
             )
 
-            # get temporal neighbors, including neighbor ids, edge ids and time information
             if len(node_ids) == batch.src.numel():
                 nbr_nids = batch.nids[1]
                 if inference and is_negative:
@@ -352,8 +345,6 @@ class TGAT(nn.Module):
                 )
                 print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-            # temporal graph convolution
-            # Tensor, output shape (batch_size, query_dim)
             output = self.attn[current_layer_num - 1](
                 node_feat=node_conv_features,
                 time_feat=node_time_features,
@@ -362,9 +353,6 @@ class TGAT(nn.Module):
                 nbr_edge_feat=neighbor_edge_features,
                 nbr_mask=neighbor_node_ids,
             )
-
-            # Tensor, output shape (batch_size, output_dim)
-            # follow the TGAT paper, use merge layer to combine the attention results and node original feature
             output = self.merge_layers[current_layer_num - 1](
                 input_1=output, input_2=node_raw_features
             )
@@ -409,7 +397,6 @@ def train(
             src_node_ids=batch_src_node_ids,
             dst_node_ids=batch_dst_node_ids,
             node_interact_times=batch_node_interact_times,
-            num_neighbors=NBRS,
             batch=batch,
             is_negative=False,
             idx=idx,
@@ -418,7 +405,6 @@ def train(
             src_node_ids=batch_neg_src_node_ids,
             dst_node_ids=batch_neg_dst_node_ids,
             node_interact_times=batch_node_interact_times,
-            num_neighbors=NBRS,
             batch=batch,
             is_negative=True,
             idx=idx,
@@ -496,7 +482,6 @@ def eval(
                 src_node_ids=batch_src_node_ids,
                 dst_node_ids=batch_dst_node_ids,
                 node_interact_times=batch_node_interact_times,
-                num_neighbors=NBRS,
                 batch=batch,
                 is_negative=False,
                 idx=idx,
@@ -514,7 +499,6 @@ def eval(
                 src_node_ids=batch_neg_src_node_ids,
                 dst_node_ids=batch_neg_dst_node_ids,
                 node_interact_times=neg_batch_node_interact_times,
-                num_neighbors=NBRS,
                 batch=batch,
                 is_negative=True,
                 idx=idx,
@@ -546,8 +530,6 @@ def eval(
 
 args = parser.parse_args()
 seed_everything(args.seed)
-
-NBRS = args.n_nbrs[0]
 
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
 eval_metric = dataset.eval_metric
@@ -597,19 +579,9 @@ test_loader = DGDataLoader(
 )
 
 
-node_raw_features = STATIC_NODE_FEAT.cpu().numpy()
-
-from tgb.linkproppred.dataset import LinkPropPredDataset
-
-data = LinkPropPredDataset(
-    name=args.dataset, root='datasets', preprocess=True
-).full_data
-edge_raw_features = data['edge_feat'].astype(np.float64)
-
-
 encoder = TGAT(
-    node_raw_features=node_raw_features,
-    edge_dim=edge_raw_features.shape[1],
+    node_raw_features=STATIC_NODE_FEAT.cpu().numpy(),
+    edge_dim=train_dg.edge_feats_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
     num_layers=len(args.n_nbrs),
