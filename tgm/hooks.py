@@ -123,8 +123,6 @@ class DeduplicationHook:
         if hasattr(batch, 'neg'):
             batch.neg = batch.neg.to(batch.src.device)
             nids.append(batch.neg)
-        if hasattr(batch, 'neg_src'):
-            nids.append(batch.neg_src)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
                 hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
@@ -168,8 +166,6 @@ class NegativeEdgeSamplerHook:
         batch.neg = torch.randint(  # type: ignore
             self.low, self.high, size, dtype=torch.long, device=dg.device
         )
-
-        batch.neg_src = batch.src.clone().to(dg.device)
         batch.neg = 888 * torch.ones_like(batch.src).to(dg.device)
         return batch
 
@@ -268,16 +264,16 @@ class NeighborSamplerHook:
                     # leakage, making the prediction easier than it should be.
 
                     # Use generator to locall constrain rng for reproducability
-                    # gen = torch.Generator(device=device)
-                    # gen.manual_seed(0)
-                    # fake_times = torch.randint(
-                    #    int(batch.time.min().item()),
-                    #    int(batch.time.max().item()) + 1,
-                    #    (batch.neg.size(0),),
-                    #    device=device,
-                    #    generator=gen,
-                    # )
-                    times.append(batch.time)
+                    gen = torch.Generator(device=device)
+                    gen.manual_seed(0)
+                    fake_times = torch.randint(
+                        int(batch.time.min().item()),
+                        int(batch.time.max().item()) + 1,
+                        (batch.neg.size(0),),
+                        device=device,
+                        generator=gen,
+                    )
+                    times.append(fake_times)
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
             else:
@@ -310,10 +306,12 @@ class RecencyNeighborHook:
     produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats', 'nbr_mask'}
 
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.	
+
     Args:	
         num_nodes (int): Total number of nodes to track.	
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).	
         edge_feats_dim (int): Edge feature dimension on the dynamic graph.	
+
     Raises:	
         ValueError: If the num_nbrs list is empty.	
     """
@@ -341,12 +339,12 @@ class RecencyNeighborHook:
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         device = dg.device
-        self._device = device
+        self._move_queues_to_device_if_needed(device)  # No-op after first batch
         self._update(batch)
 
-        batch.nids, batch.times = [], []
-        batch.nbr_nids, batch.nbr_times = [], []
-        batch.nbr_feats, batch.nbr_mask = [], []
+        batch.nids, batch.times = [], []  # type: ignore
+        batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
+        batch.nbr_feats, batch.nbr_mask = [], []  # type: ignore
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -371,12 +369,12 @@ class RecencyNeighborHook:
                 seed_nodes, seed_times, num_nbrs
             )
 
-            batch.nids.append(seed_nodes)
-            batch.times.append(seed_times)
-            batch.nbr_nids.append(nbr_nids)
-            batch.nbr_times.append(nbr_times)
-            batch.nbr_feats.append(nbr_feats)
-            batch.nbr_mask.append(nbr_mask)
+            batch.nids.append(seed_nodes)  # type: ignore
+            batch.times.append(seed_times)  # type: ignore
+            batch.nbr_nids.append(nbr_nids)  # type: ignore
+            batch.nbr_times.append(nbr_times)  # type: ignore
+            batch.nbr_feats.append(nbr_feats)  # type: ignore
+            batch.nbr_mask.append(nbr_mask)  # type: ignore
 
         return batch
 

@@ -57,7 +57,6 @@ class TimeEncoder(nn.Module):
         super().__init__()
 
         self.time_dim = time_dim
-        # trainable parameters for time encoding
         self.w = nn.Linear(1, time_dim)
         self.w.weight = nn.Parameter(
             (
@@ -73,12 +72,8 @@ class TimeEncoder(nn.Module):
             self.w.bias.requires_grad = False
 
     def forward(self, timestamps: torch.Tensor):
-        # Tensor, shape (batch_size, seq_len, 1)
         timestamps = timestamps.unsqueeze(dim=2)
-
-        # Tensor, shape (batch_size, seq_len, time_dim)
         output = torch.cos(self.w(timestamps))
-
         return output
 
 
@@ -114,7 +109,6 @@ class MultiHeadAttention(nn.Module):
         self.edge_feat_dim = edge_feat_dim
         self.time_feat_dim = time_feat_dim
         self.num_heads = num_heads
-
         self.query_dim = node_feat_dim + time_feat_dim
         self.key_dim = node_feat_dim + edge_feat_dim + time_feat_dim
 
@@ -132,7 +126,6 @@ class MultiHeadAttention(nn.Module):
         )
 
         self.head_dim = self.query_dim // num_heads
-
         self.query_projection = nn.Linear(
             self.query_dim, num_heads * self.head_dim, bias=False
         )
@@ -144,11 +137,8 @@ class MultiHeadAttention(nn.Module):
         )
 
         self.scaling_factor = self.head_dim**-0.5
-
         self.layer_norm = nn.LayerNorm(self.query_dim)
-
         self.residual_fc = nn.Linear(num_heads * self.head_dim, self.query_dim)
-
         self.dropout = nn.Dropout(dropout)
 
     def forward(
@@ -181,9 +171,6 @@ class MultiHeadAttention(nn.Module):
         query = self.query_projection(query).reshape(
             query.shape[0], query.shape[1], self.num_heads, self.head_dim
         )
-
-        # if (len(neighbor_node_edge_features.shape) < 3):
-        #     neighbor_node_edge_features = neighbor_node_edge_features.unsqueeze(dim=0)
 
         # Tensor, shape (batch_size, num_neighbors, node_feat_dim + edge_feat_dim + time_feat_dim)
         key = value = torch.cat(
@@ -269,7 +256,6 @@ class TGAT(nn.Module):
         super().__init__()
 
         self.num_nbrs = num_nbrs
-
         self.node_raw_features = torch.from_numpy(
             node_raw_features.astype(np.float32)
         ).to(device)
@@ -280,7 +266,6 @@ class TGAT(nn.Module):
         self.node_feat_dim = self.node_raw_features.shape[1]
         self.edge_feat_dim = self.edge_raw_features.shape[1]
         self.num_layers = num_layers
-
         self.time_encoder = TimeEncoder(time_dim=time_dim)
         self.temporal_conv_layers = nn.ModuleList(
             [
@@ -412,7 +397,6 @@ class TGAT(nn.Module):
             # neighbor_node_ids, ndarray, shape (batch_size, num_neighbors)
             # neighbor_edge_ids, ndarray, shape (batch_size, num_neighbors)
             # neighbor_times, ndarray, shape (batch_size, num_neighbors)
-
             if len(node_ids) == batch.src.numel():
                 nbr_nids = batch.nids[1]
                 if inference and is_negative:
@@ -562,11 +546,6 @@ class TGAT(nn.Module):
                 )
                 print(' '.join(f'{x:.8f}' for x in lll), file=f)
 
-                # print(
-                #    f'[{current_layer_num}] attention node_features ({node_conv_features.shape}), time features ({node_time_features.shape}), nbr node features ({neighbor_node_conv_features.shape}), nbr time features ({neighbor_time_features.shape}), nbr edge features ({neighbor_edge_features.shape}), nbr mask ({neighbor_node_ids.shape})'
-                # )
-                # input()
-
             output, _ = self.temporal_conv_layers[current_layer_num - 1](
                 node_features=node_conv_features,
                 node_time_features=node_time_features,
@@ -596,9 +575,7 @@ class LinkPredictor(nn.Module):
         self.act = nn.ReLU()
 
     def forward(self, input_1: torch.Tensor, input_2: torch.Tensor):
-        # Tensor, shape (*, input_dim1 + input_dim2)
         x = torch.cat([input_1, input_2], dim=1)
-        # Tensor, shape (*, output_dim)
         h = self.fc2(self.act(self.fc1(x)))
         return h
 
@@ -766,7 +743,6 @@ def eval(
             perf_list.append(perf)
             print(input_dict['y_pred_pos'], input_dict['y_pred_neg'][:3])
             print(f'---\nbatch ID: {batch_id}, MRR, {perf}---\n')
-            input()
 
         batch_id += 1
         if batch_id > 5:
@@ -798,8 +774,6 @@ test_dg = DGraph(args.dataset, split='test', device=args.device)
 NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, 1  # CHANGED TO SINGLE FEATURE
 STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
 
-
-# TODO: trying to share this between hook managers
 SHARED_NBR_HOOK = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=test_dg.num_nodes,
