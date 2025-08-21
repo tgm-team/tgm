@@ -90,10 +90,10 @@ class TGAT(nn.Module):
             in_dim = node_dim if i == 0 else embed_dim
             self.attn.append(
                 TemporalAttention(
+                    n_heads=n_heads,
                     node_dim=in_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
-                    n_heads=n_heads,
                     dropout=dropout,
                 )
             )
@@ -113,7 +113,6 @@ class TGAT(nn.Module):
         node_interact_times: np.ndarray,
         batch=None,
         is_negative=False,
-        idx=-1,
         inference=False,
     ):
         if inference and is_negative:
@@ -127,7 +126,6 @@ class TGAT(nn.Module):
                 batch=batch,
                 is_negative=is_negative,
                 is_src=True,
-                idx=idx,
                 inference=inference,
             )
         z_dst = self.compute_embeddings(
@@ -138,7 +136,6 @@ class TGAT(nn.Module):
             batch=batch,
             is_negative=is_negative,
             is_src=False,
-            idx=idx,
             inference=inference,
         )
         return z_src, z_dst
@@ -152,7 +149,6 @@ class TGAT(nn.Module):
         batch=None,
         is_negative=False,
         is_src=False,
-        idx=-1,
         inference=False,
     ):
         device = STATIC_NODE_FEAT.device
@@ -173,34 +169,28 @@ class TGAT(nn.Module):
                 batch=batch,
                 is_negative=is_negative,
                 is_src=is_src,
-                idx=idx,
                 inference=inference,
             )
 
-            if len(node_ids) == batch.src.numel():
-                nbr_nids = batch.nids[1]
+            if len(node_ids) in {batch.src.numel(), batch.neg.numel()}:
+                nbr_nids, nbr_feats = batch.nids[1], batch.nbr_feats[0]
                 if inference and is_negative:
                     nbr_times = batch.nbr_times[0].flatten()
                 else:
-                    nbr_times = batch.times[1]
-                nbr_feats = batch.nbr_feats[0]
-            elif len(node_ids) == batch.src.numel() * num_neighbors:
-                nbr_nids = batch.nbr_nids[1].flatten()
-                nbr_times = batch.nbr_times[1].flatten()
-                nbr_feats = batch.nbr_feats[1]
-            elif len(node_ids) == (batch.neg.numel()):
-                nbr_nids = batch.nids[1]
-
-                if inference and is_negative:
-                    nbr_times = batch.nbr_times[0].flatten()
-                else:
-                    nbr_times = batch.times[1].flatten()
-
-                nbr_feats = batch.nbr_feats[0]
-            elif len(node_ids) == (batch.neg.numel()) * num_neighbors:
-                nbr_nids = batch.nbr_nids[1].flatten()
-                nbr_times = batch.nbr_times[1].flatten()
-                nbr_feats = batch.nbr_feats[1]
+                    nbr_times = (
+                        batch.times[1]
+                        if len(node_ids) == batch.src.numel()
+                        else batch.times[1].flatten()
+                    )
+            elif len(node_ids) in {
+                batch.src.numel() * num_neighbors,
+                batch.neg.numel() * num_neighbors,
+            }:
+                nbr_nids, nbr_times, nbr_feats = (
+                    batch.nbr_nids[1].flatten(),
+                    batch.nbr_times[1].flatten(),
+                    batch.nbr_feats[1],
+                )
             else:
                 assert False
 
@@ -273,7 +263,6 @@ class TGAT(nn.Module):
                 batch=batch,
                 is_negative=is_negative,
                 is_src=is_src,
-                idx=idx,
                 inference=inference,
             )
 
@@ -331,7 +320,6 @@ def train(
             node_interact_times=batch.time.cpu().numpy(),
             batch=batch,
             is_negative=False,
-            idx=idx,
         )
         _, z_neg_dst = encoder(
             src_node_ids=batch.src.cpu().numpy(),
@@ -339,7 +327,6 @@ def train(
             node_interact_times=batch.time.cpu().numpy(),
             batch=batch,
             is_negative=True,
-            idx=idx,
         )
 
         pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
@@ -416,7 +403,6 @@ def eval(
                 node_interact_times=batch_node_interact_times.cpu().numpy(),
                 batch=batch,
                 is_negative=False,
-                idx=idx,
                 inference=True,
             )
 
@@ -426,7 +412,6 @@ def eval(
                 node_interact_times=neg_batch_node_interact_times.cpu().numpy(),
                 batch=batch,
                 is_negative=True,
-                idx=idx,
                 inference=True,
             )
             z_neg_src = z_src.repeat(z_neg_dst.shape[0], 1)
