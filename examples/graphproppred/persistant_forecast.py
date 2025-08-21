@@ -9,9 +9,10 @@ from tqdm import tqdm
 
 from tgm import DGBatch, DGraph
 from tgm.loader import DGDataLoader
+from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='TGCN Graph Property Example',
+    description='Persistant Forecast Graph Property Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -42,8 +43,8 @@ def edge_count(snapshot: DGBatch):
 
 
 def node_count(snapshot: DGBatch):
-    # return number of ndoes of current snapshot
-    return torch.unique(torch.cat([snapshot.src, snapshot.dst])).numel()
+    # return number of nodes of current snapshot
+    return len(snapshot.unique_nids)
 
 
 def label_generator_next_binary_classification(
@@ -65,14 +66,13 @@ def label_generator_next_binary_classification(
 # ETL step
 def preproccess_raw_data(dataframe: pd.DataFrame) -> pd.DataFrame:
     # time offset
-    start_time = dataframe['timestamp'].min()
-    dataframe['timestamp'] = dataframe['timestamp'].apply(lambda x: x - start_time)
+    dataframe['timestamp'] = dataframe['timestamp'] - dataframe['timestamp'].min()
 
     # normalize edge weight
     max_weight = float(dataframe['value'].max())
     min_weight = float(dataframe['value'].min())
     dataframe['value'] = dataframe['value'].apply(
-        lambda x: 1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))
+        lambda x: [1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))]
     )
 
     # Key generator
@@ -83,8 +83,6 @@ def preproccess_raw_data(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe['to'] = dataframe['to'].apply(
         lambda x: node_id_map.setdefault(x, len(node_id_map))
     )
-
-    dataframe['value'] = dataframe['value'].apply(lambda x: [x])
 
     return dataframe
 
@@ -103,11 +101,7 @@ class PersistantForecast:
         if self.prev_measurement is None:
             pred = torch.randint(0, 2, ())  # random guess for the first prediction
         else:
-            pred = (
-                torch.tensor(1)
-                if current_measurement > self.prev_measurement
-                else torch.tensor(0)
-            )
+            pred = torch.tensor(int(current_measurement > self.prev_measurement))
         self.prev_measurement = current_measurement
 
         return pred
@@ -137,6 +131,7 @@ def eval(
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    seed_everything(args.seed)
     metrics = [BinaryAveragePrecision(), BinaryAUROC()]
     val_metrics = MetricCollection(metrics, prefix='Validation')
 
@@ -158,6 +153,8 @@ if __name__ == '__main__':
     full_loader = DGDataLoader(
         dgraph_token,
         batch_unit=args.batch_time_gran,
+        drop_last=True,  # Set this to true for test data loader only, False for both validation and train
+        # on_empty = None @TODO: Uncomment this when #PR50 goes in
     )
     labels = label_generator_next_binary_classification(
         full_loader

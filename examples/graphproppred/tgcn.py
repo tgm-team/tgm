@@ -1,15 +1,19 @@
 import argparse
+import time
 from typing import Callable, Tuple
 
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tgb.nodeproppred.evaluate import Evaluator
+from torchmetrics import Metric, MetricCollection
+from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
+from tqdm import tqdm
 
 from tgm import DGBatch, DGraph
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
+from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
     description='TGCN Graph Property Example',
@@ -43,8 +47,8 @@ def edge_count(snapshot: DGBatch):
 
 
 def node_count(snapshot: DGBatch):
-    # return number of ndoes of current snapshot
-    return torch.unique(torch.cat([snapshot.src, snapshot.dst])).numel()
+    # return number of nodes of current snapshot
+    return len(snapshot.unique_nids)
 
 
 def label_generator_next_binary_classification(
@@ -66,14 +70,13 @@ def label_generator_next_binary_classification(
 # ETL step
 def preproccess_raw_data(dataframe: pd.DataFrame) -> pd.DataFrame:
     # time offset
-    start_time = dataframe['timestamp'].min()
-    dataframe['timestamp'] = dataframe['timestamp'].apply(lambda x: x - start_time)
+    dataframe['timestamp'] = dataframe['timestamp'] - dataframe['timestamp'].min()
 
     # normalize edge weight
     max_weight = float(dataframe['value'].max())
     min_weight = float(dataframe['value'].min())
     dataframe['value'] = dataframe['value'].apply(
-        lambda x: 1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))
+        lambda x: [1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))]
     )
 
     # Key generator
@@ -84,8 +87,6 @@ def preproccess_raw_data(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe['to'] = dataframe['to'].apply(
         lambda x: node_id_map.setdefault(x, len(node_id_map))
     )
-
-    dataframe['value'] = dataframe['value'].apply(lambda x: [x])
 
     return dataframe
 
@@ -159,70 +160,106 @@ class GraphPredictor(torch.nn.Module):
         return h.sigmoid()
 
 
+def eval(
+    loader: DGDataLoader,
+    y_true: torch.Tensor,
+    model: torch.nn.Module,
+    metrics: Metric,
+    ignore_last_snapshot=False,
+) -> dict:
+    all_preds = []
+    number_of_snapshot = len(loader)
+    for idx, snapshot in tqdm(enumerate(loader)):
+        if not (ignore_last_snapshot and idx == number_of_snapshot - 1):
+            pred = model(snapshot)
+            all_preds.append(pred)
+    y_pred = torch.Tensor(all_preds).float()
+    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
+
+    metrics(y_pred, y_true, indexes=indexes)
+    return metrics.compute()
+
+
+def train(
+    loader: DGDataLoader,
+    model: nn.Module,
+    opt: torch.optim.Optimizer,
+    node_feat: torch.Tensor,
+    labels: torch.Tensor,
+) -> Tuple[float, torch.Tensor, torch.Tensor]:
+    model.train()
+    total_loss = 0
+    h_0 = None
+    criterion = torch.nn.BCELoss()
+    for idx, snapshot in tqdm(enumerate(loader)):
+        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
+        if not len(snapshot.src):
+            continue
+
+        opt.zero_grad()
+        pred, h_0 = model(snapshot, node_feat, h_0)
+        loss = criterion(pred, labels[idx])
+        loss.backward()
+        opt.step()
+        total_loss += float(loss)
+        h_0 = h_0.detach()
+    return total_loss, h_0
+
+
 if __name__ == '__main__':
     args = parser.parse_args()
-    train_dg = DGraph(args.dataset, time_delta='s', split='train', device=args.device)
-    train_dg = train_dg.discretize(args.time_gran)
+    seed_everything(args.seed)
+    metrics = [BinaryAveragePrecision(), BinaryAUROC()]
+    val_metrics = MetricCollection(metrics, prefix='Validation')
 
-    val_dg = DGraph(args.dataset, time_delta='s', split='val', device=args.device)
-    val_dg = val_dg.discretize(args.time_gran)
-
-    test_dg = DGraph(args.dataset, time_delta='s', split='test', device=args.device)
-    test_dg = test_dg.discretize(args.time_gran)
-
-    dgraph = DGraph(args.dataset)
-    num_nodes = dgraph.num_nodes
-    label_dim = train_dg.dynamic_node_feats_dim
-    evaluator = Evaluator(name=args.dataset)
-    train_loader = DGDataLoader(
-        train_dg,
-        batch_unit=args.batch_time_gran,
-    )
-    val_loader = DGDataLoader(
-        val_dg,
-        batch_unit=args.batch_time_gran,
-    )
-    test_loader = DGDataLoader(
-        test_dg,
-        batch_unit=args.batch_time_gran,
-    )
-
-    print(len(train_loader))
-    print(len(val_loader))
-    print(len(test_loader))
-
-    for batch in train_loader:
-        print(batch.src.shape)
-        print('\n')
-
-    labels = label_generator_next_binary_classification(train_loader)
-    token = pd.read_csv('examples/graphproppred/test_token.csv')
+    token = pd.read_csv(args.path_dataset)
     token = preproccess_raw_data(token)
 
-    dgraph_token = DGraph.from_pandas(
+    dgraph_token = DGraph.from_pandas(  # @TODO: adapt changes in discretize APIs
         edge_df=token,
         edge_src_col='from',
         edge_dst_col='to',
         edge_time_col='timestamp',
-        edge_feats_col='value',  # @TODO: CHECK
-        time_delta='s',
-        device=args.device,
-        # split = 'train' # @TODO: CHECK
+        edge_feats_col='value',
+        time_delta=args.raw_time_gran,
+        device='cpu',
     )
+    # TODO: Get split from new APIs
+    dgraph_token = dgraph_token.discretize(args.batch_time_gran)
 
-    train_loader = DGDataLoader(
+    full_loader = DGDataLoader(
         dgraph_token,
         batch_unit=args.batch_time_gran,
+        drop_last=True,  # Set this to true for test data loader only, False for both validation and train
+        # on_empty = None @TODO: Uncomment this when #PR50 goes in
     )
-    val_loader = DGDataLoader(
-        dgraph_token,
-        batch_unit=args.batch_time_gran,
-    )
-    test_loader = DGDataLoader(
-        dgraph_token,
-        batch_unit=args.batch_time_gran,
-    )
+    labels = label_generator_next_binary_classification(
+        full_loader
+    )  # shape: number of snapshots - 1
 
-    print(len(train_loader))
-    print(len(val_loader))
-    print(len(test_loader))
+    # TODO: add static node features to DGraph
+    args.node_dim = args.embed_dim
+    static_node_feats = torch.randn(
+        (dgraph_token.num_nodes, args.node_dim), device=args.device
+    )
+    model = TGCN_Model(node_dim=args.node_dim, embed_dim=args.embed_dim).to(args.device)
+    opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+
+    for epoch in range(1, args.epochs + 1):
+        start_time = time.perf_counter()
+        loss, h_0 = train(
+            full_loader, model, opt, static_node_feats
+        )  # @TODO: Need to change to train_loader
+        end_time = time.perf_counter()
+        latency = end_time - start_time
+
+        val_results, h_0 = eval(
+            full_loader, model, static_node_feats, h_0
+        )  # @TODO: Need to change to eval_loader
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+            + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+        )
+
+    results = eval(full_loader, labels, model, val_metrics, True)
+    print(results)
