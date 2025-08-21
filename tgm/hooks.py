@@ -153,12 +153,7 @@ class NegativeEdgeSamplerHook:
             to the number of positive destination nodes (default = 1.0).
     """
 
-    def __init__(
-        self,
-        low: int,
-        high: int,
-        neg_ratio: float = 1.0,
-    ) -> None:
+    def __init__(self, low: int, high: int, neg_ratio: float = 1.0) -> None:
         if not 0 < neg_ratio <= 1:
             raise ValueError(f'neg_ratio must be in (0, 1], got: {neg_ratio}')
         if not low < high:
@@ -216,14 +211,6 @@ class TGBNegativeEdgeSamplerHook:
         )
         queries = []
         tensor_batch_list = []
-        ##! only take the first edge from each batch for TGB evaluation
-        # neg_batch = neg_batch_list[0]
-        # queries.append(neg_batch)
-
-        #! manually add and substract 1 due to DyGLib problems
-        # tensor_batch_list.append(
-        #    torch.tensor(neg_batch, dtype=torch.long, device=dg.device) + 1
-        # )
         for neg_batch in neg_batch_list:
             neg_batch = [x + 1 for x in neg_batch]
             queries.append(neg_batch)
@@ -322,12 +309,21 @@ class RecencyNeighborHook:
     requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats', 'nbr_mask'}
 
+    r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.	
+    Args:	
+        num_nodes (int): Total number of nodes to track.	
+        num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).	
+        edge_feats_dim (int): Edge feature dimension on the dynamic graph.	
+    Raises:	
+        ValueError: If the num_nbrs list is empty.	
+    """
+
     def __init__(
         self, num_nodes: int, num_nbrs: List[int], edge_feats_dim: int
     ) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
-        if not all(isinstance(x, int) and x > 0 for x in num_nbrs):
+        if not all([isinstance(x, int) and x > 0 for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
 
         self._num_nbrs = num_nbrs
@@ -339,39 +335,14 @@ class RecencyNeighborHook:
 
         self._device = torch.device('cpu')
 
-        self.verbose = False
-
     @property
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
-    def set_verbose(self):
-        self.verbose = True
-
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        if self.verbose:
-            print('Calling nbr sampler with: ')
-            print(batch.src, batch.dst, batch.neg)
-
-            print('History of 8228:')
-            i = 0
-            for ff in reversed(self._history[8228]):
-                print(f'8228-{ff[0]} @ {ff[1]}')
-                i += 1
-                if i > 6:
-                    break
         device = dg.device
         self._device = device
         self._update(batch)
-
-        if self.verbose:
-            print('History of 8228 AFTER UPDATE:')
-            i = 0
-            for ff in reversed(self._history[8228]):
-                print(f'8228-{ff[0]} @ {ff[1]}')
-                i += 1
-                if i > 6:
-                    break
 
         batch.nids, batch.times = [], []
         batch.nbr_nids, batch.nbr_times = [], []
@@ -386,7 +357,6 @@ class RecencyNeighborHook:
                     batch.neg = batch.neg.to(device)
                     seed_nodes = torch.cat([seed_nodes, batch.neg])
 
-                    # TODO: THIS
                     fake_times = batch.time.repeat(len(batch.neg))
                     seed_times = torch.cat([seed_times, fake_times])
             else:
@@ -397,17 +367,9 @@ class RecencyNeighborHook:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()
                 seed_times = batch.nbr_times[hop - 1].flatten()
 
-            if self.verbose:
-                print('Trying to get recency neighours with: ')
-                print(seed_nodes[2:6], seed_times[2:6])
-
             nbr_nids, nbr_times, nbr_feats, nbr_mask = self._get_recency_neighbors(
                 seed_nodes, seed_times, num_nbrs
             )
-
-            if self.verbose:
-                print('Received: ')
-                print(nbr_nids[2:6], nbr_times[2:6])
 
             batch.nids.append(seed_nodes)
             batch.times.append(seed_times)
