@@ -146,8 +146,11 @@ args = parser.parse_args()
 seed_everything(args.seed)
 
 
-data = DGData.from_tgb(args.dataset).discretize(args.time_gran)
-train_data, val_data, test_data = data.split()
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+
+train_data = train_data.discretize(args.time_gran)
+val_data = val_data.discretize(args.time_gran)
+test_data = test_data.discretize(args.time_gran)
 
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
