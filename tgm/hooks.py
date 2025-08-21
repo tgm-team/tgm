@@ -305,15 +305,15 @@ class RecencyNeighborHook:
     requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats', 'nbr_mask'}
 
-    r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.	
+    r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
-    Args:	
-        num_nodes (int): Total number of nodes to track.	
-        num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).	
-        edge_feats_dim (int): Edge feature dimension on the dynamic graph.	
+    Args:
+        num_nodes (int): Total number of nodes to track.
+        num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
+        edge_feats_dim (int): Edge feature dimension on the dynamic graph.
 
-    Raises:	
-        ValueError: If the num_nbrs list is empty.	
+    Raises:
+        ValueError: If the num_nbrs list is empty.
     """
 
     def __init__(
@@ -321,7 +321,7 @@ class RecencyNeighborHook:
     ) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
-        if not all([isinstance(x, int) and x > 0 for x in num_nbrs]):
+        if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
 
         self._num_nbrs = num_nbrs
