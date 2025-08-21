@@ -5,6 +5,7 @@ from typing import List, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from sklearn.metrics import average_precision_score, roc_auc_score
 from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
@@ -26,7 +27,7 @@ parser = argparse.ArgumentParser(
     description='TGAT TGB Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument('--seed', type=int, default=0, help='random seed to use')
+parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
@@ -741,16 +742,14 @@ def eval(
             }
             perf = evaluator.eval(input_dict)[eval_metric]
             perf_list.append(perf)
-            print(input_dict['y_pred_pos'], input_dict['y_pred_neg'][:3])
-            print(f'---\nbatch ID: {batch_id}, MRR, {perf}---\n')
+            print(f'batch ID: {batch_id}, MRR, {perf}')
 
-        batch_id += 1
-        if batch_id > 5:
+        if batch_id > 20:
             break
+        batch_id += 1
 
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
-    print(f'validate {eval_metric}, {np.mean([metric_dict[eval_metric]])}')
     return metric_dict
 
 
@@ -858,7 +857,7 @@ for epoch in range(1, args.epochs + 1):
         hook=_init_hooks(
             test_dg, args.sampling, neg_sampler, 'train', nbr_hook=SHARED_NBR_HOOK
         ),
-        batch_size=200,
+        batch_size=2000,
         drop_last=False,
     )
     print('filling up neighbor hook in preperation for validation')

@@ -348,18 +348,19 @@ class RecencyNeighborHook:
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
-                seed_nodes = torch.cat([batch.src, batch.dst])
-                seed_times = batch.time.repeat(2)
+                seed = [batch.src, batch.dst]
+                times = [batch.time.repeat(2)]  # Real link times
 
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
-                    seed_nodes = torch.cat([seed_nodes, batch.neg])
+                    seed.append(batch.neg)
 
                     fake_times = batch.time.repeat(len(batch.neg))
-                    seed_times = torch.cat([seed_times, fake_times])
+                    times.append(fake_times)
+                seed_nodes = torch.cat(seed)
+                seed_times = torch.cat(times)
             else:
-                batch.nbr_mask[hop - 1].bool()
-                # TODO:: figure out mask
+                # mask = batch.nbr_mask[hop - 1].bool()
                 # seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()
                 # seed_times = batch.nbr_times[hop - 1][mask].flatten()
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()
