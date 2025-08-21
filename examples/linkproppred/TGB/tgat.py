@@ -195,41 +195,25 @@ class TGAT(nn.Module):
                 assert False
 
             if not inference:
-                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = torch.chunk(
-                    nbr_nids, chunks=3, dim=0
-                )
-                src_nbr_times, dst_nbr_times, neg_nbr_times = torch.chunk(
-                    nbr_times, chunks=3, dim=0
-                )
-                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = torch.chunk(
-                    nbr_feats, chunks=3, dim=0
-                )
+                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = torch.chunk(nbr_nids, 3)
+                src_nbr_times, dst_nbr_times, neg_nbr_times = torch.chunk(nbr_times, 3)
+                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = torch.chunk(nbr_feats, 3)
             else:
                 if is_negative:
-                    if node_ids.shape[0] == 999:
-                        bsize = num_neighbors
-                    else:
-                        bsize = num_neighbors * num_neighbors
+                    bsize = (
+                        num_neighbors if node_ids.shape[0] == 999 else num_neighbors**2
+                    )
                 else:
                     bsize = node_ids.shape[0] * num_neighbors
 
-                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = (
-                    nbr_nids[0:bsize],
-                    nbr_nids[bsize : 2 * bsize],
-                    nbr_nids[2 * bsize :],
-                )
-                src_nbr_times, dst_nbr_times, neg_nbr_times = (
-                    nbr_times[0:bsize],
-                    nbr_times[bsize : 2 * bsize],
-                    nbr_times[2 * bsize :],
-                )
+                def _split(x):
+                    return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
+
+                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = _split(nbr_nids)
+                src_nbr_times, dst_nbr_times, neg_nbr_times = _split(nbr_times)
 
                 nbr_feats = nbr_feats.reshape(-1, nbr_feats.size(-1))
-                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = (
-                    nbr_feats[0:bsize],
-                    nbr_feats[bsize : 2 * bsize],
-                    nbr_feats[2 * bsize :],
-                )
+                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = _split(nbr_feats)
 
             if is_src:
                 nbr_node_ids = src_nbr_nids.cpu().numpy()
@@ -253,7 +237,6 @@ class TGAT(nn.Module):
                     node_ids.shape[0], -1, edge_feat_dim
                 )
 
-            # get neighbor features from previous layers
             # shape (batch_size * num_neighbors, output_dim or node_feat_dim)
             nbr_feat = self.compute_embeddings(
                 node_ids=nbr_node_ids.flatten(),
@@ -271,10 +254,8 @@ class TGAT(nn.Module):
 
             # (batch_size, num_neighbors)
             delta_time = node_interact_times[:, np.newaxis] - nbr_time
-            # shape (batch_size, num_neighbors, time_feat_dim)
-            nbr_time_feat = self.time_encoder(
-                torch.from_numpy(delta_time).float().to(device)
-            )
+            delta_time = torch.from_numpy(delta_time).float().to(device)
+            nbr_time_feat = self.time_encoder(delta_time)
 
             out = self.attn[current_layer_num - 1](
                 node_feat=node_conv_features,
