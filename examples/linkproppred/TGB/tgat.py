@@ -111,18 +111,17 @@ class TGAT(nn.Module):
         src_node_ids: np.ndarray,
         dst_node_ids: np.ndarray,
         node_interact_times: np.ndarray,
-        batch=None,
+        batch: DGBatch = None,
         is_negative=False,
         inference=False,
-    ):
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         if inference and is_negative:
             z_src = None
         else:
             z_src = self.compute_embeddings(
                 node_ids=src_node_ids,
                 node_interact_times=node_interact_times,
-                current_layer_num=self.num_layers,
-                num_neighbors=self.num_nbrs[0],
+                hop=self.num_layers,
                 batch=batch,
                 is_negative=is_negative,
                 is_src=True,
@@ -131,8 +130,7 @@ class TGAT(nn.Module):
         z_dst = self.compute_embeddings(
             node_ids=dst_node_ids,
             node_interact_times=node_interact_times,
-            current_layer_num=self.num_layers,
-            num_neighbors=self.num_nbrs[0],
+            hop=self.num_layers,
             batch=batch,
             is_negative=is_negative,
             is_src=False,
@@ -144,53 +142,42 @@ class TGAT(nn.Module):
         self,
         node_ids: np.ndarray,
         node_interact_times: np.ndarray,
-        current_layer_num: int,
-        num_neighbors: int,
+        hop: int,
         batch=None,
         is_negative=False,
         is_src=False,
         inference=False,
     ):
         device = STATIC_NODE_FEAT.device
+        num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
 
         node_time_features = self.time_encoder(
             torch.zeros(node_interact_times.shape).unsqueeze(dim=1).to(device)
         )
         node_raw_features = STATIC_NODE_FEAT[torch.from_numpy(node_ids)]
 
-        if current_layer_num == 0:
+        if hop == 0:
             return node_raw_features
         else:
             node_conv_features = self.compute_embeddings(
                 node_ids=node_ids,
                 node_interact_times=node_interact_times,
-                current_layer_num=current_layer_num - 1,
-                num_neighbors=self.num_nbrs[-current_layer_num],
+                hop=hop - 1,
                 batch=batch,
                 is_negative=is_negative,
                 is_src=is_src,
                 inference=inference,
             )
 
-            if len(node_ids) in {batch.src.numel(), batch.neg.numel()}:
-                nbr_nids, nbr_feats = batch.nids[1], batch.nbr_feats[0]
-                if inference and is_negative:
-                    nbr_times = batch.nbr_times[0].flatten()
-                else:
-                    nbr_times = (
-                        batch.times[1]
-                        if len(node_ids) == batch.src.numel()
-                        else batch.times[1].flatten()
-                    )
-            elif len(node_ids) in {
-                batch.src.numel() * num_neighbors,
-                batch.neg.numel() * num_neighbors,
+            if len(node_ids) in {batch.src.numel(), batch.neg.numel()}:  # hop 0
+                nbr_nids, nbr_feats = batch.nbr_nids[0].flatten(), batch.nbr_feats[0]
+                nbr_times = batch.nbr_times[0].flatten()
+            elif len(node_ids) in {  # hop 1
+                batch.src.numel() * num_nbrs,
+                batch.neg.numel() * num_nbrs,
             }:
-                nbr_nids, nbr_times, nbr_feats = (
-                    batch.nbr_nids[1].flatten(),
-                    batch.nbr_times[1].flatten(),
-                    batch.nbr_feats[1],
-                )
+                nbr_nids, nbr_feats = batch.nbr_nids[1].flatten(), batch.nbr_feats[1]
+                nbr_times = batch.nbr_times[1].flatten()
             else:
                 assert False
 
@@ -200,11 +187,9 @@ class TGAT(nn.Module):
                 src_nbr_feats, dst_nbr_feats, neg_nbr_feats = torch.chunk(nbr_feats, 3)
             else:
                 if is_negative:
-                    bsize = (
-                        num_neighbors if node_ids.shape[0] == 999 else num_neighbors**2
-                    )
+                    bsize = num_nbrs if node_ids.shape[0] == 999 else num_nbrs**2
                 else:
-                    bsize = node_ids.shape[0] * num_neighbors
+                    bsize = node_ids.shape[0] * num_nbrs
 
                 def _split(x):
                     return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
@@ -215,49 +200,47 @@ class TGAT(nn.Module):
                 nbr_feats = nbr_feats.reshape(-1, nbr_feats.size(-1))
                 src_nbr_feats, dst_nbr_feats, neg_nbr_feats = _split(nbr_feats)
 
+            def _to_np(x):
+                return x.cpu().numpy()
+
             if is_src:
-                nbr_node_ids = src_nbr_nids.cpu().numpy()
-                nbr_time = src_nbr_times.cpu().numpy()
+                nbr_node_ids, nbr_time = _to_np(src_nbr_nids), _to_np(src_nbr_times)
                 nbr_edge_feat = src_nbr_feats
             elif is_negative:
-                nbr_node_ids = neg_nbr_nids.cpu().numpy()
-                nbr_time = neg_nbr_times.cpu().numpy()
+                nbr_node_ids, nbr_time = _to_np(neg_nbr_nids), _to_np(neg_nbr_times)
                 nbr_edge_feat = neg_nbr_feats
             else:
-                nbr_node_ids = dst_nbr_nids.cpu().numpy()
-                nbr_time = dst_nbr_times.cpu().numpy()
+                nbr_node_ids, nbr_time = _to_np(dst_nbr_nids), _to_np(dst_nbr_times)
                 nbr_edge_feat = dst_nbr_feats
 
             nbr_node_ids = nbr_node_ids.reshape(node_ids.shape[0], -1)
             nbr_time = nbr_time.reshape(node_ids.shape[0], -1)
 
             if inference:
-                edge_feat_dim = nbr_edge_feat.shape[-1]
                 nbr_edge_feat = nbr_edge_feat.reshape(
-                    node_ids.shape[0], -1, edge_feat_dim
+                    node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
                 )
 
-            # shape (batch_size * num_neighbors, output_dim or node_feat_dim)
+            # shape (batch_size * num_nbrs, output_dim or node_feat_dim)
             nbr_feat = self.compute_embeddings(
                 node_ids=nbr_node_ids.flatten(),
                 node_interact_times=nbr_time.flatten(),
-                current_layer_num=current_layer_num - 1,
-                num_neighbors=num_neighbors,
+                hop=hop - 1,
                 batch=batch,
                 is_negative=is_negative,
                 is_src=is_src,
                 inference=inference,
             )
 
-            # (batch_size, num_neighbors, output_dim or node_feat_dim)
-            nbr_feat = nbr_feat.reshape(node_ids.shape[0], num_neighbors, -1)
+            # (batch_size, num_nbrs, output_dim or node_feat_dim)
+            nbr_feat = nbr_feat.reshape(node_ids.shape[0], num_nbrs, -1)
 
-            # (batch_size, num_neighbors)
+            # (batch_size, num_nbrs)
             delta_time = node_interact_times[:, np.newaxis] - nbr_time
             delta_time = torch.from_numpy(delta_time).float().to(device)
             nbr_time_feat = self.time_encoder(delta_time)
 
-            out = self.attn[current_layer_num - 1](
+            out = self.attn[hop - 1](
                 node_feat=node_conv_features,
                 time_feat=node_time_features,
                 nbr_node_feat=nbr_feat,
@@ -265,7 +248,7 @@ class TGAT(nn.Module):
                 nbr_edge_feat=nbr_edge_feat,
                 nbr_mask=nbr_node_ids,
             )
-            return self.merge_layers[current_layer_num - 1](out, node_raw_features)
+            return self.merge_layers[hop - 1](out, node_raw_features)
 
 
 class LinkPredictor(nn.Module):
@@ -501,17 +484,18 @@ for epoch in range(1, args.epochs + 1):
         num_nodes=test_dg.num_nodes,
         edge_feats_dim=test_dg.edge_feats_dim,
     )
-    foo_train_loader = DGDataLoader(
-        train_dg,
-        hook=_init_hooks(
-            test_dg, args.sampling, neg_sampler, 'train', nbr_hook=SHARED_NBR_HOOK
-        ),
-        batch_size=2000,
-        drop_last=False,
-    )
     print('filling up neighbor hook in preperation for validation')
-    for batch in tqdm(foo_train_loader):
-        continue
+    for _ in tqdm(
+        DGDataLoader(
+            train_dg,
+            hook=_init_hooks(
+                test_dg, args.sampling, neg_sampler, 'train', nbr_hook=SHARED_NBR_HOOK
+            ),
+            batch_size=2000,
+            drop_last=False,
+        )
+    ):
+        pass
 
     val_loader = DGDataLoader(
         val_dg,
