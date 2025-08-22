@@ -280,31 +280,27 @@ def eval(
     batch_id = 0
     for batch in tqdm(loader):
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            batch_src_node_ids = np.asarray([batch.src[idx]]).reshape(-1)
-            batch_dst_node_ids = np.asarray([batch.dst[idx]]).reshape(-1)
-            batch_neg_dst_node_ids = np.asarray(neg_batch)
-            batch_neg_src_node_ids = (
-                batch.src[idx].repeat(len(batch_neg_dst_node_ids)).cpu().numpy()
-            )
-            batch_node_interact_times = torch.tensor([batch.time[idx]]).repeat(
-                batch_dst_node_ids.shape[0]
-            )
-            neg_batch_node_interact_times = torch.tensor([batch.time[idx]]).repeat(
-                batch_neg_dst_node_ids.shape[0]
+            src_ids = np.asarray([batch.src[idx]]).reshape(-1)
+            dst_ids = np.asarray([batch.dst[idx]]).reshape(-1)
+            neg_dst_ids = np.asarray(neg_batch)
+            neg_src_ids = batch.src[idx].repeat(len(neg_dst_ids)).cpu().numpy()
+            interact_times = torch.tensor([batch.time[idx]]).repeat(dst_ids.shape[0])
+            neg_interact_times = torch.tensor([batch.time[idx]]).repeat(
+                neg_dst_ids.shape[0]
             )
             z_src, z_dst = encoder(
-                src_ids=torch.from_numpy(batch_src_node_ids),
-                dst_ids=torch.from_numpy(batch_dst_node_ids),
-                interact_times=batch_node_interact_times,
+                src_ids=torch.from_numpy(src_ids),
+                dst_ids=torch.from_numpy(dst_ids),
+                interact_times=interact_times,
                 batch=batch,
                 static_node_feats=static_node_feats,
                 is_negative=False,
                 inference=True,
             )
             _, z_neg_dst = encoder(
-                src_ids=torch.from_numpy(batch_neg_src_node_ids),
-                dst_ids=torch.from_numpy(batch_neg_dst_node_ids),
-                interact_times=neg_batch_node_interact_times,
+                src_ids=torch.from_numpy(neg_src_ids),
+                dst_ids=torch.from_numpy(neg_dst_ids),
+                interact_times=neg_interact_times,
                 batch=batch,
                 static_node_feats=static_node_feats,
                 is_negative=True,
@@ -320,9 +316,8 @@ def eval(
                 'y_pred_neg': neg_prob.detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
-            perf = evaluator.eval(input_dict)[eval_metric]
-            perf_list.append(perf)
-            print(f'batch ID: {batch_id}, MRR, {perf}')
+            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+            print(f'batch ID: {batch_id}, MRR, {perf_list[-1]}')
         if batch_id > 20:
             break
         batch_id += 1
@@ -412,9 +407,7 @@ for epoch in range(1, args.epochs + 1):
     latency = end_time - start_time
 
     SHARED_NBR_HOOK = RecencyNeighborHook(
-        num_nbrs=args.n_nbrs,
-        num_nodes=test_dg.num_nodes,
-        edge_feats_dim=test_dg.edge_feats_dim,
+        test_dg.num_nodes, args.n_nbrs, test_dg.edge_feats_dim
     )
     print('filling up neighbor hook in preperation for validation')
     _, dst, _ = test_dg.edges
