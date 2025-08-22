@@ -113,139 +113,129 @@ class TGAT(nn.Module):
         is_negative=False,
         inference=False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        def compute_embeddings(
+            node_ids: np.ndarray,
+            node_interact_times: np.ndarray,
+            hop: int,
+            is_src=False,
+        ):
+            device = STATIC_NODE_FEAT.device
+            num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
+            node_time_features = self.time_encoder(
+                torch.zeros(node_interact_times.shape).to(device)
+            )
+            node_raw_features = STATIC_NODE_FEAT[torch.from_numpy(node_ids)]
+
+            if hop == 0:
+                return node_raw_features
+            else:
+                node_conv_features = compute_embeddings(
+                    node_ids=node_ids,
+                    node_interact_times=node_interact_times,
+                    hop=hop - 1,
+                    is_src=is_src,
+                )
+
+                if len(node_ids) in {batch.src.numel(), batch.neg.numel()}:  # hop 0
+                    nbr_nids, nbr_feats = (
+                        batch.nbr_nids[0].flatten(),
+                        batch.nbr_feats[0],
+                    )
+                    nbr_times = batch.nbr_times[0].flatten()
+                elif len(node_ids) in {  # hop 1
+                    batch.src.numel() * num_nbrs,
+                    batch.neg.numel() * num_nbrs,
+                }:
+                    nbr_nids, nbr_feats = (
+                        batch.nbr_nids[1].flatten(),
+                        batch.nbr_feats[1],
+                    )
+                    nbr_times = batch.nbr_times[1].flatten()
+                else:
+                    assert False
+
+                if inference:
+                    if is_negative:
+                        bsize = num_nbrs if node_ids.shape[0] == 999 else num_nbrs**2
+                    else:
+                        bsize = node_ids.shape[0] * num_nbrs
+
+                    def _split(x):
+                        return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
+                else:
+
+                    def _split(x):
+                        return torch.chunk(x, 3)
+
+                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = _split(nbr_nids)
+                src_nbr_times, dst_nbr_times, neg_nbr_times = _split(nbr_times)
+
+                if inference:
+                    nbr_feats = nbr_feats.reshape(-1, nbr_feats.size(-1))
+                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = _split(nbr_feats)
+
+                def _to_np(x):
+                    return x.cpu().numpy()
+
+                if is_src:
+                    nbr_node_ids, nbr_time = _to_np(src_nbr_nids), _to_np(src_nbr_times)
+                    nbr_edge_feat = src_nbr_feats
+                elif is_negative:
+                    nbr_node_ids, nbr_time = _to_np(neg_nbr_nids), _to_np(neg_nbr_times)
+                    nbr_edge_feat = neg_nbr_feats
+                else:
+                    nbr_node_ids, nbr_time = _to_np(dst_nbr_nids), _to_np(dst_nbr_times)
+                    nbr_edge_feat = dst_nbr_feats
+
+                nbr_node_ids = nbr_node_ids.reshape(node_ids.shape[0], -1)
+                nbr_time = nbr_time.reshape(node_ids.shape[0], -1)
+
+                # (batch_size * num_nbrs, output_dim or node_feat_dim)
+                nbr_feat = compute_embeddings(
+                    node_ids=nbr_node_ids.flatten(),
+                    node_interact_times=nbr_time.flatten(),
+                    hop=hop - 1,
+                    is_src=is_src,
+                )
+
+                # (batch_size, num_nbrs, output_dim or node_feat_dim)
+                nbr_feat = nbr_feat.reshape(node_ids.shape[0], num_nbrs, -1)
+
+                # (batch_size, num_nbrs)
+                delta_time = node_interact_times[:, np.newaxis] - nbr_time
+                delta_time = torch.from_numpy(delta_time).float().to(device)
+                nbr_time_feat = self.time_encoder(delta_time)
+                if inference:
+                    nbr_edge_feat = nbr_edge_feat.reshape(
+                        node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
+                    )
+
+                out = self.attn[hop - 1](
+                    node_feat=node_conv_features,
+                    time_feat=node_time_features,
+                    nbr_node_feat=nbr_feat,
+                    nbr_time_feat=nbr_time_feat,
+                    edge_feat=nbr_edge_feat,
+                    nbr_mask=torch.from_numpy(nbr_node_ids).to(device),
+                )
+                return self.merge_layers[hop - 1](out, node_raw_features)
+
         if inference and is_negative:
             z_src = None
         else:
-            z_src = self.compute_embeddings(
+            z_src = compute_embeddings(
                 node_ids=src_node_ids,
                 node_interact_times=node_interact_times,
                 hop=self.num_layers,
-                batch=batch,
-                is_negative=is_negative,
                 is_src=True,
-                inference=inference,
             )
-        z_dst = self.compute_embeddings(
+        z_dst = compute_embeddings(
             node_ids=dst_node_ids,
             node_interact_times=node_interact_times,
             hop=self.num_layers,
-            batch=batch,
-            is_negative=is_negative,
             is_src=False,
-            inference=inference,
         )
         return z_src, z_dst
-
-    def compute_embeddings(
-        self,
-        node_ids: np.ndarray,
-        node_interact_times: np.ndarray,
-        hop: int,
-        batch=None,
-        is_negative=False,
-        is_src=False,
-        inference=False,
-    ):
-        device = STATIC_NODE_FEAT.device
-        num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
-        node_time_features = self.time_encoder(
-            torch.zeros(node_interact_times.shape).to(device)
-        )
-        node_raw_features = STATIC_NODE_FEAT[torch.from_numpy(node_ids)]
-
-        if hop == 0:
-            return node_raw_features
-        else:
-            node_conv_features = self.compute_embeddings(
-                node_ids=node_ids,
-                node_interact_times=node_interact_times,
-                hop=hop - 1,
-                batch=batch,
-                is_negative=is_negative,
-                is_src=is_src,
-                inference=inference,
-            )
-
-            if len(node_ids) in {batch.src.numel(), batch.neg.numel()}:  # hop 0
-                nbr_nids, nbr_feats = batch.nbr_nids[0].flatten(), batch.nbr_feats[0]
-                nbr_times = batch.nbr_times[0].flatten()
-            elif len(node_ids) in {  # hop 1
-                batch.src.numel() * num_nbrs,
-                batch.neg.numel() * num_nbrs,
-            }:
-                nbr_nids, nbr_feats = batch.nbr_nids[1].flatten(), batch.nbr_feats[1]
-                nbr_times = batch.nbr_times[1].flatten()
-            else:
-                assert False
-
-            if inference:
-                if is_negative:
-                    bsize = num_nbrs if node_ids.shape[0] == 999 else num_nbrs**2
-                else:
-                    bsize = node_ids.shape[0] * num_nbrs
-
-                def _split(x):
-                    return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
-            else:
-
-                def _split(x):
-                    return torch.chunk(x, 3)
-
-            src_nbr_nids, dst_nbr_nids, neg_nbr_nids = _split(nbr_nids)
-            src_nbr_times, dst_nbr_times, neg_nbr_times = _split(nbr_times)
-
-            if inference:
-                nbr_feats = nbr_feats.reshape(-1, nbr_feats.size(-1))
-            src_nbr_feats, dst_nbr_feats, neg_nbr_feats = _split(nbr_feats)
-
-            def _to_np(x):
-                return x.cpu().numpy()
-
-            if is_src:
-                nbr_node_ids, nbr_time = _to_np(src_nbr_nids), _to_np(src_nbr_times)
-                nbr_edge_feat = src_nbr_feats
-            elif is_negative:
-                nbr_node_ids, nbr_time = _to_np(neg_nbr_nids), _to_np(neg_nbr_times)
-                nbr_edge_feat = neg_nbr_feats
-            else:
-                nbr_node_ids, nbr_time = _to_np(dst_nbr_nids), _to_np(dst_nbr_times)
-                nbr_edge_feat = dst_nbr_feats
-
-            nbr_node_ids = nbr_node_ids.reshape(node_ids.shape[0], -1)
-            nbr_time = nbr_time.reshape(node_ids.shape[0], -1)
-
-            # (batch_size * num_nbrs, output_dim or node_feat_dim)
-            nbr_feat = self.compute_embeddings(
-                node_ids=nbr_node_ids.flatten(),
-                node_interact_times=nbr_time.flatten(),
-                hop=hop - 1,
-                batch=batch,
-                is_negative=is_negative,
-                is_src=is_src,
-                inference=inference,
-            )
-
-            # (batch_size, num_nbrs, output_dim or node_feat_dim)
-            nbr_feat = nbr_feat.reshape(node_ids.shape[0], num_nbrs, -1)
-
-            # (batch_size, num_nbrs)
-            delta_time = node_interact_times[:, np.newaxis] - nbr_time
-            delta_time = torch.from_numpy(delta_time).float().to(device)
-            nbr_time_feat = self.time_encoder(delta_time)
-            if inference:
-                nbr_edge_feat = nbr_edge_feat.reshape(
-                    node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
-                )
-
-            out = self.attn[hop - 1](
-                node_feat=node_conv_features,
-                time_feat=node_time_features,
-                nbr_node_feat=nbr_feat,
-                nbr_time_feat=nbr_time_feat,
-                edge_feat=nbr_edge_feat,
-                nbr_mask=torch.from_numpy(nbr_node_ids).to(device),
-            )
-            return self.merge_layers[hop - 1](out, node_raw_features)
 
 
 class LinkPredictor(nn.Module):

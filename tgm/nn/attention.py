@@ -44,29 +44,29 @@ class TemporalAttention(torch.nn.Module):
 
     def forward(
         self,
-        node_feat: torch.Tensor,  # (batch_size, node_dim)
-        time_feat: torch.Tensor,  # (batch_size, time_dim)
-        edge_feat: torch.Tensor,  # (batch_size, num_nbrs, node_dim)
-        nbr_node_feat: torch.Tensor,  # (batch_size, num_nbrs, time_dim)
-        nbr_time_feat: torch.Tensor,  # (batch_size, num_nbrs, edge_dim)
-        nbr_mask: torch.Tensor,  # (batch_size, num_nbrs)
-    ) -> torch.Tensor:  # (batch_size, out_dim)
+        node_feat: torch.Tensor,  # (B, node_dim)
+        time_feat: torch.Tensor,  # (B, time_dim)
+        edge_feat: torch.Tensor,  # (B, num_nbrs, node_dim)
+        nbr_node_feat: torch.Tensor,  # (B, num_nbrs, time_dim)
+        nbr_time_feat: torch.Tensor,  # (B, num_nbrs, edge_dim)
+        nbr_mask: torch.Tensor,  # (B, num_nbrs)
+    ) -> torch.Tensor:  # (B, out_dim)
         node_feat = F.pad(node_feat, (0, self.pad_dim)) if self.pad_dim else node_feat
 
         Q = R = torch.cat([node_feat, time_feat], dim=1).unsqueeze(1)
-        Q = self.W_Q(Q)  # (batch, out_dim)
+        Q = self.W_Q(Q)  # (B, out_dim)
 
         Z = torch.cat([nbr_node_feat, edge_feat, nbr_time_feat], dim=-1)
         Z = self.W_KV(Z)
-        K = Z[:, :, : self.out_dim]  # (batch, num_nbrs, out_dim)
-        V = Z[:, :, self.out_dim :]  # (batch, num_nbrs, out_dim)
+        K = Z[:, :, : self.out_dim]  # (B, num_nbrs, out_dim)
+        V = Z[:, :, self.out_dim :]  # (B, num_nbrs, out_dim)
 
         Q = Q.reshape(Q.shape[0], -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
         K = K.reshape(K.shape[0], -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
         V = V.reshape(V.shape[0], -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
         del Z
 
-        A = torch.einsum('bhld,bhnd->bhln', Q, K)  # (batch, n_heads, 1, num_nbrs)
+        A = torch.einsum('bhld,bhnd->bhln', Q, K)  # (B, n_heads, 1, num_nbrs)
         A *= self.head_dim**-0.5
         del Q, K
 
@@ -80,11 +80,11 @@ class TemporalAttention(torch.nn.Module):
         A = torch.softmax(A, dim=-1)
         A = self.dropout(A)
 
-        O = torch.einsum('bhln,bhnd->bhld', A, V)  # (batch, n_heads, 1, head_dim)
-        O = O.flatten(start_dim=1)  # (batch, out_dim)
+        O = torch.einsum('bhln,bhnd->bhld', A, V)  # (B, n_heads, 1, head_dim)
+        O = O.flatten(start_dim=1)  # (B, out_dim)
         del A
 
-        out = self.W_O(O)  # (batch, out_dim)
+        out = self.W_O(O)  # (B, out_dim)
         out = self.dropout(out)
         out = self.layer_norm(out + R.squeeze(1))
         return out
