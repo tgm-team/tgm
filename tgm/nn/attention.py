@@ -51,11 +51,11 @@ class TemporalAttention(torch.nn.Module):
         self,
         node_feat: torch.Tensor,  # (batch_size, node_dim)
         time_feat: torch.Tensor,  # (batch_size, time_dim)
-        nbr_node_feat: torch.Tensor,  # (batch_size, num_nbrs, node_dim)
-        nbr_time_feat: torch.Tensor,  # (batch_size, num_nbrs, time_dim)
-        nbr_edge_feat: torch.Tensor,  # (batch_size, num_nbrs, edge_dim)
+        edge_feat: torch.Tensor,  # (batch_size, num_nbrs, node_dim)
+        nbr_node_feat: torch.Tensor,  # (batch_size, num_nbrs, time_dim)
+        nbr_time_feat: torch.Tensor,  # (batch_size, num_nbrs, edge_dim)
         nbr_mask: torch.Tensor,  # (batch_size, num_nbrs)
-    ):
+    ) -> torch.Tensor:  # (batch_size, out_dim)
         node_feat = torch.unsqueeze(node_feat, dim=1)  # (batch_size, 1, node_dim)
 
         if self.pad_dim != 0:  # pad for the inputs
@@ -68,7 +68,7 @@ class TemporalAttention(torch.nn.Module):
         Q = self.W_Q(Q).reshape(Q.shape[0], Q.shape[1], self.n_heads, self.head_dim)
 
         # Tensor, shape (batch_size, num_neighbors, node_feat_dim + edge_feat_dim + time_feat_dim)
-        K = V = torch.cat([nbr_node_feat, nbr_edge_feat, nbr_time_feat], dim=2)
+        K = V = torch.cat([nbr_node_feat, edge_feat, nbr_time_feat], dim=2)
         K = self.W_K(K).reshape(K.shape[0], K.shape[1], self.n_heads, self.head_dim)
         V = self.W_V(V).reshape(V.shape[0], V.shape[1], self.n_heads, self.head_dim)
 

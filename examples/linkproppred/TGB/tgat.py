@@ -242,7 +242,7 @@ class TGAT(nn.Module):
                 time_feat=node_time_features,
                 nbr_node_feat=nbr_feat,
                 nbr_time_feat=nbr_time_feat,
-                nbr_edge_feat=nbr_edge_feat,
+                edge_feat=nbr_edge_feat,
                 nbr_mask=torch.from_numpy(nbr_node_ids).to(device),
             )
             return self.merge_layers[hop - 1](out, node_raw_features)
