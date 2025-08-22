@@ -138,25 +138,21 @@ class TGAT(nn.Module):
                     nbr_times = batch.nbr_times[1].flatten()
                 else:
                     assert False
+                nbr_feat = nbr_feat.reshape(-1, nbr_feat.size(-1))
 
                 if inference:
                     if is_negative:
                         bsize = num_nbrs if node_ids.shape[0] == 999 else num_nbrs**2
                     else:
                         bsize = node_ids.shape[0] * num_nbrs
-
-                    def _split(x):
-                        return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
                 else:
+                    bsize = nbr_nids.shape[0] // 3
 
-                    def _split(x):
-                        return torch.chunk(x, 3)
+                def _split(x):
+                    return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
 
                 src_nbr_nids, dst_nbr_nids, neg_nbr_nids = _split(nbr_nids)
                 src_nbr_times, dst_nbr_times, neg_nbr_times = _split(nbr_times)
-
-                if inference:
-                    nbr_feat = nbr_feat.reshape(-1, nbr_feat.size(-1))
                 src_nbr_feats, dst_nbr_feats, neg_nbr_feats = _split(nbr_feat)
 
                 if is_src:
@@ -184,10 +180,9 @@ class TGAT(nn.Module):
                 delta_time = node_times[:, np.newaxis] - nbr_time
                 delta_time = delta_time.float().to(device)
                 nbr_time_feat = self.time_encoder(delta_time)
-                if inference:
-                    nbr_edge_feat = nbr_edge_feat.reshape(
-                        node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
-                    )
+                nbr_edge_feat = nbr_edge_feat.reshape(
+                    node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
+                )
                 out = self.attn[hop - 1](
                     node_feat=node_feat,
                     time_feat=node_time_feat,
