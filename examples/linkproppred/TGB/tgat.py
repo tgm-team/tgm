@@ -151,32 +151,23 @@ class TGAT(nn.Module):
                 def _split(x):
                     return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
 
-                src_nbr_nids, dst_nbr_nids, neg_nbr_nids = _split(nbr_nids)
-                src_nbr_times, dst_nbr_times, neg_nbr_times = _split(nbr_times)
-                src_nbr_feats, dst_nbr_feats, neg_nbr_feats = _split(nbr_feat)
-
-                if is_src:
-                    nbr_node_ids, nbr_time = src_nbr_nids, src_nbr_times
-                    nbr_edge_feat = src_nbr_feats
-                elif is_negative:
-                    nbr_node_ids, nbr_time = neg_nbr_nids, neg_nbr_times
-                    nbr_edge_feat = neg_nbr_feats
-                else:
-                    nbr_node_ids, nbr_time = dst_nbr_nids, dst_nbr_times
-                    nbr_edge_feat = dst_nbr_feats
+                idx = 0 if is_src else 2 if is_negative else 1
+                nbr_node_ids = _split(nbr_nids)[idx]
+                nbr_time = _split(nbr_times)[idx]
+                nbr_edge_feat = _split(nbr_feat)[idx]
 
                 nbr_node_ids = nbr_node_ids.reshape(node_ids.shape[0], -1)
                 nbr_time = nbr_time.reshape(node_ids.shape[0], -1)
 
-                # (batch_size * num_nbrs, output_dim or node_feat_dim)
+                # (B * num_nbrs, output_dim or node_feat_dim)
                 nbr_feat = compute_embeddings(
                     nbr_node_ids.flatten(), nbr_time.flatten(), hop - 1, is_src
                 )
 
-                # (batch_size, num_nbrs, output_dim or node_feat_dim)
+                # (B, num_nbrs, output_dim or node_feat_dim)
                 nbr_feat = nbr_feat.reshape(node_ids.shape[0], num_nbrs, -1)
 
-                # (batch_size, num_nbrs)
+                # (B, num_nbrs)
                 delta_time = node_times[:, np.newaxis] - nbr_time
                 delta_time = delta_time.float().to(device)
                 nbr_time_feat = self.time_encoder(delta_time)
