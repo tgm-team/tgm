@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 
 class TemporalAttention(torch.nn.Module):
@@ -55,7 +54,7 @@ class TemporalAttention(torch.nn.Module):
         nbr_node_feat: torch.Tensor,  # (batch_size, num_nbrs, node_dim)
         nbr_time_feat: torch.Tensor,  # (batch_size, num_nbrs, time_dim)
         nbr_edge_feat: torch.Tensor,  # (batch_size, num_nbrs, edge_dim)
-        nbr_mask: np.ndarray,  # (batch_size, num_nbrs)
+        nbr_mask: torch.Tensor,  # (batch_size, num_nbrs)
     ):
         node_feat = torch.unsqueeze(node_feat, dim=1)  # (batch_size, 1, node_dim)
 
@@ -80,23 +79,21 @@ class TemporalAttention(torch.nn.Module):
         A = torch.einsum('bhld,bhnd->bhln', Q, K)  # (batch, n_heads, 1, num_nbrs)
         A *= self.head_dim**-0.5
 
-        # Tensor, shape (batch_size, 1, num_neighbors)
-        attn_mask = torch.from_numpy(nbr_mask).to(node_feat.device).unsqueeze(dim=1)
-        attn_mask = attn_mask == 0
-        # Tensor, shape (batch_size, self.n_heads, 1, num_neighbors)
-        attn_mask = torch.stack([attn_mask for _ in range(self.n_heads)], dim=1)
+        nbr_mask = nbr_mask == 0
+        nbr_mask = nbr_mask.reshape(nbr_mask.shape[0], 1, 1, -1)
+        nbr_mask = nbr_mask.repeat(1, self.n_heads, 1, 1)
 
         # If a node has no neighbors (nbr_mask all zero), setting masks to -np.inf will cause softmax nans
         # Choose a very large negative number (-1e10 following TGAT) instead
-        A = A.masked_fill(attn_mask, -1e10)
+        A = A.masked_fill(nbr_mask, -1e10)
         A = torch.softmax(A, dim=-1)
         A = self.dropout(A)
 
         O = torch.einsum('bhln,bhnd->bhld', A, V)  # (batch, n_heads, 1, head_dim)
         O = O.permute(0, 2, 1, 3).flatten(start_dim=2)  # (batch, 1, out_dim)
 
-        out = self.W_O(O)  # (batch_size, 1, out_dim)
+        out = self.W_O(O)  # (batch, 1, out_dim)
         out = self.dropout(out)
         out = self.layer_norm(out + residual)
-        out = out.squeeze(dim=1)  # (batch_size, out_dim)
+        out = out.squeeze(dim=1)  # (batch, out_dim)
         return out
