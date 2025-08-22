@@ -109,8 +109,8 @@ class TGAT(nn.Module):
         inference = batch.inference
         is_negative = batch.is_negative
 
-        def compute_embeddings(
-            node_ids: torch.Tensor, node_times: torch.Tensor, hop: int, is_src=False
+        def get_embeddings(
+            node_ids: torch.Tensor, node_times: torch.Tensor, hop: int, is_src: bool
         ):
             num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
             node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
@@ -118,7 +118,7 @@ class TGAT(nn.Module):
             if hop == 0:
                 return static_node_feats[node_ids]
             else:
-                node_feat = compute_embeddings(node_ids, node_times, hop - 1, is_src)
+                node_feat = get_embeddings(node_ids, node_times, hop - 1, is_src)
 
                 layer_0_nums = [batch.src.numel(), batch.neg.numel()]
                 layer_1_nums = [x * num_nbrs for x in layer_0_nums]
@@ -148,7 +148,7 @@ class TGAT(nn.Module):
                 )
 
                 # (B, num_nbrs, output_dim or node_feat_dim)
-                nbr_feat = compute_embeddings(
+                nbr_feat = get_embeddings(
                     nbr_node_ids.flatten(), nbr_time.flatten(), hop - 1, is_src
                 ).reshape(node_ids.shape[0], num_nbrs, -1)
 
@@ -168,10 +168,10 @@ class TGAT(nn.Module):
         if inference and is_negative:
             z_src = None
         else:
-            z_src = compute_embeddings(
+            z_src = get_embeddings(
                 batch.src_ids, batch.interact_times, self.num_layers, is_src=True
             )
-        z_dst = compute_embeddings(
+        z_dst = get_embeddings(
             batch.dst_ids, batch.interact_times, self.num_layers, is_src=False
         )
         return z_src, z_dst
@@ -362,25 +362,23 @@ for epoch in range(1, args.epochs + 1):
         hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
         batch_size=args.bsize,
     )
+    shared_nbr = RecencyNeighborHook(
+        test_dg.num_nodes, args.n_nbrs, test_dg.edge_feats_dim
+    )
+    _, dst, _ = test_dg.edges
+    neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+    foo_loader = DGDataLoader(
+        train_dg, hook=[neg_hook, shared_nbr], batch_size=2000, drop_last=False
+    )
+    for _ in tqdm(foo_loader):
+        pass
+    neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
+    val_loader = DGDataLoader(val_dg, hook=[neg_hook, shared_nbr], batch_size=1)
     start_time = time.perf_counter()
     loss = train(train_loader, static_node_feats, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    SHARED_NBR_HOOK = RecencyNeighborHook(
-        test_dg.num_nodes, args.n_nbrs, test_dg.edge_feats_dim
-    )
-    print('filling up neighbor hook in preperation for validation')
-    _, dst, _ = test_dg.edges
-    min_dst, max_dst = int(dst.min()), int(dst.max())
-    neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
-    foo_loader = DGDataLoader(
-        train_dg, hook=[neg_hook, SHARED_NBR_HOOK], batch_size=2000, drop_last=False
-    )
-    for _ in tqdm(foo_loader):
-        pass
-    neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
-    val_loader = DGDataLoader(val_dg, hook=[neg_hook, SHARED_NBR_HOOK], batch_size=1)
     val_results = eval(
         val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
     )
@@ -391,5 +389,7 @@ for epoch in range(1, args.epochs + 1):
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
-test_results = eval(test_loader, encoder, decoder, eval_metric, evaluator)
+test_results = eval(
+    test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+)
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
