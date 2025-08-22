@@ -1,4 +1,5 @@
 import argparse
+from os import stat
 import time
 from typing import List, Tuple
 
@@ -11,8 +12,7 @@ from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
-from tgm import DGData
+from tgm import DGBatch, DGData, DGraph
 from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,
@@ -111,6 +111,7 @@ class TGAT(nn.Module):
         dst_ids: torch.Tensor,
         interact_times: torch.Tensor,
         batch: DGBatch,
+        static_node_feats: torch.Tensor,
         is_negative=False,
         inference=False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -121,7 +122,7 @@ class TGAT(nn.Module):
         ):
             num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
             node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
-            node_raw_features = STATIC_NODE_FEAT[node_ids]
+            node_raw_features = static_node_feats[node_ids]
 
             if hop == 0:
                 return node_raw_features
@@ -214,6 +215,7 @@ class LinkPredictor(nn.Module):
 
 def train(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -230,12 +232,14 @@ def train(
             dst_ids=batch.dst,
             interact_times=batch.time,
             batch=batch,
+            static_node_feats=static_node_feats,
             is_negative=False,
         )
         _, z_neg_dst = encoder(
             src_ids=batch.src,
             dst_ids=batch.neg,
             interact_times=batch.time,
+            static_node_feats=static_node_feats,
             batch=batch,
             is_negative=True,
         )
@@ -271,6 +275,7 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     eval_metric: str,
@@ -299,6 +304,7 @@ def eval(
                 dst_ids=torch.from_numpy(batch_dst_node_ids),
                 interact_times=batch_node_interact_times,
                 batch=batch,
+                static_node_feats=static_node_feats,
                 is_negative=False,
                 inference=True,
             )
@@ -307,6 +313,7 @@ def eval(
                 dst_ids=torch.from_numpy(batch_neg_dst_node_ids),
                 interact_times=neg_batch_node_interact_times,
                 batch=batch,
+                static_node_feats=static_node_feats,
                 is_negative=True,
                 inference=True,
             )
@@ -347,9 +354,10 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-# TODO: Read from graph
-NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, 1
-STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
 
 
 def _init_hooks(
@@ -384,7 +392,7 @@ test_loader = DGDataLoader(
 
 
 encoder = TGAT(
-    node_dim=NODE_FEAT_DIM,
+    node_dim=1,
     edge_dim=train_dg.edge_feats_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
@@ -406,7 +414,7 @@ for epoch in range(1, args.epochs + 1):
         batch_size=args.bsize,
     )
     start_time = time.perf_counter()
-    loss = train(train_loader, encoder, decoder, opt)
+    loss = train(train_loader, static_node_feats, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
@@ -426,7 +434,9 @@ for epoch in range(1, args.epochs + 1):
         pass
     neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
     val_loader = DGDataLoader(val_dg, hook=[neg_hook, SHARED_NBR_HOOK], batch_size=1)
-    val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
+    val_results = eval(
+        val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+    )
     exit()
 
     print(
