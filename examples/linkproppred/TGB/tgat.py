@@ -149,7 +149,7 @@ class TGAT(nn.Module):
         device = STATIC_NODE_FEAT.device
         num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
         node_time_features = self.time_encoder(
-            torch.zeros(node_interact_times.shape).unsqueeze(dim=1).to(device)
+            torch.zeros(node_interact_times.shape).to(device)
         )
         node_raw_features = STATIC_NODE_FEAT[torch.from_numpy(node_ids)]
 

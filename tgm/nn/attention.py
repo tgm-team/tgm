@@ -52,9 +52,8 @@ class TemporalAttention(torch.nn.Module):
         nbr_mask: torch.Tensor,  # (batch_size, num_nbrs)
     ) -> torch.Tensor:  # (batch_size, out_dim)
         node_feat = F.pad(node_feat, (0, self.pad_dim)) if self.pad_dim else node_feat
-        node_feat = node_feat.unsqueeze(1)
 
-        Q = R = torch.cat([node_feat, time_feat], dim=2)  # (batch, 1, out_dim)
+        Q = R = torch.cat([node_feat, time_feat], dim=1).unsqueeze(1)
         Q = self.W_Q(Q)  # (batch, out_dim)
 
         Z = torch.cat([nbr_node_feat, edge_feat, nbr_time_feat], dim=-1)
