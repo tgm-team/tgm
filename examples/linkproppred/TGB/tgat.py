@@ -108,7 +108,7 @@ class TGAT(nn.Module):
         self,
         src_node_ids: torch.Tensor,
         dst_node_ids: torch.Tensor,
-        node_interact_times: torch.Tensor,
+        interact_times: torch.Tensor,
         batch: DGBatch,
         is_negative=False,
         inference=False,
@@ -127,18 +127,17 @@ class TGAT(nn.Module):
             else:
                 node_feat = compute_embeddings(node_ids, node_times, hop - 1, is_src)
 
-                if len(node_ids) in {batch.src.numel(), batch.neg.numel()}:  # hop 0
-                    nbr_nids, nbr_feat = batch.nbr_nids[0].flatten(), batch.nbr_feats[0]
-                    nbr_times = batch.nbr_times[0].flatten()
-                elif len(node_ids) in {  # hop 1
-                    batch.src.numel() * num_nbrs,
-                    batch.neg.numel() * num_nbrs,
-                }:
-                    nbr_nids, nbr_feat = batch.nbr_nids[1].flatten(), batch.nbr_feats[1]
-                    nbr_times = batch.nbr_times[1].flatten()
+                layer_0_nums = [batch.src.numel(), batch.neg.numel()]
+                layer_1_nums = [x * num_nbrs for x in layer_0_nums]
+                if len(node_ids) in layer_0_nums:
+                    i = 0
+                elif len(node_ids) in layer_1_nums:
+                    i = 1
                 else:
                     assert False
-                nbr_feat = nbr_feat.reshape(-1, nbr_feat.size(-1))
+                nbr_nids = batch.nbr_nids[i].flatten()
+                nbr_times = batch.nbr_times[i].flatten()
+                nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
 
                 if inference:
                     if is_negative:
@@ -163,13 +162,10 @@ class TGAT(nn.Module):
                 nbr_feat = compute_embeddings(
                     nbr_node_ids.flatten(), nbr_time.flatten(), hop - 1, is_src
                 )
-
                 # (B, num_nbrs, output_dim or node_feat_dim)
                 nbr_feat = nbr_feat.reshape(node_ids.shape[0], num_nbrs, -1)
-
                 # (B, num_nbrs)
-                delta_time = node_times[:, np.newaxis] - nbr_time
-                delta_time = delta_time.float().to(device)
+                delta_time = node_times[:, None] - nbr_time
                 nbr_time_feat = self.time_encoder(delta_time)
                 nbr_edge_feat = nbr_edge_feat.reshape(
                     node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
@@ -189,13 +185,13 @@ class TGAT(nn.Module):
         else:
             z_src = compute_embeddings(
                 node_ids=src_node_ids,
-                node_times=node_interact_times,
+                node_times=interact_times,
                 hop=self.num_layers,
                 is_src=True,
             )
         z_dst = compute_embeddings(
             node_ids=dst_node_ids,
-            node_times=node_interact_times,
+            node_times=interact_times,
             hop=self.num_layers,
             is_src=False,
         )
@@ -231,14 +227,14 @@ def train(
         z_src, z_dst = encoder(
             src_node_ids=batch.src,
             dst_node_ids=batch.dst,
-            node_interact_times=batch.time,
+            interact_times=batch.time,
             batch=batch,
             is_negative=False,
         )
         _, z_neg_dst = encoder(
             src_node_ids=batch.src,
             dst_node_ids=batch.neg,
-            node_interact_times=batch.time,
+            interact_times=batch.time,
             batch=batch,
             is_negative=True,
         )
@@ -300,7 +296,7 @@ def eval(
             z_src, z_dst = encoder(
                 src_node_ids=torch.from_numpy(batch_src_node_ids),
                 dst_node_ids=torch.from_numpy(batch_dst_node_ids),
-                node_interact_times=batch_node_interact_times,
+                interact_times=batch_node_interact_times,
                 batch=batch,
                 is_negative=False,
                 inference=True,
@@ -308,7 +304,7 @@ def eval(
             _, z_neg_dst = encoder(
                 src_node_ids=torch.from_numpy(batch_neg_src_node_ids),
                 dst_node_ids=torch.from_numpy(batch_neg_dst_node_ids),
-                node_interact_times=neg_batch_node_interact_times,
+                interact_times=neg_batch_node_interact_times,
                 batch=batch,
                 is_negative=True,
                 inference=True,
