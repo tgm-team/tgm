@@ -95,7 +95,7 @@ class LinkPredictor(nn.Module):
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.fc2(h)
+        return self.fc2(h).sigmoid().view(-1)
 
 
 def train(
