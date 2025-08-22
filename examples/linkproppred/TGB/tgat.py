@@ -62,8 +62,7 @@ class MergeLayer(nn.Module):
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor):
         x = torch.cat([x1, x2], dim=1)
-        h = self.fc2(self.act(self.fc1(x)))
-        return h
+        return self.fc2(self.act(self.fc1(x)))
 
 
 class TGAT(nn.Module):
@@ -142,14 +141,10 @@ class TGAT(nn.Module):
                     return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
 
                 idx = 0 if is_src else 2 if is_negative else 1
-                nbr_node_ids = _split(nbr_nids)[idx]
-                nbr_time = _split(nbr_times)[idx]
-                nbr_edge_feat = _split(nbr_feat)[idx]
-
-                nbr_node_ids = nbr_node_ids.reshape(node_ids.shape[0], -1)
-                nbr_time = nbr_time.reshape(node_ids.shape[0], -1)
-                nbr_edge_feat = nbr_edge_feat.reshape(
-                    node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
+                nbr_node_ids = _split(nbr_nids)[idx].reshape(node_ids.shape[0], -1)
+                nbr_time = _split(nbr_times)[idx].reshape(node_ids.shape[0], -1)
+                nbr_edge_feat = _split(nbr_feat)[idx].reshape(
+                    node_ids.shape[0], -1, nbr_feat.shape[-1]
                 )
 
                 # (B, num_nbrs, output_dim or node_feat_dim)
