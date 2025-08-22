@@ -97,7 +97,7 @@ class TGAT(nn.Module):
             )
             self.merge_layers.append(
                 MergeLayer(
-                    in_dim1=self.attn[-1].query_dim,
+                    in_dim1=self.attn[-1].out_dim,
                     in_dim2=node_dim,
                     hidden_dim=embed_dim,
                     output_dim=embed_dim,
