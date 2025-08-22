@@ -78,18 +78,17 @@ class TGAT(nn.Module):
         dropout: float = 0.1,
         num_nbrs=None,
     ) -> None:
+        """In this implementation, the node embedding dimension must be the same as hidden embedding dimension."""
         super().__init__()
         self.num_layers = num_layers
         self.num_nbrs = num_nbrs
         self.time_encoder = Time2Vec(time_dim=time_dim)
-
         self.attn, self.merge_layers = nn.ModuleList(), nn.ModuleList()
         for i in range(num_layers):
-            in_dim = node_dim if i == 0 else embed_dim
             self.attn.append(
                 TemporalAttention(
                     n_heads=n_heads,
-                    node_dim=in_dim,
+                    node_dim=node_dim if i == 0 else embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
                     dropout=dropout,
