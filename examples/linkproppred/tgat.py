@@ -50,6 +50,18 @@ parser.add_argument(
 )
 
 
+class MergeLayer(nn.Module):
+    def __init__(self, in_dim1: int, in_dim2: int, hidden_dim: int, output_dim: int):
+        super().__init__()
+        self.fc1 = nn.Linear(in_dim1 + in_dim2, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor):
+        h = self.fc1(torch.cat([x1, x2], dim=1))
+        h = h.relu()
+        return self.fc2(h)
+
+
 class TGAT(nn.Module):
     def __init__(
         self,
@@ -127,14 +139,13 @@ class TGAT(nn.Module):
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        return self.fc2(h).sigmoid().view(-1)
 
 
 def train(
