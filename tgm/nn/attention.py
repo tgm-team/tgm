@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 
 class TemporalAttention(torch.nn.Module):
@@ -50,16 +51,8 @@ class TemporalAttention(torch.nn.Module):
         nbr_time_feat: torch.Tensor,  # (batch_size, num_nbrs, edge_dim)
         nbr_mask: torch.Tensor,  # (batch_size, num_nbrs)
     ) -> torch.Tensor:  # (batch_size, out_dim)
-        node_feat = torch.unsqueeze(node_feat, dim=1)  # (batch_size, 1, node_dim)
-        if self.pad_dim != 0:  # pad for the inputs
-            z = torch.zeros(
-                node_feat.shape[0],
-                node_feat.shape[1],
-                self.pad_dim,
-                device=node_feat.device,
-            )
-            z = z.to(node_feat.device)
-            node_feat = torch.cat([node_feat, z], dim=2)
+        node_feat = F.pad(node_feat, (0, self.pad_dim)) if self.pad_dim else node_feat
+        node_feat = node_feat.unsqueeze(1)
 
         Q = R = torch.cat([node_feat, time_feat], dim=2)  # (batch, 1, out_dim)
         Q = self.W_Q(Q)  # (batch, out_dim)
@@ -69,12 +62,9 @@ class TemporalAttention(torch.nn.Module):
         K = Z[:, :, : self.out_dim]  # (batch, num_nbrs, out_dim)
         V = Z[:, :, self.out_dim :]  # (batch, num_nbrs, out_dim)
 
-        Q = Q.reshape(Q.shape[0], Q.shape[1], self.n_heads, self.head_dim)
-        K = K.reshape(K.shape[0], K.shape[1], self.n_heads, self.head_dim)
-        V = V.reshape(V.shape[0], V.shape[1], self.n_heads, self.head_dim)
-        Q = Q.permute(0, 2, 1, 3)
-        K = K.permute(0, 2, 1, 3)
-        V = V.permute(0, 2, 1, 3)
+        Q = Q.reshape(Q.shape[0], -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
+        K = K.reshape(K.shape[0], -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
+        V = V.reshape(V.shape[0], -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
         del Z
 
         A = torch.einsum('bhld,bhnd->bhln', Q, K)  # (batch, n_heads, 1, num_nbrs)
