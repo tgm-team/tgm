@@ -263,7 +263,6 @@ class GraphAttentionEmbedding(nn.Module):
                     node_dim=embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
-                    out_dim=embed_dim,
                     dropout=dropout,
                 )
                 for _ in range(num_layers)
