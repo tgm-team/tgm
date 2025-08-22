@@ -106,30 +106,29 @@ class TGAT(nn.Module):
 
     def forward(
         self,
-        src_node_ids: np.ndarray,
-        dst_node_ids: np.ndarray,
-        node_interact_times: np.ndarray,
+        src_node_ids: torch.Tensor,
+        dst_node_ids: torch.Tensor,
+        node_interact_times: torch.Tensor,
         batch: DGBatch = None,
         is_negative=False,
         inference=False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        device = batch.src.device
+
         def compute_embeddings(
-            node_ids: np.ndarray,
-            node_interact_times: np.ndarray,
+            node_ids: torch.Tensor,
+            node_interact_times: torch.Tensor,
             hop: int,
             is_src=False,
         ):
-            device = STATIC_NODE_FEAT.device
             num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
-            node_time_features = self.time_encoder(
-                torch.zeros(node_interact_times.shape).to(device)
-            )
-            node_raw_features = STATIC_NODE_FEAT[torch.from_numpy(node_ids)]
+            node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
+            node_raw_features = STATIC_NODE_FEAT[node_ids]
 
             if hop == 0:
                 return node_raw_features
             else:
-                node_conv_features = compute_embeddings(
+                node_feat = compute_embeddings(
                     node_ids=node_ids,
                     node_interact_times=node_interact_times,
                     hop=hop - 1,
@@ -192,8 +191,8 @@ class TGAT(nn.Module):
 
                 # (batch_size * num_nbrs, output_dim or node_feat_dim)
                 nbr_feat = compute_embeddings(
-                    node_ids=nbr_node_ids.flatten(),
-                    node_interact_times=nbr_time.flatten(),
+                    node_ids=torch.from_numpy(nbr_node_ids.flatten()),
+                    node_interact_times=torch.from_numpy(nbr_time.flatten()),
                     hop=hop - 1,
                     is_src=is_src,
                 )
@@ -203,7 +202,7 @@ class TGAT(nn.Module):
 
                 # (batch_size, num_nbrs)
                 delta_time = node_interact_times[:, np.newaxis] - nbr_time
-                delta_time = torch.from_numpy(delta_time).float().to(device)
+                delta_time = delta_time.float().to(device)
                 nbr_time_feat = self.time_encoder(delta_time)
                 if inference:
                     nbr_edge_feat = nbr_edge_feat.reshape(
@@ -211,8 +210,8 @@ class TGAT(nn.Module):
                     )
 
                 out = self.attn[hop - 1](
-                    node_feat=node_conv_features,
-                    time_feat=node_time_features,
+                    node_feat=node_feat,
+                    time_feat=node_time_feat,
                     nbr_node_feat=nbr_feat,
                     nbr_time_feat=nbr_time_feat,
                     edge_feat=nbr_edge_feat,
@@ -265,16 +264,16 @@ def train(
         opt.zero_grad()
 
         z_src, z_dst = encoder(
-            src_node_ids=batch.src.cpu().numpy(),
-            dst_node_ids=batch.dst.cpu().numpy(),
-            node_interact_times=batch.time.cpu().numpy(),
+            src_node_ids=batch.src,
+            dst_node_ids=batch.dst,
+            node_interact_times=batch.time.cpu(),
             batch=batch,
             is_negative=False,
         )
         _, z_neg_dst = encoder(
-            src_node_ids=batch.src.cpu().numpy(),
-            dst_node_ids=batch.neg.cpu().numpy(),
-            node_interact_times=batch.time.cpu().numpy(),
+            src_node_ids=batch.src.cpu(),
+            dst_node_ids=batch.neg.cpu(),
+            node_interact_times=batch.time.cpu(),
             batch=batch,
             is_negative=True,
         )
@@ -301,7 +300,6 @@ def train(
         if idx > 5:
             break
         idx += 1
-
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
     print(f'ap, {np.mean([x["ap"] for x in metrics]):.4f}')
     print(f'roc, {np.mean([x["roc_auc"] for x in metrics]):.4f}')
@@ -335,17 +333,17 @@ def eval(
                 batch_neg_dst_node_ids.shape[0]
             )
             z_src, z_dst = encoder(
-                src_node_ids=batch_src_node_ids,
-                dst_node_ids=batch_dst_node_ids,
-                node_interact_times=batch_node_interact_times.cpu().numpy(),
+                src_node_ids=torch.from_numpy(batch_src_node_ids),
+                dst_node_ids=torch.from_numpy(batch_dst_node_ids),
+                node_interact_times=batch_node_interact_times,
                 batch=batch,
                 is_negative=False,
                 inference=True,
             )
             _, z_neg_dst = encoder(
-                src_node_ids=batch_neg_src_node_ids,
-                dst_node_ids=batch_neg_dst_node_ids,
-                node_interact_times=neg_batch_node_interact_times.cpu().numpy(),
+                src_node_ids=torch.from_numpy(batch_neg_src_node_ids),
+                dst_node_ids=torch.from_numpy(batch_neg_dst_node_ids),
+                node_interact_times=neg_batch_node_interact_times,
                 batch=batch,
                 is_negative=True,
                 inference=True,
@@ -363,11 +361,9 @@ def eval(
             perf = evaluator.eval(input_dict)[eval_metric]
             perf_list.append(perf)
             print(f'batch ID: {batch_id}, MRR, {perf}')
-
         if batch_id > 20:
             break
         batch_id += 1
-
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
     return metric_dict
