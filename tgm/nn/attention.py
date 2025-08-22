@@ -19,7 +19,6 @@ class TemporalAttention(torch.nn.Module):
         node_dim: int,
         edge_dim: int,
         time_dim: int,
-        out_dim: int = None,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
@@ -36,8 +35,7 @@ class TemporalAttention(torch.nn.Module):
         self.out_dim = out_dim
         key_dim = node_dim + edge_dim + time_dim
         self.W_Q = torch.nn.Linear(out_dim, out_dim, bias=False)
-        self.W_K = torch.nn.Linear(key_dim, out_dim, bias=False)
-        self.W_V = torch.nn.Linear(key_dim, out_dim, bias=False)
+        self.W_KV = torch.nn.Linear(key_dim, out_dim * 2, bias=False)
         self.W_O = torch.nn.Linear(out_dim, out_dim)
 
         self.dropout = torch.nn.Dropout(dropout)
@@ -67,8 +65,9 @@ class TemporalAttention(torch.nn.Module):
         Q = self.W_Q(Q)  # (batch, out_dim)
 
         Z = torch.cat([nbr_node_feat, edge_feat, nbr_time_feat], dim=-1)
-        K = self.W_K(Z)  # (batch, num_nbrs, out_dim)
-        V = self.W_V(Z)  # (batch, num_nbrs, out_dim)
+        Z = self.W_KV(Z)
+        K = Z[:, :, : self.out_dim]  # (batch, num_nbrs, out_dim)
+        V = Z[:, :, self.out_dim :]  # (batch, num_nbrs, out_dim)
 
         Q = Q.reshape(Q.shape[0], Q.shape[1], self.n_heads, self.head_dim)
         K = K.reshape(K.shape[0], K.shape[1], self.n_heads, self.head_dim)
