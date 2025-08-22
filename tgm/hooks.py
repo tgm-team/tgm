@@ -326,8 +326,9 @@ class RecencyNeighborHook:
 
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
-        self._edge_feats_dim = edge_feats_dim
 
+        # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
+        self._edge_feats_dim = edge_feats_dim
         self._history = defaultdict(lambda: deque())
 
         self._device = torch.device('cpu')

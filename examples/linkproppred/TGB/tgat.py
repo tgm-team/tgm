@@ -106,8 +106,8 @@ class TGAT(nn.Module):
 
     def forward(
         self,
-        src_node_ids: torch.Tensor,
-        dst_node_ids: torch.Tensor,
+        src_ids: torch.Tensor,
+        dst_ids: torch.Tensor,
         interact_times: torch.Tensor,
         batch: DGBatch,
         is_negative=False,
@@ -184,13 +184,13 @@ class TGAT(nn.Module):
             z_src = None
         else:
             z_src = compute_embeddings(
-                node_ids=src_node_ids,
+                node_ids=src_ids,
                 node_times=interact_times,
                 hop=self.num_layers,
                 is_src=True,
             )
         z_dst = compute_embeddings(
-            node_ids=dst_node_ids,
+            node_ids=dst_ids,
             node_times=interact_times,
             hop=self.num_layers,
             is_src=False,
@@ -225,15 +225,15 @@ def train(
         opt.zero_grad()
 
         z_src, z_dst = encoder(
-            src_node_ids=batch.src,
-            dst_node_ids=batch.dst,
+            src_ids=batch.src,
+            dst_ids=batch.dst,
             interact_times=batch.time,
             batch=batch,
             is_negative=False,
         )
         _, z_neg_dst = encoder(
-            src_node_ids=batch.src,
-            dst_node_ids=batch.neg,
+            src_ids=batch.src,
+            dst_ids=batch.neg,
             interact_times=batch.time,
             batch=batch,
             is_negative=True,
@@ -294,16 +294,16 @@ def eval(
                 batch_neg_dst_node_ids.shape[0]
             )
             z_src, z_dst = encoder(
-                src_node_ids=torch.from_numpy(batch_src_node_ids),
-                dst_node_ids=torch.from_numpy(batch_dst_node_ids),
+                src_ids=torch.from_numpy(batch_src_node_ids),
+                dst_ids=torch.from_numpy(batch_dst_node_ids),
                 interact_times=batch_node_interact_times,
                 batch=batch,
                 is_negative=False,
                 inference=True,
             )
             _, z_neg_dst = encoder(
-                src_node_ids=torch.from_numpy(batch_neg_src_node_ids),
-                dst_node_ids=torch.from_numpy(batch_neg_dst_node_ids),
+                src_ids=torch.from_numpy(batch_neg_src_node_ids),
+                dst_ids=torch.from_numpy(batch_neg_dst_node_ids),
                 interact_times=neg_batch_node_interact_times,
                 batch=batch,
                 is_negative=True,
