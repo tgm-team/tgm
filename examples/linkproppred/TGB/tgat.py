@@ -1,5 +1,4 @@
 import argparse
-from os import stat
 import time
 from typing import List, Tuple
 
@@ -186,16 +185,10 @@ class TGAT(nn.Module):
             z_src = None
         else:
             z_src = compute_embeddings(
-                node_ids=src_ids,
-                node_times=interact_times,
-                hop=self.num_layers,
-                is_src=True,
+                src_ids, interact_times, self.num_layers, is_src=True
             )
         z_dst = compute_embeddings(
-            node_ids=dst_ids,
-            node_times=interact_times,
-            hop=self.num_layers,
-            is_src=False,
+            dst_ids, interact_times, self.num_layers, is_src=False
         )
         return z_src, z_dst
 
