@@ -1,13 +1,17 @@
-from unittest.mock import Mock
 from typing import List
+from unittest.mock import Mock
+
 import numpy as np
 import pytest
 import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook, TGBNegativeEdgeSamplerHook
-
+from tgm.hooks import (
+    NeighborSamplerHook,
+    RecencyNeighborHook,
+    TGBNegativeEdgeSamplerHook,
+)
 from tgm.loader import DGDataLoader
 
 
@@ -805,18 +809,20 @@ def test_2_hop_graph(two_hop_basic_graph):
     assert nbr_nids[1][1][0] == EMPTY  # node 2 second hop has no neighbor
 
 
-
 class FakeNegSampler:
     def query_batch(self, src, dst, time, split_mode='val'):
         return []
-    
-@pytest.mark.skip('TODO: add option that set seed time to always be the current query time instead of strictly following the edge timestamp of 1 hop. This checks for non-time respecting path. TO DO')
+
+
+@pytest.mark.skip(
+    'TODO: add option that set seed time to always be the current query time instead of strictly following the edge timestamp of 1 hop. This checks for non-time respecting path. TO DO'
+)
 def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph):
     dg = DGraph(two_hop_basic_graph)
     mock_sampler = Mock(spec=FakeNegSampler)
     mock_sampler.eval_set = {}
     mock_sampler.eval_set['val'] = {}
-    neg_batch_list = [[2,3,4,5]]
+    neg_batch_list = [[2, 3, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     tgb_hook = TGBNegativeEdgeSamplerHook(neg_sampler=mock_sampler, split_mode='val')
     n_nbrs = [1, 1]  # 1 neighbor for each node
@@ -837,7 +843,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
     assert nids[0][2] == 2
     assert nids[0][3] == 3
     assert nids[0][4] == 4
-    assert nids[0][5] == 5  
+    assert nids[0][5] == 5
     assert nbr_nids.shape == (2, 6, 1)
     assert nbr_nids[0][0][0] == EMPTY
     assert nbr_nids[1][0][0] == EMPTY
@@ -847,7 +853,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
     assert nbr_feats.shape == (2, 6, 1, 1)  # 1 feature per edge
     assert nbr_mask.shape == (2, 6, 1)
 
-    neg_batch_list = [[0,3,4,5]]
+    neg_batch_list = [[0, 3, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_2 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
@@ -858,7 +864,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
     assert nbr_nids[0][2][0] == 1
     assert nbr_nids[0][3][0] == nbr_nids[0][4][0] == nbr_nids[0][5][0] == EMPTY
 
-    neg_batch_list = [[0,1,4,5]]
+    neg_batch_list = [[0, 1, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_3 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_3)
@@ -867,13 +873,13 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
     assert nbr_nids[1][0][0] == EMPTY
     assert nbr_nids[1][1][0] == 0  # second hop, node 2 has neighbor 0
     assert nbr_nids[0][2][0] == 1
-    assert nbr_nids[1][2][0] == 2 
+    assert nbr_nids[1][2][0] == 2
     assert nbr_nids[0][3][0] == 2
     assert nbr_nids[1][3][0] == EMPTY
     assert nbr_nids[0][4][0] == EMPTY
     assert nbr_nids[0][5][0] == EMPTY
 
-    neg_batch_list = [[0,1,3,5]]
+    neg_batch_list = [[0, 1, 3, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_4 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_4)
@@ -892,7 +898,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
     assert nbr_nids[0][5][0] == EMPTY
     assert nbr_nids[1][5][0] == EMPTY
 
-    neg_batch_list = [[1,2,3,4]]
+    neg_batch_list = [[1, 2, 3, 4]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_5 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_5)
@@ -906,7 +912,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
     assert nbr_nids[1][4][0] == 4
     assert nbr_nids[0][5][0] == 2
 
-    neg_batch_list = [[0,1,3,4]]
+    neg_batch_list = [[0, 1, 3, 4]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_6 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_6)
@@ -927,7 +933,7 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     mock_sampler = Mock(spec=FakeNegSampler)
     mock_sampler.eval_set = {}
     mock_sampler.eval_set['val'] = {}
-    neg_batch_list = [[2,3,4,5]]
+    neg_batch_list = [[2, 3, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     tgb_hook = TGBNegativeEdgeSamplerHook(neg_sampler=mock_sampler, split_mode='val')
     n_nbrs = [1, 1]  # 1 neighbor for each node
@@ -948,7 +954,7 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     assert nids[0][2] == 2
     assert nids[0][3] == 3
     assert nids[0][4] == 4
-    assert nids[0][5] == 5  
+    assert nids[0][5] == 5
     assert nbr_nids.shape == (2, 6, 1)
     assert nbr_nids[0][0][0] == EMPTY
     assert nbr_nids[1][0][0] == EMPTY
@@ -958,7 +964,7 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     assert nbr_feats.shape == (2, 6, 1, 1)  # 1 feature per edge
     assert nbr_mask.shape == (2, 6, 1)
 
-    neg_batch_list = [[0,3,4,5]]
+    neg_batch_list = [[0, 3, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_2 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
@@ -969,7 +975,7 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     assert nbr_nids[0][2][0] == 1
     assert nbr_nids[0][3][0] == nbr_nids[0][4][0] == nbr_nids[0][5][0] == EMPTY
 
-    neg_batch_list = [[0,1,4,5]]
+    neg_batch_list = [[0, 1, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_3 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_3)
@@ -978,13 +984,13 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     assert nbr_nids[1][0][0] == EMPTY
     assert nbr_nids[1][1][0] == 0  # second hop, node 2 has neighbor 0
     assert nbr_nids[0][2][0] == 1
-    assert nbr_nids[1][2][0] == EMPTY 
+    assert nbr_nids[1][2][0] == EMPTY
     assert nbr_nids[0][3][0] == 2
     assert nbr_nids[1][3][0] == EMPTY
     assert nbr_nids[0][4][0] == EMPTY
     assert nbr_nids[0][5][0] == EMPTY
 
-    neg_batch_list = [[0,1,3,5]]
+    neg_batch_list = [[0, 1, 3, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_4 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_4)
@@ -1003,7 +1009,7 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     assert nbr_nids[0][5][0] == EMPTY
     assert nbr_nids[1][5][0] == EMPTY
 
-    neg_batch_list = [[1,2,3,4]]
+    neg_batch_list = [[1, 2, 3, 4]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_5 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_5)
@@ -1017,7 +1023,7 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     assert nbr_nids[1][4][0] == 1
     assert nbr_nids[0][5][0] == 2
 
-    neg_batch_list = [[0,1,3,4]]
+    neg_batch_list = [[0, 1, 3, 4]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_6 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_6)
@@ -1030,5 +1036,3 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     assert nbr_nids[0][4][0] == 2
     assert nbr_nids[1][4][0] == 1
     assert nbr_nids[0][5][0] == 2
-
-
