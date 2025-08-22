@@ -58,11 +58,11 @@ class MergeLayer(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(in_dim1 + in_dim2, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, output_dim)
-        self.act = nn.ReLU()
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor):
-        x = torch.cat([x1, x2], dim=1)
-        return self.fc2(self.act(self.fc1(x)))
+        h = self.fc1(torch.cat([x1, x2], dim=1))
+        h = h.relu()
+        return self.fc2(h)
 
 
 class TGAT(nn.Module):
@@ -182,7 +182,6 @@ class LinkPredictor(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(2 * dim, dim)
         self.fc2 = nn.Linear(dim, 1)
-        self.act = nn.ReLU()
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         h = self.fc1(torch.cat([z_src, z_dst], dim=1))
@@ -200,14 +199,12 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    idx, losses, metrics = 0, [], []
+    idx, losses, rocs, aps = 0, [], [], []
     for batch in tqdm(loader):
         opt.zero_grad()
-        batch.src_ids = batch.src
-        batch.dst_ids = batch.dst
+        batch.src_ids, batch.dst_ids = batch.src, batch.dst
         batch.interact_times = batch.time
-        batch.is_negative = False
-        batch.inference = False
+        batch.is_negative, batch.inference = False, False
         z_src, z_dst = encoder(batch, static_node_feats)
 
         batch.dst_ids = batch.neg
@@ -229,16 +226,13 @@ def train(
         losses.append(loss.item())
         labels = labels.cpu().numpy()
         predicts = predicts.cpu().detach().numpy()
-        d = {}
-        d['ap'] = average_precision_score(y_true=labels, y_score=predicts)
-        d['roc_auc'] = roc_auc_score(y_true=labels, y_score=predicts)
-        metrics.append(d)
+        aps.append(average_precision_score(y_true=labels, y_score=predicts))
+        rocs.append(roc_auc_score(y_true=labels, y_score=predicts))
         if idx > 5:
             break
         idx += 1
     print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
-    print(f'ap, {np.mean([x["ap"] for x in metrics]):.4f}')
-    print(f'roc, {np.mean([x["roc_auc"] for x in metrics]):.4f}')
+    print(f'ap, {np.mean(aps):.4f}\nroc, {np.mean([rocs]):.4f}')
     return total_loss
 
 
