@@ -105,16 +105,11 @@ class TGAT(nn.Module):
             )
 
     def forward(
-        self,
-        src_ids: torch.Tensor,
-        dst_ids: torch.Tensor,
-        interact_times: torch.Tensor,
-        batch: DGBatch,
-        static_node_feats: torch.Tensor,
-        is_negative=False,
-        inference=False,
+        self, batch: DGBatch, static_node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
+        inference = batch.inference
+        is_negative = batch.is_negative
 
         def compute_embeddings(
             node_ids: torch.Tensor, node_times: torch.Tensor, hop: int, is_src=False
@@ -154,19 +149,18 @@ class TGAT(nn.Module):
 
                 nbr_node_ids = nbr_node_ids.reshape(node_ids.shape[0], -1)
                 nbr_time = nbr_time.reshape(node_ids.shape[0], -1)
-
-                # (B * num_nbrs, output_dim or node_feat_dim)
-                nbr_feat = compute_embeddings(
-                    nbr_node_ids.flatten(), nbr_time.flatten(), hop - 1, is_src
-                )
-                # (B, num_nbrs, output_dim or node_feat_dim)
-                nbr_feat = nbr_feat.reshape(node_ids.shape[0], num_nbrs, -1)
-                # (B, num_nbrs)
-                delta_time = node_times[:, None] - nbr_time
-                nbr_time_feat = self.time_encoder(delta_time)
                 nbr_edge_feat = nbr_edge_feat.reshape(
                     node_ids.shape[0], -1, nbr_edge_feat.shape[-1]
                 )
+
+                # (B, num_nbrs, output_dim or node_feat_dim)
+                nbr_feat = compute_embeddings(
+                    nbr_node_ids.flatten(), nbr_time.flatten(), hop - 1, is_src
+                ).reshape(node_ids.shape[0], num_nbrs, -1)
+
+                delta_time = node_times[:, None] - nbr_time
+                nbr_time_feat = self.time_encoder(delta_time)
+
                 out = self.attn[hop - 1](
                     node_feat=node_feat,
                     time_feat=node_time_feat,
@@ -181,10 +175,10 @@ class TGAT(nn.Module):
             z_src = None
         else:
             z_src = compute_embeddings(
-                src_ids, interact_times, self.num_layers, is_src=True
+                batch.src_ids, batch.interact_times, self.num_layers, is_src=True
             )
         z_dst = compute_embeddings(
-            dst_ids, interact_times, self.num_layers, is_src=False
+            batch.dst_ids, batch.interact_times, self.num_layers, is_src=False
         )
         return z_src, z_dst
 
@@ -215,23 +209,16 @@ def train(
     idx, losses, metrics = 0, [], []
     for batch in tqdm(loader):
         opt.zero_grad()
+        batch.src_ids = batch.src
+        batch.dst_ids = batch.dst
+        batch.interact_times = batch.time
+        batch.is_negative = False
+        batch.inference = False
+        z_src, z_dst = encoder(batch, static_node_feats)
 
-        z_src, z_dst = encoder(
-            src_ids=batch.src,
-            dst_ids=batch.dst,
-            interact_times=batch.time,
-            batch=batch,
-            static_node_feats=static_node_feats,
-            is_negative=False,
-        )
-        _, z_neg_dst = encoder(
-            src_ids=batch.src,
-            dst_ids=batch.neg,
-            interact_times=batch.time,
-            static_node_feats=static_node_feats,
-            batch=batch,
-            is_negative=True,
-        )
+        batch.dst_ids = batch.neg
+        batch.is_negative = True
+        _, z_neg_dst = encoder(batch, static_node_feats)
 
         pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
         neg_prob = decoder(z_src, z_neg_dst).squeeze(dim=-1).sigmoid()
@@ -276,32 +263,22 @@ def eval(
     batch_id = 0
     for batch in tqdm(loader):
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            src_ids = torch.tensor([batch.src[idx]])
-            dst_ids = torch.tensor([batch.dst[idx]])
-            neg_dst_ids = torch.tensor(neg_batch)
-            neg_src_ids = src_ids.repeat(len(neg_dst_ids))
-            interact_times = torch.tensor([batch.time[idx]]).repeat(len(dst_ids))
-            neg_interact_times = torch.tensor([batch.time[idx]]).repeat(
-                len(neg_dst_ids)
+            batch.src_ids = torch.tensor([batch.src[idx]])
+            batch.dst_ids = torch.tensor([batch.dst[idx]])
+            batch.interact_times = torch.tensor([batch.time[idx]]).repeat(
+                len(batch.dst_ids)
             )
-            z_src, z_dst = encoder(
-                src_ids=src_ids,
-                dst_ids=dst_ids,
-                interact_times=interact_times,
-                batch=batch,
-                static_node_feats=static_node_feats,
-                is_negative=False,
-                inference=True,
+            batch.is_negative = False
+            batch.inference = True
+            z_src, z_dst = encoder(batch, static_node_feats)
+
+            batch.dst_ids = torch.tensor(neg_batch)
+            batch.src_ids = batch.src_ids.repeat(len(batch.dst_ids))
+            batch.interact_times = torch.tensor([batch.time[idx]]).repeat(
+                len(batch.dst_ids)
             )
-            _, z_neg_dst = encoder(
-                src_ids=neg_src_ids,
-                dst_ids=neg_dst_ids,
-                interact_times=neg_interact_times,
-                batch=batch,
-                static_node_feats=static_node_feats,
-                is_negative=True,
-                inference=True,
-            )
+            batch.is_negative = True
+            _, z_neg_dst = encoder(batch, static_node_feats)
             z_neg_src = z_src.repeat(z_neg_dst.shape[0], 1)
 
             pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
