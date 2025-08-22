@@ -1,12 +1,13 @@
+from unittest.mock import Mock
 from typing import List
-
 import numpy as np
 import pytest
 import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook
+from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook, TGBNegativeEdgeSamplerHook
+
 from tgm.loader import DGDataLoader
 
 
@@ -804,6 +805,131 @@ def test_2_hop_graph(two_hop_basic_graph):
     assert nbr_nids[1][1][0] == EMPTY  # node 2 second hop has no neighbor
 
 
+
 class FakeNegSampler:
     def query_batch(self, src, dst, time, split_mode='val'):
         return []
+    
+
+def test_tgb_negative_neighbor_sampling_test(two_hop_basic_graph):
+    dg = DGraph(two_hop_basic_graph)
+    mock_sampler = Mock(spec=FakeNegSampler)
+    mock_sampler.eval_set = {}
+    mock_sampler.eval_set['val'] = {}
+    neg_batch_list = [[2,3,4,5]]
+    mock_sampler.query_batch.return_value = neg_batch_list
+    tgb_hook = TGBNegativeEdgeSamplerHook(neg_sampler=mock_sampler, split_mode='val')
+    n_nbrs = [1, 1]  # 1 neighbor for each node
+    recency_hook = RecencyNeighborHook(
+        num_nbrs=n_nbrs,
+        num_nodes=dg.num_nodes,
+        edge_feats_dim=dg.edge_feats_dim,
+    )
+    loader = DGDataLoader(dg, hook=[tgb_hook, recency_hook], batch_size=1)
+    assert loader._batch_size == 1
+
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_1)
+    assert nids.shape == (2, 6)  # 2 hop, each has 2 node
+    assert nids[0][0] == 0
+    assert nids[0][1] == 1
+    assert nids[0][2] == 2
+    assert nids[0][3] == 3
+    assert nids[0][4] == 4
+    assert nids[0][5] == 5  
+    assert nbr_nids.shape == (2, 6, 1)
+    assert nbr_nids[0][0][0] == EMPTY
+    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_times.shape == (2, 6, 1)
+    assert nbr_times[0][0][0] == EMPTY
+    assert nbr_times[1][0][0] == EMPTY
+    assert nbr_feats.shape == (2, 6, 1, 1)  # 1 feature per edge
+    assert nbr_mask.shape == (2, 6, 1)
+
+    neg_batch_list = [[0,3,4,5]]
+    mock_sampler.query_batch.return_value = neg_batch_list
+    batch_2 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
+    assert nbr_nids[0][0][0] == 0  # first hop, node 1 has neighbor 0
+    assert nbr_nids[1][0][0] == EMPTY  # no second hop neighbors
+    assert nbr_nids[0][1][0] == EMPTY
+    assert nbr_nids[1][1][0] == EMPTY
+    assert nbr_nids[0][2][0] == 1
+    assert nbr_nids[0][3][0] == nbr_nids[0][4][0] == nbr_nids[0][5][0] == EMPTY
+
+    neg_batch_list = [[0,1,4,5]]
+    mock_sampler.query_batch.return_value = neg_batch_list
+    batch_3 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_3)
+    assert nbr_nids[0][0][0] == EMPTY  # first hop, node 3 has no neighbor yet
+    assert nbr_nids[0][1][0] == 1  # first hop, node 2 has neighbor 1
+    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_nids[1][1][0] == 0  # second hop, node 2 has neighbor 0
+    assert nbr_nids[0][2][0] == 1
+    assert nbr_nids[1][2][0] == 2  #!
+    assert nbr_nids[0][3][0] == 2
+    assert nbr_nids[1][3][0] == EMPTY
+    assert nbr_nids[0][4][0] == EMPTY
+    assert nbr_nids[0][5][0] == EMPTY
+
+    neg_batch_list = [[0,1,3,5]]
+    mock_sampler.query_batch.return_value = neg_batch_list
+    batch_4 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_4)
+    assert (
+        nbr_nids[0][1][0] == 3
+    )  # first hop, node 2 has neighbor 3 (replaced 1 as it is pushed out of cache)
+    assert (
+        nbr_nids[1][1][0] == EMPTY
+    )  # second hop, node 2 has no neighbor now (as 1 is pushed out of cache)
+    assert nbr_nids[0][2][0] == 0
+    assert nbr_nids[1][2][0] == 2
+    assert nbr_nids[0][3][0] == 0
+    assert nbr_nids[1][3][0] == EMPTY
+    assert nbr_nids[0][4][0] == 2
+    assert nbr_nids[1][4][0] == 1
+    assert nbr_nids[0][5][0] == EMPTY
+    assert nbr_nids[1][5][0] == EMPTY
+
+    """Initializes the following 2 hop graph.
+
+        0 -> t=1 -> 1
+                    |
+                    v
+                t=2
+                    |
+                    v
+        3 -> t=3 -> 2
+        4 -> t=4 -> 2
+        5 -> t=5 -> 0
+        5 -> t=6 -> 2
+    """
+    neg_batch_list = [[1,2,3,4]]
+    mock_sampler.query_batch.return_value = neg_batch_list
+    batch_5 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_5)
+    assert nbr_nids[0][0][0] == EMPTY
+    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_nids[0][1][0] == 1
+    assert nbr_nids[1][1][0] == EMPTY
+    assert nbr_nids[0][2][0] == 0
+    assert nbr_nids[0][3][0] == 1
+
+
+
+
+
+
+
+    
+
+
+
+    mock_sampler.eval_set['val'][(5,2,6)] = [0,1,3,4]
+
+
+
+
+
+

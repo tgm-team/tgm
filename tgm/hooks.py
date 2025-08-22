@@ -380,10 +380,16 @@ class RecencyNeighborHook:
     ):
         num_nodes = node_ids.size(0)
         device = node_ids.device
-        nbr_nids = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
-        nbr_times = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
-        nbr_feats = torch.zeros((num_nodes, k, self._edge_feats_dim), device=device)
+        nbr_nids = torch.full((num_nodes, k), -1, dtype=torch.long, device=device)
+        nbr_times = torch.full((num_nodes, k), -1, dtype=torch.long, device=device)
+        nbr_feats = torch.full((num_nodes, k, self._edge_feats_dim), -1, device=device)
         nbr_mask = torch.zeros((num_nodes, k), dtype=torch.bool, device=device)
+
+
+        # nbr_nids = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
+        # nbr_times = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
+        # nbr_feats = torch.zeros((num_nodes, k, self._edge_feats_dim), device=device)
+        # nbr_mask = torch.zeros((num_nodes, k), dtype=torch.bool, device=device)
 
         for i in range(num_nodes):
             nid, qtime = int(node_ids[i]), int(query_times[i])
@@ -407,8 +413,11 @@ class RecencyNeighborHook:
     def _update(self, batch):
         src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
         if batch.edge_feats is None:
-            edge_feats = torch.zeros(
-                (len(src), self._edge_feats_dim), device=self._device
+            # edge_feats = torch.zeros(
+            #     (len(src), self._edge_feats_dim), device=self._device
+            # )
+            edge_feats = torch.full(
+                (len(src), self._edge_feats_dim), -1, device=self._device
             )
         else:
             edge_feats = batch.edge_feats
