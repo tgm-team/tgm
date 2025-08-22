@@ -802,3 +802,8 @@ def test_2_hop_graph(two_hop_basic_graph):
     assert nbr_nids[1][0][0] == 1  # node 5 second hop has neighbor 1
     assert nbr_nids[0][1][0] == 4  # node 2 first hop has neighbor 4
     assert nbr_nids[1][1][0] == EMPTY  # node 2 second hop has no neighbor
+
+
+class FakeNegSampler:
+    def query_batch(self, src, dst, time, split_mode='val'):
+        return []
