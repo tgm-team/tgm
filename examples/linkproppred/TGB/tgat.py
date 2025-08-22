@@ -121,10 +121,9 @@ class TGAT(nn.Module):
         ):
             num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
             node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
-            node_raw_features = static_node_feats[node_ids]
 
             if hop == 0:
-                return node_raw_features
+                return static_node_feats[node_ids]
             else:
                 node_feat = compute_embeddings(node_ids, node_times, hop - 1, is_src)
 
@@ -140,13 +139,10 @@ class TGAT(nn.Module):
                 nbr_times = batch.nbr_times[i].flatten()
                 nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
 
-                if inference:
-                    if is_negative:
-                        bsize = num_nbrs if node_ids.shape[0] == 999 else num_nbrs**2
-                    else:
-                        bsize = node_ids.shape[0] * num_nbrs
+                if inference and is_negative:
+                    bsize = num_nbrs if node_ids.shape[0] == 999 else num_nbrs**2
                 else:
-                    bsize = nbr_nids.shape[0] // 3
+                    bsize = len(node_ids) * num_nbrs
 
                 def _split(x):
                     return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
@@ -179,7 +175,7 @@ class TGAT(nn.Module):
                     edge_feat=nbr_edge_feat,
                     nbr_mask=nbr_node_ids,
                 )
-                return self.merge_layers[hop - 1](out, node_raw_features)
+                return self.merge_layers[hop - 1](out, static_node_feats[node_ids])
 
         if inference and is_negative:
             z_src = None
@@ -280,17 +276,17 @@ def eval(
     batch_id = 0
     for batch in tqdm(loader):
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            src_ids = np.asarray([batch.src[idx]]).reshape(-1)
-            dst_ids = np.asarray([batch.dst[idx]]).reshape(-1)
-            neg_dst_ids = np.asarray(neg_batch)
-            neg_src_ids = batch.src[idx].repeat(len(neg_dst_ids)).cpu().numpy()
-            interact_times = torch.tensor([batch.time[idx]]).repeat(dst_ids.shape[0])
+            src_ids = torch.tensor([batch.src[idx]])
+            dst_ids = torch.tensor([batch.dst[idx]])
+            neg_dst_ids = torch.tensor(neg_batch)
+            neg_src_ids = src_ids.repeat(len(neg_dst_ids))
+            interact_times = torch.tensor([batch.time[idx]]).repeat(len(dst_ids))
             neg_interact_times = torch.tensor([batch.time[idx]]).repeat(
-                neg_dst_ids.shape[0]
+                len(neg_dst_ids)
             )
             z_src, z_dst = encoder(
-                src_ids=torch.from_numpy(src_ids),
-                dst_ids=torch.from_numpy(dst_ids),
+                src_ids=src_ids,
+                dst_ids=dst_ids,
                 interact_times=interact_times,
                 batch=batch,
                 static_node_feats=static_node_feats,
@@ -298,8 +294,8 @@ def eval(
                 inference=True,
             )
             _, z_neg_dst = encoder(
-                src_ids=torch.from_numpy(neg_src_ids),
-                dst_ids=torch.from_numpy(neg_dst_ids),
+                src_ids=neg_src_ids,
+                dst_ids=neg_dst_ids,
                 interact_times=neg_interact_times,
                 batch=batch,
                 static_node_feats=static_node_feats,
