@@ -867,7 +867,7 @@ def test_tgb_negative_neighbor_sampling_test(two_hop_basic_graph):
     assert nbr_nids[1][0][0] == EMPTY
     assert nbr_nids[1][1][0] == 0  # second hop, node 2 has neighbor 0
     assert nbr_nids[0][2][0] == 1
-    assert nbr_nids[1][2][0] == 2  #!
+    assert nbr_nids[1][2][0] == 2 
     assert nbr_nids[0][3][0] == 2
     assert nbr_nids[1][3][0] == EMPTY
     assert nbr_nids[0][4][0] == EMPTY
