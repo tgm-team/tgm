@@ -57,17 +57,16 @@ class TemporalAttention(torch.nn.Module):
         nbr_mask: torch.Tensor,  # (batch_size, num_nbrs)
     ) -> torch.Tensor:  # (batch_size, out_dim)
         node_feat = torch.unsqueeze(node_feat, dim=1)  # (batch_size, 1, node_dim)
-
         if self.pad_dim != 0:  # pad for the inputs
             z = torch.zeros(node_feat.shape[0], node_feat.shape[1], self.pad_dim)
             z = z.to(node_feat.device)
             node_feat = torch.cat([node_feat, z], dim=2)
 
-        Q = residual = torch.cat([node_feat, time_feat], dim=2)  # (batch, 1, out_dim)
-        # (batch_size, 1, n_heads, self.head_dim)
+        Q = R = torch.cat([node_feat, time_feat], dim=2)  # (batch, 1, out_dim)
+        # (batch, 1, n_heads, self.head_dim)
         Q = self.W_Q(Q).reshape(Q.shape[0], Q.shape[1], self.n_heads, self.head_dim)
 
-        # Tensor, shape (batch_size, num_neighbors, node_feat_dim + edge_feat_dim + time_feat_dim)
+        # (batch, num_neighbors, node_feat_dim + edge_feat_dim + time_feat_dim)
         K = V = torch.cat([nbr_node_feat, edge_feat, nbr_time_feat], dim=2)
         K = self.W_K(K).reshape(K.shape[0], K.shape[1], self.n_heads, self.head_dim)
         V = self.W_V(V).reshape(V.shape[0], V.shape[1], self.n_heads, self.head_dim)
@@ -78,6 +77,7 @@ class TemporalAttention(torch.nn.Module):
 
         A = torch.einsum('bhld,bhnd->bhln', Q, K)  # (batch, n_heads, 1, num_nbrs)
         A *= self.head_dim**-0.5
+        del Q, K
 
         nbr_mask = nbr_mask == 0
         nbr_mask = nbr_mask.reshape(nbr_mask.shape[0], 1, 1, -1)
@@ -90,10 +90,10 @@ class TemporalAttention(torch.nn.Module):
         A = self.dropout(A)
 
         O = torch.einsum('bhln,bhnd->bhld', A, V)  # (batch, n_heads, 1, head_dim)
-        O = O.permute(0, 2, 1, 3).flatten(start_dim=2)  # (batch, 1, out_dim)
+        O = O.flatten(start_dim=1)  # (batch, out_dim)
+        del A
 
-        out = self.W_O(O)  # (batch, 1, out_dim)
+        out = self.W_O(O)  # (batch, out_dim)
         out = self.dropout(out)
-        out = self.layer_norm(out + residual)
-        out = out.squeeze(dim=1)  # (batch, out_dim)
+        out = self.layer_norm(out + R.squeeze(1))
         return out
