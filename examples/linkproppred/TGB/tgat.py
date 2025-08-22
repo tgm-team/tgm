@@ -186,7 +186,7 @@ class LinkPredictor(nn.Module):
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.fc2(h)
+        return self.fc2(h).sigmoid().view(-1)
 
 
 def train(
@@ -211,8 +211,8 @@ def train(
         batch.is_negative = True
         _, z_neg_dst = encoder(batch, static_node_feats)
 
-        pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
-        neg_prob = decoder(z_src, z_neg_dst).squeeze(dim=-1).sigmoid()
+        pos_prob = decoder(z_src, z_dst)
+        neg_prob = decoder(z_src, z_neg_dst)
 
         loss_func = nn.BCELoss()
         predicts = torch.cat([pos_prob, neg_prob], dim=0)
@@ -269,8 +269,8 @@ def eval(
             _, z_neg_dst = encoder(batch, static_node_feats)
             z_neg_src = z_src.repeat(z_neg_dst.shape[0], 1)
 
-            pos_prob = decoder(z_src, z_dst).squeeze(dim=-1).sigmoid()
-            neg_prob = decoder(z_neg_src, z_neg_dst).squeeze(dim=-1).sigmoid()
+            pos_prob = decoder(z_src, z_dst)
+            neg_prob = decoder(z_neg_src, z_neg_dst)
 
             input_dict = {
                 'y_pred_pos': pos_prob[0].detach().cpu().numpy(),
