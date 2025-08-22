@@ -116,7 +116,7 @@ class TGAT(nn.Module):
             node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
 
             if hop == 0:
-                return static_node_feats[node_ids]
+                return static_node_feat[node_ids]
             else:
                 node_feat = get_embeddings(node_ids, node_times, hop - 1, is_src)
 
@@ -163,7 +163,7 @@ class TGAT(nn.Module):
                     edge_feat=nbr_edge_feat,
                     nbr_mask=nbr_node_ids,
                 )
-                return self.merge_layers[hop - 1](out, static_node_feats[node_ids])
+                return self.merge_layers[hop - 1](out, static_node_feat[node_ids])
 
         if inference and is_negative:
             z_src = None
