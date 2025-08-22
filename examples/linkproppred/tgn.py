@@ -318,14 +318,13 @@ class GraphAttentionEmbedding(nn.Module):
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        return self.fc2(h)
 
 
 def train(

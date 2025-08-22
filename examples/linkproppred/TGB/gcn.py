@@ -119,16 +119,15 @@ class GCNEncoder(torch.nn.Module):
 
 
 class LinkPredictor(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = nn.Linear(in_channels, in_channels)
-        self.lin_dst = nn.Linear(in_channels, in_channels)
-        self.lin_final = nn.Linear(in_channels, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
-    def forward(self, z_src, z_dst):
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_final(h).sigmoid().view(-1)  # Ensure output is a 1D tensor
+        return self.fc2(h)
 
 
 def train_in_batches(
