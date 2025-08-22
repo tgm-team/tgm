@@ -11,7 +11,7 @@ from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
 from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,
@@ -82,7 +82,9 @@ class TGN(torch.nn.Module):
             time_encoder=self.time_encoder,
         )
 
-    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, batch: DGBatch, static_node_feats: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         agg_msgs = self.msg_agg(self.nodes, self.memory.msgs)
         memory, _ = self.memory_updater.get_updated_memory(*agg_msgs)
         # TODO: I think this is only needed for multi-hop?
@@ -92,7 +94,7 @@ class TGN(torch.nn.Module):
         # batch.time[batch.dst] -= last_update[batch.dst].long()
         # batch.time[batch.neg] -= last_update[batch.neg].long()
 
-        z = self.gat(batch, memory=memory)
+        z = self.gat(batch, static_node_feats, memory=memory)
         self._update_memory(batch)
         return z
 
@@ -261,7 +263,6 @@ class GraphAttentionEmbedding(nn.Module):
                     node_dim=embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
-                    out_dim=embed_dim,
                     dropout=dropout,
                 )
                 for _ in range(num_layers)
@@ -271,6 +272,7 @@ class GraphAttentionEmbedding(nn.Module):
     def forward(
         self,
         batch: DGBatch,
+        static_node_feats: torch.Tensor,
         memory: Memory,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
@@ -284,11 +286,11 @@ class GraphAttentionEmbedding(nn.Module):
                 continue
 
             # TODO: Check and read static node features
-            node_feat = STATIC_NODE_FEAT[seed_nodes]
+            node_feat = static_node_feats[seed_nodes]
             node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
-            nbr_feat = STATIC_NODE_FEAT[nbrs]
+            nbr_feat = static_node_feats[nbrs]
             if hop < self.num_layers - 1:
                 valid_nbrs = nbrs[nbr_mask]
                 nbr_feat[nbr_mask] = z[batch.global_to_local(valid_nbrs)]
@@ -324,6 +326,7 @@ class LinkPredictor(nn.Module):
 
 def train(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -335,7 +338,7 @@ def train(
     total_loss = 0
     for batch in tqdm(loader):
         opt.zero_grad()
-        z = encoder(batch)
+        z = encoder(batch, static_node_feats)
 
         z_src = z[batch.global_to_local(batch.src)]
         z_dst = z[batch.global_to_local(batch.dst)]
@@ -357,6 +360,7 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     eval_metric: str,
@@ -366,7 +370,7 @@ def eval(
     decoder.eval()
     perf_list = []
     for batch in tqdm(loader):
-        z = encoder(batch)
+        z = encoder(batch, static_node_feats)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
@@ -399,13 +403,18 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(args.dataset, split='train', device=args.device)
-val_dg = DGraph(args.dataset, split='val', device=args.device)
-test_dg = DGraph(args.dataset, split='test', device=args.device)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 
-# TODO: Read from graph
-NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
-STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
+
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.embed_dim), device=args.device
+    )
 
 
 def _init_hooks(
@@ -442,7 +451,7 @@ test_loader = DGDataLoader(
 encoder = TGN(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
-    embed_dim=train_dg.static_node_feats_dim or args.embed_dim,
+    embed_dim=static_node_feats.shape[1],
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
@@ -468,11 +477,13 @@ for epoch in range(1, args.epochs + 1):
         batch_size=args.bsize,
     )
     start_time = time.perf_counter()
-    loss = train(train_loader, encoder, decoder, opt)
+    loss = train(train_loader, static_node_feats, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
+    val_results = eval(
+        val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+    )
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
@@ -482,5 +493,7 @@ for epoch in range(1, args.epochs + 1):
     encoder.memory.clear_msgs(list(range(test_dg.num_nodes)))
 
 
-test_results = eval(test_loader, encoder, decoder, eval_metric, evaluator)
+test_results = eval(
+    test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+)
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

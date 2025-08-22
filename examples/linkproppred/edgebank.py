@@ -5,7 +5,7 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm import DGraph
+from tgm import DGData, DGraph
 from tgm.hooks import NegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
@@ -46,8 +46,9 @@ def eval(loader: DGDataLoader, model: EdgeBankPredictor, metrics: Metric) -> dic
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train')
-test_dg = DGraph(args.dataset, split='test')
+train_data, _, test_data = DGData.from_tgb(args.dataset).split()
+train_dg = DGraph(train_data)
+test_dg = DGraph(test_data)
 
 train_data = train_dg.materialize(materialize_features=False)
 test_loader = DGDataLoader(

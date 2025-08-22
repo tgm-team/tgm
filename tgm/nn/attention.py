@@ -10,7 +10,6 @@ class TemporalAttention(torch.nn.Module):
         node_dim (int): Feature dimension of node features.
         edge_dim (int): Feature dimension of edge features.
         time_dim (int): Feature dimension of time features.
-        out_dim (int): The output latent dimension (must be multiple of n_heads).
         dropout (float): Optional dropout to apply to output linear layer (default=0.1).
     """
 
@@ -23,9 +22,10 @@ class TemporalAttention(torch.nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
-        out_dim = node_dim + time_dim
-        if any((x <= 0 for x in [n_heads, node_dim, edge_dim, time_dim, out_dim])):
+        if any((x <= 0 for x in [n_heads, node_dim, edge_dim, time_dim])):
             raise ValueError('n_heads,node_dim,edge_dim,time_dim,out_dim must be > 0')
+
+        out_dim = node_dim + time_dim
         self.pad_dim = 0
         if out_dim % n_heads != 0:
             self.pad_dim = n_heads - out_dim % n_heads
@@ -34,6 +34,7 @@ class TemporalAttention(torch.nn.Module):
         self.n_heads = n_heads
         self.head_dim = out_dim // n_heads
         self.out_dim = out_dim
+
         key_dim = node_dim + edge_dim + time_dim
         self.W_Q = torch.nn.Linear(out_dim, out_dim, bias=False)
         self.W_KV = torch.nn.Linear(key_dim, out_dim * 2, bias=False)
@@ -46,14 +47,14 @@ class TemporalAttention(torch.nn.Module):
         self,
         node_feat: torch.Tensor,  # (B, node_dim)
         time_feat: torch.Tensor,  # (B, time_dim)
-        edge_feat: torch.Tensor,  # (B, num_nbrs, node_dim)
-        nbr_node_feat: torch.Tensor,  # (B, num_nbrs, time_dim)
-        nbr_time_feat: torch.Tensor,  # (B, num_nbrs, edge_dim)
+        edge_feat: torch.Tensor,  # (B, num_nbrs, edge_dim)
+        nbr_node_feat: torch.Tensor,  # (B, num_nbrs, node_dim)
+        nbr_time_feat: torch.Tensor,  # (B, num_nbrs, time_dim)
         nbr_mask: torch.Tensor,  # (B, num_nbrs)
     ) -> torch.Tensor:  # (B, out_dim)
         node_feat = F.pad(node_feat, (0, self.pad_dim)) if self.pad_dim else node_feat
 
-        Q = R = torch.cat([node_feat, time_feat], dim=1).unsqueeze(1)
+        Q = R = torch.cat([node_feat, time_feat], dim=1).unsqueeze(1)  # (B, 1, out_dim)
         Q = self.W_Q(Q)  # (B, out_dim)
 
         Z = torch.cat([nbr_node_feat, edge_feat, nbr_time_feat], dim=-1)

@@ -12,6 +12,7 @@ from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm.graph import DGBatch, DGraph
+from tgm import DGData
 from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,
@@ -340,9 +341,11 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(args.dataset, split='train', device=args.device)
-val_dg = DGraph(args.dataset, split='val', device=args.device)
-test_dg = DGraph(args.dataset, split='test', device=args.device)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
 
 # TODO: Read from graph
 NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, 1

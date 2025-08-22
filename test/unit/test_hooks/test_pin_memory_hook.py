@@ -19,6 +19,10 @@ def test_hook_dependancies():
     assert PinMemoryHook.produces == set()
 
 
+def test_hook_reset_state():
+    assert PinMemoryHook.has_state == False
+
+
 @pytest.mark.gpu
 def test_pin_memory_hook_cpu(dg):
     # Note: The gpu is not actually used, but torch complains when calling .pin_memory()
