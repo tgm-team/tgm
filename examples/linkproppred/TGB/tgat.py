@@ -131,7 +131,7 @@ class TGAT(nn.Module):
                 nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
 
                 if batch.dst.numel() != batch.neg.numel() and batch.is_negative:
-                    bsize = num_nbrs if node_ids.shape[0] == 999 else num_nbrs**2
+                    bsize = num_nbrs if i == 0 else num_nbrs**2
                 else:
                     bsize = len(node_ids) * num_nbrs
 
@@ -139,6 +139,7 @@ class TGAT(nn.Module):
                     return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
 
                 idx = 0 if is_src else 2 if batch.is_negative else 1
+
                 nbr_node_ids = _split(nbr_nids)[idx].reshape(node_ids.shape[0], -1)
                 nbr_time = _split(nbr_times)[idx].reshape(node_ids.shape[0], -1)
                 nbr_edge_feat = _split(nbr_feat)[idx].reshape(
@@ -163,12 +164,9 @@ class TGAT(nn.Module):
                 )
                 return self.merge_layers[hop - 1](out, static_node_feat[node_ids])
 
-        if batch.inference and batch.is_negative:
-            z_src = None
-        else:
-            z_src = get_embeddings(
-                batch.src_ids, batch.interact_times, self.num_layers, is_src=True
-            )
+        z_src = get_embeddings(
+            batch.src_ids, batch.interact_times, self.num_layers, is_src=True
+        )
         z_dst = get_embeddings(
             batch.dst_ids, batch.interact_times, self.num_layers, is_src=False
         )
@@ -259,10 +257,10 @@ def eval(
             z_src, z_dst = encoder(batch, static_node_feats)
 
             batch.dst_ids = torch.tensor(neg_batch)
-            batch.src_ids = batch.src_ids.repeat(len(batch.dst_ids))
-            batch.interact_times = torch.tensor([batch.time[idx]]).repeat(
-                len(batch.dst_ids)
-            )
+            # batch.src_ids = batch.src_ids.repeat(len(batch.dst_ids))
+            # batch.interact_times = torch.tensor([batch.time[idx]]).repeat(
+            #    len(batch.dst_ids)
+            # )
             batch.is_negative = True
             _, z_neg_dst = encoder(batch, static_node_feats)
             z_neg_src = z_src.repeat(z_neg_dst.shape[0], 1)
