@@ -7,15 +7,30 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
+from tgm.split import TemporalRatioSplit
 from tgm.util.seed import seed_everything
+
+"""
+Adapted the setting for graph property prediction proposed in
+https://openreview.net/forum?id=DZqic2sPTY
+(`lag` is excluded from this example's setting)
+
+This example can be run with any token networks provided in
+https://arxiv.org/abs/2406.10426
+"""
 
 parser = argparse.ArgumentParser(
     description='Persistant Forecast Graph Property Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
+
+parser.add_argument('--train_ratio', type=float, default=0.7, help='train ratio')
+parser.add_argument('--val_ratio', type=float, default=0.15, help='validation ratio')
+parser.add_argument('--test_ratio', type=float, default=0.15, help='test ratio')
+
 parser.add_argument(
     '--path-dataset',
     type=str,
@@ -138,28 +153,50 @@ if __name__ == '__main__':
     token = pd.read_csv(args.path_dataset)
     token = preproccess_raw_data(token)
 
-    dgraph_token = DGraph.from_pandas(  # @TODO: adapt changes in discretize APIs
+    full_data = DGData.from_pandas(
         edge_df=token,
         edge_src_col='from',
         edge_dst_col='to',
         edge_time_col='timestamp',
         edge_feats_col='value',
         time_delta=args.raw_time_gran,
-        device='cpu',
+    ).discretize(args.batch_time_gran)
+    train_data, val_data, test_data = full_data.split(
+        TemporalRatioSplit(
+            train_ratio=args.train_ratio,
+            val_ratio=args.val_ratio,
+            test_ratio=args.test_ratio,
+        )
     )
-    # TODO: Get split from new APIs
-    dgraph_token = dgraph_token.discretize(args.batch_time_gran)
 
-    full_loader = DGDataLoader(
-        dgraph_token,
-        batch_unit=args.batch_time_gran,
-        drop_last=True,  # Set this to true for test data loader only, False for both validation and train
-        # on_empty = None @TODO: Uncomment this when #PR50 goes in
+    full_dg = DGraph(full_data, device='cpu')
+    train_dg = DGraph(train_data, device='cpu')
+    val_dg = DGraph(val_data, device='cpu')
+    test_dg = DGraph(test_data, device='cpu')
+
+    full_loader = DGDataLoader(full_dg, batch_unit=args.batch_time_gran, on_empty=None)
+    train_loader = DGDataLoader(
+        train_dg, batch_unit=args.batch_time_gran, on_empty=None
     )
+    val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty=None)
+    test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty=None)
+
+    train_snapshots = len(train_loader)
+    val_snapshots = len(val_loader)
+    test_snapshots = len(test_loader) - 1
+
     labels = label_generator_next_binary_classification(
-        full_loader
+        loader=full_loader, snapshot_measurement=edge_count
     )  # shape: number of snapshots - 1
 
-    baseline = PersistantForecast(node_count)
-    results = eval(full_loader, labels, baseline, val_metrics, True)
-    print(results)
+    train_labels = labels[:train_snapshots]
+    val_labels = labels[train_snapshots : train_snapshots + val_snapshots]
+    test_labels = labels[
+        train_snapshots + val_snapshots : train_snapshots
+        + val_snapshots
+        + test_snapshots
+    ]
+
+    baseline = PersistantForecast(edge_count)
+    test_results = eval(test_loader, test_labels, baseline, val_metrics, True)
+    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
