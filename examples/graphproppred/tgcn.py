@@ -16,10 +16,9 @@ from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
 from tgm.util.seed import seed_everything
 
-"""
+r"""
 Adapted the setting for graph property prediction proposed in
 https://openreview.net/forum?id=DZqic2sPTY
-(`lag` is excluded from this example's setting)
 
 This example can be run with any token networks provided in
 https://arxiv.org/abs/2406.10426
