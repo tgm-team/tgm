@@ -164,12 +164,8 @@ class TGAT(nn.Module):
                 )
                 return self.merge_layers[hop - 1](out, static_node_feat[node_ids])
 
-        z_src = get_embeddings(
-            batch.src_ids, batch.interact_times, self.num_layers, is_src=True
-        )
-        z_dst = get_embeddings(
-            batch.dst_ids, batch.interact_times, self.num_layers, is_src=False
-        )
+        z_src = get_embeddings(batch.src_ids, batch.time, self.num_layers, is_src=True)
+        z_dst = get_embeddings(batch.dst_ids, batch.time, self.num_layers, is_src=False)
         return z_src, z_dst
 
 
@@ -198,8 +194,7 @@ def train(
     idx, losses, rocs, aps = 0, [], [], []
     for batch in tqdm(loader):
         opt.zero_grad()
-        batch.src_ids, batch.dst_ids = batch.src, batch.dst
-        batch.interact_times, batch.is_negative = batch.time, False
+        batch.src_ids, batch.dst_ids, batch.is_negative = batch.src, batch.dst, False
         z_src, z_dst = encoder(batch, static_node_feats)
 
         batch.dst_ids, batch.is_negative = batch.neg, True
@@ -247,11 +242,8 @@ def eval(
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             batch.src_ids = torch.tensor([batch.src[idx]])
             batch.dst_ids = torch.tensor([batch.dst[idx]])
-            batch.interact_times = torch.tensor([batch.time[idx]]).repeat(
-                len(batch.dst_ids)
-            )
+            batch.time = torch.tensor([batch.time[idx]]).repeat(len(batch.dst_ids))
             batch.is_negative = False
-            batch.inference = True
             z_src, z_dst = encoder(batch, static_node_feats)
 
             batch.dst_ids = torch.tensor(neg_batch)
