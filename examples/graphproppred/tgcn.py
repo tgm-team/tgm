@@ -16,17 +16,32 @@ from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
 from tgm.util.seed import seed_everything
 
+"""
+Adapted the setting for graph property prediction proposed in
+https://openreview.net/forum?id=DZqic2sPTY
+(`lag` is excluded from this example's setting)
+
+This example can be run with any token networks provided in
+https://arxiv.org/abs/2406.10426
+"""
+
 parser = argparse.ArgumentParser(
     description='TGCN Graph Property Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
+parser.add_argument('--train_ratio', type=float, default=0.7, help='train ratio')
+parser.add_argument('--val_ratio', type=float, default=0.15, help='validation ratio')
+parser.add_argument('--test_ratio', type=float, default=0.15, help='test ratio')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
-parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--epochs', type=int, default=250, help='number of epochs')
+parser.add_argument('--lr', type=float, default=0.00015, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of TGCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument(
+    '--node-dim', type=int, default=100, help='node feat dimension if not provided'
+)
 parser.add_argument(
     '--path-dataset',
     type=str,
@@ -100,11 +115,11 @@ def preproccess_raw_data(dataframe: pd.DataFrame) -> pd.DataFrame:
 
 # graph pooling
 def sum_pooling(z: torch.Tensor) -> torch.Tensor:
-    return torch.sum(z, dim=0)[0].squeeze()
+    return torch.sum(z, dim=0).squeeze()
 
 
 def mean_pooling(z: torch.Tensor) -> torch.Tensor:
-    return torch.mean(z, dim=0)[0].squeeze()
+    return torch.mean(z, dim=0).squeeze()
 
 
 class TGCN_Model(nn.Module):
@@ -129,7 +144,8 @@ class TGCN_Model(nn.Module):
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0 = self.encoder(node_feat, edge_index, edge_weight, h_0)
-        z_node = z[batch.global_to_local(batch.node_ids)]  # type: ignore
+
+        z_node = z[batch.global_to_local(batch.unique_nids)]  # type: ignore
         z_graph = self.graph_pooling(z_node)
         pred = self.decoder(z_graph)
         return pred, h_0
@@ -178,7 +194,7 @@ def eval(
 ) -> dict:
     all_preds = []
     number_of_snapshot = len(loader)
-    for idx, snapshot in tqdm(enumerate(loader)):
+    for idx, snapshot in enumerate(tqdm(loader)):
         if not (ignore_last_snapshot and idx == number_of_snapshot - 1):
             pred, h_0 = model(snapshot, static_node_feats, h_0)
             all_preds.append(pred)
@@ -186,7 +202,7 @@ def eval(
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
 
     metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute()
+    return metrics.compute(), h_0
 
 
 def train(
@@ -195,30 +211,38 @@ def train(
     node_feat: torch.Tensor,
     model: nn.Module,
     opt: torch.optim.Optimizer,
+    metrics: Metric,
 ) -> Tuple[float, torch.Tensor, torch.Tensor]:
     model.train()
     total_loss = 0
     h_0 = None
     criterion = torch.nn.BCELoss()
-    for idx, snapshot in tqdm(enumerate(loader)):
+    all_preds = []
+    for idx, snapshot in enumerate(tqdm(loader)):
         # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
         if not len(snapshot.src):
             continue
 
         opt.zero_grad()
         pred, h_0 = model(snapshot, node_feat, h_0)
-        loss = criterion(pred, labels[idx])
+        loss = criterion(pred.float(), labels[idx].unsqueeze(0).float())
+        all_preds.append(pred)
         loss.backward()
         opt.step()
         total_loss += float(loss)
         h_0 = h_0.detach()
-    return total_loss, h_0
+    y_pred = torch.Tensor(all_preds).float()
+    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
+
+    metrics(y_pred, labels, indexes=indexes)
+    return total_loss, h_0, metrics.compute()
 
 
 if __name__ == '__main__':
     args = parser.parse_args()
     seed_everything(args.seed)
     metrics = [BinaryAveragePrecision(), BinaryAUROC()]
+    train_metrics = MetricCollection(metrics, prefix='Train')
     val_metrics = MetricCollection(metrics, prefix='Validation')
     test_metrics = MetricCollection(metrics, prefix='Test')
 
@@ -241,10 +265,10 @@ if __name__ == '__main__':
         )
     )
 
-    full_dg = DGraph(full_data, device='cpu')
-    train_dg = DGraph(train_data, device='cpu')
-    val_dg = DGraph(val_data, device='cpu')
-    test_dg = DGraph(test_data, device='cpu')
+    full_dg = DGraph(full_data, device=args.device)
+    train_dg = DGraph(train_data, device=args.device)
+    val_dg = DGraph(val_data, device=args.device)
+    test_dg = DGraph(test_data, device=args.device)
 
     full_loader = DGDataLoader(full_dg, batch_unit=args.batch_time_gran, on_empty=None)
     train_loader = DGDataLoader(
@@ -275,13 +299,15 @@ if __name__ == '__main__':
         static_node_feats = torch.randn(
             (test_dg.num_nodes, args.node_dim), device=args.device
         )
-    model = TGCN_Model(node_dim=args.node_dim, embed_dim=args.embed_dim).to(args.device)
+    model = TGCN_Model(
+        node_dim=args.node_dim, embed_dim=args.embed_dim, num_classes=1
+    ).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.perf_counter()
-        loss, h_0 = train(
-            train_loader, train_labels, static_node_feats, model, opt
+        loss, h_0, train_results = train(
+            train_loader, train_labels, static_node_feats, model, opt, train_metrics
         )  # @TODO: Need to change to train_loader
         end_time = time.perf_counter()
         latency = end_time - start_time
@@ -297,6 +323,8 @@ if __name__ == '__main__':
         )
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+            + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
+            + ' '
             + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
         )
 
