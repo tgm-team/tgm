@@ -148,7 +148,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     seed_everything(args.seed)
     metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-    val_metrics = MetricCollection(metrics, prefix='Validation')
+    val_metrics = MetricCollection(metrics, prefix='Test')
 
     token = pd.read_csv(args.path_dataset)
     token = preproccess_raw_data(token)
