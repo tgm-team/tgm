@@ -110,59 +110,58 @@ class TGAT(nn.Module):
         def get_embeddings(
             node_ids: torch.Tensor, node_times: torch.Tensor, hop: int, is_src: bool
         ):
-            num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
-            node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
-
             if hop == 0:
                 return static_node_feat[node_ids]
+
+            node_feat = get_embeddings(node_ids, node_times, hop - 1, is_src)
+            node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
+
+            num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
+            layer_0_nums = [batch.src.numel(), batch.neg.numel()]
+            layer_1_nums = [x * num_nbrs for x in layer_0_nums]
+            if len(node_ids) in layer_0_nums:
+                i = 0
+            elif len(node_ids) in layer_1_nums:
+                i = 1
             else:
-                node_feat = get_embeddings(node_ids, node_times, hop - 1, is_src)
+                assert False
+            nbr_nids = batch.nbr_nids[i].flatten()
+            nbr_times = batch.nbr_times[i].flatten()
+            nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
 
-                layer_0_nums = [batch.src.numel(), batch.neg.numel()]
-                layer_1_nums = [x * num_nbrs for x in layer_0_nums]
-                if len(node_ids) in layer_0_nums:
-                    i = 0
-                elif len(node_ids) in layer_1_nums:
-                    i = 1
-                else:
-                    assert False
-                nbr_nids = batch.nbr_nids[i].flatten()
-                nbr_times = batch.nbr_times[i].flatten()
-                nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
+            if batch.dst.numel() != batch.neg.numel() and batch.is_negative:
+                bsize = num_nbrs if i == 0 else num_nbrs**2
+            else:
+                bsize = len(node_ids) * num_nbrs
 
-                if batch.dst.numel() != batch.neg.numel() and batch.is_negative:
-                    bsize = num_nbrs if i == 0 else num_nbrs**2
-                else:
-                    bsize = len(node_ids) * num_nbrs
+            def _split(x):
+                return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
 
-                def _split(x):
-                    return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
+            idx = 0 if is_src else 2 if batch.is_negative else 1
 
-                idx = 0 if is_src else 2 if batch.is_negative else 1
+            nbr_node_ids = _split(nbr_nids)[idx].reshape(node_ids.shape[0], -1)
+            nbr_time = _split(nbr_times)[idx].reshape(node_ids.shape[0], -1)
+            nbr_edge_feat = _split(nbr_feat)[idx].reshape(
+                node_ids.shape[0], -1, nbr_feat.shape[-1]
+            )
 
-                nbr_node_ids = _split(nbr_nids)[idx].reshape(node_ids.shape[0], -1)
-                nbr_time = _split(nbr_times)[idx].reshape(node_ids.shape[0], -1)
-                nbr_edge_feat = _split(nbr_feat)[idx].reshape(
-                    node_ids.shape[0], -1, nbr_feat.shape[-1]
-                )
+            # (B, num_nbrs, output_dim or node_feat_dim)
+            nbr_feat = get_embeddings(
+                nbr_node_ids.flatten(), nbr_time.flatten(), hop - 1, is_src
+            ).reshape(node_ids.shape[0], num_nbrs, -1)
 
-                # (B, num_nbrs, output_dim or node_feat_dim)
-                nbr_feat = get_embeddings(
-                    nbr_node_ids.flatten(), nbr_time.flatten(), hop - 1, is_src
-                ).reshape(node_ids.shape[0], num_nbrs, -1)
+            delta_time = node_times[:, None] - nbr_time
+            nbr_time_feat = self.time_encoder(delta_time)
 
-                delta_time = node_times[:, None] - nbr_time
-                nbr_time_feat = self.time_encoder(delta_time)
-
-                out = self.attn[hop - 1](
-                    node_feat=node_feat,
-                    time_feat=node_time_feat,
-                    nbr_node_feat=nbr_feat,
-                    nbr_time_feat=nbr_time_feat,
-                    edge_feat=nbr_edge_feat,
-                    nbr_mask=nbr_node_ids,
-                )
-                return self.merge_layers[hop - 1](out, static_node_feat[node_ids])
+            out = self.attn[hop - 1](
+                node_feat=node_feat,
+                time_feat=node_time_feat,
+                nbr_node_feat=nbr_feat,
+                nbr_time_feat=nbr_time_feat,
+                edge_feat=nbr_edge_feat,
+                nbr_mask=nbr_node_ids,
+            )
+            return self.merge_layers[hop - 1](out, static_node_feat[node_ids])
 
         z_src = get_embeddings(batch.src_ids, batch.time, self.num_layers, is_src=True)
         z_dst = get_embeddings(batch.dst_ids, batch.time, self.num_layers, is_src=False)
@@ -213,8 +212,7 @@ def train(
         opt.step()
         total_loss += float(loss)
         losses.append(loss.item())
-        labels = labels.cpu().numpy()
-        predicts = predicts.cpu().detach().numpy()
+        labels, predicts = labels.cpu().numpy(), predicts.cpu().detach().numpy()
         aps.append(average_precision_score(y_true=labels, y_score=predicts))
         rocs.append(roc_auc_score(y_true=labels, y_score=predicts))
         if idx > 5:
@@ -349,9 +347,7 @@ for epoch in range(1, args.epochs + 1):
     )
     _, dst, _ = test_dg.edges
     neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
-    foo_loader = DGDataLoader(
-        train_dg, hook=[neg_hook, shared_nbr], batch_size=2000, drop_last=False
-    )
+    foo_loader = DGDataLoader(train_dg, hook=[neg_hook, shared_nbr], batch_size=2000)
     for _ in tqdm(foo_loader):
         pass
     neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
