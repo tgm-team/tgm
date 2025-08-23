@@ -10,9 +10,10 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
+from tgm.split import TemporalRatioSplit
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -20,7 +21,6 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
@@ -28,7 +28,14 @@ parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of TGCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
-    '--time-gran',
+    '--path-dataset',
+    type=str,
+    default='examples/graphproppred/test_token.csv',
+    help='Path to dataset csv file',
+)
+
+parser.add_argument(
+    '--raw-time-gran',
     type=str,
     default='s',
     help='raw time granularity for dataset',
@@ -163,7 +170,9 @@ class GraphPredictor(torch.nn.Module):
 def eval(
     loader: DGDataLoader,
     y_true: torch.Tensor,
+    static_node_feats: torch.Tensor,
     model: torch.nn.Module,
+    h_0: torch.Tensor,
     metrics: Metric,
     ignore_last_snapshot=False,
 ) -> dict:
@@ -171,7 +180,7 @@ def eval(
     number_of_snapshot = len(loader)
     for idx, snapshot in tqdm(enumerate(loader)):
         if not (ignore_last_snapshot and idx == number_of_snapshot - 1):
-            pred = model(snapshot)
+            pred, h_0 = model(snapshot, static_node_feats, h_0)
             all_preds.append(pred)
     y_pred = torch.Tensor(all_preds).float()
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
@@ -182,10 +191,10 @@ def eval(
 
 def train(
     loader: DGDataLoader,
+    labels: torch.Tensor,
+    node_feat: torch.Tensor,
     model: nn.Module,
     opt: torch.optim.Optimizer,
-    node_feat: torch.Tensor,
-    labels: torch.Tensor,
 ) -> Tuple[float, torch.Tensor, torch.Tensor]:
     model.train()
     total_loss = 0
@@ -211,55 +220,93 @@ if __name__ == '__main__':
     seed_everything(args.seed)
     metrics = [BinaryAveragePrecision(), BinaryAUROC()]
     val_metrics = MetricCollection(metrics, prefix='Validation')
+    test_metrics = MetricCollection(metrics, prefix='Test')
 
     token = pd.read_csv(args.path_dataset)
     token = preproccess_raw_data(token)
 
-    dgraph_token = DGraph.from_pandas(  # @TODO: adapt changes in discretize APIs
+    full_data = DGData.from_pandas(
         edge_df=token,
         edge_src_col='from',
         edge_dst_col='to',
         edge_time_col='timestamp',
         edge_feats_col='value',
         time_delta=args.raw_time_gran,
-        device='cpu',
+    ).discretize(args.batch_time_gran)
+    train_data, val_data, test_data = full_data.split(
+        TemporalRatioSplit(
+            train_ratio=args.train_ratio,
+            val_ratio=args.val_ratio,
+            test_ratio=args.test_ratio,
+        )
     )
-    # TODO: Get split from new APIs
-    dgraph_token = dgraph_token.discretize(args.batch_time_gran)
 
-    full_loader = DGDataLoader(
-        dgraph_token,
-        batch_unit=args.batch_time_gran,
-        drop_last=True,  # Set this to true for test data loader only, False for both validation and train
-        # on_empty = None @TODO: Uncomment this when #PR50 goes in
+    full_dg = DGraph(full_data, device='cpu')
+    train_dg = DGraph(train_data, device='cpu')
+    val_dg = DGraph(val_data, device='cpu')
+    test_dg = DGraph(test_data, device='cpu')
+
+    full_loader = DGDataLoader(full_dg, batch_unit=args.batch_time_gran, on_empty=None)
+    train_loader = DGDataLoader(
+        train_dg, batch_unit=args.batch_time_gran, on_empty=None
     )
+    val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty=None)
+    test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty=None)
+
+    train_snapshots = len(train_loader)
+    val_snapshots = len(val_loader)
+    test_snapshots = len(test_loader) - 1
+
     labels = label_generator_next_binary_classification(
-        full_loader
+        loader=full_loader, snapshot_measurement=edge_count
     )  # shape: number of snapshots - 1
 
-    # TODO: add static node features to DGraph
-    args.node_dim = args.embed_dim
-    static_node_feats = torch.randn(
-        (dgraph_token.num_nodes, args.node_dim), device=args.device
-    )
+    train_labels = labels[:train_snapshots]
+    val_labels = labels[train_snapshots : train_snapshots + val_snapshots]
+    test_labels = labels[
+        train_snapshots + val_snapshots : train_snapshots
+        + val_snapshots
+        + test_snapshots
+    ]
+
+    if train_dg.static_node_feats is not None:
+        static_node_feats = train_dg.static_node_feats
+    else:
+        static_node_feats = torch.randn(
+            (test_dg.num_nodes, args.node_dim), device=args.device
+        )
     model = TGCN_Model(node_dim=args.node_dim, embed_dim=args.embed_dim).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.perf_counter()
         loss, h_0 = train(
-            full_loader, model, opt, static_node_feats
+            train_loader, train_labels, static_node_feats, model, opt
         )  # @TODO: Need to change to train_loader
         end_time = time.perf_counter()
         latency = end_time - start_time
 
         val_results, h_0 = eval(
-            full_loader, model, static_node_feats, h_0
-        )  # @TODO: Need to change to eval_loader
+            val_loader,
+            val_labels,
+            static_node_feats,
+            model,
+            h_0,
+            val_metrics,
+            ignore_last_snapshot=False,
+        )
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
             + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
         )
 
-    results = eval(full_loader, labels, model, val_metrics, True)
-    print(results)
+    test_results, h_0 = eval(
+        test_loader,
+        test_labels,
+        static_node_feats,
+        model,
+        h_0,
+        test_metrics,
+        ignore_last_snapshot=True,
+    )
+    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
