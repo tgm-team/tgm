@@ -199,12 +199,10 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
         batch.src_ids, batch.dst_ids = batch.src, batch.dst
-        batch.interact_times = batch.time
-        batch.is_negative, batch.inference = False, False
+        batch.interact_times, batch.is_negative = batch.time, False
         z_src, z_dst = encoder(batch, static_node_feats)
 
-        batch.dst_ids = batch.neg
-        batch.is_negative = True
+        batch.dst_ids, batch.is_negative = batch.neg, True
         _, z_neg_dst = encoder(batch, static_node_feats)
 
         pos_prob = decoder(z_src, z_dst)
@@ -257,10 +255,6 @@ def eval(
             z_src, z_dst = encoder(batch, static_node_feats)
 
             batch.dst_ids = torch.tensor(neg_batch)
-            # batch.src_ids = batch.src_ids.repeat(len(batch.dst_ids))
-            # batch.interact_times = torch.tensor([batch.time[idx]]).repeat(
-            #    len(batch.dst_ids)
-            # )
             batch.is_negative = True
             _, z_neg_dst = encoder(batch, static_node_feats)
             z_neg_src = z_src.repeat(z_neg_dst.shape[0], 1)
