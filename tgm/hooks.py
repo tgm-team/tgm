@@ -383,8 +383,7 @@ class RecencyNeighborHook(StatefulHook):
                 if hasattr(batch, 'neg'):
                     batch.neg = batch.neg.to(device)
                     seed.append(batch.neg)
-                    fake_times = batch.time.repeat(len(batch.neg))  # type: ignore
-                    times.append(fake_times)
+                    times.append(batch.neg_time)  # type: ignore
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
             else:

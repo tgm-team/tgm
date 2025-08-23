@@ -80,8 +80,10 @@ class TGAT(nn.Module):
         """In this implementation, the node embedding dimension must be the same as hidden embedding dimension."""
         super().__init__()
         self.num_layers = num_layers
+        self.embed_dim = embed_dim
         self.num_nbrs = num_nbrs
         self.time_encoder = Time2Vec(time_dim=time_dim)
+        self.embed_dim = embed_dim
         self.attn, self.merge_layers = nn.ModuleList(), nn.ModuleList()
         for i in range(num_layers):
             self.attn.append(
@@ -138,7 +140,6 @@ class TGAT(nn.Module):
                 return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
 
             idx = 0 if is_src else 2 if batch.is_negative else 1
-
             nbr_node_ids = _split(nbr_nids)[idx].reshape(node_ids.shape[0], -1)
             nbr_time = _split(nbr_times)[idx].reshape(node_ids.shape[0], -1)
             nbr_edge_feat = _split(nbr_feat)[idx].reshape(
@@ -162,6 +163,79 @@ class TGAT(nn.Module):
                 nbr_mask=nbr_node_ids,
             )
             return self.merge_layers[hop - 1](out, static_node_feat[node_ids])
+
+        def get_embeddings_iter():
+            """
+            2                (n)
+            1       [n]             [nbr]
+            0   {n}    {nbr}   {nbr}  {nbr of nbr}
+
+            Compute:
+
+                Layer 0
+                {n}: seed nodes static features
+                {nbr}: 1hop nbr static features
+                {nbr of nbr}: 2hop nbr static features
+
+                Layer 1:
+                [n]: combine prev layer features of me {n} and my nbrs {nbr}
+                [nbr]: combine prev layer features of me {nbr} and my nbrs {nbr of nbr}
+
+                Layer 2:
+                (n): combine prev layer features of me [n] and my nbr [nbr]
+
+            """
+            B = len(batch.nids[0])
+            NBR = self.num_nbrs[0]  # assume uniform for simplicity
+
+            # HOP 0: Base features (static)
+            z0 = {}
+            z0['n'] = static_node_feat[batch.nids[0]]  # (B, N)
+            z0['nbr'] = static_node_feat[batch.nbr_nids[0].flatten()]  # (B * NBR, N)
+            z0['nbr2'] = static_node_feat[batch.nbr_nids[1].flatten()]  # (B * NBR^2, N)
+
+            # HOP 1: Combine hop0 features
+            z1 = {}
+
+            # branch 1: seed nodes (B, N)
+            out = self.attn[0](
+                node_feat=z0['n'],
+                time_feat=self.time_encoder(torch.zeros(B, device=device)),
+                nbr_node_feat=z0['nbr'].reshape(B, NBR, -1),
+                edge_feat=batch.nbr_feats[0],
+                nbr_mask=batch.nbr_nids[0],
+                nbr_time_feat=self.time_encoder(
+                    batch.times[0][:, None] - batch.nbr_times[0]
+                ),
+            )
+            z1['n'] = self.merge_layers[0](out, z0['n'])
+
+            # branch 2: 1-hop neighbors (B * NBR, N)
+            out = self.attn[0](
+                node_feat=z0['nbr'],
+                time_feat=self.time_encoder(torch.zeros(B * NBR, device=device)),
+                nbr_node_feat=z0['nbr2'].reshape(B * NBR, NBR, -1),
+                edge_feat=batch.nbr_feats[1],
+                nbr_mask=batch.nbr_nids[1],
+                nbr_time_feat=self.time_encoder(
+                    batch.times[1][:, None] - batch.nbr_times[1]
+                ),
+            )
+            z1['nbr'] = self.merge_layers[0](out, z0['nbr'].reshape(B * NBR, -1))
+
+            # HOP 2: Combine hop1 features (B, E)
+            out = self.attn[1](
+                node_feat=z1['n'],
+                time_feat=self.time_encoder(torch.zeros(B, device=device)),
+                nbr_node_feat=z1['nbr'].reshape(B, NBR, -1),
+                edge_feat=batch.nbr_feats[0],
+                nbr_mask=batch.nbr_nids[0],
+                nbr_time_feat=self.time_encoder(
+                    batch.times[0][:, None] - batch.nbr_times[0]
+                ),
+            )
+            out = self.merge_layers[1](out, z0['n'])
+            return out
 
         z_src = get_embeddings(batch.src_ids, batch.time, self.num_layers, is_src=True)
         z_dst = get_embeddings(batch.dst_ids, batch.time, self.num_layers, is_src=False)
