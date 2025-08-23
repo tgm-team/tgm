@@ -117,19 +117,19 @@ class TGAT(nn.Module):
             node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
 
             num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
-            layer_0_nums = [batch.src.numel(), batch.neg.numel()]
-            layer_1_nums = [x * num_nbrs for x in layer_0_nums]
-            if len(node_ids) in layer_0_nums:
+            layer_sizes = [batch.src.numel(), batch.neg.numel()]
+            layer_sizes = layer_sizes + [x * num_nbrs for x in layer_sizes]
+            if len(node_ids) == layer_sizes[0] or len(node_ids) == layer_sizes[1]:
                 i = 0
-            elif len(node_ids) in layer_1_nums:
+            elif len(node_ids) == layer_sizes[2] or len(node_ids) == layer_sizes[3]:
                 i = 1
             else:
-                assert False
+                raise ValueError(f'Unexpected node_ids length {len(node_ids)}')
             nbr_nids = batch.nbr_nids[i].flatten()
             nbr_times = batch.nbr_times[i].flatten()
             nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
 
-            if batch.dst.numel() != batch.neg.numel() and batch.is_negative:
+            if batch.is_negative and batch.dst.numel() != batch.neg.numel():
                 bsize = num_nbrs if i == 0 else num_nbrs**2
             else:
                 bsize = len(node_ids) * num_nbrs
