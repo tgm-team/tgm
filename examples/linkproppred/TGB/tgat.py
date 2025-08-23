@@ -237,9 +237,16 @@ class TGAT(nn.Module):
             out = self.merge_layers[1](out, z0['n'])
             return out
 
-        z_src = get_embeddings(batch.src_ids, batch.time, self.num_layers, is_src=True)
-        z_dst = get_embeddings(batch.dst_ids, batch.time, self.num_layers, is_src=False)
-        return z_src, z_dst
+        # z_src = get_embeddings(batch.src, batch.time, self.num_layers, is_src=True)
+        # z_dst = get_embeddings(batch.dst, batch.time, self.num_layers, is_src=False)
+
+        z = get_embeddings_iter()
+        z_src, z_dst, z_neg = z.chunk(3)
+
+        if batch.is_negative:
+            return z_src, z_neg
+        else:
+            return z_src, z_dst
 
 
 class LinkPredictor(nn.Module):
@@ -267,6 +274,10 @@ def train(
     idx, losses, rocs, aps = 0, [], [], []
     for batch in tqdm(loader):
         opt.zero_grad()
+        # z = encoder(batch, static_node_feats)
+        # z_src = z[batch.global_to_local(batch.src)]
+        # z_dst = z[batch.global_to_local(batch.dst)]
+        # z_neg_dst = z[batch.global_to_local(batch.neg)]
         batch.src_ids, batch.dst_ids, batch.is_negative = batch.src, batch.dst, False
         z_src, z_dst = encoder(batch, static_node_feats)
 
@@ -422,8 +433,8 @@ for epoch in range(1, args.epochs + 1):
     _, dst, _ = test_dg.edges
     neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
     foo_loader = DGDataLoader(train_dg, hook=[neg_hook, shared_nbr], batch_size=2000)
-    for _ in tqdm(foo_loader):
-        pass
+    # for _ in tqdm(foo_loader):
+    #    pass
     neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
     val_loader = DGDataLoader(val_dg, hook=[neg_hook, shared_nbr], batch_size=1)
     start_time = time.perf_counter()
