@@ -11,18 +11,42 @@ from tgm.hooks import DeduplicationHook, HookManager
 class MockHook:
     requires: Set[str] = set()
     produces: Set[str] = set()
+    has_state: bool = False
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.time *= 2
         return batch
 
+    def reset_state(self) -> None:
+        pass
+
 
 class MockHookRequires:
     requires = {'foo'}
     produces: Set[str] = set()
+    has_state: bool = False
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         return batch
+
+    def reset_state(self) -> None:
+        pass
+
+
+class MockHookWithState:
+    requires: Set[str] = set()
+    produces: Set[str] = set()
+    has_state: bool = True
+
+    def __init__(self) -> None:
+        self.x = 0
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        batch.time *= 2
+        return batch
+
+    def reset_state(self) -> None:
+        self.x = 1
 
 
 @pytest.fixture
@@ -112,3 +136,10 @@ def test_hook_manager_from_hook_list(dg):
 def test_hook_manager_from_bad_hook_type(dg):
     with pytest.raises(TypeError):
         _ = HookManager.from_any(dg, 'foo')
+
+
+def test_hook_manager_reset_state(dg):
+    hook = HookManager(dg, hooks=[MockHook(), MockHookWithState()])
+    assert hook.hooks[1].x == 0
+    hook.reset_state()
+    assert hook.hooks[1].x == 1

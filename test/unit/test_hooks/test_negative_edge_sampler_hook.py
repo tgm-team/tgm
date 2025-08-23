@@ -15,7 +15,11 @@ def data():
 
 def test_hook_dependancies():
     assert NegativeEdgeSamplerHook.requires == set()
-    assert NegativeEdgeSamplerHook.produces == {'neg'}
+    assert NegativeEdgeSamplerHook.produces == {'neg', 'neg_time'}
+
+
+def test_hook_reset_state():
+    assert NegativeEdgeSamplerHook.has_state == False
 
 
 def test_bad_negative_edge_sampler_init():
@@ -33,4 +37,6 @@ def test_negative_edge_sampler(data):
     batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
     assert torch.is_tensor(batch.neg)
+    assert torch.is_tensor(batch.neg_time)
     assert batch.neg.shape == batch.dst.shape
+    assert batch.neg_time.shape == batch.neg.shape

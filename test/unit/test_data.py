@@ -9,10 +9,11 @@ import pytest
 import torch
 
 from tgm.data import DGData
+from tgm.split import TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TimeDeltaDG
 
 
-def test_init_dg_data_no_node_events():
+def test_init_dg_data():
     edge_index = torch.LongTensor([[2, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([1, 5])
     data = DGData.from_raw(edge_timestamps, edge_index)
@@ -24,6 +25,21 @@ def test_init_dg_data_no_node_events():
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
+
+
+def test_init_dg_data_with_time_delta():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_timestamps, edge_index, time_delta=TimeDeltaDG('s'))
+    assert data.time_delta == TimeDeltaDG('s')
+
+
+def test_init_dg_data_with_string_time_delta():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
+    assert data.time_delta == TimeDeltaDG('s')
 
 
 def test_init_dg_data_no_node_events_with_edge_features():
@@ -39,6 +55,7 @@ def test_init_dg_data_no_node_events_with_edge_features():
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_init_dg_data_node_events():
@@ -58,6 +75,7 @@ def test_init_dg_data_node_events():
     torch.testing.assert_close(data.node_ids, node_ids)
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_init_dg_data_node_events_and_node_features():
@@ -85,6 +103,7 @@ def test_init_dg_data_node_events_and_node_features():
     torch.testing.assert_close(data.node_ids, node_ids)
     torch.testing.assert_close(data.dynamic_node_feats, dynamic_node_feats)
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_init_dg_data_sort_required():
@@ -128,6 +147,7 @@ def test_init_dg_data_sort_required():
     torch.testing.assert_close(data.node_ids, exp_node_ids)
     torch.testing.assert_close(data.dynamic_node_feats, exp_dynamic_node_feats)
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_init_dg_data_bad_args_empty_graph():
@@ -348,6 +368,7 @@ def test_from_csv_with_edge_features():
         torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
         torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
         torch.testing.assert_close(data.edge_feats, recovered_data.edge_feats)
+        assert data.time_delta == TimeDeltaDG('r')
     except Exception as e:
         raise e
     finally:
@@ -418,6 +439,7 @@ def test_from_csv_with_node_events():
         torch.testing.assert_close(
             data.dynamic_node_feats, recovered_data.dynamic_node_feats
         )
+        assert data.time_delta == TimeDeltaDG('r')
     except Exception as e:
         raise e
     finally:
@@ -523,6 +545,7 @@ def test_from_csv_with_node_features():
         torch.testing.assert_close(
             data.static_node_feats, recovered_data.static_node_feats
         )
+        assert data.time_delta == TimeDeltaDG('r')
     except Exception as e:
         raise e
     finally:
@@ -553,6 +576,7 @@ def test_from_pandas_with_edge_features():
     torch.testing.assert_close(
         data.edge_feats.tolist(), events_df.edge_features.tolist()
     )
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_from_pandas_with_node_events():
@@ -577,6 +601,7 @@ def test_from_pandas_with_node_events():
     assert data.timestamps.tolist() == [3, 6, 1337, 1338]
     assert data.node_ids.tolist() == [7, 8]
     assert data.dynamic_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 def test_from_pandas_with_node_features():
@@ -610,6 +635,7 @@ def test_from_pandas_with_node_features():
     torch.testing.assert_close(
         data.dynamic_node_feats.tolist(), node_df.node_features.tolist()
     )
+    assert data.time_delta == TimeDeltaDG('r')
 
 
 @pytest.fixture
@@ -666,32 +692,25 @@ def tgb_dataset_factory():
     return _make_dataset
 
 
-@pytest.mark.parametrize(
-    'split,with_node_feats',
-    [('train', False), ('train', True), ('val', True), ('test', True), ('all', True)],
-)
+@pytest.mark.parametrize('with_node_feats', [True, False])
 @patch('tgb.linkproppred.dataset.LinkPropPredDataset')
-def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats):
-    dataset = tgb_dataset_factory(split, with_node_feats)
+@patch.dict('tgm.timedelta.TGB_TIME_DELTAS', {'tgbl-wiki': TimeDeltaDG('D')})
+def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, with_node_feats):
+    dataset = tgb_dataset_factory(with_node_feats=with_node_feats)
     mock_dataset_cls.return_value = dataset
+
+    mock_native_time_delta = TimeDeltaDG('D')  # Patched value
 
     def _get_exp_edges():
         src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
-        edges = np.stack([src, dst], axis=1)
-        if split == 'all':
-            return edges
-        mask = getattr(dataset, f'{split}_mask')
-        return edges[mask]
+        return np.stack([src, dst], axis=1)
 
     def _get_exp_times():
-        times = dataset.full_data['timestamps']
-        if split == 'all':
-            return times
-        mask = getattr(dataset, f'{split}_mask')
-        return times[mask]
+        return dataset.full_data['timestamps']
 
-    data = DGData.from_tgb(name='tgbl-wiki', split=split)
+    data = DGData.from_tgb(name='tgbl-wiki')
     assert isinstance(data, DGData)
+    assert data.time_delta == mock_native_time_delta
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
     np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
 
@@ -706,27 +725,21 @@ def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, split, with_node_feats
         assert data.static_node_feats is None
 
 
-@pytest.mark.parametrize('split', ['train', 'val', 'test', 'all'])
 @patch('tgb.nodeproppred.dataset.NodePropPredDataset')
-def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
-    dataset = tgb_dataset_factory(split)
+@patch.dict('tgm.timedelta.TGB_TIME_DELTAS', {'tgbn-trade': TimeDeltaDG('D')})
+def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
+    dataset = tgb_dataset_factory()
     mock_dataset_cls.return_value = dataset
+
+    mock_native_time_delta = TimeDeltaDG('D')  # Patched value
 
     def _get_exp_edges():
         src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
-        edges = np.stack([src, dst], axis=1)
-        if split == 'all':
-            return edges
-        mask = getattr(dataset, f'{split}_mask')
-        return edges[mask]
+        return np.stack([src, dst], axis=1)
 
     def _get_exp_times():
         times = dataset.full_data['timestamps']
-        if split == 'all':
-            edge_times = times
-        else:
-            mask = getattr(dataset, f'{split}_mask')
-            edge_times = times[mask]
+        edge_times = times
 
         # Node times get integrated into the global timestamp array
         node_times = list(dataset.full_data['node_label_dict'].keys())
@@ -735,18 +748,15 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
         exp_times.sort()
         return exp_times
 
-    data = DGData.from_tgb(name='tgbn-trade', split=split)
+    data = DGData.from_tgb(name='tgbn-trade')
     assert isinstance(data, DGData)
+    assert data.time_delta == mock_native_time_delta
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
     np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
 
     # Assert valid node-centric data
     times = dataset.full_data['timestamps']
-    if split == 'all':
-        edge_times = times
-    else:
-        mask = getattr(dataset, f'{split}_mask')
-        edge_times = times[mask]
+    edge_times = times
 
     full_node_dict = dataset.full_data['node_label_dict']
     split_node_dict = {
@@ -769,63 +779,198 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory, split):
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
 
 
-@patch('tgb.linkproppred.dataset.LinkPropPredDataset')
-def test_from_tgb_time_remap_required_coarser(mock_dataset_cls, tgb_dataset_factory):
-    dataset = tgb_dataset_factory()
-    mock_dataset_cls.return_value = dataset
+def test_discretize_reduce_op_first():
+    edge_index = torch.LongTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_feats = torch.rand(5, 5)
+    static_node_feats = torch.rand(6, 11)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        static_node_feats=static_node_feats,
+        time_delta='m',
+    )
+    new_granularity = TimeDeltaDG('h')
+    coarse_data = data.discretize(new_granularity, reduce_op='first')
 
-    custom_td = TimeDeltaDG('Y')
-    mock_td = {'tgbl-foo': TimeDeltaDG('s')}
-    with patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td):
-        with pytest.raises(ValueError):
-            DGData.from_tgb(name='tgbl-foo', time_delta=custom_td)
+    assert coarse_data.time_delta == new_granularity
+    assert data.time_delta == TimeDeltaDG('m')
+    assert id(coarse_data) != id(data)
 
+    exp_timestamps = torch.LongTensor([0, 0, 1, 1])
+    exp_edge_event_idx = torch.LongTensor([0, 1, 2, 3])
+    exp_edge_index = torch.LongTensor([[1, 2], [2, 3], [1, 2], [4, 5]])
+    exp_edge_feats = torch.stack(
+        [edge_feats[0], edge_feats[2], edge_feats[3], edge_feats[4]]
+    )
+    exp_static_node_feats = static_node_feats
 
-@patch('tgb.linkproppred.dataset.LinkPropPredDataset')
-def test_from_tgb_time_remap_required_finer(mock_dataset_cls, tgb_dataset_factory):
-    dataset = tgb_dataset_factory()
-    mock_dataset_cls.return_value = dataset
+    torch.testing.assert_close(coarse_data.timestamps, exp_timestamps)
+    torch.testing.assert_close(coarse_data.edge_event_idx, exp_edge_event_idx)
+    torch.testing.assert_close(coarse_data.edge_index, exp_edge_index)
+    torch.testing.assert_close(coarse_data.edge_feats, exp_edge_feats)
+    torch.testing.assert_close(coarse_data.static_node_feats, exp_static_node_feats)
 
-    # Save raw (unmapped timestamps) from the original dataset. We do a copy since
-    # TGB constructor modifies timestamp info on the underlying tgb array
-    raw_times = dataset.full_data['timestamps'].copy()
-
-    custom_td = TimeDeltaDG('s')
-    mock_td = {'tgbl-foo': TimeDeltaDG('Y')}
-    with patch.dict('tgm.timedelta.TGB_TIME_DELTAS', mock_td):
-        data = DGData.from_tgb(name='tgbl-foo', time_delta=custom_td)
-
-    def _get_exp_edges():
-        src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
-        return np.stack([src, dst], axis=1)
-
-    def _get_exp_times():
-        time_factor = int(mock_td['tgbl-foo'].convert(custom_td))
-        return raw_times * time_factor
-
-    assert isinstance(data, DGData)
-    np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
-    np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
-
-    # Confirm correct dataset instantiation
-    mock_dataset_cls.assert_called_once_with(name='tgbl-foo')
+    assert coarse_data.node_event_idx is None
+    assert coarse_data.node_ids is None
+    assert coarse_data.dynamic_node_feats is None
 
 
-def test_from_any():
-    data = 'tgbl-mock'
-    with patch.object(DGData, 'from_tgb') as mock_tgb:
-        _ = DGData.from_any(data)
-        mock_tgb.assert_called_once_with(name=data, time_delta=None)
+def test_discretize_with_node_events_reduce_op_first():
+    edge_index = torch.LongTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_feats = torch.rand(5, 5)
 
-    data = 'foo.csv'
-    with patch.object(DGData, 'from_csv') as mock_csv:
-        _ = DGData.from_any(data)
-        mock_csv.assert_called_once_with(data)
+    node_ids = torch.LongTensor([6, 6, 7, 6, 6, 7])
+    node_timestamps = torch.LongTensor([10, 20, 30, 70, 80, 90])
+    dynamic_node_feats = torch.rand(6, 5)
+    static_node_feats = torch.rand(8, 11)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        node_timestamps,
+        node_ids,
+        dynamic_node_feats,
+        static_node_feats,
+        time_delta='m',
+    )
 
-    data = pd.DataFrame()
-    with patch.object(DGData, 'from_pandas') as mock_pandas:
-        _ = DGData.from_any(data)
-        mock_pandas.assert_called_once_with(data)
+    new_granularity = TimeDeltaDG('h')
+    coarse_data = data.discretize(new_granularity, reduce_op='first')
+
+    assert coarse_data.time_delta == new_granularity
+    assert data.time_delta == TimeDeltaDG('m')
+    assert id(coarse_data) != id(data)
+
+    exp_timestamps = torch.LongTensor([0, 0, 0, 0, 1, 1, 1, 1])
+    exp_edge_event_idx = torch.LongTensor([0, 1, 4, 5])
+    exp_edge_index = torch.LongTensor([[1, 2], [2, 3], [1, 2], [4, 5]])
+    exp_edge_feats = torch.stack(
+        [edge_feats[0], edge_feats[2], edge_feats[3], edge_feats[4]]
+    )
+    exp_static_node_feats = static_node_feats
+
+    exp_node_event_idx = torch.LongTensor([2, 3, 6, 7])
+    exp_node_ids = torch.LongTensor([6, 7, 6, 7])
+
+    exp_dynamic_node_feats = torch.stack(
+        [
+            dynamic_node_feats[0],
+            dynamic_node_feats[2],
+            dynamic_node_feats[3],
+            dynamic_node_feats[5],
+        ]
+    )
+
+    torch.testing.assert_close(coarse_data.timestamps, exp_timestamps)
+    torch.testing.assert_close(coarse_data.edge_event_idx, exp_edge_event_idx)
+    torch.testing.assert_close(coarse_data.edge_index, exp_edge_index)
+    torch.testing.assert_close(coarse_data.edge_feats, exp_edge_feats)
+    torch.testing.assert_close(coarse_data.static_node_feats, exp_static_node_feats)
+
+    torch.testing.assert_close(coarse_data.node_event_idx, exp_node_event_idx)
+    torch.testing.assert_close(coarse_data.node_ids, exp_node_ids)
+    torch.testing.assert_close(coarse_data.dynamic_node_feats, exp_dynamic_node_feats)
+
+
+def test_discretize_no_op():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    coarse_data = data.discretize('r')
+    assert id(data) != id(coarse_data)  # No Shared memory
+
+    data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
+    coarse_data = data.discretize('s')
+    assert id(data) != id(coarse_data)  # No Shared memory
+
+
+def test_discretize_bad_args():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
 
     with pytest.raises(ValueError):
-        _ = DGData.from_any('foo')
+        data = DGData.from_raw(edge_timestamps, edge_index, time_delta='r')
+        data.discretize('s')  # Cannot reduce from ordered
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(edge_timestamps, edge_index, time_delta='h')
+        data.discretize('s')  # Cannot reduce into more granular time
+
+
+def test_split_default_calls_ratio_split(monkeypatch):
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
+    mock_strategy = MagicMock()
+    mock_strategy.apply.return_value = expected
+    monkeypatch.setattr('tgm.data.TemporalRatioSplit', lambda: mock_strategy)
+
+    result = data.split()
+    mock_strategy.apply.assert_called_once_with(data)
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    assert all(isinstance(x, DGData) for x in result)
+
+
+def test_split_with_explicit_ratio_split():
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    strategy = TemporalRatioSplit(0.5, 0.25, 0.25)
+    expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
+    strategy.apply = MagicMock(return_value=expected)
+
+    result = data.split(strategy=strategy)
+    strategy.apply.assert_called_once_with(data)
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    assert all(isinstance(x, DGData) for x in result)
+
+
+def test_split_uses_tgb_split_when_present():
+    data = DGData.__new__(DGData)
+    data._split_strategy = None
+
+    expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
+    mock_strategy = MagicMock(spec=TGBSplit)
+    mock_strategy.apply.return_value = expected
+    data._split_strategy = mock_strategy
+
+    result = data.split()
+    mock_strategy.apply.assert_called_once_with(data)
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    assert all(isinstance(x, DGData) for x in result)
+
+
+def test_split_cannot_override_tgb_split():
+    data = DGData.__new__(DGData)
+    data._split_strategy = TGBSplit({})
+
+    with pytest.raises(ValueError):
+        data.split(strategy=TemporalRatioSplit())
+
+
+def test_clone():
+    edge_index = torch.LongTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+
+    dg1 = DGData.from_raw(edge_timestamps, edge_index)
+    dg2 = dg1.clone()
+
+    assert dg1 is not dg2
+
+    for name, val in dg1.__dict__.items():
+        if isinstance(val, torch.Tensor):
+            val2 = getattr(dg2, name)
+            assert val is not val2
+            assert torch.equal(val, val2)
+
+    assert dg1.time_delta == dg2.time_delta
+    assert dg1.time_delta is not dg2.time_delta

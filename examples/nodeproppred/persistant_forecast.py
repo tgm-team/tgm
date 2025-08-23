@@ -9,7 +9,7 @@ import numpy as np
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGraph
+from tgm import DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.util.seed import seed_everything
 
@@ -80,9 +80,13 @@ def eval(loader: DGDataLoader, model: PersistantForecaster) -> dict:
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, time_delta=args.time_gran, split='train')
-val_dg = DGraph(args.dataset, time_delta=args.time_gran, split='val')
-test_dg = DGraph(args.dataset, time_delta=args.time_gran, split='test')
+
+data = DGData.from_tgb(args.dataset).discretize(args.time_gran)
+train_data, val_data, test_data = data.split()
+
+train_dg = DGraph(train_data)
+val_dg = DGraph(val_data)
+test_dg = DGraph(test_data)
 
 train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran)

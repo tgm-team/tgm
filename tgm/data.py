@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import copy
 import csv
 import pathlib
-from dataclasses import dataclass
-from typing import Any, List
+from dataclasses import dataclass, fields, replace
+from typing import Any, List, Set, Tuple
 
 import numpy as np
 import torch
 from torch import Tensor
 
+from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
@@ -16,6 +18,7 @@ from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 class DGData:
     r"""Bundles dynamic graph data to be forwarded to DGStorage."""
 
+    time_delta: TimeDeltaDG | str
     timestamps: Tensor  # [num_events]
 
     edge_event_idx: Tensor  # [num_edge_events]
@@ -28,7 +31,12 @@ class DGData:
 
     static_node_feats: Tensor | None = None  # [num_nodes, D_node_static]
 
+    _split_strategy: SplitStrategy | None = None
+
     def __post_init__(self) -> None:
+        if isinstance(self.time_delta, str):
+            self.time_delta = TimeDeltaDG(self.time_delta)
+
         def _assert_is_tensor(x: Any, name: str) -> None:
             if not isinstance(x, Tensor):
                 raise TypeError(f'{name} must be a Tensor, got: {type(x)}')
@@ -119,13 +127,17 @@ class DGData:
 
         if self.static_node_feats is not None:
             _assert_is_tensor(self.static_node_feats, 'static_node_feats')
-            if (
-                self.static_node_feats.ndim != 2
-                or self.static_node_feats.shape[0] != num_nodes
-            ):
+            if self.static_node_feats.ndim != 2:
                 raise ValueError(
-                    'static_node_feats must have shape [num_nodes, D_node_static], '
-                    f'got {num_nodes} nodes and shape {self.static_node_feats.shape}'
+                    f'static_node_feats must be a 2D tensor of shape [N, D_node_static], '
+                    f'but got ndim={self.static_node_feats.ndim} with shape {self.static_node_feats.shape}'
+                )
+
+            if self.static_node_feats.shape[0] < num_nodes:
+                raise ValueError(
+                    f'static_node_feats has shape {self.static_node_feats.shape}, '
+                    f'but the data requires features for at least {num_nodes} nodes. '
+                    f'The first dimension ({self.static_node_feats.shape[0]}) must be >= num_nodes ({num_nodes}).'
                 )
 
         # Validate timestamps
@@ -170,6 +182,108 @@ class DGData:
                 if self.dynamic_node_feats is not None:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]
 
+    def split(self, strategy: SplitStrategy | None = None) -> Tuple[DGData, ...]:
+        strategy = strategy or self._split_strategy or TemporalRatioSplit()
+
+        if (
+            isinstance(self._split_strategy, TGBSplit)
+            and strategy is not self._split_strategy
+        ):
+            raise ValueError('Cannot override split strategy for TGB datasets')
+
+        return strategy.apply(self)
+
+    def discretize(
+        self, time_delta: TimeDeltaDG | str | None, reduce_op: str = 'first'
+    ) -> DGData:
+        r"""Returns a copy."""
+        if isinstance(time_delta, str):
+            time_delta = TimeDeltaDG(time_delta)
+
+        if time_delta is None or self.time_delta == time_delta:
+            return self.clone()  # Deepcopy
+        if self.time_delta.is_ordered or time_delta.is_ordered:  # type: ignore
+            raise ValueError('Cannot discretize a graph with ordered time granularity')
+        if self.time_delta.is_coarser_than(time_delta):  # type: ignore
+            raise ValueError(
+                f'Cannot discretize to {time_delta} which is strictly'
+                f'finer than the self.time_delta: {self.time_delta}'
+            )
+
+        valid_ops = ['first']
+        if reduce_op not in valid_ops:
+            raise ValueError(
+                f'Unknown reduce_op: {reduce_op}, expected one of: {valid_ops}'
+            )
+
+        # Note: If we simply return a new storage this will 2x our peak memory since the GC
+        # won't be able to clean up the current graph storage while `self` is alive.
+        time_factor = self.time_delta.convert(time_delta)  # type: ignore
+        buckets = (self.timestamps.float() * time_factor).floor().long()
+
+        def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
+            event_buckets = buckets[event_idx]
+            seen: Set[Any] = set()
+            keep, prev_bucket = [], None
+
+            for i in range(event_idx.numel()):
+                bucket = int(event_buckets[i])
+                node_or_edge = tuple(ids[i].tolist()) if ids.ndim > 1 else int(ids[i])
+                if bucket != prev_bucket:
+                    seen.clear()
+                    prev_bucket = bucket
+                if node_or_edge not in seen:
+                    seen.add(node_or_edge)
+                    keep.append(i)
+            return torch.tensor(keep, dtype=torch.long)
+
+        # Edge events
+        edge_mask = _get_keep_indices(self.edge_event_idx, self.edge_index)
+        edge_timestamps = buckets[self.edge_event_idx][edge_mask]
+        edge_index = self.edge_index[edge_mask]
+        edge_feats = None
+        if self.edge_feats is not None:
+            edge_feats = self.edge_feats[edge_mask]
+
+        # Node events
+        node_timestamps, node_ids, dynamic_node_feats = None, None, None
+        if self.node_event_idx is not None:
+            node_mask = _get_keep_indices(
+                self.node_event_idx,
+                self.node_ids,  # type: ignore
+            )
+            node_timestamps = buckets[self.node_event_idx][node_mask]
+            node_ids = self.node_ids[node_mask]  # type: ignore
+            dynamic_node_feats = None
+            if self.dynamic_node_feats is not None:
+                dynamic_node_feats = self.dynamic_node_feats[node_mask]
+
+        static_node_feats = None
+        if self.static_node_feats is not None:  # Need a deep copy
+            static_node_feats = self.static_node_feats.clone()
+
+        return DGData.from_raw(
+            time_delta=time_delta,  # new discretized time_delta
+            edge_timestamps=edge_timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            static_node_feats=static_node_feats,
+        )
+
+    def clone(self) -> DGData:
+        cloned_fields = {}
+        for f in fields(self):
+            val = getattr(self, f.name)
+            if isinstance(val, torch.Tensor):
+                cloned_fields[f.name] = val.clone()
+            else:
+                cloned_fields[f.name] = copy.deepcopy(val)
+
+        return replace(self, **cloned_fields)  # type: ignore
+
     @classmethod
     def from_raw(
         cls,
@@ -180,6 +294,7 @@ class DGData:
         node_ids: Tensor | None = None,
         dynamic_node_feats: Tensor | None = None,
         static_node_feats: Tensor | None = None,
+        time_delta: TimeDeltaDG | str = 'r',
     ) -> DGData:
         # Build unified event timeline
         timestamps = edge_timestamps
@@ -197,6 +312,7 @@ class DGData:
         )
 
         return cls(
+            time_delta=time_delta,
             timestamps=timestamps,
             edge_event_idx=edge_event_idx,
             edge_index=edge_index,
@@ -221,6 +337,7 @@ class DGData:
         dynamic_node_feats_col: List[str] | None = None,
         static_node_feats_file_path: str | pathlib.Path | None = None,
         static_node_feats_col: List[str] | None = None,
+        time_delta: TimeDeltaDG | str = 'r',
     ) -> DGData:
         def _read_csv(fp: str | pathlib.Path) -> List[dict]:
             # Assumes the whole things fits in memory
@@ -285,6 +402,7 @@ class DGData:
                     static_node_feats[i, j] = float(row[col])
 
         return cls.from_raw(
+            time_delta=time_delta,
             edge_timestamps=timestamps,
             edge_index=edge_index,
             edge_feats=edge_feats,
@@ -308,6 +426,7 @@ class DGData:
         dynamic_node_feats_col: List[str] | None = None,
         static_node_feats_df: 'pandas.DataFrame' | None = None,  # type: ignore
         static_node_feats_col: List[str] | None = None,
+        time_delta: TimeDeltaDG | str = 'r',
     ) -> DGData:
         def _check_pandas_import(min_version_number: str | None = None) -> None:
             try:
@@ -370,6 +489,7 @@ class DGData:
             )
 
         return cls.from_raw(
+            time_delta=time_delta,
             edge_timestamps=edge_timestamps,
             edge_index=edge_index,
             edge_feats=edge_feats,
@@ -380,54 +500,28 @@ class DGData:
         )
 
     @classmethod
-    def from_tgb(
-        cls,
-        name: str,
-        split: str = 'all',
-        time_delta: TimeDeltaDG | None = None,
-        **kwargs: Any,
-    ) -> DGData:
-        def _check_tgb_import() -> tuple['LinkPropPredDataset', 'NodePropPredDataset']:  # type: ignore
-            try:
-                from tgb.linkproppred.dataset import LinkPropPredDataset
-                from tgb.nodeproppred.dataset import NodePropPredDataset
-
-                return LinkPropPredDataset, NodePropPredDataset
-            except ImportError:
-                err_msg = 'User requires tgb to initialize a DGraph from a tgb dataset '
-                raise ImportError(err_msg)
-
-        LinkPropPredDataset, NodePropPredDataset = _check_tgb_import()
+    def from_tgb(cls, name: str, **kwargs: Any) -> DGData:
+        try:
+            from tgb.linkproppred.dataset import LinkPropPredDataset
+            from tgb.nodeproppred.dataset import NodePropPredDataset
+        except ImportError:
+            raise ImportError('TGB required to load TGB data, try `pip install py-tgb`')
 
         if name.startswith('tgbl-'):
-            dataset = LinkPropPredDataset(name=name, **kwargs)  # type: ignore
+            dataset = LinkPropPredDataset(name=name, **kwargs)
         elif name.startswith('tgbn-'):
-            dataset = NodePropPredDataset(name=name, **kwargs)  # type: ignore
+            dataset = NodePropPredDataset(name=name, **kwargs)
         else:
             raise ValueError(f'Unknown dataset: {name}')
+
         data = dataset.full_data
-
-        split_masks = {
-            'train': dataset.train_mask,
-            'val': dataset.val_mask,
-            'test': dataset.test_mask,
-        }
-
-        if split == 'all':
-            mask = slice(None)  # selects everything
-        elif split in split_masks:
-            mask = split_masks[split]
-        else:
-            raise ValueError(f'Unknown split: {split}')
-
-        src = data['sources'][mask]
-        dst = data['destinations'][mask]
+        src, dst = data['sources'], data['destinations']
         edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
-        timestamps = torch.from_numpy(data['timestamps'][mask]).long()
+        timestamps = torch.from_numpy(data['timestamps']).long()
         if data['edge_feat'] is None:
             edge_feats = None
         else:
-            edge_feats = torch.from_numpy(data['edge_feat'][mask])
+            edge_feats = torch.from_numpy(data['edge_feat'])
 
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if name.startswith('tgbn-'):
@@ -438,24 +532,18 @@ class DGData:
                 node_label_dict = {
                     t: v
                     for t, v in data['node_label_dict'].items()
-                    if (timestamps[0] - 1)
-                    <= t
-                    < timestamps[
-                        -1
-                    ]  # include the batch of labels even if they start before the edge events.
+                    if (timestamps[0] - 1) <= t < timestamps[-1]
                 }
             else:
                 raise ValueError('please update your tgb package or install by source')
 
             if len(node_label_dict):
                 # Node events could be missing from the current data split (e.g. validation)
-                num_node_events = 0
-                node_label_dim = 0
+                num_node_events, node_label_dim = 0, 0
                 for t in node_label_dict:
                     for node_id, label in node_label_dict[t].items():
                         num_node_events += 1
                         node_label_dim = label.shape[0]
-
                 temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
                 temp_node_ids = np.zeros(num_node_events, dtype=np.int64)
                 temp_dynamic_node_feats = np.zeros(
@@ -477,21 +565,18 @@ class DGData:
         if dataset.node_feat is not None:
             static_node_feats = torch.from_numpy(dataset.node_feat)
 
-        # Remap timestamps if a custom non-ordered time delta was supplied
-        if time_delta is not None and not time_delta.is_ordered:
-            tgb_time_delta = TGB_TIME_DELTAS[name]
+        raw_times = torch.from_numpy(data['timestamps'])
+        split_bounds = {}
+        for split_name, mask in {
+            'train': dataset.train_mask,
+            'val': dataset.val_mask,
+            'test': dataset.test_mask,
+        }.items():
+            times = raw_times[mask]
+            split_bounds[split_name] = (int(times.min()), int(times.max()))
 
-            if time_delta.is_coarser_than(tgb_time_delta):
-                raise ValueError(
-                    f"Tried to use a time_delta ({time_delta}) which is coarser than the TGB native time granularity ({tgb_time_delta}). This is undefined behaviour, either pick a finer time granularity, use an ordered time_delta ('r'), or coarsen the graph (dg.discretize() after construction)"
-                )
-
-            time_factor = int(tgb_time_delta.convert(time_delta))
-            timestamps *= time_factor
-            if node_timestamps is not None:
-                node_timestamps *= time_factor
-
-        return cls.from_raw(
+        data = cls.from_raw(
+            time_delta=TGB_TIME_DELTAS[name],
             edge_timestamps=timestamps,
             edge_index=edge_index,
             edge_feats=edge_feats,
@@ -501,21 +586,5 @@ class DGData:
             static_node_feats=static_node_feats,
         )
 
-    @classmethod
-    def from_any(
-        cls,
-        data: str | pathlib.Path | 'pandas.DataFrame',  # type: ignore
-        time_delta: TimeDeltaDG | None = None,
-        **kwargs: Any,
-    ) -> DGData:
-        if isinstance(data, (str, pathlib.Path)):
-            data_str = str(data)
-            if data_str.startswith('tgbl-') or data_str.startswith('tgbn-'):
-                return cls.from_tgb(name=data_str, time_delta=time_delta, **kwargs)
-            if data_str.endswith('.csv'):
-                return cls.from_csv(data, **kwargs)
-            raise ValueError(
-                f'Unsupported file format or dataset identifier: {data_str}'
-            )
-        else:
-            return cls.from_pandas(data, **kwargs)
+        data._split_strategy = TGBSplit(split_bounds)
+        return data

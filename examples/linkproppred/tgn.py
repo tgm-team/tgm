@@ -11,7 +11,7 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
 from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,
@@ -52,6 +52,18 @@ parser.add_argument(
 )
 
 
+class MergeLayer(nn.Module):
+    def __init__(self, in_dim1: int, in_dim2: int, hidden_dim: int, output_dim: int):
+        super().__init__()
+        self.fc1 = nn.Linear(in_dim1 + in_dim2, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor):
+        h = self.fc1(torch.cat([x1, x2], dim=1))
+        h = h.relu()
+        return self.fc2(h)
+
+
 class TGN(torch.nn.Module):
     def __init__(
         self,
@@ -81,7 +93,9 @@ class TGN(torch.nn.Module):
             time_encoder=self.time_encoder,
         )
 
-    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, batch: DGBatch, static_node_feats: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         agg_msgs = self.msg_agg(self.nodes, self.memory.msgs)
         memory, _ = self.memory_updater.get_updated_memory(*agg_msgs)
         # TODO: I think this is only needed for multi-hop?
@@ -91,7 +105,7 @@ class TGN(torch.nn.Module):
         # batch.time[batch.dst] -= last_update[batch.dst].long()
         # batch.time[batch.neg] -= last_update[batch.neg].long()
 
-        pos_out, neg_out = self.gat(batch, memory=memory)
+        pos_out, neg_out = self.gat(batch, static_node_feats, memory=memory)
         self._update_memory(batch)
         return pos_out, neg_out
 
@@ -261,7 +275,6 @@ class GraphAttentionEmbedding(nn.Module):
                     node_dim=embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
-                    out_dim=embed_dim,
                     dropout=dropout,
                 )
                 for _ in range(num_layers)
@@ -269,7 +282,7 @@ class GraphAttentionEmbedding(nn.Module):
         )
 
     def forward(
-        self, batch: DGBatch, memory: Memory
+        self, batch: DGBatch, static_node_feats: torch.Tensor, memory: Memory
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
         z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
@@ -282,11 +295,11 @@ class GraphAttentionEmbedding(nn.Module):
                 continue
 
             # TODO: Check and read static node features
-            node_feat = STATIC_NODE_FEAT[seed_nodes]
+            node_feat = static_node_feats[seed_nodes]
             node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
-            nbr_feat = STATIC_NODE_FEAT[nbrs]
+            nbr_feat = static_node_feats[nbrs]
             if hop < self.num_layers - 1:
                 valid_nbrs = nbrs[nbr_mask]
                 nbr_feat[nbr_mask] = z[batch.global_to_local(valid_nbrs)]
@@ -317,24 +330,28 @@ class GraphAttentionEmbedding(nn.Module):
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        return self.fc2(h).sigmoid().view(-1)
 
 
-def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) -> float:
+def train(
+    loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
+    model: nn.Module,
+    opt: torch.optim.Optimizer,
+) -> float:
     # Reinitialize memory of the model at the start of each epoch
     model.memory.reset()
     model.train()
     total_loss = 0
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out = model(batch)
+        pos_out, neg_out = model(batch, static_node_feats)
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
@@ -346,10 +363,15 @@ def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) ->
 
 
 @torch.no_grad()
-def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> dict:
+def eval(
+    loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
+    model: nn.Module,
+    metrics: Metric,
+) -> dict:
     model.eval()
     for batch in tqdm(loader):
-        pos_out, neg_out = model(batch)
+        pos_out, neg_out = model(batch, static_node_feats)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = (
             torch.cat(
@@ -366,13 +388,19 @@ def eval(loader: DGDataLoader, model: nn.Module, metrics: Metric) -> dict:
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train', device=args.device)
-val_dg = DGraph(args.dataset, split='val', device=args.device)
-test_dg = DGraph(args.dataset, split='test', device=args.device)
+data = DGData.from_tgb(args.dataset)
+train_data, val_data, test_data = data.split()
 
-# TODO: Read from graph
-NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
-STATIC_NODE_FEAT = torch.randn((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
+
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.embed_dim), device=args.device
+    )
 
 
 def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
@@ -388,7 +416,9 @@ def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
     # Always produce negative edge prior to neighbor sampling for link prediction
-    neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
+    _, dst, _ = dg.edges
+    min_dst, max_dst = int(dst.min()), int(dst.max())
+    neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
     return [neg_hook, nbr_hook]
 
 
@@ -397,12 +427,12 @@ test_loader = DGDataLoader(
 )
 
 # Get global number of nodes for TGN Memory
-num_nodes = DGraph(args.dataset).num_nodes
+num_nodes = DGraph(data).num_nodes
 
 model = TGN(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
-    embed_dim=train_dg.static_node_feats_dim or args.embed_dim,
+    embed_dim=static_node_feats.shape[1],
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
@@ -424,11 +454,11 @@ for epoch in range(1, args.epochs + 1):
         val_dg, hook=_init_hooks(val_dg, args.sampling), batch_size=args.bsize
     )
     start_time = time.perf_counter()
-    loss = train(train_loader, model, opt)
+    loss = train(train_loader, static_node_feats, model, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results = eval(val_loader, model, val_metrics)
+    val_results = eval(val_loader, static_node_feats, model, val_metrics)
     val_metrics.reset()
 
     print(
@@ -440,5 +470,5 @@ for epoch in range(1, args.epochs + 1):
     model.memory.clear_msgs(list(range(num_nodes)))
 
 
-test_results = eval(test_loader, model, test_metrics)
+test_results = eval(test_loader, static_node_feats, model, test_metrics)
 print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

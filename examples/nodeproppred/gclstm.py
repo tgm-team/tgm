@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
 from tgm.util.seed import seed_everything
@@ -29,6 +29,9 @@ parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument(
+    '--node-dim', type=int, default=100, help='node feat dimension if not provided'
+)
 parser.add_argument(
     '--time-gran',
     type=str,
@@ -99,24 +102,20 @@ class NodePredictor(torch.nn.Module):
 
 def train(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     model: nn.Module,
     opt: torch.optim.Optimizer,
-    node_feat: torch.Tensor,
 ) -> Tuple[float, torch.Tensor, torch.Tensor]:
     model.train()
     total_loss = 0
     h_0, c_0 = None, None
     criterion = torch.nn.CrossEntropyLoss()
     for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
-
         opt.zero_grad()
         label = batch.dynamic_node_feats
         if label is None:
             continue
-        pred, h_0, c_0 = model(batch, node_feat, h_0, c_0)
+        pred, h_0, c_0 = model(batch, static_node_feats, h_0, c_0)
         loss = criterion(pred, label)
         loss.backward()
         opt.step()
@@ -128,22 +127,19 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
+    h_0: torch.Tensor,
+    c_0: torch.Tensor,
     model: nn.Module,
-    node_feat: torch.Tensor,
-    h_0: torch.Tensor | None = None,
-    c_0: torch.Tensor | None = None,
 ) -> Tuple[dict, torch.Tensor, torch.Tensor]:
     model.eval()
     eval_metric = 'ndcg'
     total_score = 0
     for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
         label = batch.dynamic_node_feats
         if label is None:
             continue
-        pred, h_0, c_0 = model(batch, node_feat, h_0, c_0)
+        pred, h_0, c_0 = model(batch, static_node_feats, h_0, c_0)
         np_pred = pred.cpu().detach().numpy()
         np_true = label.cpu().detach().numpy()
         input_dict = {
@@ -162,53 +158,48 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-# TODO: Fix discretize api
-train_dg = DGraph(args.dataset, time_delta='s', split='train', device=args.device)
-train_dg = train_dg.discretize(args.time_gran)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 
-val_dg = DGraph(args.dataset, time_delta='s', split='val', device=args.device)
-val_dg = val_dg.discretize(args.time_gran)
+train_data = train_data.discretize(args.time_gran)
+val_data = val_data.discretize(args.time_gran)
+test_data = test_data.discretize(args.time_gran)
 
-test_dg = DGraph(args.dataset, time_delta='s', split='test', device=args.device)
-test_dg = test_dg.discretize(args.time_gran)
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
 
-num_nodes = DGraph(args.dataset).num_nodes
+num_nodes = DGraph(train_data).num_nodes
 label_dim = train_dg.dynamic_node_feats_dim
 evaluator = Evaluator(name=args.dataset)
 
-train_loader = DGDataLoader(
-    train_dg,
-    batch_unit=args.batch_time_gran,
-)
-val_loader = DGDataLoader(
-    val_dg,
-    batch_unit=args.batch_time_gran,
-)
-test_loader = DGDataLoader(
-    test_dg,
-    batch_unit=args.batch_time_gran,
-)
+train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran)
+val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran)
+test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran)
 
-# TODO: add static node features to DGraph
-args.node_dim = args.embed_dim
-static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.node_dim), device=args.device
+    )
+
 model = GCLSTM_Model(
-    node_dim=args.node_dim, embed_dim=args.embed_dim, num_classes=label_dim
+    node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim, num_classes=label_dim
 ).to(args.device)
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
     start_time = time.perf_counter()
-    loss, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
+    loss, h_0, c_0 = train(train_loader, static_node_feats, model, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results, h_0, c_0 = eval(val_loader, model, static_node_feats, h_0, c_0)
+    val_results, h_0, c_0 = eval(val_loader, static_node_feats, h_0, c_0, model)
 
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
-test_results, h_0, c_0 = eval(test_loader, model, static_node_feats, h_0, c_0)
+test_results, h_0, c_0 = eval(test_loader, static_node_feats, h_0, c_0, model)
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

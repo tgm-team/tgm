@@ -19,6 +19,10 @@ def test_hook_dependancies():
     assert DeviceTransferHook.produces == set()
 
 
+def test_hook_reset_state():
+    assert DeviceTransferHook.has_state == False
+
+
 def test_device_transfer_hook_cpu_cpu(dg):
     hook = DeviceTransferHook('cpu')
     batch = dg.materialize()
