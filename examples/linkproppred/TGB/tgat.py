@@ -83,7 +83,6 @@ class TGAT(nn.Module):
         self.embed_dim = embed_dim
         self.num_nbrs = num_nbrs
         self.time_encoder = Time2Vec(time_dim=time_dim)
-        self.embed_dim = embed_dim
         self.attn, self.merge_layers = nn.ModuleList(), nn.ModuleList()
         for i in range(num_layers):
             self.attn.append(
@@ -164,8 +163,8 @@ class TGAT(nn.Module):
             )
             return self.merge_layers[hop - 1](out, static_node_feat[node_ids])
 
-        z_src = get_embeddings(batch.src, batch.time, self.num_layers, is_src=True)
-        z_dst = get_embeddings(batch.dst, batch.time, self.num_layers, is_src=False)
+        z_src = get_embeddings(batch.src_ids, batch.time, self.num_layers, is_src=True)
+        z_dst = get_embeddings(batch.dst_ids, batch.time, self.num_layers, is_src=False)
         return z_src, z_dst
 
 
