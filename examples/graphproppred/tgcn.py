@@ -218,10 +218,6 @@ def train(
     criterion = torch.nn.BCELoss()
     all_preds = []
     for idx, snapshot in enumerate(tqdm(loader)):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(snapshot.src):
-            continue
-
         opt.zero_grad()
         pred, h_0 = model(snapshot, node_feat, h_0)
         loss = criterion(pred.float(), labels[idx].unsqueeze(0).float())
@@ -269,12 +265,16 @@ if __name__ == '__main__':
     val_dg = DGraph(val_data, device=args.device)
     test_dg = DGraph(test_data, device=args.device)
 
-    full_loader = DGDataLoader(full_dg, batch_unit=args.batch_time_gran, on_empty=None)
-    train_loader = DGDataLoader(
-        train_dg, batch_unit=args.batch_time_gran, on_empty=None
+    full_loader = DGDataLoader(
+        full_dg, batch_unit=args.batch_time_gran, on_empty='raise'
     )
-    val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty=None)
-    test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty=None)
+    train_loader = DGDataLoader(
+        train_dg, batch_unit=args.batch_time_gran, on_empty='raise'
+    )
+    val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+    test_loader = DGDataLoader(
+        test_dg, batch_unit=args.batch_time_gran, on_empty='raise'
+    )
 
     train_snapshots = len(train_loader)
     val_snapshots = len(val_loader)
@@ -307,7 +307,7 @@ if __name__ == '__main__':
         start_time = time.perf_counter()
         loss, h_0, train_results = train(
             train_loader, train_labels, static_node_feats, model, opt, train_metrics
-        )  # @TODO: Need to change to train_loader
+        )
         end_time = time.perf_counter()
         latency = end_time - start_time
 

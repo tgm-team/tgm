@@ -138,7 +138,6 @@ def eval(
     y_pred = torch.Tensor(all_preds).float()
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
 
-    # TODO: For debug purpose only. will be removed before merge to main
     assert torch.all(y_pred[1:] == y_true[: y_true.shape[0] - 1])
     metrics(y_pred, y_true, indexes=indexes)
     return metrics.compute()
@@ -169,17 +168,21 @@ if __name__ == '__main__':
         )
     )
 
-    full_dg = DGraph(full_data, device='cpu')
-    train_dg = DGraph(train_data, device='cpu')
-    val_dg = DGraph(val_data, device='cpu')
-    test_dg = DGraph(test_data, device='cpu')
+    full_dg = DGraph(full_data)
+    train_dg = DGraph(train_data)
+    val_dg = DGraph(val_data)
+    test_dg = DGraph(test_data)
 
-    full_loader = DGDataLoader(full_dg, batch_unit=args.batch_time_gran, on_empty=None)
-    train_loader = DGDataLoader(
-        train_dg, batch_unit=args.batch_time_gran, on_empty=None
+    full_loader = DGDataLoader(
+        full_dg, batch_unit=args.batch_time_gran, on_empty='raise'
     )
-    val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty=None)
-    test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty=None)
+    train_loader = DGDataLoader(
+        train_dg, batch_unit=args.batch_time_gran, on_empty='raise'
+    )
+    val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+    test_loader = DGDataLoader(
+        test_dg, batch_unit=args.batch_time_gran, on_empty='raise'
+    )
 
     train_snapshots = len(train_loader)
     val_snapshots = len(val_loader)
