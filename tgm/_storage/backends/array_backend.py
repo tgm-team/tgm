@@ -74,6 +74,7 @@ class DGStorageArrayBackend(DGStorageBase):
         seed_nodes: Tensor,
         num_nbrs: int,
         slice: DGSliceTracker,
+        empty=-1,
     ) -> Tuple[Tensor, ...]:
         # TODO: Take in a sample_func to enable more than uniform sampling
         device = seed_nodes.device
@@ -102,9 +103,11 @@ class DGStorageArrayBackend(DGStorageBase):
                 nbrs[d].append((i, s))
 
         B = len(seed_nodes)
-        nbr_nids = torch.full((B, num_nbrs), -1, dtype=torch.long, device=device)
-        nbr_times = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
-        nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
+        nbr_nids = torch.full((B, num_nbrs), empty, dtype=torch.long, device=device)
+        nbr_times = torch.full((B, num_nbrs), empty, dtype=torch.long, device=device)
+        nbr_feats = torch.full((B, num_nbrs, self.get_edge_feats_dim()), -1, device=device)  # type: ignore
+        # nbr_times = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
+        # nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
         nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
 
         for i, node in enumerate(unique_nodes.tolist()):
