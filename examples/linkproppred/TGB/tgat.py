@@ -177,35 +177,32 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    idx, losses, rocs, aps = 0, [], [], []
+    idx, rocs, aps = 0, [], []
     for batch in tqdm(loader):
         opt.zero_grad()
         batch.src_ids, batch.dst_ids, batch.is_negative = batch.src, batch.dst, False
         z_src, z_dst = encoder(batch, static_node_feats)
 
         batch.dst_ids, batch.is_negative = batch.neg, True
-        _, z_neg_dst = encoder(batch, static_node_feats)
+        _, z_neg = encoder(batch, static_node_feats)
 
-        pos_prob = decoder(z_src, z_dst)
-        neg_prob = decoder(z_src, z_neg_dst)
+        pos_out = decoder(z_src, z_dst)
+        neg_out = decoder(z_src, z_neg)
 
         loss_func = nn.BCELoss()
-        predicts = torch.cat([pos_prob, neg_prob], dim=0)
-        labels = torch.cat(
-            [torch.ones_like(pos_prob), torch.zeros_like(neg_prob)], dim=0
-        )
+        predicts = torch.cat([pos_out, neg_out], dim=0)
+        labels = torch.cat([torch.ones_like(pos_out), torch.zeros_like(neg_out)], dim=0)
         loss = loss_func(input=predicts, target=labels)
         loss.backward()
         opt.step()
         total_loss += float(loss)
-        losses.append(loss.item())
         labels, predicts = labels.cpu().numpy(), predicts.cpu().detach().numpy()
         aps.append(average_precision_score(y_true=labels, y_score=predicts))
         rocs.append(roc_auc_score(y_true=labels, y_score=predicts))
         if idx > 5:
             break
         idx += 1
-    print(f'Epoch: {epoch + 1}, train loss: {np.mean(losses):.4f}')
+    print(f'Epoch: {epoch + 1}, train loss: {(total_loss / (idx + 1)):.4f}')
     print(f'ap, {np.mean(aps):.4f}\nroc, {np.mean([rocs]):.4f}')
     return total_loss
 
@@ -236,12 +233,12 @@ def eval(
             _, z_neg_dst = encoder(batch, static_node_feats)
             z_neg_src = z_src.repeat(z_neg_dst.shape[0], 1)
 
-            pos_prob = decoder(z_src, z_dst)
-            neg_prob = decoder(z_neg_src, z_neg_dst)
+            pos_out = decoder(z_src, z_dst)
+            neg_out = decoder(z_neg_src, z_neg_dst)
 
             input_dict = {
-                'y_pred_pos': pos_prob[0].detach().cpu().numpy(),
-                'y_pred_neg': neg_prob.detach().cpu().numpy(),
+                'y_pred_pos': pos_out[0].detach().cpu().numpy(),
+                'y_pred_neg': neg_out.detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
@@ -335,8 +332,8 @@ for epoch in range(1, args.epochs + 1):
     _, dst, _ = test_dg.edges
     neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
     foo_loader = DGDataLoader(train_dg, hook=[neg_hook, shared_nbr], batch_size=2000)
-    for _ in tqdm(foo_loader):
-        pass
+    # for _ in tqdm(foo_loader):
+    #    pass
     neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
     val_loader = DGDataLoader(val_dg, hook=[neg_hook, shared_nbr], batch_size=1)
     start_time = time.perf_counter()
