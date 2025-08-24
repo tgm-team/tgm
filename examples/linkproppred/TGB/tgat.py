@@ -75,13 +75,11 @@ class TGAT(nn.Module):
         num_layers: int,
         n_heads: int = 2,
         dropout: float = 0.1,
-        num_nbrs=None,
     ) -> None:
         """In this implementation, the node embedding dimension must be the same as hidden embedding dimension."""
         super().__init__()
         self.num_layers = num_layers
         self.embed_dim = embed_dim
-        self.num_nbrs = num_nbrs
         self.time_encoder = Time2Vec(time_dim=time_dim)
         self.attn, self.merge_layers = nn.ModuleList(), nn.ModuleList()
         for i in range(num_layers):
@@ -118,19 +116,18 @@ class TGAT(nn.Module):
             node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
 
             B = len(node_ids)
-            num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
+            num_nbrs = batch.nbr_nids[-hop].shape[-1]
             ss = [batch.src.numel(), batch.neg.numel()]
             i = [k for k in range(5) for s in ss if B == s * num_nbrs**k][0]
-            nbr_nids = batch.nbr_nids[i].flatten()
-            nbr_times = batch.nbr_times[i].flatten()
-            nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
-
             bsize = B * num_nbrs
             if batch.dst.numel() != batch.neg.numel():
                 bsize = num_nbrs ** (i + 1)
             _split = lambda x: (x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :])
             idx = 0 if is_src else 2 if batch.is_negative else 1
 
+            nbr_nids = batch.nbr_nids[i].flatten()
+            nbr_times = batch.nbr_times[i].flatten()
+            nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
             nbr_node_ids = _split(nbr_nids)[idx].reshape(B, -1)
             nbr_time = _split(nbr_times)[idx].reshape(B, -1)
             edge_feat = _split(nbr_feat)[idx].reshape(B, -1, nbr_feat.shape[-1])
@@ -312,7 +309,6 @@ encoder = TGAT(
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
-    num_nbrs=args.n_nbrs,
 ).to(args.device)
 decoder = LinkPredictor(dim=args.embed_dim).to(args.device)
 opt = torch.optim.Adam(
