@@ -182,6 +182,7 @@ class GraphPredictor(torch.nn.Module):
         return h.sigmoid()
 
 
+@torch.no_grad()
 def eval(
     loader: DGDataLoader,
     y_true: torch.Tensor,
@@ -276,21 +277,17 @@ if __name__ == '__main__':
         test_dg, batch_unit=args.batch_time_gran, on_empty='raise'
     )
 
-    train_snapshots = len(train_loader)
-    val_snapshots = len(val_loader)
-    test_snapshots = len(test_loader) - 1
+    num_train_snapshots = len(train_loader)
+    num_val_snapshots = len(val_loader)
+    num_test_snapshots = len(test_loader) - 1
 
     labels = label_generator_next_binary_classification(
         loader=full_loader, snapshot_measurement=edge_count
     )  # shape: number of snapshots - 1
 
-    train_labels = labels[:train_snapshots]
-    val_labels = labels[train_snapshots : train_snapshots + val_snapshots]
-    test_labels = labels[
-        train_snapshots + val_snapshots : train_snapshots
-        + val_snapshots
-        + test_snapshots
-    ]
+    train_labels = labels[:num_train_snapshots]
+    val_labels = labels[num_train_snapshots : num_train_snapshots + num_val_snapshots]
+    test_labels = labels[-num_test_snapshots:]
 
     if train_dg.static_node_feats is not None:
         static_node_feats = train_dg.static_node_feats
@@ -299,7 +296,7 @@ if __name__ == '__main__':
             (test_dg.num_nodes, args.node_dim), device=args.device
         )
     model = TGCN_Model(
-        node_dim=args.node_dim, embed_dim=args.embed_dim, num_classes=1
+        node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim, num_classes=1
     ).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 

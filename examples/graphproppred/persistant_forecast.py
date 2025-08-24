@@ -184,21 +184,17 @@ if __name__ == '__main__':
         test_dg, batch_unit=args.batch_time_gran, on_empty='raise'
     )
 
-    train_snapshots = len(train_loader)
-    val_snapshots = len(val_loader)
-    test_snapshots = len(test_loader) - 1
+    num_train_snapshots = len(train_loader)
+    num_val_snapshots = len(val_loader)
+    num_test_snapshots = len(test_loader) - 1
 
     labels = label_generator_next_binary_classification(
         loader=full_loader, snapshot_measurement=edge_count
     )  # shape: number of snapshots - 1
 
-    train_labels = labels[:train_snapshots]
-    val_labels = labels[train_snapshots : train_snapshots + val_snapshots]
-    test_labels = labels[
-        train_snapshots + val_snapshots : train_snapshots
-        + val_snapshots
-        + test_snapshots
-    ]
+    train_labels = labels[:num_train_snapshots]
+    val_labels = labels[num_train_snapshots : num_train_snapshots + num_val_snapshots]
+    test_labels = labels[-num_test_snapshots:]
 
     baseline = PersistantForecast(edge_count)
     test_results = eval(test_loader, test_labels, baseline, val_metrics, True)
