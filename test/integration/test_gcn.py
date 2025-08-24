@@ -14,9 +14,6 @@ import pytest
 )
 def test_gcn_linkprop_pred(slurm_job_runner, dataset):
     cmd = f"""
-echo "Downloading dataset: {dataset}"
-echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('{dataset}')"
-
 python "$ROOT_DIR/examples/linkproppred/gcn.py" \
     --dataset {dataset} \
     --device cuda \
@@ -39,9 +36,6 @@ python "$ROOT_DIR/examples/linkproppred/gcn.py" \
 )
 def test_gcn_tgb_linkprop_pred(slurm_job_runner, dataset):
     cmd = f"""
-echo "Downloading dataset: {dataset}"
-echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('{dataset}')"
-
 python "$ROOT_DIR/examples/linkproppred/TGB/gcn.py" \
     --dataset {dataset} \
     --time-gran s \
@@ -66,9 +60,6 @@ python "$ROOT_DIR/examples/linkproppred/TGB/gcn.py" \
 )
 def test_gcn_nodeprop_pred(slurm_job_runner, dataset):
     cmd = f"""
-echo "Downloading dataset: {dataset}"
-echo "y" | python -c "from tgb.nodeproppred.dataset import NodePropPredDataset; NodePropPredDataset('{dataset}')"
-
 python "$ROOT_DIR/examples/nodeproppred/gcn.py" \
     --dataset {dataset} \
     --device cuda \

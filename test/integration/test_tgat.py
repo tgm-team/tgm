@@ -14,9 +14,6 @@ import pytest
 )
 def test_tgat_recency_sampler_linkprop_pred(slurm_job_runner, dataset):
     cmd = f"""
-echo "Downloading dataset: {dataset}"
-echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('{dataset}')"
-
 python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     --dataset {dataset} \
     --device cuda \
@@ -41,9 +38,6 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
 )
 def test_tgat_tgb_recency_sampler_linkprop_pred(slurm_job_runner, dataset):
     cmd = f"""
-echo "Downloading dataset: {dataset}"
-echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('{dataset}')"
-
 python "$ROOT_DIR/examples/linkproppred/TGB/tgat.py" \
     --dataset {dataset} \
     --device cuda \
