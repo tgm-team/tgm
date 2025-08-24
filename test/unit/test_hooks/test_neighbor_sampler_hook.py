@@ -128,7 +128,7 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     also make sure recency and uniform samplers return the same output.
     """
     dg = DGraph(basic_sample_graph)
-    n_nbrs = [1]  # 1 neighbor for each node
+    n_nbrs = [3]  # 3 neighbor for each node
     uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs)
     loader = DGDataLoader(dg, hook=[uniform_hook], batch_size=1)
     assert loader._batch_size == 1
@@ -139,60 +139,108 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nids.shape == (1, 2)
     assert nids[0][0] == 0
     assert nids[0][1] == 1
-    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids.shape == (1, 2, 3)
     assert nbr_nids[0][0][0] == EMPTY
+    assert nbr_nids[0][0][1] == EMPTY
+    assert nbr_nids[0][0][2] == EMPTY
     assert nbr_nids[0][1][0] == EMPTY
-    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_nids[0][1][1] == EMPTY
+    assert nbr_nids[0][1][2] == EMPTY
+    assert nbr_times.shape == (1, 2, 3)
     assert nbr_times[0][0][0] == EMPTY
+    assert nbr_times[0][0][1] == EMPTY
+    assert nbr_times[0][0][2] == EMPTY
     assert nbr_times[0][1][0] == EMPTY
-    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
-    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == EMPTY
-    assert nbr_mask.shape == (1, 2, 1)
+    assert nbr_times[0][1][1] == EMPTY
+    assert nbr_times[0][1][2] == EMPTY
+    assert nbr_feats.shape == (1, 2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0][0] == EMPTY
+    assert nbr_feats[0][0][1][0] == EMPTY
+    assert nbr_feats[0][0][2][0] == EMPTY
+    assert nbr_feats[0][1][0][0] == EMPTY
+    assert nbr_feats[0][1][1][0] == EMPTY
+    assert nbr_feats[0][1][2][0] == EMPTY
+    assert nbr_mask.shape == (1, 2, 3)
 
     batch_2 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
     assert nids.shape == (1, 2)
     assert nids[0][0] == 0
     assert nids[0][1] == 2
-    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids.shape == (1, 2, 3)
     assert nbr_nids[0][0][0] == 1
+    assert nbr_nids[0][0][1] == EMPTY
+    assert nbr_nids[0][0][2] == EMPTY
     assert nbr_nids[0][1][0] == EMPTY
-    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_nids[0][1][1] == EMPTY
+    assert nbr_nids[0][1][2] == EMPTY
+    assert nbr_times.shape == (1, 2, 3)
     assert nbr_times[0][0][0] == 1
+    assert nbr_times[0][0][1] == EMPTY
+    assert nbr_times[0][0][2] == EMPTY
     assert nbr_times[0][1][0] == EMPTY
-    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_times[0][1][1] == EMPTY
+    assert nbr_times[0][1][2] == EMPTY
+    assert nbr_feats.shape == (1, 2, 3, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 1.0
+    assert nbr_feats[0][0][1][0] == EMPTY
+    assert nbr_feats[0][0][2][0] == EMPTY
     assert nbr_feats[0][1][0][0] == EMPTY
-    assert nbr_mask.shape == (1, 2, 1)
+    assert nbr_feats[0][1][1][0] == EMPTY
+    assert nbr_feats[0][1][2][0] == EMPTY
+    assert nbr_mask.shape == (1, 2, 3)
 
     batch_3 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_3)
     assert nids.shape == (1, 2)
     assert nids[0][0] == 2
     assert nids[0][1] == 3
-    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids.shape == (1, 2, 3)
     assert nbr_nids[0][0][0] == 0
+    assert nbr_nids[0][0][1] == EMPTY
+    assert nbr_nids[0][0][2] == EMPTY
     assert nbr_nids[0][1][0] == EMPTY
-    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_nids[0][1][1] == EMPTY
+    assert nbr_nids[0][1][2] == EMPTY
+    assert nbr_times.shape == (1, 2, 3)
     assert nbr_times[0][0][0] == 2
+    assert nbr_times[0][0][1] == EMPTY
+    assert nbr_times[0][0][2] == EMPTY
     assert nbr_times[0][1][0] == EMPTY
-    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_times[0][1][1] == EMPTY
+    assert nbr_times[0][1][2] == EMPTY
+    assert nbr_feats.shape == (1, 2, 3, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 2.0
+    assert nbr_feats[0][0][1][0] == EMPTY
+    assert nbr_feats[0][0][2][0] == EMPTY
     assert nbr_feats[0][1][0][0] == EMPTY
-    assert nbr_mask.shape == (1, 2, 1)
+    assert nbr_feats[0][1][1][0] == EMPTY
+    assert nbr_feats[0][1][2][0] == EMPTY
+    assert nbr_mask.shape == (1, 2, 3)
 
     batch_4 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_4)
     assert nids.shape == (1, 2)
     assert nids[0][0] == 2
     assert nids[0][1] == 0
-    assert nbr_nids.shape == (1, 2, 1)
-    assert nbr_nids[0][0][0] == 3
-    assert nbr_nids[0][1][0] == 2
-    assert nbr_times.shape == (1, 2, 1)
-    assert nbr_times[0][0][0] == 3
-    assert nbr_times[0][1][0] == 2
-    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
-    assert nbr_feats[0][0][0][0] == 5.0
-    assert nbr_feats[0][1][0][0] == 2.0
-    assert nbr_mask.shape == (1, 2, 1)
+    assert nbr_nids.shape == (1, 2, 3)
+    assert nbr_nids[0][0][0] == 0
+    assert nbr_nids[0][0][1] == 3
+    assert nbr_nids[0][0][2] == EMPTY
+    assert nbr_nids[0][1][0] == 1
+    assert nbr_nids[0][1][1] == 2
+    assert nbr_nids[0][1][2] == EMPTY
+    assert nbr_times.shape == (1, 2, 3)
+    assert nbr_times[0][0][0] == 2
+    assert nbr_times[0][0][1] == 3
+    assert nbr_times[0][0][2] == EMPTY
+    assert nbr_times[0][1][0] == 1
+    assert nbr_times[0][1][1] == 2
+    assert nbr_times[0][1][2] == EMPTY
+    assert nbr_feats.shape == (1, 2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0][0] == 2.0
+    assert nbr_feats[0][0][1][0] == 5.0
+    assert nbr_feats[0][0][2][0] == EMPTY
+    assert nbr_feats[0][1][0][0] == 1.0
+    assert nbr_feats[0][1][1][0] == 2.0
+    assert nbr_feats[0][1][2][0] == EMPTY

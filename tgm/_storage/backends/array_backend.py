@@ -74,6 +74,7 @@ class DGStorageArrayBackend(DGStorageBase):
         seed_nodes: Tensor,
         num_nbrs: int,
         slice: DGSliceTracker,
+        sampling_strategy: str = 'uniform',
         empty=-1,
     ) -> Tuple[Tensor, ...]:
         # TODO: Take in a sample_func to enable more than uniform sampling
@@ -105,11 +106,8 @@ class DGStorageArrayBackend(DGStorageBase):
         B = len(seed_nodes)
         nbr_nids = torch.full((B, num_nbrs), empty, dtype=torch.long, device=device)
         nbr_times = torch.full((B, num_nbrs), empty, dtype=torch.long, device=device)
-        nbr_feats = torch.full((B, num_nbrs, self.get_edge_feats_dim()), -1, device=device)  # type: ignore
-        # nbr_times = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
-        # nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
+        nbr_feats = torch.full((B, num_nbrs, self.get_edge_feats_dim()), float(empty), device=device)  # type: ignore
         nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
-
         for i, node in enumerate(unique_nodes.tolist()):
             node_nbrs = nbrs[node]
             if not len(node_nbrs):
@@ -117,7 +115,10 @@ class DGStorageArrayBackend(DGStorageBase):
 
             # Subsample if we have more neighbours than was queried
             if num_nbrs != -1 and len(node_nbrs) > num_nbrs:
-                node_nbrs = random.sample(node_nbrs, k=num_nbrs)
+                if sampling_strategy == 'uniform':
+                    node_nbrs = random.sample(node_nbrs, k=num_nbrs)
+                elif sampling_strategy == 'recent':
+                    node_nbrs = sorted(node_nbrs, key=lambda x: x[0], reverse=True)[:num_nbrs]
 
             nbr_ids, times, feats = [], [], []
             for eid, nbr_id in node_nbrs:
