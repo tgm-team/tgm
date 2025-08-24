@@ -118,26 +118,17 @@ class TGAT(nn.Module):
             node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
 
             num_nbrs = self.num_nbrs[-hop]  # recursing from hop = self.num_layers
-            layer_sizes = [batch.src.numel(), batch.neg.numel()]
-            layer_sizes = layer_sizes + [x * num_nbrs for x in layer_sizes]
-            if len(node_ids) == layer_sizes[0] or len(node_ids) == layer_sizes[1]:
-                i = 0
-            elif len(node_ids) == layer_sizes[2] or len(node_ids) == layer_sizes[3]:
-                i = 1
-            else:
-                raise ValueError(f'Unexpected node_ids length {len(node_ids)}')
+            ss = [batch.src.numel(), batch.neg.numel()]
+            i = [k for k in range(5) for s in ss if len(node_ids) == s * num_nbrs**k][0]
             nbr_nids = batch.nbr_nids[i].flatten()
             nbr_times = batch.nbr_times[i].flatten()
             nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
 
+            bsize = len(node_ids) * num_nbrs
             if batch.is_negative and batch.dst.numel() != batch.neg.numel():
-                bsize = num_nbrs if i == 0 else num_nbrs**2
-            else:
-                bsize = len(node_ids) * num_nbrs
+                bsize = num_nbrs ** (i + 1)
 
-            def _split(x):
-                return x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :]
-
+            _split = lambda x: (x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :])
             idx = 0 if is_src else 2 if batch.is_negative else 1
             nbr_node_ids = _split(nbr_nids)[idx].reshape(node_ids.shape[0], -1)
             nbr_time = _split(nbr_times)[idx].reshape(node_ids.shape[0], -1)
