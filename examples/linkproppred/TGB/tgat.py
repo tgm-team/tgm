@@ -6,7 +6,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import average_precision_score, roc_auc_score
 from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
@@ -154,7 +153,6 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    idx, rocs, aps = 0, [], []
     for batch in tqdm(loader):
         opt.zero_grad()
         z = encoder(batch, static_node_feats)
@@ -163,21 +161,11 @@ def train(
         pos_out = decoder(z_src, z_dst)
         neg_out = decoder(z_src, z_neg)
 
-        loss_func = nn.BCELoss()
-        predicts = torch.cat([pos_out, neg_out], dim=0)
-        labels = torch.cat([torch.ones_like(pos_out), torch.zeros_like(neg_out)], dim=0)
-        loss = loss_func(input=predicts, target=labels)
+        loss = F.binary_cross_entropy(pos_out, torch.ones_like(pos_out))
+        loss += F.binary_cross_entropy(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
-        labels, predicts = labels.cpu().numpy(), predicts.cpu().detach().numpy()
-        aps.append(average_precision_score(y_true=labels, y_score=predicts))
-        rocs.append(roc_auc_score(y_true=labels, y_score=predicts))
-        if idx > 5:
-            break
-        idx += 1
-    print(f'Epoch: {epoch + 1}, train loss: {(total_loss / (idx + 1)):.4f}')
-    print(f'ap, {np.mean(aps):.4f}\nroc, {np.mean([rocs]):.4f}')
     return total_loss
 
 
@@ -213,10 +201,7 @@ def eval(
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
-            print(f'batch ID: {batch_id}, MRR, {perf_list[-1]}')
-        if batch_id > 20:
-            break
-        batch_id += 1
+
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
     return metric_dict
@@ -314,7 +299,6 @@ for epoch in range(1, args.epochs + 1):
     val_results = eval(
         val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
     )
-    exit()
 
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
