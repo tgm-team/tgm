@@ -105,57 +105,31 @@ class TGAT(nn.Module):
         self, batch: DGBatch, static_node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
-        B = len(batch.nids[0])
-        NBR = batch.nbr_nids[0].shape[-1]  # assume uniform for simplicity
+        z = {j: {} for j in range(self.num_layers + 1)}  # z[j][i] = z of nbr^i at hop j
 
-        # HOP 0: Base features (static)
-        z0 = {}
-        z0['n'] = static_node_feat[batch.nids[0]]  # (B, N)
-        z0['nbr'] = static_node_feat[batch.nbr_nids[0].flatten()]  # (B * NBR, N)
-        z0['nbr2'] = static_node_feat[batch.nbr_nids[1].flatten()]  # (B * NBR^2, N)
+        # Layer 0 (leaf nodes): z[0][i] = static_node_feat
+        z[0][0] = static_node_feat[batch.nids[0]]
+        for i in range(1, self.num_layers + 1):
+            z[0][i] = static_node_feat[batch.nbr_nids[i - 1].flatten()]
 
-        # HOP 1: Combine hop0 features
-        z1 = {}
+        # Layers 1..H: aggregate z[j][i] = agg(z[j - 1][i], z[j - 1][i + 1])
+        for j in range(1, self.num_layers + 1):
+            for i in range(self.num_layers - j + 1):
+                num_nodes = z[j - 1][i].size(0)
+                num_nbr = batch.nbr_nids[j - 1].shape[-1]
+                out = self.attn[j - 1](
+                    node_feat=z[j - 1][i],
+                    time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
+                    nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
+                    edge_feat=batch.nbr_feats[i],
+                    nbr_mask=batch.nbr_nids[i],
+                    nbr_time_feat=self.time_encoder(
+                        batch.times[i][:, None] - batch.nbr_times[i]
+                    ),
+                )
+                z[j][i] = self.merge_layers[j - 1](out, z[0][i])
 
-        # branch 1: seed nodes (B, N)
-        out = self.attn[0](
-            node_feat=z0['n'],
-            time_feat=self.time_encoder(torch.zeros(B, device=device)),
-            nbr_node_feat=z0['nbr'].reshape(B, NBR, -1),
-            edge_feat=batch.nbr_feats[0],
-            nbr_mask=batch.nbr_nids[0],
-            nbr_time_feat=self.time_encoder(
-                batch.times[0][:, None] - batch.nbr_times[0]
-            ),
-        )
-        z1['n'] = self.merge_layers[0](out, z0['n'])
-
-        # branch 2: 1-hop neighbors (B * NBR, N)
-        out = self.attn[0](
-            node_feat=z0['nbr'],
-            time_feat=self.time_encoder(torch.zeros(B * NBR, device=device)),
-            nbr_node_feat=z0['nbr2'].reshape(B * NBR, NBR, -1),
-            edge_feat=batch.nbr_feats[1],
-            nbr_mask=batch.nbr_nids[1],
-            nbr_time_feat=self.time_encoder(
-                batch.times[1][:, None] - batch.nbr_times[1]
-            ),
-        )
-        z1['nbr'] = self.merge_layers[0](out, z0['nbr'].reshape(B * NBR, -1))
-
-        # HOP 2: Combine hop1 features (B, E)
-        out = self.attn[1](
-            node_feat=z1['n'],
-            time_feat=self.time_encoder(torch.zeros(B, device=device)),
-            nbr_node_feat=z1['nbr'].reshape(B, NBR, -1),
-            edge_feat=batch.nbr_feats[0],
-            nbr_mask=batch.nbr_nids[0],
-            nbr_time_feat=self.time_encoder(
-                batch.times[0][:, None] - batch.nbr_times[0]
-            ),
-        )
-        z = self.merge_layers[1](out, z0['n'])
-        return z
+        return z[self.num_layers][0]
 
 
 class LinkPredictor(nn.Module):
