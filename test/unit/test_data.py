@@ -150,6 +150,25 @@ def test_init_dg_data_sort_required():
     assert data.time_delta == TimeDeltaDG('r')
 
 
+def test_init_dg_data_bad_args_invalid_node_id():
+    edge_index = torch.LongTensor([[-1, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(edge_timestamps, edge_index)
+
+    edge_index = torch.LongTensor([[1, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    node_ids = torch.LongTensor([-1])
+    node_timestamps = torch.LongTensor([1])
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_ids=node_ids,
+            node_timestamps=node_timestamps,
+        )
+
+
 def test_init_dg_data_bad_args_empty_graph():
     # Empty graph not supported
     with pytest.raises(ValueError):

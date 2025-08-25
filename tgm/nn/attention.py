@@ -50,7 +50,7 @@ class TemporalAttention(torch.nn.Module):
         edge_feat: torch.Tensor,  # (B, num_nbrs, edge_dim)
         nbr_node_feat: torch.Tensor,  # (B, num_nbrs, node_dim)
         nbr_time_feat: torch.Tensor,  # (B, num_nbrs, time_dim)
-        nbr_mask: torch.Tensor,  # (B, num_nbrs)
+        invalid_nbr_mask: torch.Tensor,  # (B, num_nbrs)
     ) -> torch.Tensor:  # (B, out_dim)
         node_feat = F.pad(node_feat, (0, self.pad_dim)) if self.pad_dim else node_feat
 
@@ -71,13 +71,12 @@ class TemporalAttention(torch.nn.Module):
         A *= self.head_dim**-0.5
         del Q, K
 
-        nbr_mask = nbr_mask == 0
-        nbr_mask = nbr_mask.reshape(nbr_mask.shape[0], 1, 1, -1)
-        nbr_mask = nbr_mask.repeat(1, self.n_heads, 1, 1)
+        invalid_nbr_mask = invalid_nbr_mask.reshape(invalid_nbr_mask.shape[0], 1, 1, -1)
+        invalid_nbr_mask = invalid_nbr_mask.repeat(1, self.n_heads, 1, 1)
 
-        # If a node has no neighbors (nbr_mask all zero), setting masks to -np.inf will cause softmax nans
+        # If a node has no neighbors (invalid_nbr_mask all True), setting masks to -np.inf will cause softmax nans
         # Choose a very large negative number (-1e10 following TGAT) instead
-        A = A.masked_fill(nbr_mask, -1e10)
+        A = A.masked_fill(invalid_nbr_mask, -1e10)
         A = torch.softmax(A, dim=-1)
         A = self.dropout(A)
 

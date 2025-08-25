@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm.constants import INVALID_NODE_ID
 from tgm.data import DGData
 from tgm.hooks import (
     NeighborSamplerHook,
@@ -22,7 +23,6 @@ def test_hook_dependancies():
         'nbr_nids',
         'nbr_times',
         'nbr_feats',
-        'nbr_mask',
         'times',
     }
 
@@ -451,9 +451,6 @@ def test_neighbor_sampler_hook_neg_edges():
     assert batch.nbr_nids[0].shape == (4, 2)
 
 
-EMPTY = -1  # use to indicate uninitialized vectors
-
-
 def _nbrs_2_np(batch: DGBatch) -> List[np.ndarray]:
     """Convert neighbors in batch to numpy arrays."""
     assert isinstance(batch, DGBatch)
@@ -461,14 +458,12 @@ def _nbrs_2_np(batch: DGBatch) -> List[np.ndarray]:
     assert hasattr(batch, 'nbr_nids')
     assert hasattr(batch, 'nbr_times')
     assert hasattr(batch, 'nbr_feats')
-    assert hasattr(batch, 'nbr_mask')
 
     nids = np.array(batch.nids)
     nbr_nids = np.array(batch.nbr_nids)
     nbr_times = np.array(batch.nbr_times)
     nbr_feats = np.array(batch.nbr_feats)
-    nbr_mask = np.array(batch.nbr_mask)
-    return [nids, nbr_nids, nbr_times, nbr_feats, nbr_mask]
+    return [nids, nbr_nids, nbr_times, nbr_feats]
 
 
 @pytest.fixture
@@ -522,54 +517,51 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
 
     batch_iter = iter(loader)
     batch_1 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_1)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
     assert nids.shape == (1, 2)
     assert nids[0][0] == 0
     assert nids[0][1] == 1
     assert nbr_nids.shape == (1, 2, 1)
-    assert nbr_nids[0][0][0] == EMPTY
-    assert nbr_nids[0][1][0] == EMPTY
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID
+    assert nbr_nids[0][1][0] == INVALID_NODE_ID
     assert nbr_times.shape == (1, 2, 1)
-    assert nbr_times[0][0][0] == EMPTY
-    assert nbr_times[0][1][0] == EMPTY
+    assert nbr_times[0][0][0] == INVALID_NODE_ID
+    assert nbr_times[0][1][0] == INVALID_NODE_ID
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
-    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == EMPTY
-    assert nbr_mask.shape == (1, 2, 1)
+    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == INVALID_NODE_ID
 
     batch_2 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
     assert nids.shape == (1, 2)
     assert nids[0][0] == 0
     assert nids[0][1] == 2
     assert nbr_nids.shape == (1, 2, 1)
     assert nbr_nids[0][0][0] == 1
-    assert nbr_nids[0][1][0] == EMPTY
+    assert nbr_nids[0][1][0] == INVALID_NODE_ID
     assert nbr_times.shape == (1, 2, 1)
     assert nbr_times[0][0][0] == 1
-    assert nbr_times[0][1][0] == EMPTY
+    assert nbr_times[0][1][0] == INVALID_NODE_ID
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 1.0
-    assert nbr_feats[0][1][0][0] == EMPTY
-    assert nbr_mask.shape == (1, 2, 1)
+    assert nbr_feats[0][1][0][0] == INVALID_NODE_ID
 
     batch_3 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_3)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
     assert nids.shape == (1, 2)
     assert nids[0][0] == 2
     assert nids[0][1] == 3
     assert nbr_nids.shape == (1, 2, 1)
     assert nbr_nids[0][0][0] == 0
-    assert nbr_nids[0][1][0] == EMPTY
+    assert nbr_nids[0][1][0] == INVALID_NODE_ID
     assert nbr_times.shape == (1, 2, 1)
     assert nbr_times[0][0][0] == 2
-    assert nbr_times[0][1][0] == EMPTY
+    assert nbr_times[0][1][0] == INVALID_NODE_ID
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 2.0
-    assert nbr_feats[0][1][0][0] == EMPTY
-    assert nbr_mask.shape == (1, 2, 1)
+    assert nbr_feats[0][1][0][0] == INVALID_NODE_ID
 
     batch_4 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_4)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
     assert nids.shape == (1, 2)
     assert nids[0][0] == 2
     assert nids[0][1] == 0
@@ -582,7 +574,6 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 5.0
     assert nbr_feats[0][1][0][0] == 2.0
-    assert nbr_mask.shape == (1, 2, 1)
 
 
 def _batch_eq_nbrs(batch_1: DGBatch, batch_2: DGBatch) -> bool:
@@ -591,7 +582,6 @@ def _batch_eq_nbrs(batch_1: DGBatch, batch_2: DGBatch) -> bool:
     torch.testing.assert_close(batch_1.nbr_nids, batch_2.nbr_nids)
     torch.testing.assert_close(batch_1.nbr_times, batch_2.nbr_times)
     torch.testing.assert_close(batch_1.nbr_feats, batch_2.nbr_feats)
-    torch.testing.assert_close(batch_1.nbr_mask, batch_2.nbr_mask)
     return True
 
 
@@ -671,11 +661,11 @@ def test_recency_exceed_buffer(recency_buffer_graph):
     nids, nbr_nids, nbr_times, nbr_feats, _ = _nbrs_2_np(batch_1)
     assert nids.shape == (1, 4)
     assert nbr_nids.shape == (1, 4, 2)
-    assert nbr_nids[0][0][0] == EMPTY
-    assert nbr_nids[0][0][1] == EMPTY
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID
+    assert nbr_nids[0][0][1] == INVALID_NODE_ID
     assert nbr_times.shape == (1, 4, 2)
-    assert nbr_times[0][0][0] == EMPTY
-    assert nbr_times[0][0][1] == EMPTY
+    assert nbr_times[0][0][0] == INVALID_NODE_ID
+    assert nbr_times[0][0][1] == INVALID_NODE_ID
     assert nbr_feats.shape == (1, 4, 2, 1)  # 1 feature per edge
 
     batch_2 = next(batch_iter)
@@ -737,81 +727,75 @@ def test_2_hop_graph(two_hop_basic_graph):
 
     batch_iter = iter(loader)
     batch_1 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_1)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
     assert nids.shape == (2, 2)  # 2 hop, each has 2 node
     assert nids[0][0] == 0
     assert nids[0][1] == 1
     assert nbr_nids.shape == (2, 2, 1)
-    assert nbr_nids[0][0][0] == EMPTY
-    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID
     assert nbr_times.shape == (2, 2, 1)
-    assert nbr_times[0][0][0] == EMPTY
-    assert nbr_times[1][0][0] == EMPTY
+    assert nbr_times[0][0][0] == INVALID_NODE_ID
+    assert nbr_times[1][0][0] == INVALID_NODE_ID
     assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
-    assert nbr_mask.shape == (2, 2, 1)
 
     batch_2 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
     assert nids.shape == (2, 2)
     assert nbr_nids.shape == (2, 2, 1)
     assert nbr_times.shape == (2, 2, 1)
     assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
-    assert nbr_mask.shape == (2, 2, 1)
     assert nbr_nids[0][0][0] == 0  # first hop, node 1 has neighbor 0
-    assert nbr_nids[1][0][0] == EMPTY  # no second hop neighbors
-    assert nbr_nids[0][1][0] == EMPTY
-    assert nbr_nids[1][1][0] == EMPTY
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID  # no second hop neighbors
+    assert nbr_nids[0][1][0] == INVALID_NODE_ID
+    assert nbr_nids[1][1][0] == INVALID_NODE_ID
 
     batch_3 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_3)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
     assert nids.shape == (2, 2)
     assert nbr_nids.shape == (2, 2, 1)
     assert nbr_times.shape == (2, 2, 1)
     assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
-    assert nbr_mask.shape == (2, 2, 1)
-    assert nbr_nids[0][0][0] == EMPTY  # first hop, node 3 has no neighbor yet
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID  # first hop, node 3 has no neighbor yet
     assert nbr_nids[0][1][0] == 1  # first hop, node 2 has neighbor 1
-    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID
     assert nbr_nids[1][1][0] == 0  # second hop, node 2 has neighbor 0
 
     batch_4 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_4)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
     assert nids.shape == (2, 2)
     assert nbr_nids.shape == (2, 2, 1)
     assert nbr_times.shape == (2, 2, 1)
     assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
-    assert nbr_mask.shape == (2, 2, 1)
-    assert nbr_nids[0][0][0] == EMPTY  # first hop, node 4 has no neighbor yet
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID  # first hop, node 4 has no neighbor yet
     assert (
         nbr_nids[0][1][0] == 3
     )  # first hop, node 2 has neighbor 3 (replaced 1 as it is pushed out of cache)
     assert (
-        nbr_nids[1][1][0] == EMPTY
+        nbr_nids[1][1][0] == INVALID_NODE_ID
     )  # second hop, node 2 has no neighbor now (as 1 is pushed out of cache)
 
     batch_5 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_5)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_5)
     assert nids.shape == (2, 2)
     assert nbr_nids.shape == (2, 2, 1)
     assert nbr_times.shape == (2, 2, 1)
     assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
-    assert nbr_mask.shape == (2, 2, 1)
-    assert nbr_nids[0][0][0] == EMPTY
-    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID
     assert nbr_nids[0][1][0] == 1
-    assert nbr_nids[1][1][0] == EMPTY
+    assert nbr_nids[1][1][0] == INVALID_NODE_ID
 
     batch_6 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_6)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_6)
     assert nids.shape == (2, 2)
     assert nbr_nids.shape == (2, 2, 1)
     assert nbr_times.shape == (2, 2, 1)
     assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
-    assert nbr_mask.shape == (2, 2, 1)
     assert nbr_nids[0][0][0] == 0  # node 5 first hop has neighbor 0
     assert nbr_nids[1][0][0] == 1  # node 5 second hop has neighbor 1
     assert nbr_nids[0][1][0] == 4  # node 2 first hop has neighbor 4
-    assert nbr_nids[1][1][0] == EMPTY  # node 2 second hop has no neighbor
+    assert nbr_nids[1][1][0] == INVALID_NODE_ID  # node 2 second hop has no neighbor
 
 
 class FakeNegSampler:
@@ -841,7 +825,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
 
     batch_iter = iter(loader)
     batch_1 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_1)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
     assert nids.shape == (2, 6)  # 2 hop, each has 2 node
     assert nids[0][0] == 0
     assert nids[0][1] == 1
@@ -850,67 +834,68 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
     assert nids[0][4] == 4
     assert nids[0][5] == 5
     assert nbr_nids.shape == (2, 6, 1)
-    assert nbr_nids[0][0][0] == EMPTY
-    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID
     assert nbr_times.shape == (2, 6, 1)
-    assert nbr_times[0][0][0] == EMPTY
-    assert nbr_times[1][0][0] == EMPTY
+    assert nbr_times[0][0][0] == INVALID_NODE_ID
+    assert nbr_times[1][0][0] == INVALID_NODE_ID
     assert nbr_feats.shape == (2, 6, 1, 1)  # 1 feature per edge
-    assert nbr_mask.shape == (2, 6, 1)
 
     neg_batch_list = [[0, 3, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_2 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
     assert nbr_nids[0][0][0] == 0  # first hop, node 1 has neighbor 0
-    assert nbr_nids[1][0][0] == EMPTY  # no second hop neighbors
-    assert nbr_nids[0][1][0] == EMPTY
-    assert nbr_nids[1][1][0] == EMPTY
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID  # no second hop neighbors
+    assert nbr_nids[0][1][0] == INVALID_NODE_ID
+    assert nbr_nids[1][1][0] == INVALID_NODE_ID
     assert nbr_nids[0][2][0] == 1
-    assert nbr_nids[0][3][0] == nbr_nids[0][4][0] == nbr_nids[0][5][0] == EMPTY
+    assert (
+        nbr_nids[0][3][0] == nbr_nids[0][4][0] == nbr_nids[0][5][0] == INVALID_NODE_ID
+    )
 
     neg_batch_list = [[0, 1, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_3 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_3)
-    assert nbr_nids[0][0][0] == EMPTY  # first hop, node 3 has no neighbor yet
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID  # first hop, node 3 has no neighbor yet
     assert nbr_nids[0][1][0] == 1  # first hop, node 2 has neighbor 1
-    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID
     assert nbr_nids[1][1][0] == 0  # second hop, node 2 has neighbor 0
     assert nbr_nids[0][2][0] == 1
     assert nbr_nids[1][2][0] == 2
     assert nbr_nids[0][3][0] == 2
-    assert nbr_nids[1][3][0] == EMPTY
-    assert nbr_nids[0][4][0] == EMPTY
-    assert nbr_nids[0][5][0] == EMPTY
+    assert nbr_nids[1][3][0] == INVALID_NODE_ID
+    assert nbr_nids[0][4][0] == INVALID_NODE_ID
+    assert nbr_nids[0][5][0] == INVALID_NODE_ID
 
     neg_batch_list = [[0, 1, 3, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_4 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_4)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
     assert (
         nbr_nids[0][1][0] == 3
     )  # first hop, node 2 has neighbor 3 (replaced 1 as it is pushed out of cache)
     assert (
-        nbr_nids[1][1][0] == EMPTY
+        nbr_nids[1][1][0] == INVALID_NODE_ID
     )  # second hop, node 2 has no neighbor now (as 1 is pushed out of cache)
     assert nbr_nids[0][2][0] == 1
     assert nbr_nids[1][2][0] == 2
     assert nbr_nids[0][3][0] == 0
-    assert nbr_nids[1][3][0] == EMPTY
+    assert nbr_nids[1][3][0] == INVALID_NODE_ID
     assert nbr_nids[0][4][0] == 2
     assert nbr_nids[1][4][0] == 1
-    assert nbr_nids[0][5][0] == EMPTY
-    assert nbr_nids[1][5][0] == EMPTY
+    assert nbr_nids[0][5][0] == INVALID_NODE_ID
+    assert nbr_nids[1][5][0] == INVALID_NODE_ID
 
     neg_batch_list = [[1, 2, 3, 4]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_5 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_5)
-    assert nbr_nids[0][0][0] == EMPTY
-    assert nbr_nids[1][0][0] == EMPTY
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_5)
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID
     assert nbr_nids[0][1][0] == 1
-    assert nbr_nids[1][1][0] == EMPTY
+    assert nbr_nids[1][1][0] == INVALID_NODE_ID
     assert nbr_nids[0][2][0] == 0
     assert nbr_nids[0][3][0] == 1
     assert nbr_nids[0][4][0] == 2
@@ -920,11 +905,11 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
     neg_batch_list = [[0, 1, 3, 4]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_6 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_6)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_6)
     assert nbr_nids[0][0][0] == 0  # node 5 first hop has neighbor 0
     assert nbr_nids[1][0][0] == 1  # node 5 second hop has neighbor 1
     assert nbr_nids[0][1][0] == 4  # node 2 first hop has neighbor 4
-    assert nbr_nids[1][1][0] == EMPTY  # node 2 second hop has no neighbor
+    assert nbr_nids[1][1][0] == INVALID_NODE_ID  # node 2 second hop has no neighbor
     assert nbr_nids[0][2][0] == 5
     assert nbr_nids[0][3][0] == 2
     assert nbr_nids[0][4][0] == 2
@@ -952,7 +937,7 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
 
     batch_iter = iter(loader)
     batch_1 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_1)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
     assert nids.shape == (2, 6)  # 2 hop, each has 2 node
     assert nids[0][0] == 0
     assert nids[0][1] == 1
@@ -961,67 +946,68 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     assert nids[0][4] == 4
     assert nids[0][5] == 5
     assert nbr_nids.shape == (2, 6, 1)
-    assert nbr_nids[0][0][0] == EMPTY
-    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID
     assert nbr_times.shape == (2, 6, 1)
-    assert nbr_times[0][0][0] == EMPTY
-    assert nbr_times[1][0][0] == EMPTY
+    assert nbr_times[0][0][0] == INVALID_NODE_ID
+    assert nbr_times[1][0][0] == INVALID_NODE_ID
     assert nbr_feats.shape == (2, 6, 1, 1)  # 1 feature per edge
-    assert nbr_mask.shape == (2, 6, 1)
 
     neg_batch_list = [[0, 3, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_2 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_2)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
     assert nbr_nids[0][0][0] == 0  # first hop, node 1 has neighbor 0
-    assert nbr_nids[1][0][0] == EMPTY  # no second hop neighbors
-    assert nbr_nids[0][1][0] == EMPTY
-    assert nbr_nids[1][1][0] == EMPTY
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID  # no second hop neighbors
+    assert nbr_nids[0][1][0] == INVALID_NODE_ID
+    assert nbr_nids[1][1][0] == INVALID_NODE_ID
     assert nbr_nids[0][2][0] == 1
-    assert nbr_nids[0][3][0] == nbr_nids[0][4][0] == nbr_nids[0][5][0] == EMPTY
+    assert (
+        nbr_nids[0][3][0] == nbr_nids[0][4][0] == nbr_nids[0][5][0] == INVALID_NODE_ID
+    )
 
     neg_batch_list = [[0, 1, 4, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_3 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_3)
-    assert nbr_nids[0][0][0] == EMPTY  # first hop, node 3 has no neighbor yet
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID  # first hop, node 3 has no neighbor yet
     assert nbr_nids[0][1][0] == 1  # first hop, node 2 has neighbor 1
-    assert nbr_nids[1][0][0] == EMPTY
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID
     assert nbr_nids[1][1][0] == 0  # second hop, node 2 has neighbor 0
     assert nbr_nids[0][2][0] == 1
-    assert nbr_nids[1][2][0] == EMPTY
+    assert nbr_nids[1][2][0] == INVALID_NODE_ID
     assert nbr_nids[0][3][0] == 2
-    assert nbr_nids[1][3][0] == EMPTY
-    assert nbr_nids[0][4][0] == EMPTY
-    assert nbr_nids[0][5][0] == EMPTY
+    assert nbr_nids[1][3][0] == INVALID_NODE_ID
+    assert nbr_nids[0][4][0] == INVALID_NODE_ID
+    assert nbr_nids[0][5][0] == INVALID_NODE_ID
 
     neg_batch_list = [[0, 1, 3, 5]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_4 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_4)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
     assert (
         nbr_nids[0][1][0] == 3
     )  # first hop, node 2 has neighbor 3 (replaced 1 as it is pushed out of cache)
     assert (
-        nbr_nids[1][1][0] == EMPTY
+        nbr_nids[1][1][0] == INVALID_NODE_ID
     )  # second hop, node 2 has no neighbor now (as 1 is pushed out of cache)
     assert nbr_nids[0][2][0] == 1
-    assert nbr_nids[1][2][0] == EMPTY
+    assert nbr_nids[1][2][0] == INVALID_NODE_ID
     assert nbr_nids[0][3][0] == 2
-    assert nbr_nids[1][3][0] == EMPTY
+    assert nbr_nids[1][3][0] == INVALID_NODE_ID
     assert nbr_nids[0][4][0] == 2
     assert nbr_nids[1][4][0] == 1
-    assert nbr_nids[0][5][0] == EMPTY
-    assert nbr_nids[1][5][0] == EMPTY
+    assert nbr_nids[0][5][0] == INVALID_NODE_ID
+    assert nbr_nids[1][5][0] == INVALID_NODE_ID
 
     neg_batch_list = [[1, 2, 3, 4]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_5 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_5)
-    assert nbr_nids[0][0][0] == EMPTY
-    assert nbr_nids[1][0][0] == EMPTY
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_5)
+    assert nbr_nids[0][0][0] == INVALID_NODE_ID
+    assert nbr_nids[1][0][0] == INVALID_NODE_ID
     assert nbr_nids[0][1][0] == 1
-    assert nbr_nids[1][1][0] == EMPTY
+    assert nbr_nids[1][1][0] == INVALID_NODE_ID
     assert nbr_nids[0][2][0] == 2
     assert nbr_nids[0][3][0] == 4
     assert nbr_nids[0][4][0] == 2
@@ -1031,11 +1017,11 @@ def test_tgb_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph
     neg_batch_list = [[0, 1, 3, 4]]
     mock_sampler.query_batch.return_value = neg_batch_list
     batch_6 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats, nbr_mask = _nbrs_2_np(batch_6)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_6)
     assert nbr_nids[0][0][0] == 0  # node 5 first hop has neighbor 0
     assert nbr_nids[1][0][0] == 1  # node 5 second hop has neighbor 1
     assert nbr_nids[0][1][0] == 4  # node 2 first hop has neighbor 4
-    assert nbr_nids[1][1][0] == EMPTY  # node 2 second hop has no neighbor
+    assert nbr_nids[1][1][0] == INVALID_NODE_ID  # node 2 second hop has no neighbor
     assert nbr_nids[0][2][0] == 5
     assert nbr_nids[0][3][0] == 2
     assert nbr_nids[0][4][0] == 2
