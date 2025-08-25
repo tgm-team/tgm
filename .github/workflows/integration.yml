@@ -20,6 +20,7 @@ jobs:
     if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang'
     env:
       TGM_CI_LOG_BASE: $SLURM_TMPDIR/tgm_ci
+      DATA_ROOT: $HOME/tgb_datasets
 
     steps:
       - name: Checkout repository
@@ -44,6 +45,11 @@ jobs:
             uv-${{ runner.os }}
       - name: Install dependencies
         run: uv sync --group examples
+
+      - name: Download TGB datasets
+        run: |
+          echo "Preparing TGB datasets in $DATA_ROOT..."
+          ./scripts/download_tgb_datasets.sh "$DATA_ROOT"
 
       - name: Run Integration Tests
         run: uv run pytest -m "integration" -n 2 -vvv
