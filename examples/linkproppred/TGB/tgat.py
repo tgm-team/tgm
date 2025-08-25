@@ -106,49 +106,61 @@ class TGAT(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
 
-        def get_embeddings(
-            node_ids: torch.Tensor, node_times: torch.Tensor, hop: int, is_src: bool
-        ):
-            if hop == 0:
-                return static_node_feat[node_ids]
+        B = len(batch.nids[0])
+        NBR = batch.nbr_nids[0].shape[-1]  # assume uniform for simplicity
 
-            node_feat = get_embeddings(node_ids, node_times, hop - 1, is_src)
-            node_time_feat = self.time_encoder(torch.zeros_like(node_ids))
+        # HOP 0: Base features (static)
+        z0 = {}
+        z0['n'] = static_node_feat[batch.nids[0]]  # (B, N)
+        z0['nbr'] = static_node_feat[batch.nbr_nids[0].flatten()]  # (B * NBR, N)
+        z0['nbr2'] = static_node_feat[batch.nbr_nids[1].flatten()]  # (B * NBR^2, N)
 
-            B = len(node_ids)
-            num_nbrs = batch.nbr_nids[-hop].shape[-1]
-            ss = [batch.src.numel(), batch.neg.numel()]
-            i = [k for k in range(5) for s in ss if B == s * num_nbrs**k][0]
-            bsize = B * num_nbrs
-            if batch.dst.numel() != batch.neg.numel():
-                bsize = num_nbrs ** (i + 1)
-            _split = lambda x: (x[0:bsize], x[bsize : 2 * bsize], x[2 * bsize :])
-            idx = 0 if is_src else 2 if batch.is_negative else 1
+        # HOP 1: Combine hop0 features
+        z1 = {}
 
-            nbr_nids = batch.nbr_nids[i].flatten()
-            nbr_times = batch.nbr_times[i].flatten()
-            nbr_feat = batch.nbr_feats[i].reshape(-1, batch.nbr_feats[i].size(-1))
-            nbr_node_ids = _split(nbr_nids)[idx].reshape(B, -1)
-            nbr_time = _split(nbr_times)[idx].reshape(B, -1)
-            edge_feat = _split(nbr_feat)[idx].reshape(B, -1, nbr_feat.shape[-1])
+        # branch 1: seed nodes (B, N)
+        out = self.attn[0](
+            node_feat=z0['n'],
+            time_feat=self.time_encoder(torch.zeros(B, device=device)),
+            nbr_node_feat=z0['nbr'].reshape(B, NBR, -1),
+            edge_feat=batch.nbr_feats[0],
+            nbr_mask=batch.nbr_nids[0],
+            nbr_time_feat=self.time_encoder(
+                batch.times[0][:, None] - batch.nbr_times[0]
+            ),
+        )
+        z1['n'] = self.merge_layers[0](out, z0['n'])
 
-            nbr_node_feat = get_embeddings(
-                nbr_node_ids.flatten(), nbr_time.flatten(), hop - 1, is_src
-            ).reshape(B, num_nbrs, -1)
-            nbr_time_feat = self.time_encoder(node_times[:, None] - nbr_time)
+        # branch 2: 1-hop neighbors (B * NBR, N)
+        out = self.attn[0](
+            node_feat=z0['nbr'],
+            time_feat=self.time_encoder(torch.zeros(B * NBR, device=device)),
+            nbr_node_feat=z0['nbr2'].reshape(B * NBR, NBR, -1),
+            edge_feat=batch.nbr_feats[1],
+            nbr_mask=batch.nbr_nids[1],
+            nbr_time_feat=self.time_encoder(
+                batch.times[1][:, None] - batch.nbr_times[1]
+            ),
+        )
+        z1['nbr'] = self.merge_layers[0](out, z0['nbr'].reshape(B * NBR, -1))
 
-            out = self.attn[hop - 1](
-                node_feat=node_feat,
-                time_feat=node_time_feat,
-                nbr_node_feat=nbr_node_feat,
-                nbr_time_feat=nbr_time_feat,
-                edge_feat=edge_feat,
-                nbr_mask=nbr_node_ids,
-            )
-            return self.merge_layers[hop - 1](out, static_node_feat[node_ids])
+        # HOP 2: Combine hop1 features (B, E)
+        out = self.attn[1](
+            node_feat=z1['n'],
+            time_feat=self.time_encoder(torch.zeros(B, device=device)),
+            nbr_node_feat=z1['nbr'].reshape(B, NBR, -1),
+            edge_feat=batch.nbr_feats[0],
+            nbr_mask=batch.nbr_nids[0],
+            nbr_time_feat=self.time_encoder(
+                batch.times[0][:, None] - batch.nbr_times[0]
+            ),
+        )
+        z = self.merge_layers[1](out, z0['n'])
 
-        z_src = get_embeddings(batch.src_ids, batch.time, self.num_layers, is_src=True)
-        z_dst = get_embeddings(batch.dst_ids, batch.time, self.num_layers, is_src=False)
+        S, D = batch.src.numel(), batch.dst.numel()
+        z_src, z_dst, z_neg = z[:D], z[S : S + D], z[S + D :]
+        if batch.is_negative:
+            return z_src, z_neg
         return z_src, z_dst
 
 
@@ -328,8 +340,8 @@ for epoch in range(1, args.epochs + 1):
     _, dst, _ = test_dg.edges
     neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
     foo_loader = DGDataLoader(train_dg, hook=[neg_hook, shared_nbr], batch_size=2000)
-    # for _ in tqdm(foo_loader):
-    #    pass
+    for _ in tqdm(foo_loader):
+        pass
     neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
     val_loader = DGDataLoader(val_dg, hook=[neg_hook, shared_nbr], batch_size=1)
     start_time = time.perf_counter()
