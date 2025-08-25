@@ -221,15 +221,11 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # this might complain if the edge is not found in the negative sampler, which could happen if the user is not using the correct version of dataset
         neg_batch_list = self.neg_sampler.query_batch(  # type: ignore
-            np.array([batch.src[0]]) - 1,
-            np.array([batch.dst[0]]) - 1,
-            np.array([batch.time[0]]),
-            split_mode=self.split_mode,
+            batch.src, batch.dst, batch.time, split_mode=self.split_mode
         )
         queries = []
         tensor_batch_list = []
         for neg_batch in neg_batch_list:
-            neg_batch = [x + 1 for x in neg_batch]
             queries.append(neg_batch)
             tensor_batch_list.append(
                 torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
@@ -387,7 +383,6 @@ class RecencyNeighborHook(StatefulHook):
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
             else:
-                # mask = batch.nbr_mask[hop - 1].bool()
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()
                 seed_times = batch.nbr_times[hop - 1].flatten()
 
@@ -409,7 +404,7 @@ class RecencyNeighborHook(StatefulHook):
     ):
         num_nodes = node_ids.size(0)
         device = node_ids.device
-        nbr_nids = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
+        nbr_nids = torch.full((num_nodes, k), -1, dtype=torch.long, device=device)
         nbr_times = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
         nbr_feats = torch.zeros((num_nodes, k, self._edge_feats_dim), device=device)
         nbr_mask = torch.zeros((num_nodes, k), dtype=torch.bool, device=device)

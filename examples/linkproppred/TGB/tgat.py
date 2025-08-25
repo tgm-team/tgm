@@ -197,11 +197,11 @@ def eval(
     batch_id = 0
     for batch in tqdm(loader):
         z = encoder(batch, static_node_feats)
+        id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
-            id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
             src_idx = torch.tensor([id_map[n.item()] for n in src_ids], device=z.device)
             dst_idx = torch.tensor([id_map[n.item()] for n in dst_ids], device=z.device)
             z_src = z[src_idx]
