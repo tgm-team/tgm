@@ -152,7 +152,7 @@ class DeduplicationHook(StatelessHook):
         unique_nids = torch.unique(all_nids, sorted=True)
 
         batch.unique_nids = unique_nids  # type: ignore
-        batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
 
         return batch
 
@@ -383,8 +383,8 @@ class RecencyNeighborHook(StatefulHook):
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
             else:
-                seed_nodes = batch.nbr_nids[hop - 1].flatten()
-                seed_times = batch.nbr_times[hop - 1].flatten()
+                seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
+                seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
 
             nbr_nids, nbr_times, nbr_feats, nbr_mask = self._get_recency_neighbors(
                 seed_nodes, seed_times, num_nbrs

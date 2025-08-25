@@ -71,7 +71,6 @@ class TemporalAttention(torch.nn.Module):
         A *= self.head_dim**-0.5
         del Q, K
 
-        nbr_mask = nbr_mask == -1
         nbr_mask = nbr_mask.reshape(nbr_mask.shape[0], 1, 1, -1)
         nbr_mask = nbr_mask.repeat(1, self.n_heads, 1, 1)
 

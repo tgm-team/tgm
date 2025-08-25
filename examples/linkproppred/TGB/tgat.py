@@ -122,7 +122,7 @@ class TGAT(nn.Module):
                     time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
                     nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
                     edge_feat=batch.nbr_feats[i],
-                    nbr_mask=batch.nbr_nids[i],
+                    nbr_mask=batch.nbr_nids[i] == -1,
                     nbr_time_feat=self.time_encoder(
                         batch.times[i][:, None] - batch.nbr_times[i]
                     ),
@@ -158,8 +158,7 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
         z = encoder(batch, static_node_feats)
-        S, D = batch.src.numel(), batch.dst.numel()
-        z_src, z_dst, z_neg = z[:D], z[S : S + D], z[S + D :]
+        z_src, z_dst, z_neg = torch.chunk(z, 3)
 
         pos_out = decoder(z_src, z_dst)
         neg_out = decoder(z_src, z_neg)
