@@ -75,7 +75,7 @@ jobs:
           export TGM_CI_PERF_LOG_BASE=${TGM_CI_PERF_LOG_BASE:-$HOME/tgm_ci_perf}
 
           # Run the local performance test script
-          ./scripts/run_perf_tests.sh --gpu
+          ./scripts/run_perf_tests.sh --gpu --all
           EOF
 
           chmod +x "$SCRIPT_PATH"
