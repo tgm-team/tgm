@@ -2,6 +2,8 @@ import random
 
 import pytest
 import torch
+
+from tgm import DGraph
 from tgm._storage import (
     DGSliceTracker,
     DGStorageBackends,
@@ -10,7 +12,6 @@ from tgm._storage import (
 )
 from tgm._storage.backends import DGStorageArrayBackend
 from tgm.data import DGData
-from tgm import DGraph
 from tgm.loader import DGDataLoader
 
 
@@ -341,6 +342,7 @@ def test_get_static_node_feats(DGStorageImpl, data_with_features):
     assert storage.get_static_node_feats().shape == (9, 11)
     assert storage.get_static_node_feats_dim() == 11
 
+
 def test_get_dg_storage_backend():
     assert get_dg_storage_backend() == DGStorageArrayBackend
 
@@ -359,7 +361,9 @@ def test_set_dg_storage_backend_with_bad_str():
     with pytest.raises(ValueError):
         set_dg_storage_backend('foo')
 
+
 EMPTY = -1  # use to indicate uninitialized vectors
+
 
 @pytest.fixture
 def basic_sample_graph():
@@ -396,7 +400,7 @@ def basic_sample_graph():
 
 def test_dg_storage_get_nbrs_one_hop(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
-    n_nbrs = (3)  # 3 neighbor for each node
+    n_nbrs = 3  # 3 neighbor for each node
     loader = DGDataLoader(dg, hook=[], batch_size=1)
     batch_iter = iter(loader)
     batch = next(batch_iter)
@@ -537,6 +541,3 @@ def test_dg_storage_get_nbrs_one_hop(basic_sample_graph):
     assert nbr_feats[1][0][0] == 1.0
     assert nbr_feats[1][1][0] == 2.0
     assert nbr_feats[1][2][0] == EMPTY
-
-
-

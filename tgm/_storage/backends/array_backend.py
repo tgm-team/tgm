@@ -105,7 +105,9 @@ class DGStorageArrayBackend(DGStorageBase):
         B = len(seed_nodes)
         nbr_nids = torch.full((B, num_nbrs), empty, dtype=torch.long, device=device)
         nbr_times = torch.full((B, num_nbrs), empty, dtype=torch.long, device=device)
-        nbr_feats = torch.full((B, num_nbrs, self.get_edge_feats_dim()), float(empty), device=device)  # type: ignore
+        nbr_feats = torch.full(
+            (B, num_nbrs, self.get_edge_feats_dim()), float(empty), device=device
+        )  # type: ignore
         nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
         for i, node in enumerate(unique_nodes.tolist()):
             node_nbrs = nbrs[node]

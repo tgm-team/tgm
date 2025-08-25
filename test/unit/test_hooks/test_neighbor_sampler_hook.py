@@ -244,4 +244,3 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nbr_feats[0][1][0][0] == 1.0
     assert nbr_feats[0][1][1][0] == 2.0
     assert nbr_feats[0][1][2][0] == EMPTY
-
