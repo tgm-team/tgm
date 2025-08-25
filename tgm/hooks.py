@@ -185,7 +185,6 @@ class NegativeEdgeSamplerHook(StatelessHook):
         batch.neg = torch.randint(  # type: ignore
             self.low, self.high, size, dtype=torch.long, device=dg.device
         )
-        batch.neg = 888 * torch.ones_like(batch.src).to(dg.device)
         batch.neg_time = batch.time.clone()  # type: ignore
         return batch
 
