@@ -35,8 +35,8 @@ setup_venv_if_missing() {
 
 run_perf_tests() {
     local marker_arg="-m benchmark"
-    if [[ "$GPU" == "1" ]]; then
-        marker_arg="$marker_arg and gpu"
+    if [[ "$GPU" == "0" ]]; then
+        marker_arg="$marker_arg and not gpu"
     fi
 
     if [[ "$ALL_DATASETS" != "1" ]]; then
