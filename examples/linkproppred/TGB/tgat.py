@@ -10,7 +10,7 @@ from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
 from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,
@@ -20,7 +20,6 @@ from tgm.hooks import (
 )
 from tgm.loader import DGDataLoader
 from tgm.nn import TemporalAttention, Time2Vec
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -43,7 +42,7 @@ parser.add_argument(
     help='num sampled nbrs at each hop',
 )
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
+parser.add_argument('--embed-dim', type=int, default=172, help='attention dimension')
 parser.add_argument(
     '--sampling',
     type=str,
@@ -53,10 +52,21 @@ parser.add_argument(
 )
 
 
+class MergeLayer(nn.Module):
+    def __init__(self, in_dim1: int, in_dim2: int, hidden_dim: int, output_dim: int):
+        super().__init__()
+        self.fc1 = nn.Linear(in_dim1 + in_dim2, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor):
+        h = self.fc1(torch.cat([x1, x2], dim=1))
+        h = h.relu()
+        return self.fc2(h)
+
+
 class TGAT(nn.Module):
     def __init__(
         self,
-        node_dim: int,
         edge_dim: int,
         time_dim: int,
         embed_dim: int,
@@ -64,6 +74,7 @@ class TGAT(nn.Module):
         n_heads: int = 2,
         dropout: float = 0.1,
     ) -> None:
+        """In this implementation, the node embedding dimension must be the same as hidden embedding dimension."""
         super().__init__()
         self.num_layers = num_layers
         self.embed_dim = embed_dim
@@ -72,38 +83,41 @@ class TGAT(nn.Module):
             [
                 TemporalAttention(
                     n_heads=n_heads,
-                    node_dim=node_dim if i == 0 else embed_dim,
+                    node_dim=embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
-                    out_dim=embed_dim,
                     dropout=dropout,
                 )
-                for i in range(num_layers)
+                for _ in range(num_layers)
             ]
         )
 
-    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, batch: DGBatch, static_node_feat: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
         z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
 
         for hop in reversed(range(self.num_layers)):
             seed_nodes = batch.nids[hop]
             nbrs = batch.nbr_nids[hop]
-            nbr_mask = batch.nbr_mask[hop]
+            nbr_mask = batch.nbr_mask[hop].bool()
             if seed_nodes.numel() == 0:
                 continue
 
             # TODO: Check and read static node features
-            node_feat = torch.zeros((*seed_nodes.shape, self.embed_dim), device=device)
+            node_feat = static_node_feat[seed_nodes]
             node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
-            nbr_feat = torch.zeros((*nbrs.shape, self.embed_dim), device=device)
+            nbr_feat = static_node_feat[nbrs]
             if hop < self.num_layers - 1:
-                valid_nbrs = nbrs[nbr_mask.bool()]
-                nbr_feat[nbr_mask.bool()] = z[batch.global_to_local(valid_nbrs)]
+                valid_nbrs = nbrs[nbr_mask]
+                nbr_feat[nbr_mask] = z[batch.global_to_local(valid_nbrs)]
 
             delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
+            delta_time = delta_time.masked_fill(~nbr_mask, 0)
+
             nbr_time_feat = self.time_encoder(delta_time)
 
             out = self.attn[hop](
@@ -121,18 +135,18 @@ class TGAT(nn.Module):
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        return self.fc2(h).sigmoid().view(-1)
 
 
 def train(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -142,7 +156,7 @@ def train(
     total_loss = 0
     for batch in tqdm(loader):
         opt.zero_grad()
-        z = encoder(batch)
+        z = encoder(batch, static_node_feats)
 
         z_src = z[batch.global_to_local(batch.src)]
         z_dst = z[batch.global_to_local(batch.dst)]
@@ -162,6 +176,7 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     eval_metric: str,
@@ -171,10 +186,10 @@ def eval(
     decoder.eval()
     perf_list = []
     for batch in tqdm(loader):
-        z = encoder(batch)
+        z = encoder(batch, static_node_feats)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
             z_src = z[batch.global_to_local(src_ids)]
@@ -187,6 +202,7 @@ def eval(
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
+
     metric_dict = {}
     metric_dict[eval_metric] = float(np.mean(perf_list))
     return metric_dict
@@ -202,24 +218,31 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='train', device=args.device
-)
-val_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='val', device=args.device
-)
-test_dg = DGraph(
-    args.dataset, time_delta=TimeDeltaDG('r'), split='test', device=args.device
-)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
+
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.embed_dim), device=args.device
+    )
 
 
 def _init_hooks(
-    num_nodes: int, sampling_type: str, neg_sampler: object, split_mode: str
+    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
 ) -> List[DGHook]:
     if sampling_type == 'uniform':
         nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
     elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(num_nbrs=args.n_nbrs, num_nodes=num_nodes)
+        nbr_hook = RecencyNeighborHook(
+            num_nbrs=args.n_nbrs,
+            num_nodes=dg.num_nodes,
+            edge_feats_dim=dg.edge_feats_dim,
+        )
     else:
         raise ValueError(f'Unknown sampling type: {args.sampling}')
 
@@ -227,31 +250,23 @@ def _init_hooks(
     if split_mode in ['val', 'test']:
         neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
     else:
-        neg_hook = NegativeEdgeSamplerHook(low=0, high=num_nodes)
+        _, dst, _ = dg.edges
+        min_dst, max_dst = int(dst.min()), int(dst.max())
+        neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
     return [neg_hook, nbr_hook]
 
 
-train_loader = DGDataLoader(
-    train_dg,
-    hook=_init_hooks(test_dg.num_nodes, args.sampling, neg_sampler, 'train'),
-    batch_size=args.bsize,
-)
-val_loader = DGDataLoader(
-    val_dg,
-    hook=_init_hooks(test_dg.num_nodes, args.sampling, neg_sampler, 'val'),
-    batch_size=args.bsize,
-)
 test_loader = DGDataLoader(
     test_dg,
-    hook=_init_hooks(test_dg.num_nodes, args.sampling, neg_sampler, 'test'),
+    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'test'),
     batch_size=args.bsize,
 )
 
+
 encoder = TGAT(
-    node_dim=train_dg.dynamic_node_feats_dim or args.embed_dim,  # TODO: verify
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
-    embed_dim=args.embed_dim,
+    embed_dim=static_node_feats.shape[1],
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
@@ -262,16 +277,32 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
+    # TODO: Need a clean way to clear nbr state across epochs
+    train_loader = DGDataLoader(
+        train_dg,
+        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
+        batch_size=args.bsize,
+    )
+    val_loader = DGDataLoader(
+        val_dg,
+        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
+        batch_size=args.bsize,
+    )
     start_time = time.perf_counter()
-    loss = train(train_loader, encoder, decoder, opt)
+    loss = train(train_loader, static_node_feats, encoder, decoder, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
+    val_results = eval(
+        val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+    )
+
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
-test_results = eval(test_loader, encoder, decoder, eval_metric, evaluator)
+test_results = eval(
+    test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+)
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

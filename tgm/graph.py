@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import pathlib
-from dataclasses import dataclass
+from collections.abc import Iterable, Sized
+from dataclasses import dataclass, replace
 from functools import cached_property
 from typing import Any, Optional, Set, Tuple
 
@@ -16,25 +16,12 @@ from tgm.timedelta import TimeDeltaDG
 class DGraph:
     r"""Dynamic Graph Object provides a 'view' over a DGStorage backend."""
 
-    def __init__(
-        self,
-        data: DGStorage | DGData | str | pathlib.Path | 'pd.DataFrame',  # type: ignore
-        time_delta: TimeDeltaDG | str = 'r',
-        device: str | torch.device = 'cpu',
-        **kwargs: Any,
-    ) -> None:
-        if isinstance(time_delta, str):
-            time_delta = TimeDeltaDG(time_delta)
-        if not isinstance(time_delta, TimeDeltaDG):
-            raise ValueError(f'Bad time_delta type: {type(time_delta)}')
-        if isinstance(data, DGStorage):
-            self._storage = data
-        else:
-            if not isinstance(data, DGData):
-                data = DGData.from_any(data, time_delta, **kwargs)
-            self._storage = DGStorage(data)
+    def __init__(self, data: DGData, device: str | torch.device = 'cpu') -> None:
+        if not isinstance(data, DGData):
+            raise TypeError(f'DGraph must be initialized with DGData, got {type(data)}')
 
-        self._time_delta = time_delta
+        self._time_delta = data.time_delta
+        self._storage = DGStorage(data)
         self._device = torch.device(device)
         self._slice = DGSliceTracker()
 
@@ -55,12 +42,10 @@ class DGraph:
         if start_idx is not None and end_idx is not None and start_idx > end_idx:
             raise ValueError(f'start_idx ({start_idx}) must be <= end_idx ({end_idx})')
 
-        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
-        dg._slice.start_time = self._slice.start_time
-        dg._slice.end_time = self._slice.end_time
-        dg._slice.start_idx = self._maybe_max(start_idx, self._slice.start_idx)
-        dg._slice.end_idx = self._maybe_min(end_idx, self._slice.end_idx)
-        return dg
+        slice = replace(self._slice)
+        slice.start_idx = self._maybe_max(start_idx, slice.start_idx)
+        slice.end_idx = self._maybe_min(end_idx, slice.end_idx)
+        return DGraph._from_storage(self._storage, self.time_delta, self.device, slice)
 
     def slice_time(
         self, start_time: Optional[int] = None, end_time: Optional[int] = None
@@ -73,12 +58,10 @@ class DGraph:
         if end_time is not None:
             end_time -= 1
 
-        dg = DGraph(data=self._storage, time_delta=self.time_delta, device=self.device)
-        dg._slice.start_time = self._maybe_max(start_time, self.start_time)
-        dg._slice.end_time = self._maybe_min(end_time, self.end_time)
-        dg._slice.start_idx = self._slice.start_idx
-        dg._slice.end_idx = self._slice.end_idx
-        return dg
+        slice = replace(self._slice)
+        slice.start_time = self._maybe_max(start_time, slice.start_time)
+        slice.end_time = self._maybe_min(end_time, slice.end_time)
+        return DGraph._from_storage(self._storage, self.time_delta, self.device, slice)
 
     def __len__(self) -> int:
         r"""The number of timestamps in the dynamic graph."""
@@ -93,10 +76,12 @@ class DGraph:
 
     @property
     def time_delta(self) -> TimeDeltaDG:
-        return self._time_delta
+        return self._time_delta  # type: ignore
 
     def to(self, device: str | torch.device) -> DGraph:
-        return DGraph(data=self._storage, time_delta=self.time_delta, device=device)
+        device = torch.device(device)
+        slice = replace(self._slice)
+        return DGraph._from_storage(self._storage, self.time_delta, device, slice)
 
     @cached_property
     def start_time(self) -> Optional[int]:
@@ -148,7 +133,10 @@ class DGraph:
 
     @cached_property
     def static_node_feats(self) -> Optional[Tensor]:
-        r"""If static node features exist, returns a dense Tensor(num_nodes x d_node_static)."""
+        r"""If static node features exist, returns a dense Tensor(num_nodes_global x d_node_static).
+        num_nodes_global is the global number of nodes from the underlying DGData and it will be independent of the slice.
+        This means that it won't be necessarily the same as the number of nodes in the current slice.
+        """
         feats = self._storage.get_static_node_feats()
         if feats is not None:
             feats = feats.to(self.device)
@@ -203,6 +191,21 @@ class DGraph:
             return min(a, b)
         return a if b is None else b if a is None else None
 
+    @classmethod
+    def _from_storage(
+        cls,
+        storage: DGStorage,
+        time_delta: TimeDeltaDG,
+        device: torch.device,
+        slice: DGSliceTracker,
+    ) -> DGraph:
+        obj = cls.__new__(cls)
+        obj._storage = storage
+        obj._time_delta = time_delta
+        obj._device = device
+        obj._slice = slice
+        return obj
+
 
 @dataclass
 class DGBatch:
@@ -213,3 +216,30 @@ class DGBatch:
     edge_feats: Optional[Tensor] = None
     node_times: Optional[Tensor] = None
     node_ids: Optional[Tensor] = None
+
+    def __str__(self) -> str:
+        def _get_description(object: Any) -> str:
+            description = ''
+            if isinstance(object, torch.Tensor):
+                description = str(list(object.shape))
+            elif isinstance(object, Iterable):
+                unique_type = set()
+                for element in object:
+                    unique_type.add(_get_description(element))
+                if isinstance(object, Sized):
+                    obj_len = f' x{str(len(object))}'
+                else:
+                    obj_len = ''
+
+                description = (
+                    type(object).__name__ + '(' + '|'.join(unique_type) + obj_len + ')'
+                )
+            else:
+                description = type(object).__name__
+
+            return description
+
+        descriptions = []
+        for attr, value in vars(self).items():
+            descriptions.append(f'{attr} = {_get_description(value)}')
+        return 'DGBatch(' + ', '.join(descriptions) + ')'

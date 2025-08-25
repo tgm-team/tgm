@@ -1,5 +1,5 @@
-r"""python -u gclstm.py --dataset tgbn-trade --time-gran Y --batch-time-gran Y
-python -u gclstm.py --dataset tgbn-genre --time-gran s --batch-time-gran D\
+r"""python -u tgcn.py --dataset tgbn-trade --time-gran Y --batch-time-gran Y
+python -u tgcn.py --dataset tgbn-genre --time-gran s --batch-time-gran D\
 example commands to run this script.
 """
 
@@ -13,19 +13,19 @@ import torch.nn.functional as F
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGData, DGraph
+from tgm.graph import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
-from tgm.nn.recurrent import GCLSTM
+from tgm.nn.recurrent import TGCN
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='GCLSTM Example',
+    description='TGCN Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbn-genre', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=250, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
@@ -46,10 +46,10 @@ parser.add_argument(
 )
 
 
-class GCLSTM_Model(nn.Module):
+class TGCN_Model(nn.Module):
     def __init__(self, node_dim: int, embed_dim: int, num_classes: int) -> None:
         super().__init__()
-        self.encoder = RecurrentGCN(node_dim=node_dim, embed_dim=embed_dim, K=1)
+        self.encoder = RecurrentGCN(node_dim=node_dim, embed_dim=embed_dim)
         self.decoder = NodePredictor(in_dim=embed_dim, out_dim=num_classes)
 
     def forward(
@@ -57,34 +57,32 @@ class GCLSTM_Model(nn.Module):
         batch: DGBatch,
         node_feat: torch.Tensor,
         h_0: torch.Tensor | None = None,
-        c_0: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, ...]:
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
-        z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
+        z, h_0 = self.encoder(node_feat, edge_index, edge_weight, h_0)
         z_node = z[batch.global_to_local(batch.node_ids)]  # type: ignore
         pred = self.decoder(z_node)
-        return pred, h_0, c_0
+        return pred, h_0
 
 
 class RecurrentGCN(torch.nn.Module):
-    def __init__(self, node_dim: int, embed_dim: int, K=1) -> None:
+    def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
-        self.recurrent = GCLSTM(in_channels=node_dim, out_channels=embed_dim, K=K)
+        self.recurrent = TGCN(in_channels=node_dim, out_channels=embed_dim)
         self.linear = nn.Linear(embed_dim, embed_dim)
 
     def forward(
         self,
         x: torch.Tensor,
         edge_index: torch.Tensor,
-        edge_weight: torch.Tensor,
+        edge_weight: torch.Tensor | None,
         h: torch.Tensor | None,
-        c: torch.Tensor | None,
     ) -> Tuple[torch.Tensor, ...]:
-        h_0, c_0 = self.recurrent(x, edge_index, edge_weight, h, c)
+        h_0 = self.recurrent(x, edge_index, edge_weight, h)
         h = F.relu(h_0)
         h = self.linear(h)
-        return h, h_0, c_0
+        return h, h_0
 
 
 class NodePredictor(torch.nn.Module):
@@ -108,20 +106,20 @@ def train(
 ) -> Tuple[float, torch.Tensor, torch.Tensor]:
     model.train()
     total_loss = 0
-    h_0, c_0 = None, None
+    h_0 = None
     criterion = torch.nn.CrossEntropyLoss()
     for batch in tqdm(loader):
         opt.zero_grad()
         label = batch.dynamic_node_feats
         if label is None:
             continue
-        pred, h_0, c_0 = model(batch, static_node_feats, h_0, c_0)
+        pred, h_0 = model(batch, static_node_feats, h_0)
         loss = criterion(pred, label)
         loss.backward()
         opt.step()
         total_loss += float(loss)
-        h_0, c_0 = h_0.detach(), c_0.detach()
-    return total_loss, h_0, c_0
+        h_0 = h_0.detach()
+    return total_loss, h_0
 
 
 @torch.no_grad()
@@ -129,7 +127,6 @@ def eval(
     loader: DGDataLoader,
     static_node_feats: torch.Tensor,
     h_0: torch.Tensor,
-    c_0: torch.Tensor,
     model: nn.Module,
 ) -> Tuple[dict, torch.Tensor, torch.Tensor]:
     model.eval()
@@ -139,7 +136,7 @@ def eval(
         label = batch.dynamic_node_feats
         if label is None:
             continue
-        pred, h_0, c_0 = model(batch, static_node_feats, h_0, c_0)
+        pred, h_0 = model(batch, static_node_feats, h_0)
         np_pred = pred.cpu().detach().numpy()
         np_true = label.cpu().detach().numpy()
         input_dict = {
@@ -152,7 +149,7 @@ def eval(
         total_score += score
     metric_dict = {}
     metric_dict[eval_metric] = float(total_score) / len(loader)
-    return metric_dict, h_0, c_0
+    return metric_dict, h_0
 
 
 args = parser.parse_args()
@@ -168,7 +165,7 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-num_nodes = DGraph(train_data).num_nodes
+num_nodes = DGraph(test_data).num_nodes
 label_dim = train_dg.dynamic_node_feats_dim
 evaluator = Evaluator(name=args.dataset)
 
@@ -182,24 +179,22 @@ else:
     static_node_feats = torch.randn(
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
-
-model = GCLSTM_Model(
+model = TGCN_Model(
     node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim, num_classes=label_dim
 ).to(args.device)
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
     start_time = time.perf_counter()
-    loss, h_0, c_0 = train(train_loader, static_node_feats, model, opt)
+    loss, h_0 = train(train_loader, static_node_feats, model, opt)
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_results, h_0, c_0 = eval(val_loader, static_node_feats, h_0, c_0, model)
-
+    val_results, h_0 = eval(val_loader, static_node_feats, h_0, model)
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
-test_results, h_0, c_0 = eval(test_loader, static_node_feats, h_0, c_0, model)
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+test_results, h_0 = eval(test_loader, static_node_feats, h_0, model)
+print('Test:', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
