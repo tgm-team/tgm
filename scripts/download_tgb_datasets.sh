@@ -9,7 +9,11 @@ VENV_TGB_DIR=".venv/lib/python3.10/site-packages/tgb/datasets"
 
 DATASETS=(
     "tgbl_wiki"
+    "tgbl_coin"
+    "tgbl_flight"
+    "tgbn_trade"
     "tgbn_genre"
+    "tgbn_reddit"
 )
 
 print_usage() {
