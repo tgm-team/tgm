@@ -156,12 +156,7 @@ class TGAT(nn.Module):
             ),
         )
         z = self.merge_layers[1](out, z0['n'])
-
-        S, D = batch.src.numel(), batch.dst.numel()
-        z_src, z_dst, z_neg = z[:D], z[S : S + D], z[S + D :]
-        if batch.is_negative:
-            return z_src, z_neg
-        return z_src, z_dst
+        return z
 
 
 class LinkPredictor(nn.Module):
@@ -189,11 +184,9 @@ def train(
     idx, rocs, aps = 0, [], []
     for batch in tqdm(loader):
         opt.zero_grad()
-        batch.src_ids, batch.dst_ids, batch.is_negative = batch.src, batch.dst, False
-        z_src, z_dst = encoder(batch, static_node_feats)
-
-        batch.dst_ids, batch.is_negative = batch.neg, True
-        _, z_neg = encoder(batch, static_node_feats)
+        z = encoder(batch, static_node_feats)
+        S, D = batch.src.numel(), batch.dst.numel()
+        z_src, z_dst, z_neg = z[:D], z[S : S + D], z[S + D :]
 
         pos_out = decoder(z_src, z_dst)
         neg_out = decoder(z_src, z_neg)
@@ -230,20 +223,14 @@ def eval(
     perf_list = []
     batch_id = 0
     for batch in tqdm(loader):
-        for idx, neg_batch in enumerate(batch.neg_batch_list):
-            batch.src_ids = torch.tensor([batch.src[idx]])
-            batch.dst_ids = torch.tensor([batch.dst[idx]])
-            batch.time = torch.tensor([batch.time[idx]]).repeat(len(batch.dst_ids))
-            batch.is_negative = False
-            z_src, z_dst = encoder(batch, static_node_feats)
-
-            batch.dst_ids = torch.tensor(neg_batch)
-            batch.is_negative = True
-            _, z_neg_dst = encoder(batch, static_node_feats)
-            z_neg_src = z_src.repeat(z_neg_dst.shape[0], 1)
+        for idx, neg_batch in enumerate(batch.neg_batch_list):  # Why the loop?
+            z = encoder(batch, static_node_feats)
+            S, D = batch.src.numel(), batch.dst.numel()
+            z_src, z_dst, z_neg = z[:D], z[S : S + D], z[S + D :]
+            z_neg_src = z_src.repeat(z_neg.shape[0], 1)
 
             pos_out = decoder(z_src, z_dst)
-            neg_out = decoder(z_neg_src, z_neg_dst)
+            neg_out = decoder(z_neg_src, z_neg)
 
             input_dict = {
                 'y_pred_pos': pos_out[0].detach().cpu().numpy(),
