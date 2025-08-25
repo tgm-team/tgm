@@ -105,7 +105,6 @@ class TGAT(nn.Module):
         self, batch: DGBatch, static_node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
-
         B = len(batch.nids[0])
         NBR = batch.nbr_nids[0].shape[-1]  # assume uniform for simplicity
 
@@ -223,8 +222,8 @@ def eval(
     perf_list = []
     batch_id = 0
     for batch in tqdm(loader):
+        z = encoder(batch, static_node_feats)
         for idx, neg_batch in enumerate(batch.neg_batch_list):  # Why the loop?
-            z = encoder(batch, static_node_feats)
             S, D = batch.src.numel(), batch.dst.numel()
             z_src, z_dst, z_neg = z[:D], z[S : S + D], z[S + D :]
             z_neg_src = z_src.repeat(z_neg.shape[0], 1)
