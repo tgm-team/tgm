@@ -74,7 +74,6 @@ class DGStorageArrayBackend(DGStorageBase):
         seed_nodes: Tensor,
         num_nbrs: int,
         slice: DGSliceTracker,
-        sampling_strategy: str = 'uniform',
         empty=-1,
     ) -> Tuple[Tensor, ...]:
         # TODO: Take in a sample_func to enable more than uniform sampling
@@ -114,11 +113,8 @@ class DGStorageArrayBackend(DGStorageBase):
                 continue
 
             # Subsample if we have more neighbours than was queried
-            if num_nbrs != -1 and len(node_nbrs) > num_nbrs:
-                if sampling_strategy == 'uniform':
-                    node_nbrs = random.sample(node_nbrs, k=num_nbrs)
-                elif sampling_strategy == 'recent':
-                    node_nbrs = sorted(node_nbrs, key=lambda x: x[0], reverse=True)[:num_nbrs]
+            if len(node_nbrs) > num_nbrs:
+                node_nbrs = random.sample(node_nbrs, k=num_nbrs)
 
             nbr_ids, times, feats = [], [], []
             for eid, nbr_id in node_nbrs:

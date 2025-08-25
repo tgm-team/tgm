@@ -266,8 +266,8 @@ class NeighborSamplerHook(StatelessHook):
     def __init__(self, num_nbrs: List[int]) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
-        if not all([isinstance(x, int) and (x == -1 or x > 0) for x in num_nbrs]):
-            raise ValueError('Each value in num_nbrs must be a positive integer or -1')
+        if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
+            raise ValueError('Each value in num_nbrs must be a positive integer')
         self._num_nbrs = num_nbrs
 
     @property
