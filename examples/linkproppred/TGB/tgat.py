@@ -197,17 +197,20 @@ def eval(
     batch_id = 0
     for batch in tqdm(loader):
         z = encoder(batch, static_node_feats)
-        for idx, neg_batch in enumerate(batch.neg_batch_list):  # Why the loop?
-            S, D = batch.src.numel(), batch.dst.numel()
-            z_src, z_dst, z_neg = z[:D], z[S : S + D], z[S + D :]
-            z_neg_src = z_src.repeat(z_neg.shape[0], 1)
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.src[idx].repeat(len(dst_ids))
 
-            pos_out = decoder(z_src, z_dst)
-            neg_out = decoder(z_neg_src, z_neg)
+            id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
+            src_idx = torch.tensor([id_map[n.item()] for n in src_ids], device=z.device)
+            dst_idx = torch.tensor([id_map[n.item()] for n in dst_ids], device=z.device)
+            z_src = z[src_idx]
+            z_dst = z[dst_idx]
+            y_pred = decoder(z_src, z_dst)
 
             input_dict = {
-                'y_pred_pos': pos_out[0].detach().cpu().numpy(),
-                'y_pred_neg': neg_out.detach().cpu().numpy(),
+                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
+                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
