@@ -19,6 +19,7 @@ from tgm.hooks import (
     RecencyNeighborHook,
     TGBNegativeEdgeSamplerHook,
 )
+from tgm.hooks.hooks import DeviceTransferHook
 from tgm.loader import DGDataLoader
 from tgm.nn import TemporalAttention, Time2Vec
 from tgm.util.seed import seed_everything
@@ -250,15 +251,16 @@ train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())
 val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
 test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
-hook_manager = HookManager()
-hook_manager.register('train', train_neg_hook)
-hook_manager.register('val', val_neg_hook)
-hook_manager.register('test', test_neg_hook)
-hook_manager.register_shared(nbr_hook)
+hm = HookManager()
+hm.register('train', train_neg_hook)
+hm.register('val', val_neg_hook)
+hm.register('test', test_neg_hook)
+hm.register_shared(nbr_hook)
+hm.register_shared(DeviceTransferHook(args.device))
 
-train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hook_manager)
-val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hook_manager)
-test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hook_manager)
+train_loader = DGDataLoader(train_dg, args.bsize, hm=hm)
+val_loader = DGDataLoader(val_dg, args.bsize, hm=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hm=hm)
 
 encoder = TGAT(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
@@ -274,13 +276,13 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
-    with hook_manager.activate('train'):
+    with hm.activate('train'):
         start_time = time.perf_counter()
         loss = train(train_loader, static_node_feats, encoder, decoder, opt)
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-    with hook_manager.activate('val'):
+    with hm.activate('val'):
         val_results = eval(
             val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
         )
@@ -291,9 +293,9 @@ for epoch in range(1, args.epochs + 1):
     )
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
-        hook_manager.reset_state()
+        hm.reset_state()
 
-with hook_manager.activate('test'):
+with hm.activate('test'):
     test_results = eval(
         test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
     )

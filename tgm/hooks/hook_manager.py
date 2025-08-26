@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, Set
 
 from tgm import DGBatch, DGraph
-from tgm.hooks import DGHook
+from tgm.hooks import DeduplicationHook, DGHook
 
 
 class HookManager:
@@ -13,7 +13,8 @@ class HookManager:
         self._shared_hooks: List[DGHook] = []
         self._active_key: str | None = None
 
-        # TODO: Do we still want to implicitly add Dedup/DeviceTransfer hooks?
+        # Implicitly add deduplication
+        self._shared_hooks.append(DeduplicationHook())
 
     def register_shared(self, hook: DGHook) -> None:
         self._ensure_valid_hook(hook)
@@ -85,4 +86,21 @@ class HookManager:
             )
 
     def _topological_sort_hooks(self, hooks: List[DGHook]) -> List[DGHook]:
-        return hooks
+        produced: Set[str] = set()
+        ordered: List[DGHook] = []
+        remaining = hooks[:]  # Shalllow copy to avoid mutating
+
+        while remaining:
+            ready_hooks = [h for h in remaining if h.requires.issubset(produced)]
+
+            if not ready_hooks:
+                missing = {h: h.requires - produced for h in remaining}
+                raise ValueError(f'Cannot resolve hook dependencies: {missing}')
+
+            # Schedule ready hooks
+            for hook in ready_hooks:
+                ordered.append(hook)
+                produced |= hook.produces
+                remaining.remove(hook)
+
+        return ordered
