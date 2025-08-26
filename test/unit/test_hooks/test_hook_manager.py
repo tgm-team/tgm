@@ -152,8 +152,8 @@ def test_topo_sort_no_solution_missing_requires():
 
 @pytest.mark.skip(
     'TODO: This test only makes sense if we enable registering multiple hooks at once. '
-    'Otherwise, the "missing produced" will trigger an exception before the secon hook can '
-    'be registered. Skiping for now, and should reconsider enabling multiple hook registry.'
+    'Otherwise, the "missing produced" will trigger an exception before the second hook can '
+    'be registered. Skipping for now, and should reconsider enabling multiple hook registry.'
 )
 def test_topo_sort_no_solution_no_dag():
     h1 = MockHook()
