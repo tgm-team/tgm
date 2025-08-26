@@ -6,7 +6,7 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from tgm import DGData, DGraph
-from tgm.hooks import NegativeEdgeSamplerHook
+from tgm.hooks import HookManager, NegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
 from tgm.util.seed import seed_everything
@@ -51,11 +51,12 @@ train_dg = DGraph(train_data)
 test_dg = DGraph(test_data)
 
 train_data = train_dg.materialize(materialize_features=False)
-test_loader = DGDataLoader(
-    test_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
-    batch_size=args.bsize,
-)
+test_neg_hook = NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes)
+
+hm = HookManager()
+hm.register('test', test_neg_hook)
+
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = EdgeBankPredictor(
     train_data.src,
@@ -69,5 +70,6 @@ model = EdgeBankPredictor(
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 test_metrics = MetricCollection(metrics, prefix='Test')
 
-test_results = eval(test_loader, model, test_metrics)
-print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+with hm.activate('test'):
+    test_results = eval(test_loader, model, test_metrics)
+    print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

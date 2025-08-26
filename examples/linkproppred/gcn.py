@@ -11,7 +11,7 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
-from tgm.hooks import NegativeEdgeSamplerHook
+from tgm.hooks import HookManager, NegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.util.seed import seed_everything
 
@@ -182,27 +182,24 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-train_loader = DGDataLoader(
-    train_dg,
-    hook=NegativeEdgeSamplerHook(
-        low=int(train_dg.edges[1].min()), high=int(train_dg.edges[1].max())
-    ),
-    batch_unit=args.batch_time_gran,
+train_neg_hook = NegativeEdgeSamplerHook(
+    low=int(train_dg.edges[1].min()), high=int(train_dg.edges[1].max())
 )
-val_loader = DGDataLoader(
-    val_dg,
-    hook=NegativeEdgeSamplerHook(
-        low=int(val_dg.edges[1].min()), high=int(val_dg.edges[1].max())
-    ),
-    batch_unit=args.batch_time_gran,
+val_neg_hook = NegativeEdgeSamplerHook(
+    low=int(val_dg.edges[1].min()), high=int(val_dg.edges[1].max())
 )
-test_loader = DGDataLoader(
-    test_dg,
-    hook=NegativeEdgeSamplerHook(
-        low=int(test_dg.edges[1].min()), high=int(test_dg.edges[1].max())
-    ),
-    batch_unit=args.batch_time_gran,
+test_neg_hook = NegativeEdgeSamplerHook(
+    low=int(test_dg.edges[1].min()), high=int(test_dg.edges[1].max())
 )
+
+hm = HookManager(args.device)
+hm.register('train', train_neg_hook)
+hm.register('val', val_neg_hook)
+hm.register('test', test_neg_hook)
+
+train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
 
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
@@ -225,17 +222,20 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
-    start_time = time.perf_counter()
-    loss = train(train_loader, static_node_feats, model, opt)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
+    with hm.activate('train'):
+        start_time = time.perf_counter()
+        loss = train(train_loader, static_node_feats, model, opt)
+        end_time = time.perf_counter()
+        latency = end_time - start_time
 
-    val_results = eval(val_loader, static_node_feats, model, val_metrics)
-    val_metrics.reset()
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
-    )
+    with hm.activate('val'):
+        val_results = eval(val_loader, static_node_feats, model, val_metrics)
+        val_metrics.reset()
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+            + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+        )
 
-test_results = eval(test_loader, static_node_feats, model, test_metrics)
-print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+with hm.activate('test'):
+    test_results = eval(test_loader, static_node_feats, model, test_metrics)
+    print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

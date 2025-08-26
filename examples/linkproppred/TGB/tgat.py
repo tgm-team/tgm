@@ -256,9 +256,9 @@ hm.register('val', val_neg_hook)
 hm.register('test', test_neg_hook)
 hm.register_shared(nbr_hook)
 
-train_loader = DGDataLoader(train_dg, args.bsize, hm=hm)
-val_loader = DGDataLoader(val_dg, args.bsize, hm=hm)
-test_loader = DGDataLoader(test_dg, args.bsize, hm=hm)
+train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 encoder = TGAT(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
@@ -297,4 +297,4 @@ with hm.activate('test'):
     test_results = eval(
         test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
     )
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

@@ -7,7 +7,7 @@ from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGData, DGraph
-from tgm.hooks import TGBNegativeEdgeSamplerHook
+from tgm.hooks import HookManager, TGBNegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
 from tgm.util.seed import seed_everything
@@ -75,16 +75,15 @@ val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
 
 train_data = train_dg.materialize(materialize_features=False)
-val_loader = DGDataLoader(
-    val_dg,
-    hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')],
-    batch_size=args.bsize,
-)
-test_loader = DGDataLoader(
-    test_dg,
-    hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')],
-    batch_size=args.bsize,
-)
+val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
+test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
+
+hm = HookManager()
+hm.register('val', val_neg_hook)
+hm.register('test', test_neg_hook)
+
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = EdgeBankPredictor(
     train_data.src,
@@ -95,7 +94,10 @@ model = EdgeBankPredictor(
     pos_prob=args.pos_prob,
 )
 
-val_results = eval(val_loader, model, eval_metric, evaluator)
-print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
-test_results = eval(test_loader, model, eval_metric, evaluator)
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+with hm.activate('val'):
+    val_results = eval(val_loader, model, eval_metric, evaluator)
+    print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
+
+with hm.activate('test'):
+    test_results = eval(test_loader, model, eval_metric, evaluator)
+    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

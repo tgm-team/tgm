@@ -14,6 +14,7 @@ from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
+from tgm.hooks import HookManager
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
 from tgm.util.seed import seed_everything
@@ -172,9 +173,10 @@ num_nodes = DGraph(train_data).num_nodes
 label_dim = train_dg.dynamic_node_feats_dim
 evaluator = Evaluator(name=args.dataset)
 
-train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran)
-val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran)
-test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran)
+hm = HookManager(args.device)
+train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
 
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats

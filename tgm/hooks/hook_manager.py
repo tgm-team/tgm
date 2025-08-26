@@ -16,9 +16,14 @@ class HookManager:
         self._shared_hooks: List[DGHook] = []
         self._active_key: str | None = None
 
-        # Implicitly add deduplication and device as shared hooks
+        # Implicitly add deduplication shared hook
         self._shared_hooks.append(DeduplicationHook())
         self._shared_hooks.append(DeviceTransferHook(device))
+
+        # Device transfer hook is a special case. It is always run first,
+        # and triggers even when no _active_key is present. This happens
+        # if a user want to run data loader on gpu, without any addition hooks (e.g. negatives, neighbors)
+        self._device_hook = DeviceTransferHook(device)
 
     def register_shared(self, hook: DGHook) -> None:
         self._ensure_valid_hook(hook)
@@ -60,6 +65,12 @@ class HookManager:
 
     def execute_active_hooks(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
+
+        # Always run device hook first
+        batch = self._device_hook(dg, batch)
+
+        if self._active_key is None:
+            return batch
 
         for hook in self.get_active_hooks():
             batch = hook(dg, batch)

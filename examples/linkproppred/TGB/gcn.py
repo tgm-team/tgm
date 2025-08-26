@@ -16,7 +16,11 @@ from torch_geometric.nn import GCNConv
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
-from tgm.hooks import NegativeEdgeSamplerHook, TGBNegativeEdgeSamplerHook
+from tgm.hooks import (
+    HookManager,
+    NegativeEdgeSamplerHook,
+    TGBNegativeEdgeSamplerHook,
+)
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
@@ -230,7 +234,6 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 
 train_data_discretized = train_data.discretize(args.snapshot_time_gran)
@@ -245,30 +248,31 @@ test_data_discretized = test_data.discretize(args.snapshot_time_gran)
 test_dg = DGraph(test_data, device=args.device)
 test_snapshots = DGraph(test_data_discretized, device=args.device)
 
-train_loader = DGDataLoader(
-    train_dg,
-    hook=[NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes)],
-    batch_size=args.bsize,
-)
+
+_, dst, _ = train_dg.edges
+train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
+test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
+
+hm = HookManager(args.device)
+hm.register('train', train_neg_hook)
+hm.register('val', val_neg_hook)
+hm.register('test', test_neg_hook)
+
+train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
+
 train_snapshots_loader = DGDataLoader(
-    train_snapshots,
-    hook=[NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes)],
-    batch_unit=args.snapshot_time_gran,
+    train_snapshots, batch_unit=args.snapshot_time_gran, hook_manager=hm
+)
+val_snapshots_loader = DGDataLoader(
+    val_snapshots, batch_unit=args.snapshot_time_gran, hook_manager=hm
+)
+test_snapshots_loader = DGDataLoader(
+    test_snapshots, batch_unit=args.snapshot_time_gran, hook_manager=hm
 )
 
-val_loader = DGDataLoader(
-    val_dg,
-    hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')],
-    batch_size=args.bsize,
-)
-val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time_gran)
-
-test_loader = DGDataLoader(
-    test_dg,
-    hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')],
-    batch_size=args.bsize,
-)
-test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran)
 
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
@@ -294,23 +298,43 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
-    start_time = time.perf_counter()
-    loss, z = train_in_batches(
-        train_loader,
-        train_snapshots_loader,
-        static_node_feats,
-        encoder,
-        decoder,
-        opt,
-        conversion_rate,
-    )
-    end_time = time.perf_counter()
-    latency = end_time - start_time
-    print(f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f}')
+    with hm.activate('train'):
+        start_time = time.perf_counter()
+        loss, z = train_in_batches(
+            train_loader,
+            train_snapshots_loader,
+            static_node_feats,
+            encoder,
+            decoder,
+            opt,
+            conversion_rate,
+        )
+        end_time = time.perf_counter()
+        latency = end_time - start_time
+        print(f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f}')
 
-    val_results = eval(
-        val_loader,
-        val_snapshots_loader,
+    with hm.activate('val'):
+        val_results = eval(
+            val_loader,
+            val_snapshots_loader,
+            static_node_feats,
+            z,
+            encoder,
+            decoder,
+            eval_metric,
+            evaluator,
+            conversion_rate,
+        )
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+            + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+        )
+
+
+with hm.activate('test'):
+    test_results = eval(
+        test_loader,
+        test_snapshots_loader,
         static_node_feats,
         z,
         encoder,
@@ -319,20 +343,4 @@ for epoch in range(1, args.epochs + 1):
         evaluator,
         conversion_rate,
     )
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-    )
-
-test_results = eval(
-    test_loader,
-    test_snapshots_loader,
-    static_node_feats,
-    z,
-    encoder,
-    decoder,
-    eval_metric,
-    evaluator,
-    conversion_rate,
-)
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
