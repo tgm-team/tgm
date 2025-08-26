@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from tgm.constants import INVALID_NODE_ID
+from tgm.constants import PADDED_NODE_ID
 from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
@@ -54,9 +54,9 @@ class DGData:
             raise ValueError(
                 f'edge_index must have shape [num_edges, 2], got: {self.edge_index.shape}',
             )
-        if torch.any(self.edge_index == INVALID_NODE_ID):
+        if torch.any(self.edge_index == PADDED_NODE_ID):
             raise ValueError(
-                f'Edge events contains node ids matching INVALID_NODE_ID: {INVALID_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
+                f'Edge events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
             )
 
         num_edges = self.edge_index.shape[0]
@@ -105,9 +105,9 @@ class DGData:
                     'node_ids must have shape [num_node_events], ',
                     f'got {num_node_events} node events and shape {self.node_ids.shape}',  # type: ignore
                 )
-            if torch.any(self.node_ids == INVALID_NODE_ID):  # type: ignore
+            if torch.any(self.node_ids == PADDED_NODE_ID):  # type: ignore
                 raise ValueError(
-                    f'Node events contains node ids matching INVALID_NODE_ID: {INVALID_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
+                    f'Node events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
                 )
 
             # Validate dynamic node features (could be None)

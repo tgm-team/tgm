@@ -8,7 +8,7 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm._storage import DGSliceTracker
-from tgm.constants import INVALID_NODE_ID
+from tgm.constants import PADDED_NODE_ID
 
 
 @runtime_checkable
@@ -342,7 +342,7 @@ class RecencyNeighborHook(StatefulHook):
 
         # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
         self._nbr_nids = torch.full(
-            (num_nodes, self._max_nbrs), INVALID_NODE_ID, dtype=torch.long
+            (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.long
         )
         self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
         self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))

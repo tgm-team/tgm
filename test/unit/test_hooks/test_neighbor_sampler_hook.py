@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm.constants import INVALID_NODE_ID
+from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
 from tgm.hooks import NeighborSamplerHook
 from tgm.loader import DGDataLoader
@@ -134,13 +134,13 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nids[0][0] == 0
     assert nids[0][1] == 1
     assert nbr_nids.shape == (1, 2, 1)
-    assert nbr_nids[0][0][0] == INVALID_NODE_ID
-    assert nbr_nids[0][1][0] == INVALID_NODE_ID
+    assert nbr_nids[0][0][0] == PADDED_NODE_ID
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
     assert nbr_times.shape == (1, 2, 1)
-    assert nbr_times[0][0][0] == INVALID_NODE_ID
-    assert nbr_times[0][1][0] == INVALID_NODE_ID
+    assert nbr_times[0][0][0] == PADDED_NODE_ID
+    assert nbr_times[0][1][0] == PADDED_NODE_ID
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
-    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == INVALID_NODE_ID
+    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == PADDED_NODE_ID
 
     batch_2 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
@@ -149,13 +149,13 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nids[0][1] == 2
     assert nbr_nids.shape == (1, 2, 1)
     assert nbr_nids[0][0][0] == 1
-    assert nbr_nids[0][1][0] == INVALID_NODE_ID
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
     assert nbr_times.shape == (1, 2, 1)
     assert nbr_times[0][0][0] == 1
-    assert nbr_times[0][1][0] == INVALID_NODE_ID
+    assert nbr_times[0][1][0] == PADDED_NODE_ID
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 1.0
-    assert nbr_feats[0][1][0][0] == INVALID_NODE_ID
+    assert nbr_feats[0][1][0][0] == PADDED_NODE_ID
 
     batch_3 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
@@ -164,13 +164,13 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nids[0][1] == 3
     assert nbr_nids.shape == (1, 2, 1)
     assert nbr_nids[0][0][0] == 0
-    assert nbr_nids[0][1][0] == INVALID_NODE_ID
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
     assert nbr_times.shape == (1, 2, 1)
     assert nbr_times[0][0][0] == 2
-    assert nbr_times[0][1][0] == INVALID_NODE_ID
+    assert nbr_times[0][1][0] == PADDED_NODE_ID
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 2.0
-    assert nbr_feats[0][1][0][0] == INVALID_NODE_ID
+    assert nbr_feats[0][1][0][0] == PADDED_NODE_ID
 
     batch_4 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)

@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import torch
 from torch import Tensor
 
-from tgm.constants import INVALID_NODE_ID
+from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
 
 from ..base import DGSliceTracker, DGStorageBase
@@ -104,7 +104,7 @@ class DGStorageArrayBackend(DGStorageBase):
 
         B = len(seed_nodes)
         nbr_nids = torch.full(
-            (B, num_nbrs), INVALID_NODE_ID, dtype=torch.long, device=device
+            (B, num_nbrs), PADDED_NODE_ID, dtype=torch.long, device=device
         )
         nbr_times = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
         nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
