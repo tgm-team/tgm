@@ -1,68 +1,88 @@
 from __future__ import annotations
 
-from typing import List, Set
+from contextlib import contextmanager
+from typing import Any, Dict, Iterator, List
 
 from tgm import DGBatch, DGraph
-from tgm.hooks import (
-    DeduplicationHook,
-    DeviceTransferHook,
-    DGHook,
-    PinMemoryHook,
-)
+from tgm.hooks import DGHook
 
 
 class HookManager:
-    def __init__(self, dg: DGraph, hooks: List[DGHook]) -> None:
-        if not isinstance(hooks, list):
-            raise TypeError(f'Invalid hook type: {type(hooks)}')
-        bad_hook_names = [type(h).__name__ for h in hooks if not isinstance(h, DGHook)]
-        if len(bad_hook_names):
-            raise TypeError(
-                f'These hooks do not correctly implement the DGHook protocol: {bad_hook_names}, '
-                'ensure there is a __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch implemented'
+    def __init__(self) -> None:
+        self._key_to_hooks: Dict[str, List[DGHook]] = {}  # Topological order
+        self._shared_hooks: List[DGHook] = []
+        self._active_key: str | None = None
+
+        # TODO: Do we still want to implicitly add Dedup/DeviceTransfer hooks?
+
+    def register_shared(self, hook: DGHook) -> None:
+        self._ensure_valid_hook(hook)
+        if self._active_key is not None:
+            raise RuntimeError(
+                'Cannot register hooks while a key is active. Register hooks before using `activate`.'
+            )
+        self._shared_hooks.append(hook)
+
+        # Recompute execution order for all keys
+        for key, hooks in self._key_to_hooks.items():
+            self._key_to_hooks[key] = self._topological_sort_hooks(
+                self._shared_hooks + hooks
             )
 
-        # Implicitly add dedup hook after all user-defined hooks and before device transfer
-        hooks.append(DeduplicationHook())
+    def register(self, key: str, hook: DGHook) -> None:
+        self._ensure_valid_hook(hook)
+        if self._active_key is not None:
+            raise RuntimeError(
+                'Cannot register hooks while a key is active. Register hooks before using `activate`.'
+            )
 
-        if dg.device.type != 'cpu':
-            hooks.append(PinMemoryHook())
-            hooks.append(DeviceTransferHook(dg.device))
+        if key not in self._key_to_hooks:
+            self._key_to_hooks[key] = []
+        self._key_to_hooks[key].append(hook)
 
-        self.hooks = hooks
-        self._validate_hook_dependencies()
+        # Precompute execution order for the key
+        self._key_to_hooks[key] = self._topological_sort_hooks(
+            self._shared_hooks + self._key_to_hooks[key]
+        )
 
-    def reset_state(self) -> None:
-        for hook in self.hooks:
-            hook.reset_state()
+    def get_active_hooks(self) -> List[DGHook]:
+        if self._active_key is None:
+            raise RuntimeError('No active key set. Use active() context manager.')
+        return self._key_to_hooks[self._active_key]
 
-    @classmethod
-    def from_any(
-        cls, dg: DGraph, hook_like: HookManager | DGHook | List[DGHook] | None
-    ) -> HookManager:
-        if isinstance(hook_like, cls):
-            return hook_like
-        elif hook_like is None:
-            return cls(dg, hooks=[])
-        elif isinstance(hook_like, DGHook):
-            return cls(dg, hooks=[hook_like])
-        elif isinstance(hook_like, list):
-            return cls(dg, hooks=hook_like)
-        else:
-            raise TypeError(f'Invalid hook type: {type(hook_like)}')
+    def set_active_hooks(self, key: str) -> None:
+        self._active_key = key
 
-    def __call__(self, dg: DGraph) -> DGBatch:
+    def execute_active_hooks(self, dg: DGraph) -> DGBatch:
         batch = dg.materialize()
-        for hook in self.hooks:
+
+        for hook in self.get_active_hooks():
             batch = hook(dg, batch)
         return batch
 
-    def _validate_hook_dependencies(self) -> None:
-        produced: Set[str] = set()
-        for hook in self.hooks:
-            missing = hook.requires - produced
-            if missing:
-                raise ValueError(
-                    f'{hook.__class__.__name__} is missing required fields: {missing}'
-                )
-            produced |= hook.produces
+    def reset_state(self, key: str | None = None) -> None:
+        for hook in self._shared_hooks:
+            hook.reset_state()
+
+        keys_to_reset = [key] if key is not None else list(self._key_to_hooks.keys())
+        for k in keys_to_reset:
+            for h in self._key_to_hooks.get(k, []):
+                h.reset_state()
+
+    @contextmanager
+    def activate(self, key: str) -> Iterator[None]:
+        prev_key = self._active_key
+        self.set_active_hooks(key)
+        try:
+            yield
+        finally:
+            self._active_key = prev_key  # Restore previous active key
+
+    def _ensure_valid_hook(self, hook: Any) -> None:
+        if not isinstance(hook, DGHook):
+            raise TypeError(
+                f'Cannot register hook {type(hook).__name__}: must implement __call__(dg: DGraph, batch: DGBatch) -> DGBatch and reset_state()'
+            )
+
+    def _topological_sort_hooks(self, hooks: List[DGHook]) -> List[DGHook]:
+        return hooks
