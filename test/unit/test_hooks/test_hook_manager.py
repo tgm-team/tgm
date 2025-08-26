@@ -1,41 +1,31 @@
-from typing import Set
-
 import pytest
 import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.hooks import DeduplicationHook, HookManager
+from tgm.hooks import (
+    DeduplicationHook,
+    HookManager,
+    StatefulHook,
+    StatelessHook,
+)
+from tgm.hooks.hooks import DeviceTransferHook
 
 
-class MockHook:
-    requires: Set[str] = set()
-    produces: Set[str] = set()
-    has_state: bool = False
-
+class MockHook(StatelessHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.time *= 2
         return batch
 
-    def reset_state(self) -> None:
-        pass
 
-
-class MockHookRequires:
+class MockHookRequires(StatelessHook):
     requires = {'foo'}
-    produces: Set[str] = set()
-    has_state: bool = False
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         return batch
 
-    def reset_state(self) -> None:
-        pass
 
-
-class MockHookWithState:
-    requires: Set[str] = set()
-    produces: Set[str] = set()
+class MockHookWithState(StatefulHook):
     has_state: bool = True
 
     def __init__(self) -> None:
@@ -57,89 +47,201 @@ def dg():
     return DGraph(data)
 
 
-def test_hook_manager_init_cpu_empty(dg):
-    hook = HookManager(dg, hooks=[])
-    exp_batch = dg.materialize()
-    assert hook(dg) == exp_batch
+def test_str():
+    hm = HookManager()
+    assert isinstance(str(hm), str)
+
+    hm.register_shared(MockHook())
+    hm.register('train', MockHookRequires())
+    hm.register('train', MockHookWithState())
+    hm.register('val', MockHookRequires())
+    assert isinstance(str(hm), str)
 
 
-def test_hook_manager_init_cpu_non_empty(dg):
-    hook = HookManager(dg, hooks=[MockHook()])
-    exp_batch = dg.materialize()
-    exp_batch.time *= 2
-    assert hook(dg) == exp_batch
-
-
-@pytest.mark.gpu
-def test_hook_manager_init_gpu_empty(dg):
-    dg = dg.to('cuda')
-
-    hook = HookManager(dg, hooks=[])
-    assert len(hook.hooks) == 3
-
-    exp_batch = dg.materialize()
-    batch = hook(dg)
-    torch.testing.assert_close(exp_batch.src, batch.src)
-    torch.testing.assert_close(exp_batch.dst, batch.dst)
-    torch.testing.assert_close(exp_batch.time, batch.time)
+def test_init_cpu():
+    hm = HookManager()
+    assert isinstance(hm._device_hook, DeviceTransferHook)
+    assert any(isinstance(h, DeduplicationHook) for h in hm._shared_hooks)
 
 
 @pytest.mark.gpu
-def test_hook_manager_init_gpu_non_empty(dg):
-    dg = dg.to('cuda')
-
-    hook = HookManager(dg, hooks=[MockHook()])
-    assert len(hook.hooks) == 4
-
-    exp_batch = dg.materialize()
-    exp_batch.time *= 2
-    batch = hook(dg)
-    torch.testing.assert_close(exp_batch.src, batch.src)
-    torch.testing.assert_close(exp_batch.dst, batch.dst)
-    torch.testing.assert_close(exp_batch.time, batch.time)
+def test_init_gpu():
+    hm = HookManager(device='cuda')
+    assert isinstance(hm._device_hook, DeviceTransferHook)
 
 
-def test_hook_manager_bad_hooks(dg):
+def test_register():
+    hm = HookManager()
+    hook = MockHook()
+    hm.register('foo', hook)
+    assert hook in hm._key_to_hooks['foo']
+    assert len(hm._key_to_hooks['foo']) == 2
+
+
+def test_register_multiple():
+    hm = HookManager()
+    hm.register_shared(MockHook())
+    hm.register('train', MockHookRequires())
+    hm.register('train', MockHookWithState())
+    hm.register('val', MockHookRequires())
+
+    hm.set_active_hooks('train')
+    assert len(hm.get_active_hooks()) == 4  # dedup, shared, requires, state
+
+    hm.set_active_hooks('val')
+    assert len(hm.get_active_hooks()) == 3  # dedup, shared, requires
+
+
+def test_register_shared():
+    hm = HookManager()
+    hook = MockHook()
+    hm.register_shared(hook)
+    assert hook in hm._shared_hooks
+    assert len(hm._shared_hooks) == 2
+
+
+def test_attempt_register_bad_hook():
+    hm = HookManager()
     with pytest.raises(TypeError):
-        _ = HookManager(dg, hooks='foo')
+        hm.register('foo', object())
+
+
+def test_attempt_register_shared_bad_hook():
+    hm = HookManager()
     with pytest.raises(TypeError):
-        _ = HookManager(dg, hooks=['foo'])
+        hm.register_shared(object())
 
 
-def test_hook_manager_bad_hook_dependancies(dg):
+def test_attempt_regiser_while_active():
+    hm = HookManager()
+    hook = MockHook()
+    with hm.activate('train'):
+        with pytest.raises(RuntimeError):
+            hm.register('train', hook)
+
+
+def test_attempt_register_shared_while_active():
+    hm = HookManager()
+    hook = MockHook()
+    with hm.activate('train'):
+        with pytest.raises(RuntimeError):
+            hm.register_shared(hook)
+
+
+def test_topo_sort_required():
+    h1 = MockHook()
+    h2 = MockHookRequires()
+    h2.requires = {'foo'}
+    h1.produces = {'foo'}
+
+    hm = HookManager()
+    hm.register('train', h2)
+    hm.register('train', h1)
+    hooks_ordered = hm._key_to_hooks['train']
+    assert hooks_ordered.index(h1) < hooks_ordered.index(h2)
+    assert len(hm._key_to_hooks['train']) == 3
+
+
+def test_topo_sort_no_dag_solution():
+    h1 = MockHook()
+    h2 = MockHook()
+    h1.requires = {'x'}
+    h2.requires = {'y'}
+
+    # Cycle-like missing dependency
+    hm = HookManager()
+    hm.register('train', h1)
+    hm.register('train', h2)
+
     with pytest.raises(ValueError):
-        _ = HookManager(dg, hooks=[MockHook(), MockHookRequires()])
+        hm._topological_sort_hooks([h1, h2] + hm._shared_hooks)
 
 
-def test_hook_manager_from_any_none(dg):
-    hook = HookManager.from_any(dg, None)
-    assert len(hook.hooks) == 1
-    assert isinstance(hook.hooks[0], DeduplicationHook)
+def test_get_active_hooks():
+    hm = HookManager()
+    hook = MockHook()
+    hm.register('train', hook)
+    hm.set_active_hooks('train')
+    assert len(hm.get_active_hooks()) == 2  # dedup, and MockHook
+    assert any(isinstance(h, DeduplicationHook) for h in hm.get_active_hooks())
+    assert any(isinstance(h, MockHook) for h in hm.get_active_hooks())
 
 
-def test_hook_manager_from_manager(dg):
-    hook = HookManager(dg, hooks=[])
-    hook2 = HookManager.from_any(dg, hook)
-    assert hook is hook2
+def test_get_active_hooks_no_active_keys():
+    hm = HookManager()
+    hook = MockHook()
+    hm.register('train', hook)
+    with pytest.raises(RuntimeError):
+        hm.get_active_hooks()
 
 
-def test_hook_manager_from_single_hook(dg):
-    hook = HookManager.from_any(dg, MockHook())
-    assert len(hook.hooks) == 2
+def execute_active_hooks_empty(dg):
+    hm = HookManager()
+    batch = hm.execute_active_hooks(dg)
+    assert isinstance(batch, DGBatch)
+    assert batch.src.device == torch.device('cpu')
 
 
-def test_hook_manager_from_hook_list(dg):
-    hook = HookManager.from_any(dg, [MockHook()])
-    assert len(hook.hooks) == 2
+@pytest.mark.gpu
+def execute_active_hooks_empty_gpu(dg):
+    hm = HookManager(device='cuda')
+    batch = hm.execute_active_hooks(dg)
+    assert isinstance(batch, DGBatch)
+    assert batch.src.device == torch.device('cuda')
 
 
-def test_hook_manager_from_bad_hook_type(dg):
-    with pytest.raises(TypeError):
-        _ = HookManager.from_any(dg, 'foo')
+def execute_active_hooks_keyed(dg):
+    hm = HookManager()
+    hook = MockHook()
+    hm.register('train', hook)
+    hm.set_active_hooks('train')
+    exp_batch = dg.materialize()
+    exp_batch.time *= 2
+    batch = hm.execute_active_hooks(dg)
+    assert batch == exp_batch
 
 
-def test_hook_manager_reset_state(dg):
-    hook = HookManager(dg, hooks=[MockHook(), MockHookWithState()])
-    assert hook.hooks[1].x == 0
-    hook.reset_state()
-    assert hook.hooks[1].x == 1
+def execute_active_hooks_keyed_and_shared(dg):
+    hm = HookManager()
+    hook_shared = MockHook()
+    hook_keyed = MockHook()
+    hm.register_shared(hook_shared)
+    hm.register('train', hook_keyed)
+    hm.set_active_hooks('train')
+    assert len(hm.get_active_hooks()) == 3
+    exp_batch = dg.materialize()
+    exp_batch.time *= 4
+    batch = hm.execute_active_hooks(dg)
+    assert batch == exp_batch
+
+
+def test_reset_state():
+    hm = HookManager()
+    h1 = MockHookWithState()
+    assert h1.x == 0
+    hm.register_shared(h1)
+    hm.reset_state()
+    assert h1.x == 1
+    assert hm._device_hook is not None
+
+
+def test_reset_state_by_key():
+    hm = HookManager()
+    h1 = MockHookWithState()
+    hm.register('train', h1)
+    hm.reset_state('train')
+    assert h1.x == 1
+
+
+def test_activate_ctx():
+    hm = HookManager()
+    hm.register('train', MockHook())
+    hm.register('val', MockHook())
+    with hm.activate('train'):
+        assert hm._active_key == 'train'
+        with hm.activate('val'):
+            assert hm._active_key == 'val'
+
+        assert hm._active_key == 'train'
+
+    assert hm._active_key is None

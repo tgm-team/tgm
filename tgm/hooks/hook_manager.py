@@ -18,12 +18,41 @@ class HookManager:
 
         # Implicitly add deduplication shared hook
         self._shared_hooks.append(DeduplicationHook())
-        self._shared_hooks.append(DeviceTransferHook(device))
 
         # Device transfer hook is a special case. It is always run first,
         # and triggers even when no _active_key is present. This happens
         # if a user want to run data loader on gpu, without any addition hooks (e.g. negatives, neighbors)
         self._device_hook = DeviceTransferHook(device)
+
+    def __str__(self) -> str:
+        lines = ['HookManager:']
+        lines.append(
+            f'  DeviceHook: {self._device_hook.__class__.__name__} '
+            f'(requires={self._device_hook.requires}, produces={self._device_hook.produces})'
+        )
+
+        lines.append('  Shared hooks:')
+        for h in self._shared_hooks:
+            lines.append(
+                f'    - {h.__class__.__name__} '
+                f'(requires={h.requires}, produces={h.produces})'
+            )
+
+        lines.append(f'  Active key: {self._active_key}')
+
+        if self._key_to_hooks:
+            lines.append('  Keyed hooks:')
+            for key, hooks in self._key_to_hooks.items():
+                lines.append(f'    {key}:')
+                for h in hooks:
+                    lines.append(
+                        f'      - {h.__class__.__name__} '
+                        f'(requires={h.requires}, produces={h.produces})'
+                    )
+        else:
+            lines.append('  No keyed hooks registered.')
+
+        return '\n'.join(lines)
 
     def register_shared(self, hook: DGHook) -> None:
         self._ensure_valid_hook(hook)
@@ -35,8 +64,10 @@ class HookManager:
 
         # Recompute execution order for all keys
         for key, hooks in self._key_to_hooks.items():
+            # Only include keyed hooks that are not shared
+            keyed_only = [h for h in hooks if h not in self._shared_hooks]
             self._key_to_hooks[key] = self._topological_sort_hooks(
-                self._shared_hooks + hooks
+                self._shared_hooks + keyed_only
             )
 
     def register(self, key: str, hook: DGHook) -> None:
@@ -50,9 +81,10 @@ class HookManager:
             self._key_to_hooks[key] = []
         self._key_to_hooks[key].append(hook)
 
-        # Precompute execution order for the key
+        # Precompute execution order including shared hooks once
+        keyed_only = [h for h in self._key_to_hooks[key] if h not in self._shared_hooks]
         self._key_to_hooks[key] = self._topological_sort_hooks(
-            self._shared_hooks + self._key_to_hooks[key]
+            self._shared_hooks + keyed_only
         )
 
     def get_active_hooks(self) -> List[DGHook]:
