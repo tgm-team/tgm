@@ -116,8 +116,13 @@ class HookManager:
                     queue.append(v)
 
         if len(ordered) != len(hooks):
-            raise ValueError(
-                'Cannot resolve hook dependencies (cycle or missing producer)'
-            )
+            unresolved = [h for h in hooks if h not in ordered]
+
+            # For each unresolved hook, show which .requires are unsatisfied
+            err_msg = f'Cannot resolve hook dependencies:\n'
+            for h in unresolved:
+                missing = h.requires - set().union(*[u.produces for u in ordered])
+                err_msg += f'\n - {repr(h)} requires {missing} but not produced (or stuck in cycle)'
+            raise ValueError(err_msg)
 
         return ordered
