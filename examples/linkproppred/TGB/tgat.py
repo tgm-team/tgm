@@ -13,7 +13,6 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import (
-    DeviceTransferHook,
     HookManager,
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
@@ -251,12 +250,11 @@ train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())
 val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
 test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
-hm = HookManager()
+hm = HookManager(args.device)
 hm.register('train', train_neg_hook)
 hm.register('val', val_neg_hook)
 hm.register('test', test_neg_hook)
 hm.register_shared(nbr_hook)
-hm.register_shared(DeviceTransferHook(args.device))
 
 train_loader = DGDataLoader(train_dg, args.bsize, hm=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hm=hm)

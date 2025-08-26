@@ -4,18 +4,21 @@ from collections import defaultdict, deque
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List
 
+import torch
+
 from tgm import DGBatch, DGraph
-from tgm.hooks import DeduplicationHook, DGHook
+from tgm.hooks import DeduplicationHook, DeviceTransferHook, DGHook
 
 
 class HookManager:
-    def __init__(self) -> None:
+    def __init__(self, device: str | torch.device = 'cpu') -> None:
         self._key_to_hooks: Dict[str, List[DGHook]] = {}  # Topological order
         self._shared_hooks: List[DGHook] = []
         self._active_key: str | None = None
 
-        # Implicitly add deduplication
+        # Implicitly add deduplication and device as shared hooks
         self._shared_hooks.append(DeduplicationHook())
+        self._shared_hooks.append(DeviceTransferHook(device))
 
     def register_shared(self, hook: DGHook) -> None:
         self._ensure_valid_hook(hook)
