@@ -96,7 +96,9 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
 
         self._dg = dg
         self._batch_size = batch_size
-        self._hook_manager = HookManager() if hook_manager is None else hook_manager
+        self._hook_manager = (
+            HookManager(dg.device) if hook_manager is None else hook_manager
+        )
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
 
         start_idx = 0 if batch_ordered else dg.start_time
