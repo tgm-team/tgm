@@ -11,6 +11,7 @@ from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import (
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
@@ -125,7 +126,7 @@ class TGAT(nn.Module):
                 edge_feat=batch.nbr_feats[hop],
                 nbr_node_feat=nbr_feat,
                 nbr_time_feat=nbr_time_feat,
-                nbr_mask=nbr_mask,
+                valid_nbr_mask=nbr_mask != PADDED_NODE_ID,
             )
             z[batch.global_to_local(seed_nodes)] = out
         return z
