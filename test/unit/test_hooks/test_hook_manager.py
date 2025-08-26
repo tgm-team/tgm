@@ -13,6 +13,8 @@ from tgm.hooks.hooks import DeviceTransferHook
 
 
 class MockHook(StatelessHook):
+    produces = {'foo'}
+
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.time *= 2
         return batch
@@ -52,9 +54,9 @@ def test_str():
     assert isinstance(str(hm), str)
 
     hm.register_shared(MockHook())
-    hm.register('train', MockHookRequires())
+    hm.register('train', MockHook())
     hm.register('train', MockHookWithState())
-    hm.register('val', MockHookRequires())
+    hm.register('val', MockHook())
     assert isinstance(str(hm), str)
 
 
@@ -81,9 +83,9 @@ def test_register():
 def test_register_multiple():
     hm = HookManager()
     hm.register_shared(MockHook())
-    hm.register('train', MockHookRequires())
+    hm.register('train', MockHook())
     hm.register('train', MockHookWithState())
-    hm.register('val', MockHookRequires())
+    hm.register('val', MockHook())
 
     hm.set_active_hooks('train')
     assert len(hm.get_active_hooks()) == 4  # dedup, shared, requires, state
@@ -131,22 +133,33 @@ def test_attempt_register_shared_while_active():
 def test_topo_sort_required():
     h1 = MockHook()
     h2 = MockHookRequires()
-    h2.requires = {'foo'}
-    h1.produces = {'foo'}
 
     hm = HookManager()
-    hm.register('train', h2)
     hm.register('train', h1)
+    hm.register('train', h2)
     hooks_ordered = hm._key_to_hooks['train']
     assert hooks_ordered.index(h1) < hooks_ordered.index(h2)
     assert len(hm._key_to_hooks['train']) == 3
 
 
-def test_topo_sort_no_dag_solution():
+def test_topo_sort_no_solution_missing_requires():
+    h = MockHookRequires()
+
+    hm = HookManager()
+    with pytest.raises(ValueError):
+        hm.register('train', h)
+
+
+@pytest.mark.skip(
+    'TODO: This test only makes sense if we enable registering multiple hooks at once. '
+    'Otherwise, the "missing produced" will trigger an exception before the secon hook can '
+    'be registered. Skiping for now, and should reconsider enabling multiple hook registry.'
+)
+def test_topo_sort_no_solution_no_dag():
     h1 = MockHook()
     h2 = MockHook()
-    h1.requires = {'x'}
-    h2.requires = {'y'}
+    h1.requires, h1.produces = {'x'}, {'y'}
+    h2.requires, h2.produces = {'y'}, {'x'}
 
     # Cycle-like missing dependency
     hm = HookManager()

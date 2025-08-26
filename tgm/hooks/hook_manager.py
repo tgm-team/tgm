@@ -134,6 +134,17 @@ class HookManager:
 
     @staticmethod
     def _topological_sort_hooks(hooks: List[DGHook]) -> List[DGHook]:
+        # Before producing a valid hook ordering, we need to ensure
+        # that all the required attributes are produced by *some* hook.
+        all_produced = set().union(*(h.produces for h in hooks))
+        missing = set()
+        for h in hooks:
+            missing |= h.requires - all_produced
+        if missing:
+            raise ValueError(
+                f'Cannot resolve hook dependencies: required attributes not produced by any hook: {missing}'
+            )
+
         # Build adjacency list and then run Kahn's algorithmk jbs
         adj_list: Dict[DGHook, List[DGHook]] = defaultdict(list)
         for i, h1 in enumerate(hooks):
