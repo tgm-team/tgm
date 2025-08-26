@@ -13,13 +13,13 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import (
+    DeviceTransferHook,
     HookManager,
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
     RecencyNeighborHook,
     TGBNegativeEdgeSamplerHook,
 )
-from tgm.hooks.hooks import DeviceTransferHook
 from tgm.loader import DGDataLoader
 from tgm.nn import TemporalAttention, Time2Vec
 from tgm.util.seed import seed_everything
