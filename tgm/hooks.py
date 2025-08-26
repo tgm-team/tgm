@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import is_dataclass
-from typing import Any, List, Protocol, Set, runtime_checkable
+from typing import (
+    Any,
+    Deque,
+    Dict,
+    List,
+    Protocol,
+    Set,
+    Tuple,
+    runtime_checkable,
+)
 
 import numpy as np
 import torch
@@ -144,9 +153,7 @@ class DeduplicationHook(StatelessHook):
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
-                hop_nids, hop_mask = batch.nbr_nids[hop], batch.nbr_mask[hop].bool()  # type: ignore
-                valid_hop_nids = hop_nids[hop_mask].to(batch.src.device)
-                nids.append(valid_hop_nids)
+                nids.append(batch.nbr_nids[hop].to(batch.src.device))
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)
@@ -262,7 +269,7 @@ class NeighborSamplerHook(StatelessHook):
     """
 
     requires: Set[str] = set()
-    produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'nbr_mask'}
+    produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats'}
 
     def __init__(self, num_nbrs: List[int]) -> None:
         if not len(num_nbrs):
@@ -280,7 +287,7 @@ class NeighborSamplerHook(StatelessHook):
 
         batch.nids, batch.times = [], []  # type: ignore
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
-        batch.nbr_feats, batch.nbr_mask = [], []  # type: ignore
+        batch.nbr_feats = []  # type: ignore
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -294,15 +301,14 @@ class NeighborSamplerHook(StatelessHook):
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
             else:
-                mask = batch.nbr_mask[hop - 1].bool()  # type: ignore
-                seed_nodes = batch.nbr_nids[hop - 1][mask].flatten()  # type: ignore
-                seed_times = batch.nbr_times[hop - 1][mask].flatten()  # type: ignore
+                seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
+                seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
 
             # TODO: Storage needs to use the right device
 
             # We slice on batch.start_time so that we only consider neighbor events
             # that occurred strictly before this batch
-            nbr_nids, nbr_times, nbr_feats, nbr_mask = dg._storage.get_nbrs(
+            nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
                 slice=DGSliceTracker(end_time=int(batch.time.min())),
@@ -313,14 +319,13 @@ class NeighborSamplerHook(StatelessHook):
             batch.nbr_nids.append(nbr_nids)  # type: ignore
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
-            batch.nbr_mask.append(nbr_mask)  # type: ignore
 
         return batch
 
 
 class RecencyNeighborHook(StatefulHook):
     requires: Set[str] = set()
-    produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats', 'nbr_mask'}
+    produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats'}
 
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
@@ -346,7 +351,7 @@ class RecencyNeighborHook(StatefulHook):
 
         # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
         self._edge_feats_dim = edge_feats_dim
-        self._history = defaultdict(lambda: deque())
+        self._history: Dict[int, Deque[Any]] = defaultdict(lambda: deque())
 
         self._device = torch.device('cpu')
 
@@ -355,11 +360,7 @@ class RecencyNeighborHook(StatefulHook):
         return self._num_nbrs
 
     def reset_state(self) -> None:
-        self._nbr_nids.fill_(-1)
-        self._nbr_times.zero_()
-        self._nbr_mask.zero_()
-        self._nbr_feats.zero_()
-        self._nbr_ptr.zero_()
+        self._history = defaultdict(lambda: deque())
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # TODO: Consider the case where no edge features exist
@@ -369,7 +370,7 @@ class RecencyNeighborHook(StatefulHook):
 
         batch.nids, batch.times = [], []  # type: ignore
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
-        batch.nbr_feats, batch.nbr_mask = [], []  # type: ignore
+        batch.nbr_feats = []  # type: ignore
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -385,7 +386,7 @@ class RecencyNeighborHook(StatefulHook):
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
 
-            nbr_nids, nbr_times, nbr_feats, nbr_mask = self._get_recency_neighbors(
+            nbr_nids, nbr_times, nbr_feats = self._get_recency_neighbors(
                 seed_nodes, seed_times, num_nbrs
             )
 
@@ -394,19 +395,17 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_nids.append(nbr_nids)  # type: ignore
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
-            batch.nbr_mask.append(nbr_mask)  # type: ignore
 
         return batch
 
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
-    ):
+    ) -> Tuple[torch.Tensor, ...]:
         num_nodes = node_ids.size(0)
         device = node_ids.device
         nbr_nids = torch.full((num_nodes, k), -1, dtype=torch.long, device=device)
         nbr_times = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
         nbr_feats = torch.zeros((num_nodes, k, self._edge_feats_dim), device=device)
-        nbr_mask = torch.zeros((num_nodes, k), dtype=torch.bool, device=device)
 
         for i in range(num_nodes):
             nid, qtime = int(node_ids[i]), int(query_times[i])
@@ -423,11 +422,10 @@ class RecencyNeighborHook(StatefulHook):
                 [x[1] for x in valid], dtype=torch.long, device=device
             )
             nbr_feats[i, -len(valid) :] = torch.stack([x[2] for x in valid])
-            nbr_mask[i, -len(valid) :] = True
 
-        return nbr_nids, nbr_times, nbr_feats, nbr_mask
+        return nbr_nids, nbr_times, nbr_feats
 
-    def _update(self, batch):
+    def _update(self, batch: DGBatch) -> None:
         src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
         if batch.edge_feats is None:
             edge_feats = torch.zeros(

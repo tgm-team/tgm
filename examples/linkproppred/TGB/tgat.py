@@ -1,6 +1,6 @@
 import argparse
 import time
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 import torch
@@ -11,6 +11,7 @@ from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import (
     DGHook,
     NegativeEdgeSamplerHook,
@@ -100,9 +101,7 @@ class TGAT(nn.Module):
                 )
             )
 
-    def forward(
-        self, batch: DGBatch, static_node_feat: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, batch: DGBatch, static_node_feat: torch.Tensor) -> torch.Tensor:
         device = batch.src.device
         z = {j: {} for j in range(self.num_layers + 1)}  # z[j][i] = z of nbr^i at hop j
 
@@ -121,7 +120,7 @@ class TGAT(nn.Module):
                     time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
                     nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
                     edge_feat=batch.nbr_feats[i],
-                    nbr_mask=batch.nbr_nids[i] == -1,
+                    valid_nbr_mask=batch.nbr_nids[i] != PADDED_NODE_ID,
                     nbr_time_feat=self.time_encoder(
                         batch.times[i][:, None] - batch.nbr_times[i]
                     ),
@@ -181,7 +180,6 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    batch_id = 0
     for batch in tqdm(loader):
         z = encoder(batch, static_node_feats)
         id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
