@@ -13,6 +13,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import (
+    HookManager,
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
     RecencyNeighborHook,
@@ -243,14 +244,21 @@ elif args.sampling_type == 'recency':
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
 
+
 _, dst, _ = train_dg.edges
 train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
 val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
 test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
-train_loader = DGDataLoader(train_dg, args.bsize, hooks=[nbr_hook, train_neg_hook])
-val_loader = DGDataLoader(val_dg, args.bsize, hooks=[nbr_hook, val_neg_hook])
-test_loader = DGDataLoader(test_dg, args.bsize, hooks=[nbr_hook, test_neg_hook])
+hook_manager = HookManager()
+hook_manager.register('train', train_neg_hook)
+hook_manager.register('val', val_neg_hook)
+hook_manager.register('test', test_neg_hook)
+hook_manager.register_shared(nbr_hook)
+
+train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hook_manager)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hook_manager)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hook_manager)
 
 encoder = TGAT(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
@@ -266,14 +274,16 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
-    start_time = time.perf_counter()
-    loss = train(train_loader, static_node_feats, encoder, decoder, opt)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
+    with hook_manager.activate('train'):
+        start_time = time.perf_counter()
+        loss = train(train_loader, static_node_feats, encoder, decoder, opt)
+        end_time = time.perf_counter()
+        latency = end_time - start_time
 
-    val_results = eval(
-        val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
-    )
+    with hook_manager.activate('val'):
+        val_results = eval(
+            val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+        )
 
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
@@ -281,10 +291,10 @@ for epoch in range(1, args.epochs + 1):
     )
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
-        train_loader._hook.reset_state()
-        val_loader._hook.reset_state()  # This is technically redundant
+        hook_manager.reset_state()
 
-test_results = eval(
-    test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
-)
+with hook_manager.activate('test'):
+    test_results = eval(
+        test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+    )
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
