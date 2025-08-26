@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections import defaultdict, deque
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List, Set
+from typing import Any, Dict, Iterator, List
 
 from tgm import DGBatch, DGraph
 from tgm.hooks import DeduplicationHook, DGHook
@@ -85,22 +86,35 @@ class HookManager:
                 f'Cannot register hook {type(hook).__name__}: must implement __call__(dg: DGraph, batch: DGBatch) -> DGBatch and reset_state()'
             )
 
-    def _topological_sort_hooks(self, hooks: List[DGHook]) -> List[DGHook]:
-        produced: Set[str] = set()
-        ordered: List[DGHook] = []
-        remaining = hooks[:]  # Shalllow copy to avoid mutating
+    @staticmethod
+    def _topological_sort_hooks(hooks: List[DGHook]) -> List[DGHook]:
+        # Build adjacency list and then run Kahn's algorithmk jbs
+        adj_list: Dict[DGHook, List[DGHook]] = defaultdict(list)
+        for i, h1 in enumerate(hooks):
+            for j, h2 in enumerate(hooks):
+                if i != j and h1.produces & h2.requires:
+                    # If h2 requires something h1 produces, add edge
+                    adj_list[h1].append(h2)
 
-        while remaining:
-            ready_hooks = [h for h in remaining if h.requires.issubset(produced)]
+        indegree: Dict[DGHook, int] = {h: 0 for h in hooks}
+        for u in adj_list:
+            for v in adj_list[u]:
+                indegree[v] += 1
 
-            if not ready_hooks:
-                missing = {h: h.requires - produced for h in remaining}
-                raise ValueError(f'Cannot resolve hook dependencies: {missing}')
+        queue = deque([h for h in hooks if indegree[h] == 0])
+        ordered: List['DGHook'] = []
 
-            # Schedule ready hooks
-            for hook in ready_hooks:
-                ordered.append(hook)
-                produced |= hook.produces
-                remaining.remove(hook)
+        while queue:
+            u = queue.popleft()
+            ordered.append(u)
+            for v in adj_list.get(u, []):
+                indegree[v] -= 1
+                if indegree[v] == 0:
+                    queue.append(v)
+
+        if len(ordered) != len(hooks):
+            raise ValueError(
+                'Cannot resolve hook dependencies (cycle or missing producer)'
+            )
 
         return ordered
