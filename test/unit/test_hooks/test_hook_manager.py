@@ -160,7 +160,7 @@ def test_resolve_hooks_by_key():
     assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)
 
 
-def test_resolve_hooks_no_solution_no_dag(dg):
+def test_resolve_hooks_no_solution_no_dag():
     h1 = MockHook()
     h2 = MockHook()
     h1.requires, h1.produces = {'x'}, {'y'}
