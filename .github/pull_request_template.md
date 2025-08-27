@@ -1,8 +1,8 @@
 ### Summary / Description
 
-Provide a brief overview of what this PR does, why it’s needed, and any relevant context.
+Provide a brief overview of what this PR does, and any relevant context.
 
-**Fixes / Related Issues:** # (issue number)
+**Related Issues:** # (issue number)
 
 #### Type of Change
 
@@ -14,7 +14,7 @@ Provide a brief overview of what this PR does, why it’s needed, and any releva
 
 #### Test Evidence
 
-Describe how this PR has been tests.
+Describe how this PR has been tested.
 
 - [ ] Unit tests
 - [ ] Integration tests
@@ -22,12 +22,4 @@ Describe how this PR has been tests.
 
 #### Questions / Discussion Points
 
-List any areas where you’d like reviewer input or have open questions. For example:
-
-- Implementation choices you’re unsure about
-- Alternative approaches you considered
-- Specific functionality or performance concerns
-
-#### Additional Notes / Context
-
-Add any additional comments, rationale, or details helpful for reviewers.
+List any areas where you’d like reviewer input or have open questions.
