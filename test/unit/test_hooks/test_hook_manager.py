@@ -9,7 +9,6 @@ from tgm.hooks import (
     StatefulHook,
     StatelessHook,
 )
-from tgm.hooks.hooks import DeviceTransferHook
 
 
 class MockHook(StatelessHook):
@@ -62,14 +61,7 @@ def test_str():
 
 def test_init_cpu():
     hm = HookManager()
-    assert isinstance(hm._device_hook, DeviceTransferHook)
     assert any(isinstance(h, DeduplicationHook) for h in hm._shared_hooks)
-
-
-@pytest.mark.gpu
-def test_init_gpu():
-    hm = HookManager(device='cuda')
-    assert isinstance(hm._device_hook, DeviceTransferHook)
 
 
 def test_register():
@@ -235,7 +227,6 @@ def test_reset_state():
     hm.register_shared(h1)
     hm.reset_state()
     assert h1.x == 1
-    assert hm._device_hook is not None
 
 
 def test_reset_state_by_key():

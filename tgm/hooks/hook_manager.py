@@ -4,14 +4,12 @@ from collections import defaultdict, deque
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List
 
-import torch
-
 from tgm import DGBatch, DGraph
-from tgm.hooks import DeduplicationHook, DeviceTransferHook, DGHook
+from tgm.hooks import DeduplicationHook, DGHook
 
 
 class HookManager:
-    def __init__(self, device: str | torch.device = 'cpu') -> None:
+    def __init__(self) -> None:
         self._key_to_hooks: Dict[str, List[DGHook]] = {}  # Topological order
         self._shared_hooks: List[DGHook] = []
         self._active_key: str | None = None
@@ -19,18 +17,8 @@ class HookManager:
         # Implicitly add deduplication shared hook
         self._shared_hooks.append(DeduplicationHook())
 
-        # Device transfer hook is a special case. It is always run first,
-        # and triggers even when no _active_key is present. This happens
-        # if a user want to run data loader on gpu, without any addition hooks (e.g. negatives, neighbors)
-        self._device_hook = DeviceTransferHook(device)
-
     def __str__(self) -> str:
         lines = ['HookManager:']
-        lines.append(
-            f'  DeviceHook: {self._device_hook.__class__.__name__} '
-            f'(requires={self._device_hook.requires}, produces={self._device_hook.produces})'
-        )
-
         lines.append('  Shared hooks:')
         for h in self._shared_hooks:
             lines.append(
@@ -39,7 +27,6 @@ class HookManager:
             )
 
         lines.append(f'  Active key: {self._active_key}')
-
         if self._key_to_hooks:
             lines.append('  Keyed hooks:')
             for key, hooks in self._key_to_hooks.items():
@@ -96,12 +83,6 @@ class HookManager:
         self._active_key = key
 
     def execute_active_hooks(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        # Always run device hook first
-        batch = self._device_hook(dg, batch)
-
-        if self._active_key is None:
-            return batch
-
         for hook in self.get_active_hooks():
             batch = hook(dg, batch)
         return batch
