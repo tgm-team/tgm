@@ -52,37 +52,16 @@ jobs:
           echo "Preparing TGB datasets in $DATA_ROOT..."
           ./scripts/download_tgb_datasets.sh "$DATA_ROOT"
 
-      - name: Run Performance Benchmarks on SLURM
+      - name: Submit Performance Benchmark Job
+        id: submit-bench
         run: |
-          SCRIPT_PATH=$(mktemp)
-          cat > "$SCRIPT_PATH" <<'EOF'
-          #!/bin/bash
-          #SBATCH --job-name=tgm_benchmarks
-          #SBATCH --output=$HOME/tgm_ci_perf/benchmarks.out
-          #SBATCH --error=$HOME/tgm_ci_perf/benchmarks.err
-          #SBATCH --cpus-per-task=4
-          #SBATCH --mem=16G
-          #SBATCH --gres=gpu:a100l:1
-          #SBATCH --time=00:30:00
+          JOB_ID=$(sbatch --parsable .github/scripts/run_perf_job.sh)
+          echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
 
-          set -euo pipefail
-
-          module load python/3.10
-          module load cudatoolkit/11.7
-
-          cd "$GITHUB_WORKSPACE"
-
-          export TGM_CI_PERF_LOG_BASE=${TGM_CI_PERF_LOG_BASE:-$HOME/tgm_ci_perf}
-
-          # Run the local performance test script
-          ./scripts/run_perf_tests.sh --gpu --all
-          EOF
-
-          chmod +x "$SCRIPT_PATH"
-          sbatch "$SCRIPT_PATH"
-
-      - name: Wait for benchmarks to finish
-        run: echo "Waiting for SLURM job to finish..." && sleep 60  # TODO: replace with proper polling
+      - name: Wait for SLURM job to finish
+        run: |
+          JOB_ID="${{ steps.submit-bench.outputs.job_id }}"
+          .github/scripts/wait_for_slurm.sh "$JOB_ID" --timeout 3600 --interval 10
 
       - name: Get Latest CI Run Log Path
         if: always()
