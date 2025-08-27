@@ -95,9 +95,7 @@ class HookManager:
     def set_active_hooks(self, key: str) -> None:
         self._active_key = key
 
-    def execute_active_hooks(self, dg: DGraph) -> DGBatch:
-        batch = dg.materialize()
-
+    def execute_active_hooks(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # Always run device hook first
         batch = self._device_hook(dg, batch)
 

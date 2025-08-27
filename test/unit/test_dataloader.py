@@ -3,7 +3,6 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.hooks import HookManager
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
@@ -22,7 +21,6 @@ def test_init_ordered_dg_ordered_batch():
     dg = DGraph(data)
     loader = DGDataLoader(dg)
     assert loader._batch_size == 1
-    assert isinstance(loader._hook_manager, HookManager)
 
 
 @pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])

@@ -96,9 +96,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
 
         self._dg = dg
         self._batch_size = batch_size
-        self._hook_manager = (
-            HookManager(dg.device) if hook_manager is None else hook_manager
-        )
+        self._hook_manager = hook_manager
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
 
         start_idx = 0 if batch_ordered else dg.start_time
@@ -115,8 +113,11 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
 
     def __call__(self, slice_start: List[int]) -> DGBatch:
         slice_end = slice_start[0] + self._batch_size
-        batch = self._slice_op(slice_start[0], slice_end)
-        return self._hook_manager.execute_active_hooks(batch)
+        dg = self._slice_op(slice_start[0], slice_end)
+        batch = dg.materialize()
+        if self._hook_manager is not None:
+            batch = self._hook_manager.execute_active_hooks(dg, batch)
+        return batch
 
     def is_batch_empty(self, batch: DGBatch) -> bool:
         return batch.src.numel() == 0
