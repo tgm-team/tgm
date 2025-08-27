@@ -1,31 +1,26 @@
-## Summary / Description
+### Summary / Description
 
 Provide a brief overview of what this PR does, why it’s needed, and any relevant context.
 
 **Fixes / Related Issues:** # (issue number)
 
-______________________________________________________________________
-
-### Type of Change
+#### Type of Change
 
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking Change
 - [ ] Refactoring
 - [ ] Documentation update
-- [ ] Examples update
 
-______________________________________________________________________
-
-### Test Evidence
+#### Test Evidence
 
 Describe how this PR has been tests.
 
 - [ ] Unit tests
-- [ ] Ran integration tests
-- [ ] Ran performance tests
+- [ ] Integration tests
+- [ ] Performance tests
 
-### Questions / Discussion Points
+#### Questions / Discussion Points
 
 List any areas where you’d like reviewer input or have open questions. For example:
 
@@ -33,8 +28,6 @@ List any areas where you’d like reviewer input or have open questions. For exa
 - Alternative approaches you considered
 - Specific functionality or performance concerns
 
-______________________________________________________________________
-
-### Additional Notes / Context
+#### Additional Notes / Context
 
 Add any additional comments, rationale, or details helpful for reviewers.
