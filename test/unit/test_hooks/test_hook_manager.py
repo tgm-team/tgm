@@ -74,7 +74,7 @@ def test_register():
     hook = MockHook()
     hm.register('foo', hook)
     assert hook in hm._key_to_hooks['foo']
-    assert len(hm._key_to_hooks['foo']) == 2
+    assert len(hm._key_to_hooks['foo']) == 1
 
 
 def test_register_multiple():
@@ -84,11 +84,8 @@ def test_register_multiple():
     hm.register('train', MockHookWithState())
     hm.register('val', MockHook())
 
-    hm.set_active_hooks('train')
-    assert len(hm.get_active_hooks()) == 4  # dedup, shared, requires, state
-
-    hm.set_active_hooks('val')
-    assert len(hm.get_active_hooks()) == 3  # dedup, shared, requires
+    assert len(hm._key_to_hooks['train']) == 2
+    assert len(hm._key_to_hooks['val']) == 1
 
 
 def test_register_shared():
@@ -133,32 +130,37 @@ def test_attempt_register_shared_while_active():
             hm.register_shared(hook)
 
 
-def test_topo_sort_required():
+def test_resolve_hooks_all_hooks():
+    h1 = MockHook()
+    h2 = MockHookRequires()
+
+    hm = HookManager(keys=['train', 'val'])
+    hm.register('train', h2)
+    hm.register('train', h1)
+    hm.register('val', h2)
+    hm.register('val', h1)
+
+    hm.resolve_hooks()
+    assert len(hm._key_to_hooks['train']) == 3
+    assert len(hm._key_to_hooks['val']) == 3
+    assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)
+    assert hm._key_to_hooks['val'].index(h1) < hm._key_to_hooks['val'].index(h2)
+
+
+def test_resolve_hooks_by_key():
     h1 = MockHook()
     h2 = MockHookRequires()
 
     hm = HookManager(keys=['train'])
-    hm.register('train', h1)
     hm.register('train', h2)
-    hooks_ordered = hm._key_to_hooks['train']
-    assert hooks_ordered.index(h1) < hooks_ordered.index(h2)
+    hm.register('train', h1)
+
+    hm.resolve_hooks('train')
     assert len(hm._key_to_hooks['train']) == 3
+    assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)
 
 
-def test_topo_sort_no_solution_missing_requires():
-    h = MockHookRequires()
-
-    hm = HookManager(keys=['train'])
-    with pytest.raises(ValueError):
-        hm.register('train', h)
-
-
-@pytest.mark.skip(
-    'TODO: This test only makes sense if we enable registering multiple hooks at once. '
-    'Otherwise, the "missing produced" will trigger an exception before the second hook can '
-    'be registered. Skipping for now, and should reconsider enabling multiple hook registry.'
-)
-def test_topo_sort_no_solution_no_dag():
+def test_resolve_hooks_no_solution_no_dag(dg):
     h1 = MockHook()
     h2 = MockHook()
     h1.requires, h1.produces = {'x'}, {'y'}
@@ -170,25 +172,109 @@ def test_topo_sort_no_solution_no_dag():
     hm.register('train', h2)
 
     with pytest.raises(ValueError):
-        hm._topological_sort_hooks([h1, h2] + hm._shared_hooks)
+        hm.resolve_hooks('train')
 
 
-def test_get_active_hooks():
+def test_resolve_hooks_by_key_bad_key():
     hm = HookManager(keys=['train'])
-    hook = MockHook()
-    hm.register('train', hook)
+    with pytest.raises(KeyError):
+        hm.resolve_hooks('val')
+
+
+def test_topo_sort_lazy_required(dg):
+    h1 = MockHook()
+    h2 = MockHookRequires()
+
+    hm = HookManager(keys=['train'])
+    hm.register('train', h2)
+    hm.register('train', h1)
+
+    # Topo sort should run lazily
     hm.set_active_hooks('train')
-    assert len(hm.get_active_hooks()) == 2  # dedup, and MockHook
-    assert any(isinstance(h, DeduplicationHook) for h in hm.get_active_hooks())
-    assert any(isinstance(h, MockHook) for h in hm.get_active_hooks())
+    hm.execute_active_hooks(dg, dg.materialize())
 
 
-def test_get_active_hooks_no_active_keys():
+def test_topo_sort_lazy_no_solution_missing_requires(dg):
+    h = MockHookRequires()
+
     hm = HookManager(keys=['train'])
-    hook = MockHook()
-    hm.register('train', hook)
-    with pytest.raises(RuntimeError):
-        hm.get_active_hooks()
+    hm.register('train', h)
+    hm.set_active_hooks('train')
+    with pytest.raises(ValueError):
+        hm.execute_active_hooks(dg, dg.materialize())
+
+
+def test_topo_sort_cached(dg, monkeypatch):
+    hm = HookManager(keys=['train'])
+
+    h1, h2 = MockHook(), MockHook()
+    h1.requires, h1.produces = set(), {'x'}
+    h2.requires, h2.produces = {'x'}, {'y'}
+
+    hm.register('train', h1)
+    hm.register('train', h2)
+    call_count = {'n': 0}
+
+    def fake_topo_sort(hooks_list):
+        call_count['n'] += 1
+        return hooks_list
+
+    monkeypatch.setattr(hm, '_topological_sort_hooks', fake_topo_sort)
+
+    # First call should trigger topo sort
+    hm.set_active_hooks('train')
+    hm.execute_active_hooks(dg, dg.materialize())
+    assert call_count['n'] == 1
+
+    # Second call should reuse cached topo order
+    hm.execute_active_hooks(dg, dg.materialize())
+    assert call_count['n'] == 1
+
+
+def test_topo_sort_cached_invalidated(dg, monkeypatch):
+    hm = HookManager(keys=['train'])
+
+    h1 = MockHook()
+    h1.requires, h1.produces = set(), {'x'}
+
+    hm.register('train', h1)
+    call_count = {'n': 0}
+
+    def fake_topo_sort(hooks_list):
+        call_count['n'] += 1
+        return hooks_list
+
+    monkeypatch.setattr(hm, '_topological_sort_hooks', fake_topo_sort)
+
+    # First execution: topo sort should run
+    with hm.activate('train'):
+        hm.execute_active_hooks(dg, dg.materialize())
+    assert call_count['n'] == 1
+
+    # Register a new hook to invalidate the dirty bit
+    h2 = MockHookRequires()
+    hm.register('train', h2)
+
+    # Topo sort should run again
+    with hm.activate('train'):
+        hm.execute_active_hooks(dg, dg.materialize())
+    assert call_count['n'] == 2
+
+
+def test_topo_sort_no_solution_no_dag(dg):
+    h1 = MockHook()
+    h2 = MockHook()
+    h1.requires, h1.produces = {'x'}, {'y'}
+    h2.requires, h2.produces = {'y'}, {'x'}
+
+    # Cycle-like missing dependency
+    hm = HookManager(keys=['train'])
+    hm.register('train', h1)
+    hm.register('train', h2)
+
+    hm.set_active_hooks('train')
+    with pytest.raises(ValueError):
+        hm.execute_active_hooks(dg, dg.materialize())
 
 
 def test_set_active_key_bad_key():
@@ -199,7 +285,7 @@ def test_set_active_key_bad_key():
 
 def execute_active_hooks_empty(dg):
     hm = HookManager(keys=['train'])
-    batch = hm.execute_active_hooks(dg)
+    batch = hm.execute_active_hooks(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
     assert batch.src.device == torch.device('cpu')
 
@@ -211,7 +297,7 @@ def execute_active_hooks_keyed(dg):
     hm.set_active_hooks('train')
     exp_batch = dg.materialize()
     exp_batch.time *= 2
-    batch = hm.execute_active_hooks(dg)
+    batch = hm.execute_active_hooks(dg, dg.materialize())
     assert batch == exp_batch
 
 
@@ -222,10 +308,10 @@ def execute_active_hooks_keyed_and_shared(dg):
     hm.register_shared(hook_shared)
     hm.register('train', hook_keyed)
     hm.set_active_hooks('train')
-    assert len(hm.get_active_hooks()) == 3
+    assert len(hm._key_to_hooks['train']) == 2
     exp_batch = dg.materialize()
     exp_batch.time *= 4
-    batch = hm.execute_active_hooks(dg)
+    batch = hm.execute_active_hooks(dg, dg.materialize())
     assert batch == exp_batch
 
 

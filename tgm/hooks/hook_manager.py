@@ -13,7 +13,7 @@ class HookManager:
         if not len(keys):
             raise ValueError('HookManager keys list must be non-empty')
 
-        # Topological order
+        self._dirty: Dict[str, bool] = {k: False for k in keys}
         self._key_to_hooks: Dict[str, List[DGHook]] = {k: [] for k in keys}
         self._shared_hooks: List[DGHook] = []
         self._active_key: str | None = None
@@ -45,41 +45,31 @@ class HookManager:
     def register_shared(self, hook: DGHook) -> None:
         self._ensure_valid_hook(hook)
         self._ensure_no_active_key()
-
         self._shared_hooks.append(hook)
-
-        # Recompute execution order for all keys
-        for key, hooks in self._key_to_hooks.items():
-            # Only include keyed hooks that are not shared
-            keyed_only = [h for h in hooks if h not in self._shared_hooks]
-            self._key_to_hooks[key] = self._topological_sort_hooks(
-                self._shared_hooks + keyed_only
-            )
+        for k in self._dirty:  # Mark all keys as 'dirty'
+            self._dirty[k] = True
 
     def register(self, key: str, hook: DGHook) -> None:
         self._ensure_valid_key(key)
         self._ensure_valid_hook(hook)
         self._ensure_no_active_key()
-
         self._key_to_hooks[key].append(hook)
-
-        # Precompute execution order including shared hooks once
-        keyed_only = [h for h in self._key_to_hooks[key] if h not in self._shared_hooks]
-        self._key_to_hooks[key] = self._topological_sort_hooks(
-            self._shared_hooks + keyed_only
-        )
-
-    def get_active_hooks(self) -> List[DGHook]:
-        if self._active_key is None:
-            raise RuntimeError('No active key set. Use activate() context manager.')
-        return self._key_to_hooks[self._active_key]
+        self._dirty[key] = True  # Mark registered key as 'dirty'
 
     def set_active_hooks(self, key: str) -> None:
         self._ensure_valid_key(key)
         self._active_key = key
 
     def execute_active_hooks(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        for hook in self.get_active_hooks():
+        if self._active_key is None:
+            raise RuntimeError('No active key set. Use activate() context manager.')
+
+        # Lazily validate and topological sort if needed
+        key = self._active_key
+        if self._dirty[key]:
+            self.resolve_hooks(key)
+
+        for hook in self._key_to_hooks[key]:
             batch = hook(dg, batch)
         return batch
 
@@ -94,6 +84,18 @@ class HookManager:
         for k in keys_to_reset:
             for h in self._key_to_hooks[k]:
                 h.reset_state()
+
+    def resolve_hooks(self, key: str | None = None) -> None:
+        if key is not None:
+            self._ensure_valid_key(key)
+
+        keys_to_validate = [key] if key else list(self._key_to_hooks.keys())
+        for k in keys_to_validate:
+            hooks = self._shared_hooks + [
+                h for h in self._key_to_hooks[k] if h not in self._shared_hooks
+            ]
+            self._key_to_hooks[k] = self._topological_sort_hooks(hooks)
+            self._dirty[k] = False
 
     @contextmanager
     def activate(self, key: str) -> Iterator[None]:
