@@ -78,7 +78,7 @@ train_data = train_dg.materialize(materialize_features=False)
 val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
 test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
-hm = HookManager()
+hm = HookManager(keys=['val', 'test'])
 hm.register('val', val_neg_hook)
 hm.register('test', test_neg_hook)
 

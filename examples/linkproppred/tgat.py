@@ -230,7 +230,7 @@ test_neg_hook = NegativeEdgeSamplerHook(
     low=int(test_dst.min()), high=int(test_dst.max())
 )
 
-hm = HookManager(args.device)
+hm = HookManager(keys=['train', 'val', 'test'])
 hm.register('train', train_neg_hook)
 hm.register('val', val_neg_hook)
 hm.register('test', test_neg_hook)

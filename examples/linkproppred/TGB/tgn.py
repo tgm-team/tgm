@@ -447,7 +447,7 @@ train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())
 val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
 test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
-hm = HookManager(args.device)
+hm = HookManager(keys=['train', 'val', 'test'])
 hm.register('train', train_neg_hook)
 hm.register('val', val_neg_hook)
 hm.register('test', test_neg_hook)

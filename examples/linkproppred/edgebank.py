@@ -53,7 +53,7 @@ test_dg = DGraph(test_data)
 train_data = train_dg.materialize(materialize_features=False)
 test_neg_hook = NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes)
 
-hm = HookManager()
+hm = HookManager(keys=['test'])
 hm.register('test', test_neg_hook)
 
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
