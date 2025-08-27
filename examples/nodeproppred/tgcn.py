@@ -189,7 +189,6 @@ model = TGCN_Model(
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
-    # TODO: Technically, we need to activate the device hook... but no other hooks necessary
     start_time = time.perf_counter()
     loss, h_0 = train(train_loader, static_node_feats, model, opt)
     end_time = time.perf_counter()

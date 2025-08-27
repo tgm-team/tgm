@@ -480,7 +480,7 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-        with hm.activaet('val'):
+        with hm.activate('val'):
             val_results = eval(
                 val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
             )
