@@ -21,7 +21,8 @@ If applicable, add screenshots to help explain your problem.
 
 **Environment:**
  - OS:
- - Version: 
+ - TGM Version:
+ - CPU / GPU
 
 **Additional context**
 Add any other context about the problem here.
