@@ -49,7 +49,7 @@ def dg():
 
 
 def test_str():
-    hm = HookManager()
+    hm = HookManager(keys=['train', 'val'])
     assert isinstance(str(hm), str)
 
     hm.register_shared(MockHook())
@@ -59,13 +59,18 @@ def test_str():
     assert isinstance(str(hm), str)
 
 
+def test_bad_init_empty_keys():
+    with pytest.raises(ValueError):
+        _ = HookManager(keys=[])
+
+
 def test_init_cpu():
-    hm = HookManager()
+    hm = HookManager(keys=['foo'])
     assert any(isinstance(h, DeduplicationHook) for h in hm._shared_hooks)
 
 
 def test_register():
-    hm = HookManager()
+    hm = HookManager(keys=['foo'])
     hook = MockHook()
     hm.register('foo', hook)
     assert hook in hm._key_to_hooks['foo']
@@ -73,7 +78,7 @@ def test_register():
 
 
 def test_register_multiple():
-    hm = HookManager()
+    hm = HookManager(keys=['train', 'val'])
     hm.register_shared(MockHook())
     hm.register('train', MockHook())
     hm.register('train', MockHookWithState())
@@ -87,27 +92,33 @@ def test_register_multiple():
 
 
 def test_register_shared():
-    hm = HookManager()
+    hm = HookManager(keys=['foo'])
     hook = MockHook()
     hm.register_shared(hook)
     assert hook in hm._shared_hooks
     assert len(hm._shared_hooks) == 2
 
 
+def test_attempt_register_bad_key():
+    hm = HookManager(keys=['train'])
+    with pytest.raises(KeyError):
+        hm.register('foo', MockHook())
+
+
 def test_attempt_register_bad_hook():
-    hm = HookManager()
+    hm = HookManager(keys=['foo'])
     with pytest.raises(TypeError):
         hm.register('foo', object())
 
 
 def test_attempt_register_shared_bad_hook():
-    hm = HookManager()
+    hm = HookManager(keys=['foo'])
     with pytest.raises(TypeError):
         hm.register_shared(object())
 
 
 def test_attempt_regiser_while_active():
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     hook = MockHook()
     with hm.activate('train'):
         with pytest.raises(RuntimeError):
@@ -115,7 +126,7 @@ def test_attempt_regiser_while_active():
 
 
 def test_attempt_register_shared_while_active():
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     hook = MockHook()
     with hm.activate('train'):
         with pytest.raises(RuntimeError):
@@ -126,7 +137,7 @@ def test_topo_sort_required():
     h1 = MockHook()
     h2 = MockHookRequires()
 
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     hm.register('train', h1)
     hm.register('train', h2)
     hooks_ordered = hm._key_to_hooks['train']
@@ -137,7 +148,7 @@ def test_topo_sort_required():
 def test_topo_sort_no_solution_missing_requires():
     h = MockHookRequires()
 
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     with pytest.raises(ValueError):
         hm.register('train', h)
 
@@ -154,7 +165,7 @@ def test_topo_sort_no_solution_no_dag():
     h2.requires, h2.produces = {'y'}, {'x'}
 
     # Cycle-like missing dependency
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     hm.register('train', h1)
     hm.register('train', h2)
 
@@ -163,7 +174,7 @@ def test_topo_sort_no_solution_no_dag():
 
 
 def test_get_active_hooks():
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     hook = MockHook()
     hm.register('train', hook)
     hm.set_active_hooks('train')
@@ -173,30 +184,28 @@ def test_get_active_hooks():
 
 
 def test_get_active_hooks_no_active_keys():
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     hook = MockHook()
     hm.register('train', hook)
     with pytest.raises(RuntimeError):
         hm.get_active_hooks()
 
 
+def test_set_active_key_bad_key():
+    hm = HookManager(keys=['train'])
+    with pytest.raises(KeyError):
+        hm.set_active_hooks('val')
+
+
 def execute_active_hooks_empty(dg):
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     batch = hm.execute_active_hooks(dg)
     assert isinstance(batch, DGBatch)
     assert batch.src.device == torch.device('cpu')
 
 
-@pytest.mark.gpu
-def execute_active_hooks_empty_gpu(dg):
-    hm = HookManager(device='cuda')
-    batch = hm.execute_active_hooks(dg)
-    assert isinstance(batch, DGBatch)
-    assert batch.src.device == torch.device('cuda')
-
-
 def execute_active_hooks_keyed(dg):
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     hook = MockHook()
     hm.register('train', hook)
     hm.set_active_hooks('train')
@@ -207,7 +216,7 @@ def execute_active_hooks_keyed(dg):
 
 
 def execute_active_hooks_keyed_and_shared(dg):
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     hook_shared = MockHook()
     hook_keyed = MockHook()
     hm.register_shared(hook_shared)
@@ -221,7 +230,7 @@ def execute_active_hooks_keyed_and_shared(dg):
 
 
 def test_reset_state():
-    hm = HookManager()
+    hm = HookManager(keys=['foo'])
     h1 = MockHookWithState()
     assert h1.x == 0
     hm.register_shared(h1)
@@ -230,15 +239,21 @@ def test_reset_state():
 
 
 def test_reset_state_by_key():
-    hm = HookManager()
+    hm = HookManager(keys=['train'])
     h1 = MockHookWithState()
     hm.register('train', h1)
     hm.reset_state('train')
     assert h1.x == 1
 
 
+def test_attempt_reset_state_bad_key():
+    hm = HookManager(keys=['train'])
+    with pytest.raises(KeyError):
+        hm.reset_state('val')
+
+
 def test_activate_ctx():
-    hm = HookManager()
+    hm = HookManager(keys=['train', 'val'])
     hm.register('train', MockHook())
     hm.register('val', MockHook())
     with hm.activate('train'):
