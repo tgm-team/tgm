@@ -11,6 +11,12 @@ import torch
 from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
+from tgm.exceptions import (
+    EmptyGraphError,
+    InvalidDiscretizationError,
+    OrderedTimeGranularityError,
+    PaddedNodeIDError,
+)
 from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
@@ -55,13 +61,13 @@ class DGData:
                 f'edge_index must have shape [num_edges, 2], got: {self.edge_index.shape}',
             )
         if torch.any(self.edge_index == PADDED_NODE_ID):
-            raise ValueError(
+            raise PaddedNodeIDError(
                 f'Edge events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
             )
 
         num_edges = self.edge_index.shape[0]
         if num_edges == 0:
-            raise ValueError('empty graphs not supported')
+            raise EmptyGraphError('empty graphs not supported')
 
         # Validate edge event idx
         _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
@@ -106,7 +112,7 @@ class DGData:
                     f'got {num_node_events} node events and shape {self.node_ids.shape}',  # type: ignore
                 )
             if torch.any(self.node_ids == PADDED_NODE_ID):  # type: ignore
-                raise ValueError(
+                raise PaddedNodeIDError(
                     f'Node events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
                 )
 
@@ -212,9 +218,11 @@ class DGData:
         if time_delta is None or self.time_delta == time_delta:
             return self.clone()  # Deepcopy
         if self.time_delta.is_ordered or time_delta.is_ordered:  # type: ignore
-            raise ValueError('Cannot discretize a graph with ordered time granularity')
+            raise OrderedTimeGranularityError(
+                'Cannot discretize a graph with ordered time granularity'
+            )
         if self.time_delta.is_coarser_than(time_delta):  # type: ignore
-            raise ValueError(
+            raise InvalidDiscretizationError(
                 f'Cannot discretize to {time_delta} which is strictly'
                 f'finer than the self.time_delta: {self.time_delta}'
             )

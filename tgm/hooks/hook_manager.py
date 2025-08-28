@@ -5,6 +5,10 @@ from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List
 
 from tgm import DGBatch, DGraph
+from tgm.exceptions import (
+    BadHookProtocolError,
+    UnresolvableHookDependenciesError,
+)
 from tgm.hooks import DeduplicationHook, DGHook
 
 
@@ -108,7 +112,7 @@ class HookManager:
 
     def _ensure_valid_hook(self, hook: Any) -> None:
         if not isinstance(hook, DGHook):
-            raise TypeError(
+            raise BadHookProtocolError(
                 f'Cannot register hook {type(hook).__name__}: must implement __call__(dg: DGraph, batch: DGBatch) -> DGBatch and reset_state()'
             )
 
@@ -131,7 +135,7 @@ class HookManager:
         for h in hooks:
             missing |= h.requires - all_produced
         if missing:
-            raise ValueError(
+            raise UnresolvableHookDependenciesError(
                 f'Cannot resolve hook dependencies: required attributes not produced by any hook: {missing}'
             )
 
@@ -167,6 +171,6 @@ class HookManager:
             for h in unresolved:
                 missing = h.requires - set().union(*[u.produces for u in ordered])
                 err_msg += f'\n - {repr(h)} requires {missing} but not produced (or stuck in cycle)'
-            raise ValueError(err_msg)
+            raise UnresolvableHookDependenciesError(err_msg)
 
         return ordered
