@@ -6,7 +6,7 @@ from typing import Any, Iterator, List, Literal
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm.hooks import DGHook, HookManager
+from tgm.hooks import HookManager
 from tgm.timedelta import TimeDeltaDG
 
 
@@ -49,7 +49,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         batch_size (int): The batch size to yield at each iteration.
         batch_unit (str): The unit corresponding to the batch_size.
         on_empty (Literal['skip', 'raise', None]): Action for empty batches.
-        hook (HookManager | Hook | List[Hook] | None): Arbitrary transform behaviour to execute before materializing a batch.
+        hook_manager (HookManager | None): Arbitrary transform behaviour to execute before materializing a batch.
         **kwargs (Any): Additional arguments to torch.utils.data.DataLoader.
 
     Raises:
@@ -69,7 +69,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         batch_size: int = 1,
         batch_unit: str = 'r',
         on_empty: Literal['skip', 'raise', None] = 'skip',
-        hook: HookManager | DGHook | List[DGHook] | None = None,
+        hook_manager: HookManager | None = None,
         **kwargs: Any,
     ) -> None:
         if batch_size <= 0:
@@ -96,7 +96,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
 
         self._dg = dg
         self._batch_size = batch_size
-        self._hook = HookManager.from_any(dg, hook)
+        self._hook_manager = hook_manager
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
 
         start_idx = 0 if batch_ordered else dg.start_time
@@ -113,8 +113,11 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
 
     def __call__(self, slice_start: List[int]) -> DGBatch:
         slice_end = slice_start[0] + self._batch_size
-        batch = self._slice_op(slice_start[0], slice_end)
-        return self._hook(batch)
+        dg = self._slice_op(slice_start[0], slice_end)
+        batch = dg.materialize()
+        if self._hook_manager is not None:
+            batch = self._hook_manager.execute_active_hooks(dg, batch)
+        return batch
 
     def is_batch_empty(self, batch: DGBatch) -> bool:
         return batch.src.numel() == 0
