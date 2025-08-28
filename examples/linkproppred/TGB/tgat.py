@@ -254,7 +254,7 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 encoder = TGAT(
-    node_dim=1,
+    node_dim=static_node_feats.shape[1],
     edge_dim=train_dg.edge_feats_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
