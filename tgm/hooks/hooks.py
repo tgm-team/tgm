@@ -229,7 +229,7 @@ class NeighborSamplerHook(StatelessHook):
 
 
 class RecencyNeighborHook(StatefulHook):
-    requires: Set[str] = set()
+    requires = {'neg'}
     produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats'}
 
     r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
@@ -271,7 +271,6 @@ class RecencyNeighborHook(StatefulHook):
         # TODO: Consider the case where no edge features exist
         device = dg.device
         self._move_queues_to_device_if_needed(device)  # No-op after first batch
-        self._update(batch)
 
         batch.nids, batch.times = [], []  # type: ignore
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
@@ -301,6 +300,7 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
+        self._update(batch)
         return batch
 
     def _get_recency_neighbors(
