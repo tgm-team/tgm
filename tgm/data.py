@@ -4,7 +4,7 @@ import copy
 import csv
 import pathlib
 from dataclasses import dataclass, fields, replace
-from typing import Any, List, Set, Tuple
+from typing import Any, Callable, List, Set, Tuple
 
 import numpy as np
 import torch
@@ -516,10 +516,18 @@ class DGData:
         except ImportError:
             raise ImportError('TGB required to load TGB data, try `pip install py-tgb`')
 
+        def suppress_output(func: Callable, *args: Any, **kwargs: Any) -> Any:
+            import os
+            from contextlib import redirect_stdout
+
+            with open(os.devnull, 'w') as f:
+                with redirect_stdout(f):
+                    return func(*args, **kwargs)
+
         if name.startswith('tgbl-'):
-            dataset = LinkPropPredDataset(name=name, **kwargs)
+            dataset = suppress_output(LinkPropPredDataset, name=name, **kwargs)
         elif name.startswith('tgbn-'):
-            dataset = NodePropPredDataset(name=name, **kwargs)
+            dataset = suppress_output(NodePropPredDataset, name=name, **kwargs)
         else:
             raise ValueError(f'Unknown dataset: {name}')
 
