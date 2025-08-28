@@ -9,14 +9,20 @@ nav:
       - Quickstart: quickstart.md
       - Architecture: architecture.md
       - Benchmarks: benchmarks.md
-      - API Reference:
-          - dgraph.md
-          - hooks.md
-          - timedelta.md
-          - data.md
-          - loader.md
-          - nn (Neural Networks): nn.md
-          - util: util.md
+
+  - Tutorials:
+      - DGraph Construction: tutorials/dgraph_tutorial.md
+
+  - API Reference:
+      - Constants: constants.md
+      - Data Module: data.md
+      - Graph Module: graph.md
+      - Split: split.md
+      - Hooks:
+          - DGHook: hooks/hooks.md
+          - Hook Manager: hooks/hook_manager.md
+      - Neural Networks: nn.md
+      - Utilities: util.md
 
 validation:
   links:
