@@ -256,7 +256,9 @@ class RecencyNeighborHook(StatefulHook):
 
         # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
         self._edge_feats_dim = edge_feats_dim
-        self._history: Dict[int, Deque[Any]] = defaultdict(lambda: deque())
+        self._history: Dict[int, Deque[Any]] = defaultdict(
+            lambda: deque(maxlen=self._max_nbrs)
+        )
 
         self._device = torch.device('cpu')
 
@@ -265,7 +267,7 @@ class RecencyNeighborHook(StatefulHook):
         return self._num_nbrs
 
     def reset_state(self) -> None:
-        self._history = defaultdict(lambda: deque())
+        self._history = defaultdict(lambda: deque(maxlen=self._max_nbrs))
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # TODO: Consider the case where no edge features exist
