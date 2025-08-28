@@ -9,6 +9,10 @@ def seed_everything(seed: int) -> None:
 
     Args:
         seed(int): The desired seed.
+
+    Notes:
+        - You may also want to set `torch.backends.cudnn.deterministic = True`
+          and `torch.backends.cudnn.benchmark = False` for full determinism on GPU.
     """
     random.seed(seed)
     np.random.seed(seed)

@@ -17,7 +17,30 @@ from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 @dataclass
 class DGData:
-    r"""Bundles dynamic graph data to be forwarded to DGStorage."""
+    r"""Container for dynamic graph data to be ingested by `DGStorage`.
+
+    Stores edge and node events, their timestamps, features, and optional split strategy.
+    Provides methods to split, discretize, and clone the data.
+
+    Attributes:
+        time_delta (TimeDeltaDG | str): Time granularity of the graph.
+        timestamps (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
+        edge_event_idx (Tensor): Indices of edge events within `timestamps`.
+        edge_index (Tensor): Edge connections [num_edge_events, 2].
+        edge_feats (Tensor | None): Optional edge features [num_edge_events, D_edge].
+        node_event_idx (Tensor | None): Indices of node events within `timestamps`.
+        node_ids (Tensor | None): Node IDs corresponding to node events [num_node_events].
+        dynamic_node_feats (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
+        static_node_feats (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
+        _split_strategy (SplitStrategy | None): Default splitting strategy for the dataset.
+
+    Notes:
+        - Timestamps must be non-negative and sorted; DGData will sort automatically if necessary.
+        - Edge and node IDs cannot be equal to `PADDED_NODE_ID`.
+        - Cloning creates a deep copy of tensors to prevent in-place modifications.
+        - Can be constructed from raw tensors, CSV, Pandas DataFrame, or TGB datasets.
+        - Supports discretization into coarser time bins using `discretize`.
+    """
 
     time_delta: TimeDeltaDG | str
     timestamps: Tensor  # [num_events]
@@ -192,6 +215,19 @@ class DGData:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]
 
     def split(self, strategy: SplitStrategy | None = None) -> Tuple[DGData, ...]:
+        r"""Split the dataset according to a strategy.
+
+        Args:
+            strategy (SplitStrategy | None): Optional strategy to override the
+                default. If None, uses `_split_strategy` or defaults to `TemporalRatioSplit`.
+
+        Returns:
+            Tuple[DGData, ...]: Split datasets (train/val/test).
+
+        Notes:
+            - Cannot override split strategy for TGB datasets.
+            - Splits preserve the underlying storage; only indices are filtered.
+        """
         strategy = strategy or self._split_strategy or TemporalRatioSplit()
 
         if (
@@ -205,7 +241,19 @@ class DGData:
     def discretize(
         self, time_delta: TimeDeltaDG | str | None, reduce_op: str = 'first'
     ) -> DGData:
-        r"""Returns a copy."""
+        r"""Return a copy of the dataset discretized to a coarser time granularity.
+
+        Args:
+            time_delta (TimeDeltaDG | str | None): Target time granularity.
+            reduce_op (str): Aggregation method for multiple events per bucket. Default 'first'.
+
+        Returns:
+            DGData: New dataset with discretized timestamps and features.
+
+        Raises:
+            ValueError: If discretization is incompatible with ordered granularity or
+                        finer than current granularity.
+        """
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
 
@@ -283,6 +331,7 @@ class DGData:
         )
 
     def clone(self) -> DGData:
+        r"""Deep copy all tensor and non-tensor fields to create a new DGData object."""
         cloned_fields = {}
         for f in fields(self):
             val = getattr(self, f.name)
@@ -305,6 +354,11 @@ class DGData:
         static_node_feats: Tensor | None = None,
         time_delta: TimeDeltaDG | str = 'r',
     ) -> DGData:
+        r"""Construct a DGData from raw tensors for edges, nodes, and features.
+
+        Automatically combines edge and node timestamps, computes event indices,
+        and validates tensor shapes.
+        """
         # Build unified event timeline
         timestamps = edge_timestamps
         event_types = torch.zeros_like(edge_timestamps)
@@ -348,6 +402,23 @@ class DGData:
         static_node_feats_col: List[str] | None = None,
         time_delta: TimeDeltaDG | str = 'r',
     ) -> DGData:
+        r"""Construct a DGData from CSV files containing edge and optional node events.
+
+        Args:
+            edge_file_path: Path to CSV file containing edges.
+            edge_src_col: Column name for src nodes.
+            edge_dst_col: Column name for dst nodes.
+            edge_time_col: Column name for edge times.
+            edge_feats_col: Optional edge feature columns.
+            node_file_path: Optional CSV file for dynamic node features.
+            node_id_col: Column name for dynamic node event ids. Required if node_file_path is specified.
+            node_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
+            dynamic_node_feats_col: Optional dynamic node feature columns.
+            static_node_feats_file_path: Optional CSV file for static node features.
+            static_node_feats_col: Required if static_node_feats_file_path is specified.
+            time_delta: Time granularity.
+        """
+
         def _read_csv(fp: str | pathlib.Path) -> List[dict]:
             # Assumes the whole things fits in memory
             fp = str(fp) if isinstance(fp, pathlib.Path) else fp
@@ -437,6 +508,26 @@ class DGData:
         static_node_feats_col: List[str] | None = None,
         time_delta: TimeDeltaDG | str = 'r',
     ) -> DGData:
+        r"""Construct a DGData from Pandas DataFrames.
+
+        Args:
+            edge_df: DataFrame of edges.
+            edge_src_col: Column name for src nodes.
+            edge_dst_col: Column name for dst nodes.
+            edge_time_col: Column name for edge times.
+            edge_feats_col: Optional edge feature columns.
+            node_df: Optional DataFrame of dynamic node events.
+            node_id_col: Column name for dynamic node event ids. Required if node_file_path is specified.
+            node_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
+            dynamic_node_feats_col: Optional node feature columns.
+            static_node_feats_df: Optional static node features DataFrame.
+            static_node_feats_col: Required if static_node_feats_df is specified.
+            time_delta: Time granularity.
+
+        Notes:
+            - Requires `pandas`
+        """
+
         def _check_pandas_import(min_version_number: str | None = None) -> None:
             try:
                 import pandas
@@ -510,6 +601,19 @@ class DGData:
 
     @classmethod
     def from_tgb(cls, name: str, **kwargs: Any) -> DGData:
+        r"""Load a DGData from a TGB dataset.
+
+        Args:
+            name (str): Name of the TGB dataset, e.g., 'tgbl-xxxx' or 'tgbn-xxxx'.
+            kwargs: Additional dataset-specific arguments.
+
+        Returns:
+            DGData: Dataset with `_split_strategy` automatically set to `TGBSplit`.
+
+        Notes:
+            - TGBLinkPrediction (`tgbl-`) and TGBNodePrediction (`tgbn-`) are supported.
+            - Requires `py-tgb`.
+        """
         try:
             from tgb.linkproppred.dataset import LinkPropPredDataset
             from tgb.nodeproppred.dataset import NodePropPredDataset

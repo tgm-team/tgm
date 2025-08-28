@@ -3,14 +3,26 @@ import torch.nn.functional as F
 
 
 class TemporalAttention(torch.nn.Module):
-    r"""Multi-head Temporal Attention Module.
+    r"""Multi-head Temporal Attention Module for dynamic/temporal graphs.
+
+    This module computes attention over a node's neighbors considering node features,
+    edge features, and time features. It supports multiple attention heads and applies
+    residual connection, dropout, and layer normalization to the output.
 
     Args:
-        n_heads (int): The number of heads in the attention module.
-        node_dim (int): Feature dimension of node features.
-        edge_dim (int): Feature dimension of edge features.
-        time_dim (int): Feature dimension of time features.
-        dropout (float): Optional dropout to apply to output linear layer (default=0.1).
+        n_heads (int): Number of attention heads.
+        node_dim (int): Dimensionality of node features.
+        edge_dim (int): Dimensionality of edge features.
+        time_dim (int): Dimensionality of temporal features.
+        dropout (float, optional): Dropout probability applied to attention and output
+            layers. Default is 0.1.
+
+    Raises:
+        ValueError: If `n_heads`, `node_dim`, `edge_dim`, or `time_dim` are <= 0.
+
+    Note:
+        The output dimension is `node_dim + time_dim`, padded to be divisible by
+        `n_heads` if necessary.
     """
 
     def __init__(
@@ -45,13 +57,39 @@ class TemporalAttention(torch.nn.Module):
 
     def forward(
         self,
-        node_feat: torch.Tensor,  # (B, node_dim)
-        time_feat: torch.Tensor,  # (B, time_dim)
-        edge_feat: torch.Tensor,  # (B, num_nbrs, edge_dim)
-        nbr_node_feat: torch.Tensor,  # (B, num_nbrs, node_dim)
-        nbr_time_feat: torch.Tensor,  # (B, num_nbrs, time_dim)
-        valid_nbr_mask: torch.Tensor,  # (B, num_nbrs)
-    ) -> torch.Tensor:  # (B, out_dim)
+        node_feat: torch.Tensor,
+        time_feat: torch.Tensor,
+        edge_feat: torch.Tensor,
+        nbr_node_feat: torch.Tensor,
+        nbr_time_feat: torch.Tensor,
+        valid_nbr_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        r"""Forward pass of the Temporal Attention module.
+
+        Computes multi-head attention over neighbors, using node, edge, and time
+        features, followed by a residual connection, dropout, and layer normalization.
+
+        Args:
+            node_feat (torch.Tensor): Node features of shape (B, node_dim).
+            time_feat (torch.Tensor): Node time features of shape (B, time_dim).
+            edge_feat (torch.Tensor): Edge features for each neighbor of shape
+                (B, num_nbrs, edge_dim).
+            nbr_node_feat (torch.Tensor): Neighbor node features of shape
+                (B, num_nbrs, node_dim).
+            nbr_time_feat (torch.Tensor): Neighbor time features of shape
+                (B, num_nbrs, time_dim).
+            valid_nbr_mask (torch.Tensor): Boolean mask indicating valid neighbors
+                of shape (B, num_nbrs). True indicates valid neighbors.
+
+        Returns:
+            torch.Tensor: Updated node features of shape (B, out_dim).
+
+        Notes:
+            - If a node has no neighbors, masked attention values are set to -1e10
+              to avoid NaNs in softmax.
+            - The output dimension is padded if necessary to be divisible by the number
+              of heads.
+        """
         node_feat = F.pad(node_feat, (0, self.pad_dim)) if self.pad_dim else node_feat
 
         Q = R = torch.cat([node_feat, time_feat], dim=1).unsqueeze(1)  # (B, 1, out_dim)

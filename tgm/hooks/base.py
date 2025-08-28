@@ -19,6 +19,8 @@ class DGHook(Protocol):
 
 
 class StatelessHook:
+    """Base class for hooks without internal state."""
+
     requires: Set[str] = set()
     produces: Set[str] = set()
     has_state: bool = False
@@ -31,6 +33,8 @@ class StatelessHook:
 
 
 class StatefulHook:
+    """Base class for hooks that maintain internal state."""
+
     requires: Set[str] = set()
     produces: Set[str] = set()
     has_state: bool = True
