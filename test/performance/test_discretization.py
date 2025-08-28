@@ -20,5 +20,5 @@ def test_graph_discretization(benchmark, dataset, granularity):
 
     num_events = dg.num_events
     throughput = (num_events / benchmark.stats['mean']) / 1e6
-    benchmark.extra_info['throughput_events_per_sec'] = throughput
+    benchmark.extra_info['throughput_M_events_per_sec'] = throughput
     print(f'{dataset} discretiation ({granularity}): {throughput:.2f} M events/sec')

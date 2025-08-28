@@ -40,12 +40,13 @@ def setup_random_negs(dg, dataset):
 
 
 def setup_tgb_negs(dg, dataset, sampler_type=None, num_nbrs=None):
-    tgb_dataset = PyGLinkPropPredDataset(name=dataset, root='datasets')
-    neg_sampler = tgb_dataset.negative_sampler
-    tgb_dataset.load_val_ns()
-    tgb_dataset.load_test_ns()
-
-    hooks = [TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')]
+    if dataset.startswith('tgbl'):
+        tgb_dataset = PyGLinkPropPredDataset(name=dataset, root='datasets')
+        neg_sampler = tgb_dataset.negative_sampler
+        tgb_dataset.load_val_ns()
+        tgb_dataset.load_test_ns()
+        hooks = [TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')]
+    hooks = []
 
     if sampler_type is None:
         return create_hook_manager(hooks)
@@ -110,11 +111,11 @@ def test_data_loader_cpu_hooks(benchmark, dataset, batch_size, hook_key):
     if isinstance(batch_size, int):
         loader = DGDataLoader(dg, batch_size=batch_size, hook_manager=hook_manager)
     else:
-        loader = DGDataLoader(dg, batch_unit=batch_size, hook_maanger=hook_manager)
+        loader = DGDataLoader(dg, batch_unit=batch_size, hook_manager=hook_manager)
 
     result = benchmark(lambda: run_epoch(loader))
     throughput = (dg.num_events / result.mean) / 1e6
-    benchmark.extra_info['throughput_events_per_sec'] = throughput
+    benchmark.extra_info['throughput_M_events_per_sec'] = throughput
 
     print(
         f'{dataset.values[0]} | CPU | batch={batch_size} | hooks={hook_key} -> '
@@ -139,7 +140,7 @@ def test_data_loader_gpu_hooks(benchmark, dataset, batch_size, hook_key):
 
     result = benchmark(lambda: run_epoch(loader))
     throughput = (dg.num_events / result.mean) / 1e6
-    benchmark.extra_info['throughput_events_per_sec'] = throughput
+    benchmark.extra_info['throughput_M_events_per_sec'] = throughput
 
     print(
         f'{dataset.values[0]} | GPU | batch={batch_size} | hooks={hook_key} -> '
