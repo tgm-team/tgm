@@ -13,6 +13,6 @@
 ::: tgm.nn.recurrent.gclstm
 ::: tgm.nn.recurrent.tgcn
 
-## Memory
+## Models
 
 ::: tgm.nn.memory.edgebank

@@ -6,7 +6,7 @@ PROJECT_ROOT="$SCRIPT_DIR/.."
 cd "$PROJECT_ROOT"
 
 print_usage() {
-    echo "Usage: $0 [--gpu]"
+    echo "Usage: $0"
     echo
     echo "Build and serve documentation locally."
     echo

@@ -14,15 +14,18 @@ nav:
       - DGraph Construction: tutorials/dgraph_tutorial.md
 
   - API Reference:
-      - Constants: constants.md
-      - Data Module: data.md
-      - Graph Module: graph.md
-      - Split: split.md
+      - Dynamic Graphs:
+          - DGraph: api/graph.md
+          - DGBatch: api/batch.md
+          - TimeDeltaDG: api/timedelta.md
+      - Datasets: api/data.md
+      - Data Loading: api/loader.md
       - Hooks:
-          - DGHook: hooks/hooks.md
-          - Hook Manager: hooks/hook_manager.md
-      - Neural Networks: nn.md
-      - Utilities: util.md
+          - DGHook: api/hooks/hooks.md
+          - Hook Manager: api/hooks/hook_manager.md
+      - Neural Networks: api/nn.md
+      - Utilities: api/util.md
+      - Constants: api/constants.md
 
 validation:
   links:

@@ -1,8 +1,10 @@
-## DGHooks
+## Base Classes
 
 ::: tgm.hooks.DGHook
 ::: tgm.hooks.StatelessHook
 ::: tgm.hooks.StatefulHook
+
+## Concrete Hooks
 
 ::: tgm.hooks.PinMemoryHook
 ::: tgm.hooks.DeviceTransferHook
