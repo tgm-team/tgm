@@ -3,7 +3,6 @@ from functools import partial
 import pytest
 from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 
-from tgm.graph import DGData, DGraph
 from tgm.hooks import (
     HookManager,
     NegativeEdgeSamplerHook,
@@ -101,11 +100,14 @@ def run_epoch(loader):
 
 @pytest.mark.benchmark(group='data_loader_cpu_hooks')
 @pytest.mark.parametrize('dataset', DATASETS)
-@pytest.mark.parametrize('batch_size', [200, 'D'])
+@pytest.mark.parametrize('batch_size', [200, 'Y'])
 @pytest.mark.parametrize('hook_key', list(HOOK_CONFIGS.keys()))
-def test_data_loader_cpu_hooks(benchmark, dataset, batch_size, hook_key):
-    _, data, _ = DGData.from_tgb(dataset).split()
-    dg = DGraph(data, device='cpu')
+def test_data_loader_cpu_hooks(
+    benchmark, dataset, batch_size, hook_key, preloaded_graphs
+):
+    data = preloaded_graphs[dataset]['data']
+    dg = preloaded_graphs[dataset]['dg']
+    _, data, _ = data.split()  # just testing on validation set
     hook_manager = HOOK_CONFIGS[hook_key](dg, dataset)
 
     if isinstance(batch_size, int):
@@ -113,12 +115,24 @@ def test_data_loader_cpu_hooks(benchmark, dataset, batch_size, hook_key):
     else:
         loader = DGDataLoader(dg, batch_unit=batch_size, hook_manager=hook_manager)
 
-    result = benchmark(lambda: run_epoch(loader))
-    throughput = (dg.num_events / result.mean) / 1e6
-    benchmark.extra_info['throughput_M_events_per_sec'] = throughput
+    total_events = 0
+
+    def run_epoch_wrapper():
+        nonlocal total_events
+        total_events = run_epoch(loader)
+
+    benchmark(run_epoch_wrapper)
+
+    throughput = (total_events / benchmark.stats['mean']) / 1e6
+    benchmark.extra_info.update(
+        {
+            'throughput_M_events_per_sec': throughput,
+            'num_events': total_events,
+        }
+    )
 
     print(
-        f'{dataset.values[0]} | CPU | batch={batch_size} | hooks={hook_key} -> '
+        f'{dataset} | CPU | batch={batch_size} | hooks={hook_key} -> '
         f'{throughput:.2f} M events/sec'
     )
 
@@ -128,9 +142,13 @@ def test_data_loader_cpu_hooks(benchmark, dataset, batch_size, hook_key):
 @pytest.mark.parametrize('dataset', DATASETS)
 @pytest.mark.parametrize('batch_size', [200, 'D'])
 @pytest.mark.parametrize('hook_key', list(HOOK_CONFIGS.keys()))
-def test_data_loader_gpu_hooks(benchmark, dataset, batch_size, hook_key):
-    _, data, _ = DGData.from_tgb(dataset).split()
-    dg = DGraph(data, device='cuda')
+def test_data_loader_gpu_hooks(
+    benchmark, dataset, batch_size, hook_key, preloaded_graphs
+):
+    data = preloaded_graphs[dataset]['data']
+    dg = preloaded_graphs[dataset]['dg']
+    _, data, _ = data.split()  # just testing on validation set
+    dg = dg.to('cuda')  # move graph to gpu
     hook_manager = HOOK_CONFIGS[hook_key](dg, dataset)
 
     if isinstance(batch_size, int):
@@ -138,11 +156,23 @@ def test_data_loader_gpu_hooks(benchmark, dataset, batch_size, hook_key):
     else:
         loader = DGDataLoader(dg, batch_unit=batch_size, hook_manager=hook_manager)
 
-    result = benchmark(lambda: run_epoch(loader))
-    throughput = (dg.num_events / result.mean) / 1e6
-    benchmark.extra_info['throughput_M_events_per_sec'] = throughput
+    total_events = 0
+
+    def run_epoch_wrapper():
+        nonlocal total_events
+        total_events = run_epoch(loader)
+
+    benchmark(run_epoch_wrapper)
+
+    throughput = (total_events / benchmark.stats['mean']) / 1e6
+    benchmark.extra_info.update(
+        {
+            'throughput_M_events_per_sec': throughput,
+            'num_events': total_events,
+        }
+    )
 
     print(
-        f'{dataset.values[0]} | GPU | batch={batch_size} | hooks={hook_key} -> '
+        f'{dataset} | GPU | batch={batch_size} | hooks={hook_key} -> '
         f'{throughput:.2f} M events/sec'
     )

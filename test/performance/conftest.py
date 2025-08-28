@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from tgm import DGData, DGraph
+
 DATASETS = [
     pytest.param('tgbl-wiki', marks=pytest.mark.small),
     pytest.param('tgbn-trade', marks=pytest.mark.small),
@@ -18,6 +20,25 @@ DATASETS = [
 @pytest.fixture(scope='session')
 def datasets():
     return DATASETS
+
+
+@pytest.fixture(scope='session')
+def preloaded_graphs(datasets, pytestconfig):
+    run_small_only = False
+    markers_arg = pytestconfig.getoption('-m')
+    run_small_only = 'small' in markers_arg and 'not small' not in markers_arg
+
+    graphs = {}
+    for param in datasets:
+        dataset_name = param.values[0]
+        marks = {m.name for m in getattr(param, 'marks', [])}
+        if run_small_only and 'small' not in marks:
+            continue  # skip non-small dataset
+
+        data = DGData.from_tgb(dataset_name)
+        dg = DGraph(data)
+        graphs[dataset_name] = {'dg': dg, 'data': data}
+    return graphs
 
 
 @pytest.fixture(scope='session', autouse=True)

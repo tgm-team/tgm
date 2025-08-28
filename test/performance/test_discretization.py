@@ -1,7 +1,5 @@
 import pytest
 
-from tgm.graph import DGData, DGraph
-
 from .conftest import DATASETS
 
 
@@ -12,9 +10,9 @@ from .conftest import DATASETS
     [d for d in DATASETS if d.values[0] != 'tgbn-trade'],
 )
 @pytest.mark.parametrize('granularity', ['D', 'M', 'Y'])  # daily, monthly, yearly
-def test_graph_discretization(benchmark, dataset, granularity):
-    data = DGData.from_tgb(dataset)
-    dg = DGraph(data)
+def test_graph_discretization(benchmark, dataset, granularity, preloaded_graphs):
+    data = preloaded_graphs[dataset]['data']
+    dg = preloaded_graphs[dataset]['dg']
 
     benchmark(lambda: data.discretize(granularity))
 
