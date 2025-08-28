@@ -6,7 +6,7 @@ from typing import ClassVar, Dict, Final
 
 @dataclass(frozen=True, slots=True)
 class TimeDeltaDG:
-    r"""Represents the time granularity for a temporal index in a dynamic graph.
+    """Represents the time granularity for a temporal index in a dynamic graph.
 
     This class is used to define the resolution at which events or interactions
     are indexed in a dynamic/temporal graph. It supports both standard temporal
@@ -55,11 +55,11 @@ class TimeDeltaDG:
 
     @property
     def is_ordered(self) -> bool:
-        r"""Return True if this is the special ordered unit ('r')."""
+        """Return True if this is the special ordered unit ('r')."""
         return self.unit == TimeDeltaDG._ORDERED
 
     def is_coarser_than(self, other: str | TimeDeltaDG) -> bool:
-        r"""Return True if this granularity is strictly coarser than `other`.
+        """Return True if this granularity is strictly coarser than `other`.
 
         Args:
             other (str | TimeDeltaDG): The time delta to compare against.
@@ -70,7 +70,7 @@ class TimeDeltaDG:
         return self.convert(other) > 1
 
     def convert(self, time_delta: str | TimeDeltaDG) -> float:
-        r"""Convert this granularity into the scale of another time delta.
+        """Convert this granularity into the scale of another time delta.
 
         Args:
             time_delta (str | TimeDeltaDG): Target time delta to convert into.

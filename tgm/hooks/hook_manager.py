@@ -9,7 +9,7 @@ from tgm.hooks import DeduplicationHook, DGHook
 
 
 class HookManager:
-    r"""Manages hooks (`DGHook`s) for a `DGraph`, supporting both shared and key-specific hooks.
+    """Manages hooks (`DGHook`s) for a `DGraph`, supporting both shared and key-specific hooks.
 
     This class allows you to register hooks that modify or enrich batches of graph events
     before they are materialized. Hooks can be shared across all keys or specific to
@@ -58,7 +58,7 @@ class HookManager:
         return '\n'.join(lines)
 
     def register_shared(self, hook: DGHook) -> None:
-        r"""Registers a shared hook that runs for all keys.
+        """Registers a shared hook that runs for all keys.
 
         Args:
             hook (DGHook): The hook to register.
@@ -74,7 +74,7 @@ class HookManager:
             self._dirty[k] = True
 
     def register(self, key: str, hook: DGHook) -> None:
-        r"""Registers a key-specific hook.
+        """Registers a key-specific hook.
 
         Args:
             key (str): The key to associate the hook with.
@@ -92,7 +92,7 @@ class HookManager:
         self._dirty[key] = True  # Mark registered key as 'dirty'
 
     def set_active_hooks(self, key: str) -> None:
-        r"""Sets the currently active key for executing hooks.
+        """Sets the currently active key for executing hooks.
 
         Args:
             key (str): The key to activate.
@@ -104,7 +104,7 @@ class HookManager:
         self._active_key = key
 
     def execute_active_hooks(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        r"""Executes all hooks (shared + key-specific) for the active key on a batch.
+        """Executes all hooks (shared + key-specific) for the active key on a batch.
 
         Args:
             dg (DGraph): The graph on which hooks operate.
@@ -129,7 +129,7 @@ class HookManager:
         return batch
 
     def reset_state(self, key: str | None = None) -> None:
-        r"""Resets the internal state of all stateful hooks.
+        """Resets the internal state of all stateful hooks.
 
         Args:
             key (str | None): If specified, resets only hooks for this key.
@@ -147,7 +147,7 @@ class HookManager:
                 h.reset_state()
 
     def resolve_hooks(self, key: str | None = None) -> None:
-        r"""Resolves hook execution order by topologically sorting them based on dependencies.
+        """Resolves hook execution order by topologically sorting them based on dependencies.
 
         Args:
             key (str | None): If specified, resolves hooks only for this key.
@@ -170,7 +170,7 @@ class HookManager:
 
     @contextmanager
     def activate(self, key: str) -> Iterator[None]:
-        r"""Context manager to temporarily set a key as active for hook execution.
+        """Context manager to temporarily set a key as active for hook execution.
 
         Args:
             key (str): The key to activate.

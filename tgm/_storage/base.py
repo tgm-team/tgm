@@ -18,7 +18,7 @@ class DGSliceTracker:
 
 
 class DGStorageBase(ABC):
-    r"""Base class for dynamic graph storage engine."""
+    """Base class for dynamic graph storage engines."""
 
     @abstractmethod
     def __init__(self, data: DGData) -> None:
@@ -100,6 +100,7 @@ class DGStorageBase(ABC):
             slice: The temporal/event slice to consider.
 
         Returns:
-            TODO
+            (nbr_nids, nbr_times, nbr_feats) tensors containing the relevant neighborhood
+            information, padded using tgm.constants.PADDED_NODE_ID.
         """
         ...

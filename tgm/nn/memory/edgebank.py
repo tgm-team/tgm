@@ -13,7 +13,7 @@ class EdgeBankPredictor:
         window_ratio: float = 0.15,
         pos_prob: float = 1.0,
     ) -> None:
-        r"""Edgebank link predictor with fixed or unlimited memory.
+        """Edgebank link predictor with fixed or unlimited memory.
 
         Reference: https://arxiv.org/abs/2207.10128.
 
@@ -68,7 +68,7 @@ class EdgeBankPredictor:
         self.update(src, dst, ts)
 
     def update(self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor) -> None:
-        r"""Update EdgeBank memory with a batch of edges.
+        """Update EdgeBank memory with a batch of edges.
 
         Args:
             src (torch.Tensor): Source node IDs of the edges.
@@ -89,7 +89,7 @@ class EdgeBankPredictor:
     def __call__(
         self, query_src: torch.Tensor, query_dst: torch.Tensor
     ) -> torch.Tensor:
-        r"""Predict link probabilities for a batch of query edges.
+        """Predict link probabilities for a batch of query edges.
 
         Args:
             query_src (torch.Tensor): Source node IDs of the query edges.
@@ -113,17 +113,17 @@ class EdgeBankPredictor:
 
     @property
     def window_start(self) -> int | float:
-        r"""Return the start timestamp of the current memory window."""
+        """Return the start timestamp of the current memory window."""
         return self._window_start.item()
 
     @property
     def window_end(self) -> int | float:
-        r"""Return the end timestamp of the current memory window."""
+        """Return the end timestamp of the current memory window."""
         return self._window_end.item()
 
     @property
     def window_ratio(self) -> float:
-        r"""Return the ratio of the memory window size to the full time span."""
+        """Return the ratio of the memory window size to the full time span."""
         return self._window_ratio
 
     def _check_input_data(

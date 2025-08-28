@@ -11,7 +11,7 @@ from tgm.timedelta import TimeDeltaDG
 
 
 class _SkippableDataLoaderMixin(ABC):
-    r"""Mixin to optionally skip or raise on empty batches.
+    """Mixin to optionally skip or raise on empty batches.
 
     This mixin adds the ability to either skip or raise an error when an
     empty batch is encountered during iteration over a dataset.
@@ -54,7 +54,7 @@ class _SkippableDataLoaderMixin(ABC):
 
 
 class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # type: ignore
-    r"""Iterate and materialize batches from a `DGraph`.
+    """Iterate and materialize batches from a `DGraph`.
 
     This DataLoader supports both ordered and non-ordered temporal graphs.
     Optional hooks can be applied to each batch, and empty batches can be skipped
@@ -84,8 +84,6 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
           time delta. Otherwise, a ValueError is raised.
         - The effective batch size may be adjusted internally when using non-ordered
           batching to match the graph's time granularity.
-        - `hook_manager` can execute arbitrary transformations on each batch before
-          returning it.
         - The length returned by `len(DGDataLoader)` may be inaccurate for non-ordered
           batches with `on_empty='skip'`, since skipped batches are still counted.
         - Slices and batch materialization return new `DGBatch` objects; underlying

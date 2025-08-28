@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 
 class TemporalAttention(torch.nn.Module):
-    r"""Multi-head Temporal Attention Module for dynamic/temporal graphs.
+    """Multi-head Temporal Attention Module for dynamic/temporal graphs.
 
     This module computes attention over a node's neighbors considering node features,
     edge features, and time features. It supports multiple attention heads and applies
@@ -64,7 +64,7 @@ class TemporalAttention(torch.nn.Module):
         nbr_time_feat: torch.Tensor,
         valid_nbr_mask: torch.Tensor,
     ) -> torch.Tensor:
-        r"""Forward pass of the Temporal Attention module.
+        """Forward pass of the Temporal Attention module.
 
         Computes multi-head attention over neighbors, using node, edge, and time
         features, followed by a residual connection, dropout, and layer normalization.

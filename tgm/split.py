@@ -9,7 +9,7 @@ from torch import Tensor
 
 
 class SplitStrategy(ABC):
-    r"""Abstract base class for splitting temporal graph datasets.
+    """Abstract base class for splitting temporal graph datasets.
 
     Implementations of this class define the logic for dividing a `DGData` object
     into one or more subsets (train/val/test) based on temporal information.
@@ -73,7 +73,7 @@ class SplitStrategy(ABC):
 
 @dataclass
 class TemporalSplit(SplitStrategy):
-    r"""Split a temporal graph dataset based on absolute timestamp boundaries.
+    """Split a temporal graph dataset based on absolute timestamp boundaries.
 
     Args:
         val_time (int): The timestamp separating training and validation data.
@@ -128,7 +128,7 @@ class TemporalSplit(SplitStrategy):
 
 @dataclass
 class TemporalRatioSplit(SplitStrategy):
-    r"""Split a temporal graph dataset according to relative ratios of time.
+    """Split a temporal graph dataset according to relative ratios of time.
 
     Args:
         train_ratio (float, optional): Fraction of data to assign to training. Defaults to 0.7.
@@ -172,7 +172,7 @@ class TemporalRatioSplit(SplitStrategy):
 
 @dataclass
 class TGBSplit(SplitStrategy):
-    r"""Split a temporal graph dataset using pre-specified edge time bounds.
+    """Split a temporal graph dataset using pre-specified edge time bounds.
 
     Args:
         split_bounds (Dict[str, Tuple[int, int]]): Mapping from split names
