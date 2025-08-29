@@ -354,3 +354,24 @@ def test_activate_ctx():
         assert hm._active_key == 'train'
 
     assert hm._active_key is None
+
+
+def test_topo_sort_neg_before_nbr():
+    mock_neg_hook, mock_nbr_hook = MockHook(), MockHook()
+    mock_neg_hook.requires, mock_neg_hook.produces = set(), {'neg'}
+    mock_nbr_hook.requires, mock_nbr_hook.produces = set(), {'nbr_nids'}
+
+    # Register neg first in foo, nbr first in bar
+    hm = HookManager(keys=['foo', 'bar'])
+    hm.register('foo', mock_neg_hook)
+    hm.register('foo', mock_nbr_hook)
+    hm.register('bar', mock_nbr_hook)
+    hm.register('bar', mock_neg_hook)
+
+    hm.resolve_hooks()
+    foo_hooks = hm._key_to_hooks['foo']
+    bar_hooks = hm._key_to_hooks['bar']
+
+    # Ensure negatives precede nbrs in both cases
+    assert foo_hooks.index(mock_neg_hook) < foo_hooks.index(mock_nbr_hook)
+    assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)
