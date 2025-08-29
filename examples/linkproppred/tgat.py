@@ -208,9 +208,9 @@ else:
     )
 
 # Neighbor Sampler is shared across loaders
-if args.sampling_type == 'uniform':
+if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(num_nbrs=args.num_nbrs)
-elif args.sampling_type == 'recency':
+elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
