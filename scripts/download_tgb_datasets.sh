@@ -10,6 +10,10 @@ VENV_TGB_DIR=".venv/lib/python3.10/site-packages/tgb/datasets"
 DATASETS=(
     "tgbl_wiki"
     "tgbn_trade"
+    "tgbn_genre"
+    "tgbl_coin"
+    #"tgbl_flight" TODO: Start working with the large graphs
+    #"tgbn_reddit"
 )
 
 print_usage() {
@@ -53,8 +57,8 @@ setup_venv_if_missing() {
     if [ ! -d ".venv" ]; then
         echo ".venv not found. Setting up environment. This might take a while..."
         uv venv .venv
-        uv sync --group dev
     fi
+    uv sync --group dev
 }
 
 download_dataset() {

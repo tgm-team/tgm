@@ -24,7 +24,7 @@ python "$ROOT_DIR/examples/linkproppred/gclstm.py" \
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize('dataset', ['tgbn-trade'])
+@pytest.mark.parametrize('dataset', ['tgbn-genre'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
