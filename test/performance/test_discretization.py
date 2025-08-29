@@ -11,6 +11,9 @@ from .conftest import DATASETS
 )
 @pytest.mark.parametrize('granularity', ['D', 'M', 'Y'])  # daily, monthly, yearly
 def test_graph_discretization(benchmark, dataset, granularity, preloaded_graphs):
+    if dataset not in preloaded_graphs:
+        pytest.skip()
+
     data = preloaded_graphs[dataset]['data']
     dg = preloaded_graphs[dataset]['dg']
 

@@ -15,15 +15,6 @@ from tgm.loader import DGDataLoader
 from .conftest import DATASETS
 
 
-def iterate_loader(loader, max_batches=50):
-    total_events = 0
-    for i, batch in enumerate(loader):
-        total_events += len(batch.src)
-        if max_batches and i + 1 >= max_batches:
-            break
-    return total_events
-
-
 def setup_no_hooks(dg, dataset):
     return None
 
@@ -91,13 +82,6 @@ def create_hook_manager(hooks):
     return hm
 
 
-def run_epoch(loader):
-    total_events = 0
-    for batch in loader:
-        total_events += len(batch.src)
-    return total_events
-
-
 @pytest.mark.benchmark(group='data_loader_cpu_hooks')
 @pytest.mark.parametrize('dataset', DATASETS)
 @pytest.mark.parametrize('batch_size', [200, 'M'])
@@ -105,6 +89,9 @@ def run_epoch(loader):
 def test_data_loader_cpu_hooks(
     benchmark, dataset, batch_size, hook_key, preloaded_graphs
 ):
+    if dataset not in preloaded_graphs:
+        pytest.skip()
+
     data = preloaded_graphs[dataset]['data']
     dg = preloaded_graphs[dataset]['dg']
     _, data, _ = data.split()  # just testing on validation set
@@ -116,12 +103,14 @@ def test_data_loader_cpu_hooks(
         loader = DGDataLoader(dg, batch_unit=batch_size, hook_manager=hook_manager)
 
     total_events = 0
+    loader_iter = iter(loader)
 
     def run_epoch_wrapper():
         nonlocal total_events
-        total_events = run_epoch(loader)
+        batch = next(loader_iter)
+        total_events += len(batch.src)
 
-    benchmark.pedantic(run_epoch_wrapper, rounds=3, iterations=1)
+    benchmark(run_epoch_wrapper)
 
     throughput = (total_events / benchmark.stats['mean']) / 1e6
     benchmark.extra_info.update(
@@ -145,6 +134,9 @@ def test_data_loader_cpu_hooks(
 def test_data_loader_gpu_hooks(
     benchmark, dataset, batch_size, hook_key, preloaded_graphs
 ):
+    if dataset not in preloaded_graphs:
+        pytest.skip()
+
     data = preloaded_graphs[dataset]['data']
     dg = preloaded_graphs[dataset]['dg']
     _, data, _ = data.split()  # just testing on validation set
@@ -157,12 +149,14 @@ def test_data_loader_gpu_hooks(
         loader = DGDataLoader(dg, batch_unit=batch_size, hook_manager=hook_manager)
 
     total_events = 0
+    loader_iter = iter(loader)
 
     def run_epoch_wrapper():
         nonlocal total_events
-        total_events = run_epoch(loader)
+        batch = next(loader_iter)
+        total_events += len(batch.src)
 
-    benchmark.pedantic(run_epoch_wrapper, rounds=3, iterations=1)
+    benchmark(run_epoch_wrapper)
 
     throughput = (total_events / benchmark.stats['mean']) / 1e6
     benchmark.extra_info.update(

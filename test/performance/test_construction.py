@@ -7,7 +7,10 @@ from .conftest import DATASETS
 
 @pytest.mark.benchmark(group='graph_loading')
 @pytest.mark.parametrize('dataset', DATASETS)
-def test_graph_loading(benchmark, dataset):
+def test_graph_loading(benchmark, dataset, preloaded_graphs):
+    if dataset not in preloaded_graphs:
+        pytest.skip()
+
     out = {}
 
     def run():
@@ -29,6 +32,9 @@ def test_graph_loading(benchmark, dataset):
 @pytest.mark.benchmark(group='graph_split')
 @pytest.mark.parametrize('dataset', DATASETS)
 def test_graph_split(benchmark, dataset, preloaded_graphs):
+    if dataset not in preloaded_graphs:
+        pytest.skip()
+
     data = preloaded_graphs[dataset]['data']
     dg = preloaded_graphs[dataset]['dg']
 

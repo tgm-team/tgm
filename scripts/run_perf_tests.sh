@@ -41,12 +41,23 @@ run_perf_tests() {
         marker_arg="$marker_arg and not gpu"
     fi
 
-    if [[ "${#SIZES[@]}" -eq 0 ]]; then
-        # default: small only
-        marker_arg="$marker_arg and small"
-    else
-        marker_arg="$marker_arg and (${SIZES[*]})"
+    sizes=()
+    [[ "$RUN_SMALL" == "1" ]] && sizes+=("small")
+    [[ "$RUN_MEDIUM" == "1" ]] && sizes+=("medium")
+    [[ "$RUN_LARGE" == "1" ]] && sizes+=("large")
+
+    # default to small if no sizes specified
+    if [ ${#sizes[@]} -eq 0 ]; then
+        sizes=("small")
     fi
+
+    # join sizes with "or"
+    sizes_expr="${sizes[0]}"
+    for s in "${sizes[@]:1}"; do
+        sizes_expr="$sizes_expr or $s"
+    done
+
+    marker_arg="$marker_arg and ($sizes_expr)"
 
     local timestamp
     timestamp=$(date '+%Y%m%d-%H%M%S')
@@ -64,14 +75,16 @@ run_perf_tests() {
 
 parse_args() {
     GPU=0
-    SIZES=()
+    RUN_SMALL=0
+    RUN_MEDIUM=0
+    RUN_LARGE=0
 
     for arg in "$@"; do
         case "$arg" in
             --gpu) GPU=1 ;;
-            --small) SIZES+=("small") ;;
-            --medium) SIZES+=("medium") ;;
-            --large) SIZES+=("large") ;;
+            --small) RUN_SMALL=1 ;;
+            --medium) RUN_MEDIUM=1 ;;
+            --large) RUN_LARGE=1 ;;
             -h|--help) print_usage; exit 0 ;;
             *) echo "Unknown argument: $arg"; print_usage; exit 1 ;;
         esac
