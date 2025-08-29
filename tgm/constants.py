@@ -4,5 +4,6 @@ PADDED_NODE_ID: Final[int] = -1
 """Sentinel node ID used to mark invalid or padded neighbors in a graph.
 
 Notes:
-    - This value should **not** appear in actual node IDs in edge or node event tensors.
+    - A tgm.exceptions.InvalidNodeIDError will be thrown if this value
+    appears as an ID in edge or node event tensors will consturcting DGData.
 """
