@@ -14,8 +14,8 @@ from tgm.constants import PADDED_NODE_ID
 from tgm.exceptions import (
     EmptyGraphError,
     InvalidDiscretizationError,
+    InvalidNodeIDError,
     OrderedTimeGranularityError,
-    PaddedNodeIDError,
 )
 from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
@@ -61,7 +61,7 @@ class DGData:
                 f'edge_index must have shape [num_edges, 2], got: {self.edge_index.shape}',
             )
         if torch.any(self.edge_index == PADDED_NODE_ID):
-            raise PaddedNodeIDError(
+            raise InvalidNodeIDError(
                 f'Edge events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
             )
 
@@ -112,7 +112,7 @@ class DGData:
                     f'got {num_node_events} node events and shape {self.node_ids.shape}',  # type: ignore
                 )
             if torch.any(self.node_ids == PADDED_NODE_ID):  # type: ignore
-                raise PaddedNodeIDError(
+                raise InvalidNodeIDError(
                     f'Node events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
                 )
 

@@ -13,8 +13,8 @@ from tgm.data import DGData
 from tgm.exceptions import (
     EmptyGraphError,
     InvalidDiscretizationError,
+    InvalidNodeIDError,
     OrderedTimeGranularityError,
-    PaddedNodeIDError,
 )
 from tgm.split import TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TimeDeltaDG
@@ -160,14 +160,14 @@ def test_init_dg_data_sort_required():
 def test_init_dg_data_bad_args_invalid_node_id():
     edge_index = torch.LongTensor([[PADDED_NODE_ID, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([1, 5])
-    with pytest.raises(PaddedNodeIDError):
+    with pytest.raises(InvalidNodeIDError):
         _ = DGData.from_raw(edge_timestamps, edge_index)
 
     edge_index = torch.LongTensor([[1, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([1, 5])
     node_ids = torch.LongTensor([PADDED_NODE_ID])
     node_timestamps = torch.LongTensor([1])
-    with pytest.raises(PaddedNodeIDError):
+    with pytest.raises(InvalidNodeIDError):
         _ = DGData.from_raw(
             edge_timestamps,
             edge_index,

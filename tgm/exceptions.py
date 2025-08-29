@@ -10,8 +10,8 @@ class UnresolvableHookDependenciesError(TGMError):
     """Raised when no valid execution ordering of hooks can be found, due to conflicting or cyclic requires/produces dependencies."""
 
 
-class PaddedNodeIDError(TGMError):
-    """Raised when a dataset contains node IDs that conflict with the reserved padded node placeholder ID."""
+class InvalidNodeIDError(TGMError):
+    """Raised when a dataset contains node IDs that conflict with the reserved padded node placeholder ID (tgm.constants.PADDED_NODE_ID)."""
 
 
 class EmptyGraphError(TGMError):
