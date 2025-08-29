@@ -638,7 +638,7 @@ class DGData:
 
         Notes:
             - TGBLinkPrediction (`tgbl-`) and TGBNodePrediction (`tgbn-`) are supported.
-            - Requires `py-tgb`.
+            - The split strategy of a TGB dataset cannot be modified.
         """
         try:
             from tgb.linkproppred.dataset import LinkPropPredDataset

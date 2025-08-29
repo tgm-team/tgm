@@ -16,8 +16,10 @@ class HookManager:
     """Manages hooks (`DGHook`s) for a `DGraph`, supporting both shared and key-specific hooks.
 
     This class allows you to register hooks that modify or enrich batches of graph events
-    before they are materialized. Hooks can be shared across all keys or specific to
-    a key. Dependencies between hooks are automatically resolved using topological
+    via transformation on the current, and optionally past history of the temporal graph.
+    The hook manager executed these transformation transparently to the user during data
+    iteration. Hooks can be shared across all keys or specific to a key.
+    Dependencies between hooks are automatically resolved using topological
     sorting based on their `requires` and `produces` attributes.
 
     Args:
