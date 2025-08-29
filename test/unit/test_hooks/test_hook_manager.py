@@ -368,6 +368,6 @@ def test_topo_sort_neg_before_nbr():
     foo_hooks = hm._key_to_hooks['foo']
     bar_hooks = hm._key_to_hooks['bar']
 
-    # Ensure negatives preceed nbrs in both cases
+    # Ensure negatives precede nbrs in both cases
     assert foo_hooks.index(mock_neg_hook) < foo_hooks.index(mock_nbr_hook)
     assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)

@@ -148,7 +148,7 @@ class HookManager:
                 # that the negatives come first (so that we sample neighbors for the negatives).
                 # But since neighbor sampler does not explicitly require negatives, the topological
                 # sort may put these out of order. In order to fix this, we add an extra edge
-                # into tthe DAG before sorting. Long term, we need to think about how to avoid
+                # into the DAG before sorting. Long term, we need to think about how to avoid
                 # things like this, and make it seamless for the user.
                 is_neg_hook = lambda h: 'neg' in h.produces
                 is_nbr_hook = lambda h: 'nbr_nids' in h.produces
