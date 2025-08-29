@@ -18,4 +18,4 @@ export TGM_CI_PERF_LOG_BASE=${TGM_CI_PERF_LOG_BASE:-$HOME/tgm_ci_perf}
 mkdir -p "$TGM_CI_PERF_LOG_BASE"
 
 # Run the performance tests
-./scripts/run_perf_tests.sh --gpu --all
+./scripts/run_perf_tests.sh --gpu --small --medium

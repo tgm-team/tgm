@@ -14,8 +14,10 @@ print_usage() {
     echo "Run performance tests locally with pytest-benchmark."
     echo
     echo "Options:"
-    echo "  --gpu    Enable GPU benchmarks (default: CPU-only)"
-    echo "  --all    Run benchmarks on all datasets (default: small only)"
+    echo "  --gpu       Enable GPU benchmarks (default: CPU-only)"
+    echo "  --small     Run benchmarks on small datasets (default if no flag given)"
+    echo "  --medium    Run benchmarks on medium datasets"
+    echo "  --large     Run benchmarks on large datasets"
 }
 
 check_uv_install() {
@@ -39,8 +41,11 @@ run_perf_tests() {
         marker_arg="$marker_arg and not gpu"
     fi
 
-    if [[ "$ALL_DATASETS" != "1" ]]; then
+    if [[ "${#SIZES[@]}" -eq 0 ]]; then
+        # default: small only
         marker_arg="$marker_arg and small"
+    else
+        marker_arg="$marker_arg and (${SIZES[*]})"
     fi
 
     local timestamp
@@ -59,12 +64,14 @@ run_perf_tests() {
 
 parse_args() {
     GPU=0
-    ALL_DATASETS=0
+    SIZES=()
 
     for arg in "$@"; do
         case "$arg" in
             --gpu) GPU=1 ;;
-            --all) ALL_DATASETS=1 ;;
+            --small) SIZES+=("small") ;;
+            --medium) SIZES+=("medium") ;;
+            --large) SIZES+=("large") ;;
             -h|--help) print_usage; exit 0 ;;
             *) echo "Unknown argument: $arg"; print_usage; exit 1 ;;
         esac

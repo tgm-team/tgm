@@ -24,16 +24,18 @@ def datasets():
 
 @pytest.fixture(scope='session')
 def preloaded_graphs(datasets, pytestconfig):
-    run_small_only = False
-    markers_arg = pytestconfig.getoption('-m')
-    run_small_only = 'small' in markers_arg and 'not small' not in markers_arg
+    markers_arg = pytestconfig.getoption('-m') or ''
+
+    requested_sizes = {s for s in ['small', 'medium', 'large'] if s in markers_arg}
+    if not requested_sizes:
+        requested_sizes = {'small'}  # default
 
     graphs = {}
     for param in datasets:
         dataset_name = param.values[0]
         marks = {m.name for m in getattr(param, 'marks', [])}
-        if run_small_only and 'small' not in marks:
-            continue  # skip non-small dataset
+        if not (marks & requested_sizes):
+            continue
 
         data = DGData.from_tgb(dataset_name)
         dg = DGraph(data)
