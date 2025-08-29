@@ -233,9 +233,9 @@ else:
     )
 
 # Neighbor Sampler is shared across loaders
-if args.sampling_type == 'uniform':
+if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(num_nbrs=args.num_nbrs)
-elif args.sampling_type == 'recency':
+elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
@@ -273,6 +273,9 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
+hm.resolve_hooks()
+print(hm)
+input()
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         start_time = time.perf_counter()

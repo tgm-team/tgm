@@ -135,13 +135,28 @@ class HookManager:
                 f'Cannot resolve hook dependencies: required attributes not produced by any hook: {missing}'
             )
 
-        # Build adjacency list and then run Kahn's algorithmk jbs
+        # Build adjacency list and then run Kahn's algorithm
         adj_list: Dict[DGHook, List[DGHook]] = defaultdict(list)
         for i, h1 in enumerate(hooks):
             for j, h2 in enumerate(hooks):
                 if i != j and h1.produces & h2.requires:
                     # If h2 requires something h1 produces, add edge
                     adj_list[h1].append(h2)
+
+        # TODO: This is a hacky short term fix for implcit hook ordering constraints.
+        # If both a negative hook and a neighbor hook are present, it is crucial
+        # that the negatives come first (so that we sample neighbors for the negatives).
+        # But since neighbor sampler does not explicitly require negatives, the topological
+        # sort may put these out of order. In order to fix this, we add an extra edge
+        # into tthe DAG before sorting. Long term, we need to think about how to avoid
+        # things like this, and make it seamless for the user.
+        is_neg_hook = lambda h: 'neg' in h.produces
+        is_nbr_hook = lambda h: 'nbr_nids' in h.produces
+        for h1 in hooks:
+            if is_neg_hook(h1):
+                for h2 in hooks:
+                    if is_nbr_hook(h2):
+                        adj_list[h1].append(h2)
 
         indegree: Dict[DGHook, int] = {h: 0 for h in hooks}
         for u in adj_list:
