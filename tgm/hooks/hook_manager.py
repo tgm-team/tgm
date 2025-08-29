@@ -13,6 +13,23 @@ from tgm.hooks import DeduplicationHook, DGHook
 
 
 class HookManager:
+    """Manages hooks (`DGHook`s) for a `DGraph`, supporting both shared and key-specific hooks.
+
+    This class allows you to register hooks that modify or enrich batches of graph events
+    via transformation on the current, and optionally past history of the temporal graph.
+    The hook manager executed these transformation transparently to the user during data
+    iteration. Hooks can be shared across all keys or specific to a key.
+    Dependencies between hooks are automatically resolved using topological
+    sorting based on their `requires` and `produces` attributes.
+
+    Args:
+        keys (List[str]): List of valid keys for key-specific hooks. Each key can
+            have its own set of hooks, in addition to shared hooks.
+
+    Raises:
+        ValueError: If `keys` is empty.
+    """
+
     def __init__(self, keys: List[str]) -> None:
         if not len(keys):
             raise ValueError('HookManager keys list must be non-empty')
@@ -47,6 +64,15 @@ class HookManager:
         return '\n'.join(lines)
 
     def register_shared(self, hook: DGHook) -> None:
+        """Registers a shared hook that runs for all keys.
+
+        Args:
+            hook (DGHook): The hook to register.
+
+        Raises:
+            BadHookProtocolError: If `hook` does not implement the `DGHook` protocol.
+            RuntimeError: If called while a key is active.
+        """
         self._ensure_valid_hook(hook)
         self._ensure_no_active_key()
         self._shared_hooks.append(hook)
@@ -54,6 +80,17 @@ class HookManager:
             self._dirty[k] = True
 
     def register(self, key: str, hook: DGHook) -> None:
+        """Registers a key-specific hook.
+
+        Args:
+            key (str): The key to associate the hook with.
+            hook (DGHook): The hook to register.
+
+        Raises:
+            KeyError: If `key` is not a declared key.
+            BadHookProtocolError: If `hook` does not implement the `DGHook` protocol.
+            RuntimeError: If called while a key is active.
+        """
         self._ensure_valid_key(key)
         self._ensure_valid_hook(hook)
         self._ensure_no_active_key()
@@ -61,10 +98,31 @@ class HookManager:
         self._dirty[key] = True  # Mark registered key as 'dirty'
 
     def set_active_hooks(self, key: str) -> None:
+        """Sets the currently active key for executing hooks.
+
+        Args:
+            key (str): The key to activate.
+
+        Raises:
+            KeyError: If `key` is not a declared key.
+        """
         self._ensure_valid_key(key)
         self._active_key = key
 
     def execute_active_hooks(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        """Executes all hooks (shared + key-specific) for the active key on a batch.
+
+        Args:
+            dg (DGraph): The graph on which hooks operate.
+            batch (DGBatch): The batch of events to modify.
+
+        Returns:
+            DGBatch: The modified batch after all hooks are applied.
+
+        Raises:
+            RuntimeError: If no active key is set.
+            UnresolvableHookDependenciesError: If required attributes are missing or hooks form a cyclic dependency.
+        """
         if self._active_key is None:
             raise RuntimeError('No active key set. Use activate() context manager.')
 
@@ -78,6 +136,12 @@ class HookManager:
         return batch
 
     def reset_state(self, key: str | None = None) -> None:
+        """Resets the internal state of all stateful hooks.
+
+        Args:
+            key (str | None): If specified, resets only hooks for this key.
+                Otherwise resets all keys and shared hooks.
+        """
         if key is not None:
             self._ensure_valid_key(key)
 
@@ -90,6 +154,16 @@ class HookManager:
                 h.reset_state()
 
     def resolve_hooks(self, key: str | None = None) -> None:
+        """Resolves hook execution order by topologically sorting them based on dependencies.
+
+        Args:
+            key (str | None): If specified, resolves hooks only for this key.
+                Otherwise resolves all keys.
+
+        Raises:
+            KeyError: If `key` is invalid.
+            UnresolvableHookDependenciesError: If required attributes are missing or hooks form a cyclic dependency.
+        """
         if key is not None:
             self._ensure_valid_key(key)
 
@@ -103,6 +177,11 @@ class HookManager:
 
     @contextmanager
     def activate(self, key: str) -> Iterator[None]:
+        """Context manager to temporarily set a key as active for hook execution.
+
+        Args:
+            key (str): The key to activate.
+        """
         prev_key = self._active_key
         self.set_active_hooks(key)
         try:

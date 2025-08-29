@@ -14,7 +14,7 @@ from tgm.hooks import StatefulHook, StatelessHook
 
 
 class PinMemoryHook(StatelessHook):
-    r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
+    """Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         pin_if_needed = (
@@ -26,7 +26,7 @@ class PinMemoryHook(StatelessHook):
 
 
 class DeviceTransferHook(StatelessHook):
-    r"""Moves all tensors in the DGBatch to the specified device."""
+    """Moves all tensors in the DGBatch to the specified device."""
 
     def __init__(self, device: str | torch.device) -> None:
         self.device = torch.device(device)
@@ -43,7 +43,7 @@ class DeviceTransferHook(StatelessHook):
 
 
 class DeduplicationHook(StatelessHook):
-    r"""Deduplicate node IDs from batch fields and create index mappings to unique node embeddings.
+    """Deduplicate node IDs from batch fields and create index mappings to unique node embeddings.
 
     Note: Supports batches with or without negative samples and multi-hop neighbors.
     """
@@ -70,7 +70,7 @@ class DeduplicationHook(StatelessHook):
 
 
 class NegativeEdgeSamplerHook(StatelessHook):
-    r"""Sample negative edges for dynamic link prediction.
+    """Sample negative edges for dynamic link prediction.
 
     Args:
         low (int): The minimum node id to sample
@@ -102,7 +102,7 @@ class NegativeEdgeSamplerHook(StatelessHook):
 
 
 class TGBNegativeEdgeSamplerHook(StatelessHook):
-    r"""Load data from DGraph using pre-generated TGB negative samples.
+    """Load data from DGraph using pre-generated TGB negative samples.
     Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
 
     Args:
@@ -164,7 +164,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
 
 
 class NeighborSamplerHook(StatelessHook):
-    r"""Load data from DGraph using a memory based sampling function.
+    """Load data from DGraph using a memory based sampling function.
 
     Args:
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
@@ -232,7 +232,7 @@ class RecencyNeighborHook(StatefulHook):
     requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats'}
 
-    r"""Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
+    """Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
         num_nodes (int): Total number of nodes to track.

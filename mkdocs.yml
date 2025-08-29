@@ -9,14 +9,23 @@ nav:
       - Quickstart: quickstart.md
       - Architecture: architecture.md
       - Benchmarks: benchmarks.md
-      - API Reference:
-          - dgraph.md
-          - hooks.md
-          - timedelta.md
-          - data.md
-          - loader.md
-          - nn (Neural Networks): nn.md
-          - util: util.md
+
+  - Tutorials:
+      - DGraph Construction: tutorials/dgraph_tutorial.md
+
+  - API Reference:
+      - Dynamic Graphs:
+          - DGraph: api/graph.md
+          - DGBatch: api/batch.md
+          - TimeDeltaDG: api/timedelta.md
+      - Datasets: api/data.md
+      - Data Loading: api/loader.md
+      - Hooks:
+          - DGHook: api/hooks/hooks.md
+          - Hook Manager: api/hooks/hook_manager.md
+      - Neural Networks: api/nn.md
+      - Utilities: api/util.md
+      - Constants: api/constants.md
 
 validation:
   links:

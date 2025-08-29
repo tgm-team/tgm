@@ -1,3 +1,9 @@
 from typing import Final
 
-PADDED_NODE_ID: Final[int] = -1  # Sentinel node id marking 'no valid neighbors'
+PADDED_NODE_ID: Final[int] = -1
+"""Sentinel node ID used to mark invalid or padded neighbors in a graph.
+
+Notes:
+    - A tgm.exceptions.InvalidNodeIDError will be thrown if this value
+    appears as an ID in edge or node event tensors will constructing DGData.
+"""
