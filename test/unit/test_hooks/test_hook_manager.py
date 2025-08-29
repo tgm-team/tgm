@@ -3,6 +3,10 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
+from tgm.exceptions import (
+    BadHookProtocolError,
+    UnresolvableHookDependenciesError,
+)
 from tgm.hooks import (
     DeduplicationHook,
     HookManager,
@@ -104,13 +108,13 @@ def test_attempt_register_bad_key():
 
 def test_attempt_register_bad_hook():
     hm = HookManager(keys=['foo'])
-    with pytest.raises(TypeError):
+    with pytest.raises(BadHookProtocolError):
         hm.register('foo', object())
 
 
 def test_attempt_register_shared_bad_hook():
     hm = HookManager(keys=['foo'])
-    with pytest.raises(TypeError):
+    with pytest.raises(BadHookProtocolError):
         hm.register_shared(object())
 
 
@@ -171,7 +175,7 @@ def test_resolve_hooks_no_solution_no_dag():
     hm.register('train', h1)
     hm.register('train', h2)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(UnresolvableHookDependenciesError):
         hm.resolve_hooks('train')
 
 
@@ -200,7 +204,7 @@ def test_topo_sort_lazy_no_solution_missing_requires(dg):
     hm = HookManager(keys=['train'])
     hm.register('train', h)
     hm.set_active_hooks('train')
-    with pytest.raises(ValueError):
+    with pytest.raises(UnresolvableHookDependenciesError):
         hm.execute_active_hooks(dg, dg.materialize())
 
 
@@ -273,7 +277,7 @@ def test_topo_sort_no_solution_no_dag(dg):
     hm.register('train', h2)
 
     hm.set_active_hooks('train')
-    with pytest.raises(ValueError):
+    with pytest.raises(UnresolvableHookDependenciesError):
         hm.execute_active_hooks(dg, dg.materialize())
 
 
