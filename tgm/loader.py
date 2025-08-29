@@ -6,6 +6,11 @@ from typing import Any, Iterator, List, Literal
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm.exceptions import (
+    EmptyBatchError,
+    InvalidDiscretizationError,
+    OrderedGranularityConversionError,
+)
 from tgm.hooks import HookManager
 from tgm.timedelta import TimeDeltaDG
 
@@ -47,7 +52,7 @@ class _SkippableDataLoaderMixin(ABC):
         for batch in super().__iter__():  # type: ignore
             if self._is_batch_empty(batch):
                 if self._on_empty == 'raise':
-                    raise ValueError('Empty batch encountered')
+                    raise EmptyBatchError('Empty batch encountered')
                 elif self._on_empty == 'skip':
                     continue
             yield batch
@@ -73,9 +78,9 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
 
     Raises:
         ValueError: If `batch_size` <= 0.
-        ValueError: If iterating an ordered DGraph using a non-ordered batch_unit.
-        ValueError: If a non-ordered DGraph has a time unit coarser than the batch_unit.
-        ValueError: If an empty batch is encountered with on_empty='raise'.
+        OrderedGranularityConversionError: If iterating an ordered DGraph using a non-ordered batch_unit.
+        InvalidDiscretizationError: If a non-ordered DGraph has a time unit coarser than the batch_unit.
+        EmptyBatchError: If an empty batch is encountered with on_empty='raise'.
 
     Note:
         - Ordered batching ('r') iterates sequentially over event indices.
@@ -106,12 +111,14 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         batch_ordered = batch_unit == 'r'
 
         if dg_ordered and not batch_ordered:
-            raise ValueError('Cannot iterate ordered dg using non-ordered batch_unit')
+            raise OrderedGranularityConversionError(
+                'Cannot iterate ordered dg using non-ordered batch_unit'
+            )
         if not dg_ordered and not batch_ordered:
             # Ensure the graph time unit is more granular than batch time unit.
             batch_time_delta = TimeDeltaDG(batch_unit, value=batch_size)
             if dg.time_delta.is_coarser_than(batch_time_delta):
-                raise ValueError(
+                raise InvalidDiscretizationError(
                     f'Tried to construct a data loader on a DGraph with time delta: {dg.time_delta} '
                     f'which is strictly coarser than the batch_unit: {batch_unit}, batch_size: {batch_size}. '
                     'Either choose a larger batch size, batch unit or consider iterate using ordered batching.'

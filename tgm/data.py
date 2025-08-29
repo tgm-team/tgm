@@ -4,13 +4,19 @@ import copy
 import csv
 import pathlib
 from dataclasses import dataclass, fields, replace
-from typing import Any, List, Set, Tuple
+from typing import Any, Callable, List, Set, Tuple
 
 import numpy as np
 import torch
 from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
+from tgm.exceptions import (
+    EmptyGraphError,
+    InvalidDiscretizationError,
+    InvalidNodeIDError,
+    OrderedGranularityConversionError,
+)
 from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
@@ -33,9 +39,13 @@ class DGData:
         dynamic_node_feats (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
         static_node_feats (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
 
+    Raises:
+        InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
+        ValueError: If any data attributes have non-well defined tensor shapes.
+        EmptyGraphError: If attempting to initialize an empty graph.
+
     Notes:
         - Timestamps must be non-negative and sorted; DGData will sort automatically if necessary.
-        - Edge and node IDs cannot be equal to `PADDED_NODE_ID`.
         - Cloning creates a deep copy of tensors to prevent in-place modifications.
     """
 
@@ -75,13 +85,13 @@ class DGData:
                 f'edge_index must have shape [num_edges, 2], got: {self.edge_index.shape}',
             )
         if torch.any(self.edge_index == PADDED_NODE_ID):
-            raise ValueError(
+            raise InvalidNodeIDError(
                 f'Edge events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
             )
 
         num_edges = self.edge_index.shape[0]
         if num_edges == 0:
-            raise ValueError('empty graphs not supported')
+            raise EmptyGraphError('empty graphs not supported')
 
         # Validate edge event idx
         _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
@@ -126,7 +136,7 @@ class DGData:
                     f'got {num_node_events} node events and shape {self.node_ids.shape}',  # type: ignore
                 )
             if torch.any(self.node_ids == PADDED_NODE_ID):  # type: ignore
-                raise ValueError(
+                raise InvalidNodeIDError(
                     f'Node events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
                 )
 
@@ -221,8 +231,10 @@ class DGData:
         Returns:
             Tuple[DGData, ...]: Split datasets (train/val/test).
 
+        Raises:
+            ValueError: If attempting to override the split strategy for TGB datasets.
+
         Notes:
-            - Cannot override split strategy for TGB datasets.
             - Splits preserve the underlying storage; only indices are filtered.
         """
         strategy = strategy or self._split_strategy or TemporalRatioSplit()
@@ -248,8 +260,8 @@ class DGData:
             DGData: New dataset with discretized timestamps and features.
 
         Raises:
-            ValueError: If discretization is incompatible with ordered granularity or
-                        finer than current granularity.
+            OrderedGranularityConversionError: If discretization is incompatible with ordered granularity
+            InvalidDiscretizationError: If the target granularity is finer than the current granularity.
         """
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
@@ -257,9 +269,11 @@ class DGData:
         if time_delta is None or self.time_delta == time_delta:
             return self.clone()  # Deepcopy
         if self.time_delta.is_ordered or time_delta.is_ordered:  # type: ignore
-            raise ValueError('Cannot discretize a graph with ordered time granularity')
+            raise OrderedGranularityConversionError(
+                'Cannot discretize a graph with ordered time granularity'
+            )
         if self.time_delta.is_coarser_than(time_delta):  # type: ignore
-            raise ValueError(
+            raise InvalidDiscretizationError(
                 f'Cannot discretize to {time_delta} which is strictly'
                 f'finer than the self.time_delta: {self.time_delta}'
             )
@@ -355,6 +369,11 @@ class DGData:
 
         Automatically combines edge and node timestamps, computes event indices,
         and validates tensor shapes.
+
+        Raises:
+            InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
+            ValueError: If any data attributes have non-well defined tensor shapes.
+            EmptyGraphError: If attempting to initialize an empty graph.
         """
         # Build unified event timeline
         timestamps = edge_timestamps
@@ -414,6 +433,11 @@ class DGData:
             static_node_feats_file_path: Optional CSV file for static node features.
             static_node_feats_col: Required if static_node_feats_file_path is specified.
             time_delta: Time granularity.
+
+        Raises:
+            InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
+            ValueError: If any data attributes have non-well defined tensor shapes.
+            EmptyGraphError: If attempting to initialize an empty graph.
         """
 
         def _read_csv(fp: str | pathlib.Path) -> List[dict]:
@@ -521,8 +545,10 @@ class DGData:
             static_node_feats_col: Required if static_node_feats_df is specified.
             time_delta: Time granularity.
 
-        Notes:
-            - Requires `pandas`
+        Raises:
+            InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
+            ValueError: If any data attributes have non-well defined tensor shapes.
+            ImportError: If the Pandas package is not resolved in the current python environment.
         """
 
         def _check_pandas_import(min_version_number: str | None = None) -> None:
@@ -607,6 +633,9 @@ class DGData:
         Returns:
             DGData: Dataset with `_split_strategy` automatically set to `TGBSplit`.
 
+        Raises:
+            ImportError: If the TGB package is not resolved in the current python environment.
+
         Notes:
             - TGBLinkPrediction (`tgbl-`) and TGBNodePrediction (`tgbn-`) are supported.
             - Requires `py-tgb`.
@@ -617,10 +646,18 @@ class DGData:
         except ImportError:
             raise ImportError('TGB required to load TGB data, try `pip install py-tgb`')
 
+        def suppress_output(func: Callable, *args: Any, **kwargs: Any) -> Any:
+            import os
+            from contextlib import redirect_stdout
+
+            with open(os.devnull, 'w') as f:
+                with redirect_stdout(f):
+                    return func(*args, **kwargs)
+
         if name.startswith('tgbl-'):
-            dataset = LinkPropPredDataset(name=name, **kwargs)
+            dataset = suppress_output(LinkPropPredDataset, name=name, **kwargs)
         elif name.startswith('tgbn-'):
-            dataset = NodePropPredDataset(name=name, **kwargs)
+            dataset = suppress_output(NodePropPredDataset, name=name, **kwargs)
         else:
             raise ValueError(f'Unknown dataset: {name}')
 
