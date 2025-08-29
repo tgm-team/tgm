@@ -29,8 +29,8 @@ setup_venv_if_missing() {
     if [ ! -d ".venv" ]; then
         echo ".venv not found. Setting up environment. This might take a while..."
         uv venv .venv
-        uv sync --group dev
     fi
+    uv sync --group dev
 }
 
 run_tests() {

@@ -100,7 +100,7 @@ def run_epoch(loader):
 
 @pytest.mark.benchmark(group='data_loader_cpu_hooks')
 @pytest.mark.parametrize('dataset', DATASETS)
-@pytest.mark.parametrize('batch_size', [200, 'Y'])
+@pytest.mark.parametrize('batch_size', [200, 'M'])
 @pytest.mark.parametrize('hook_key', list(HOOK_CONFIGS.keys()))
 def test_data_loader_cpu_hooks(
     benchmark, dataset, batch_size, hook_key, preloaded_graphs
@@ -121,7 +121,7 @@ def test_data_loader_cpu_hooks(
         nonlocal total_events
         total_events = run_epoch(loader)
 
-    benchmark(run_epoch_wrapper)
+    benchmark.pedantic(run_epoch_wrapper, rounds=3, iterations=1)
 
     throughput = (total_events / benchmark.stats['mean']) / 1e6
     benchmark.extra_info.update(
@@ -133,14 +133,14 @@ def test_data_loader_cpu_hooks(
 
     print(
         f'{dataset} | CPU | batch={batch_size} | hooks={hook_key} -> '
-        f'{throughput:.2f} M events/sec'
+        f'{throughput:.3f} M events/sec'
     )
 
 
 @pytest.mark.gpu
 @pytest.mark.benchmark(group='data_loader_gpu_hooks')
 @pytest.mark.parametrize('dataset', DATASETS)
-@pytest.mark.parametrize('batch_size', [200, 'D'])
+@pytest.mark.parametrize('batch_size', [200, 'M'])
 @pytest.mark.parametrize('hook_key', list(HOOK_CONFIGS.keys()))
 def test_data_loader_gpu_hooks(
     benchmark, dataset, batch_size, hook_key, preloaded_graphs
@@ -148,7 +148,7 @@ def test_data_loader_gpu_hooks(
     data = preloaded_graphs[dataset]['data']
     dg = preloaded_graphs[dataset]['dg']
     _, data, _ = data.split()  # just testing on validation set
-    dg = dg.to('cuda')  # move graph to gpu
+    dg = dg.to('cuda')
     hook_manager = HOOK_CONFIGS[hook_key](dg, dataset)
 
     if isinstance(batch_size, int):
@@ -162,7 +162,7 @@ def test_data_loader_gpu_hooks(
         nonlocal total_events
         total_events = run_epoch(loader)
 
-    benchmark(run_epoch_wrapper)
+    benchmark.pedantic(run_epoch_wrapper, rounds=3, iterations=1)
 
     throughput = (total_events / benchmark.stats['mean']) / 1e6
     benchmark.extra_info.update(
@@ -174,5 +174,5 @@ def test_data_loader_gpu_hooks(
 
     print(
         f'{dataset} | GPU | batch={batch_size} | hooks={hook_key} -> '
-        f'{throughput:.2f} M events/sec'
+        f'{throughput:.3f} M events/sec'
     )

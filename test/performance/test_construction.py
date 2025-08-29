@@ -23,7 +23,7 @@ def test_graph_loading(benchmark, dataset):
             'num_events': out['dg'].num_events,
         }
     )
-    print(f'{dataset} loading throughput: {throughput:.2f} M events/sec')
+    print(f'{dataset} loading throughput: {throughput:.3f} M events/sec')
 
 
 @pytest.mark.benchmark(group='graph_split')
@@ -42,4 +42,4 @@ def test_graph_split(benchmark, dataset, preloaded_graphs):
             'num_events': dg.num_events,
         }
     )
-    print(f'{dataset} split throughput: {throughput:.2f} M events/sec')
+    print(f'{dataset} split throughput: {throughput:.3f} M events/sec')

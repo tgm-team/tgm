@@ -3,7 +3,7 @@
 #SBATCH --output=$HOME/tgm_ci_perf/benchmarks.out
 #SBATCH --error=$HOME/tgm_ci_perf/benchmarks.err
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH --gres=gpu:a100l:1
 #SBATCH --time=00:30:00
 
