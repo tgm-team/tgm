@@ -5,6 +5,10 @@ from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List
 
 from tgm import DGBatch, DGraph
+from tgm.exceptions import (
+    BadHookProtocolError,
+    UnresolvableHookDependenciesError,
+)
 from tgm.hooks import DeduplicationHook, DGHook
 
 
@@ -108,7 +112,7 @@ class HookManager:
 
     def _ensure_valid_hook(self, hook: Any) -> None:
         if not isinstance(hook, DGHook):
-            raise TypeError(
+            raise BadHookProtocolError(
                 f'Cannot register hook {type(hook).__name__}: must implement __call__(dg: DGraph, batch: DGBatch) -> DGBatch and reset_state()'
             )
 
@@ -131,16 +135,28 @@ class HookManager:
         for h in hooks:
             missing |= h.requires - all_produced
         if missing:
-            raise ValueError(
+            raise UnresolvableHookDependenciesError(
                 f'Cannot resolve hook dependencies: required attributes not produced by any hook: {missing}'
             )
 
-        # Build adjacency list and then run Kahn's algorithmk jbs
+        # Build adjacency list and then run Kahn's algorithm
         adj_list: Dict[DGHook, List[DGHook]] = defaultdict(list)
         for i, h1 in enumerate(hooks):
             for j, h2 in enumerate(hooks):
                 if i != j and h1.produces & h2.requires:
                     # If h2 requires something h1 produces, add edge
+                    adj_list[h1].append(h2)
+
+                # TODO: This is a hacky short term fix for implcit hook ordering constraints.
+                # If both a negative hook and a neighbor hook are present, it is crucial
+                # that the negatives come first (so that we sample neighbors for the negatives).
+                # But since neighbor sampler does not explicitly require negatives, the topological
+                # sort may put these out of order. In order to fix this, we add an extra edge
+                # into the DAG before sorting. Long term, we need to think about how to avoid
+                # things like this, and make it seamless for the user.
+                is_neg_hook = lambda h: 'neg' in h.produces
+                is_nbr_hook = lambda h: 'nbr_nids' in h.produces
+                if is_neg_hook(h1) and is_nbr_hook(h2):
                     adj_list[h1].append(h2)
 
         indegree: Dict[DGHook, int] = {h: 0 for h in hooks}
@@ -167,6 +183,6 @@ class HookManager:
             for h in unresolved:
                 missing = h.requires - set().union(*[u.produces for u in ordered])
                 err_msg += f'\n - {repr(h)} requires {missing} but not produced (or stuck in cycle)'
-            raise ValueError(err_msg)
+            raise UnresolvableHookDependenciesError(err_msg)
 
         return ordered

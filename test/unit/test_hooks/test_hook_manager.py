@@ -3,6 +3,10 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
+from tgm.exceptions import (
+    BadHookProtocolError,
+    UnresolvableHookDependenciesError,
+)
 from tgm.hooks import (
     DeduplicationHook,
     HookManager,
@@ -104,13 +108,13 @@ def test_attempt_register_bad_key():
 
 def test_attempt_register_bad_hook():
     hm = HookManager(keys=['foo'])
-    with pytest.raises(TypeError):
+    with pytest.raises(BadHookProtocolError):
         hm.register('foo', object())
 
 
 def test_attempt_register_shared_bad_hook():
     hm = HookManager(keys=['foo'])
-    with pytest.raises(TypeError):
+    with pytest.raises(BadHookProtocolError):
         hm.register_shared(object())
 
 
@@ -171,7 +175,7 @@ def test_resolve_hooks_no_solution_no_dag():
     hm.register('train', h1)
     hm.register('train', h2)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(UnresolvableHookDependenciesError):
         hm.resolve_hooks('train')
 
 
@@ -200,7 +204,7 @@ def test_topo_sort_lazy_no_solution_missing_requires(dg):
     hm = HookManager(keys=['train'])
     hm.register('train', h)
     hm.set_active_hooks('train')
-    with pytest.raises(ValueError):
+    with pytest.raises(UnresolvableHookDependenciesError):
         hm.execute_active_hooks(dg, dg.materialize())
 
 
@@ -273,7 +277,7 @@ def test_topo_sort_no_solution_no_dag(dg):
     hm.register('train', h2)
 
     hm.set_active_hooks('train')
-    with pytest.raises(ValueError):
+    with pytest.raises(UnresolvableHookDependenciesError):
         hm.execute_active_hooks(dg, dg.materialize())
 
 
@@ -350,3 +354,24 @@ def test_activate_ctx():
         assert hm._active_key == 'train'
 
     assert hm._active_key is None
+
+
+def test_topo_sort_neg_before_nbr():
+    mock_neg_hook, mock_nbr_hook = MockHook(), MockHook()
+    mock_neg_hook.requires, mock_neg_hook.produces = set(), {'neg'}
+    mock_nbr_hook.requires, mock_nbr_hook.produces = set(), {'nbr_nids'}
+
+    # Register neg first in foo, nbr first in bar
+    hm = HookManager(keys=['foo', 'bar'])
+    hm.register('foo', mock_neg_hook)
+    hm.register('foo', mock_nbr_hook)
+    hm.register('bar', mock_nbr_hook)
+    hm.register('bar', mock_neg_hook)
+
+    hm.resolve_hooks()
+    foo_hooks = hm._key_to_hooks['foo']
+    bar_hooks = hm._key_to_hooks['bar']
+
+    # Ensure negatives precede nbrs in both cases
+    assert foo_hooks.index(mock_neg_hook) < foo_hooks.index(mock_nbr_hook)
+    assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)

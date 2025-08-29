@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar, Dict, Final
 
+from tgm.exceptions import OrderedGranularityConversionError
+
 
 @dataclass(frozen=True, slots=True)
 class TimeDeltaDG:
@@ -51,12 +53,14 @@ class TimeDeltaDG:
         r"""Convert the current granularity to the specified time_delta.
 
         Raises:
-            ValueError if either self or other is ordered.
+            OrderedGranularityConversionError if either self or other is ordered.
         """
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
         if self.is_ordered or time_delta.is_ordered:
-            raise ValueError('Cannot compare granularity for ordered TimeDeltaDG')
+            raise OrderedGranularityConversionError(
+                'Cannot compare granularity for ordered TimeDeltaDG'
+            )
         return self._convert(time_delta)
 
     def _convert(self, other: TimeDeltaDG) -> float:
