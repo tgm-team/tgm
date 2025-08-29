@@ -9,7 +9,7 @@ from tgm import DGBatch, DGraph
 from tgm.exceptions import (
     EmptyBatchError,
     InvalidDiscretizationError,
-    OrderedTimeGranularityError,
+    OrderedGranularityConversionError,
 )
 from tgm.hooks import HookManager
 from tgm.timedelta import TimeDeltaDG
@@ -84,7 +84,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         batch_ordered = batch_unit == 'r'
 
         if dg_ordered and not batch_ordered:
-            raise OrderedTimeGranularityError(
+            raise OrderedGranularityConversionError(
                 'Cannot iterate ordered dg using non-ordered batch_unit'
             )
         if not dg_ordered and not batch_ordered:

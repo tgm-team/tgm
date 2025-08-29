@@ -15,7 +15,7 @@ from tgm.exceptions import (
     EmptyGraphError,
     InvalidDiscretizationError,
     InvalidNodeIDError,
-    OrderedTimeGranularityError,
+    OrderedGranularityConversionError,
 )
 from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
@@ -218,7 +218,7 @@ class DGData:
         if time_delta is None or self.time_delta == time_delta:
             return self.clone()  # Deepcopy
         if self.time_delta.is_ordered or time_delta.is_ordered:  # type: ignore
-            raise OrderedTimeGranularityError(
+            raise OrderedGranularityConversionError(
                 'Cannot discretize a graph with ordered time granularity'
             )
         if self.time_delta.is_coarser_than(time_delta):  # type: ignore

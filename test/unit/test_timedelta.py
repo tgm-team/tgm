@@ -1,6 +1,6 @@
 import pytest
 
-from tgm.exceptions import OrderedTimeGranularityError
+from tgm.exceptions import OrderedGranularityConversionError
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
@@ -117,7 +117,7 @@ def test_bad_convert_from_ordered():
     td1 = TimeDeltaDG('r')
     td2 = TimeDeltaDG('Y', 1)
 
-    with pytest.raises(OrderedTimeGranularityError):
+    with pytest.raises(OrderedGranularityConversionError):
         _ = td2.convert(td1)
 
 
@@ -125,7 +125,7 @@ def test_bad_convert_to_ordered():
     td1 = TimeDeltaDG('Y', 1)
     td2 = TimeDeltaDG('r')
 
-    with pytest.raises(OrderedTimeGranularityError):
+    with pytest.raises(OrderedGranularityConversionError):
         _ = td1.convert(td2)
 
 
@@ -161,13 +161,13 @@ def test_time_delta_is_coarser_try_compare_ordered():
     td1 = TimeDeltaDG('r')
     td2 = TimeDeltaDG('s')
 
-    with pytest.raises(OrderedTimeGranularityError):
+    with pytest.raises(OrderedGranularityConversionError):
         td1.is_coarser_than(td2)
 
-    with pytest.raises(OrderedTimeGranularityError):
+    with pytest.raises(OrderedGranularityConversionError):
         td2.is_coarser_than(td1)
 
-    with pytest.raises(OrderedTimeGranularityError):
+    with pytest.raises(OrderedGranularityConversionError):
         td1.is_coarser_than('r')
 
 

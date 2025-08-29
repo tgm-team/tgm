@@ -18,7 +18,7 @@ class EmptyGraphError(TGMError):
     """Raised when attempting to instantiate an empty graph. Empty graphs are unsupported since updates are not allowed."""
 
 
-class OrderedTimeGranularityError(TGMError):
+class OrderedGranularityConversionError(TGMError):
     """Raised when an operation requiring time-based granularity is attempted on a graph that only has ordered (relative) granularity.
 
     Examples:

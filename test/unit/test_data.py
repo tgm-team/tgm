@@ -14,7 +14,7 @@ from tgm.exceptions import (
     EmptyGraphError,
     InvalidDiscretizationError,
     InvalidNodeIDError,
-    OrderedTimeGranularityError,
+    OrderedGranularityConversionError,
 )
 from tgm.split import TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TimeDeltaDG
@@ -917,7 +917,7 @@ def test_discretize_bad_args():
     edge_index = torch.LongTensor([[2, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([1, 5])
 
-    with pytest.raises(OrderedTimeGranularityError):
+    with pytest.raises(OrderedGranularityConversionError):
         data = DGData.from_raw(edge_timestamps, edge_index, time_delta='r')
         data.discretize('s')  # Cannot reduce from ordered
     with pytest.raises(InvalidDiscretizationError):
