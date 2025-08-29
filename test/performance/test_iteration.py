@@ -84,12 +84,16 @@ def create_hook_manager(hooks):
 
 @pytest.mark.benchmark(group='data_loader_cpu_hooks')
 @pytest.mark.parametrize('dataset', DATASETS)
-@pytest.mark.parametrize('batch_size', [200, 'M'])
+@pytest.mark.parametrize('batch_size', [200, 'D'])
 @pytest.mark.parametrize('hook_key', list(HOOK_CONFIGS.keys()))
 def test_data_loader_cpu_hooks(
     benchmark, dataset, batch_size, hook_key, preloaded_graphs
 ):
     if dataset not in preloaded_graphs:
+        pytest.skip()
+
+    # Skip temporal batch unit with tgbn-trade which has coarse ("Y") granularity
+    if dataset == 'tgbn-trade' and isinstance(batch_size, str):
         pytest.skip()
 
     data = preloaded_graphs[dataset]['data']
@@ -102,21 +106,17 @@ def test_data_loader_cpu_hooks(
     else:
         loader = DGDataLoader(dg, batch_unit=batch_size, hook_manager=hook_manager)
 
-    total_events = 0
-    loader_iter = iter(loader)
+    def run_full_loader():
+        for _ in loader:
+            continue
 
-    def run_epoch_wrapper():
-        nonlocal total_events
-        batch = next(loader_iter)
-        total_events += len(batch.src)
+    benchmark(run_full_loader)
 
-    benchmark(run_epoch_wrapper)
-
-    throughput = (total_events / benchmark.stats['mean']) / 1e6
+    throughput = (len(dg) / benchmark.stats['mean']) / 1e6
     benchmark.extra_info.update(
         {
             'throughput_M_events_per_sec': throughput,
-            'num_events': total_events,
+            'num_events': len(dg),
         }
     )
 
@@ -129,12 +129,16 @@ def test_data_loader_cpu_hooks(
 @pytest.mark.gpu
 @pytest.mark.benchmark(group='data_loader_gpu_hooks')
 @pytest.mark.parametrize('dataset', DATASETS)
-@pytest.mark.parametrize('batch_size', [200, 'M'])
+@pytest.mark.parametrize('batch_size', [200, 'D'])
 @pytest.mark.parametrize('hook_key', list(HOOK_CONFIGS.keys()))
 def test_data_loader_gpu_hooks(
     benchmark, dataset, batch_size, hook_key, preloaded_graphs
 ):
     if dataset not in preloaded_graphs:
+        pytest.skip()
+
+    # Skip temporal batch unit with tgbn-trade which has coarse ("Y") granularity
+    if dataset == 'tgbn-trade' and isinstance(batch_size, str):
         pytest.skip()
 
     data = preloaded_graphs[dataset]['data']
@@ -148,21 +152,17 @@ def test_data_loader_gpu_hooks(
     else:
         loader = DGDataLoader(dg, batch_unit=batch_size, hook_manager=hook_manager)
 
-    total_events = 0
-    loader_iter = iter(loader)
+    def run_full_loader():
+        for _ in loader:
+            continue
 
-    def run_epoch_wrapper():
-        nonlocal total_events
-        batch = next(loader_iter)
-        total_events += len(batch.src)
+    benchmark(run_full_loader)
 
-    benchmark(run_epoch_wrapper)
-
-    throughput = (total_events / benchmark.stats['mean']) / 1e6
+    throughput = (len(dg) / benchmark.stats['mean']) / 1e6
     benchmark.extra_info.update(
         {
             'throughput_M_events_per_sec': throughput,
-            'num_events': total_events,
+            'num_events': len(dg),
         }
     )
 
