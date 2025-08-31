@@ -1,13 +1,10 @@
 from dataclasses import asdict
-from unittest.mock import patch
 
 import pytest
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm._storage import DGStorage
 from tgm.data import DGData
-from tgm.timedelta import TimeDeltaDG
 
 
 @pytest.fixture
@@ -98,193 +95,10 @@ def test_init_gpu(data):
 
 def test_init_from_storage(data):
     dg_tmp = DGraph(data)
-    dg = DGraph(dg_tmp._storage)
+    dg = DGraph._from_storage(
+        dg_tmp._storage, dg_tmp.time_delta, dg_tmp.device, dg_tmp._slice
+    )
     assert id(dg_tmp._storage) == id(dg._storage)
-
-
-def test_init_bad_args(data):
-    with pytest.raises(ValueError):
-        _ = DGraph(data, time_delta='foo')
-
-
-def test_init_construct_data():
-    data = 'foo.csv'
-    with patch.object(DGData, 'from_any') as mock:
-        _ = DGraph(data)
-        mock.assert_called_once_with(data, TimeDeltaDG('r'))
-
-
-def test_dgraph_from_raw():
-    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.LongTensor([1, 5, 20])
-    edge_feats = torch.rand(3, 5)
-    node_timestamps = torch.LongTensor([1, 5, 10])
-    node_ids = torch.LongTensor([2, 4, 6])
-    dynamic_node_feats = torch.rand([3, 5])
-    static_node_feats = torch.rand(9, 11)
-
-    dg = DGraph.from_raw(
-        edge_timestamps,
-        edge_index,
-        edge_feats,
-        node_timestamps,
-        node_ids,
-        dynamic_node_feats,
-        static_node_feats,
-    )
-
-    assert dg.time_delta.is_ordered
-    assert len(dg) == 4
-    assert dg.start_time == 1
-    assert dg.end_time == 20
-    assert dg.num_nodes == 9
-    assert dg.num_edges == 3
-    assert dg.num_timestamps == 4
-    assert dg.num_events == 6
-    assert dg.nodes == {1, 2, 4, 6, 8}
-    assert dg.static_node_feats_dim == 11
-    assert dg.dynamic_node_feats_dim == 5
-    assert dg.edge_feats_dim == 5
-    assert dg.device == torch.device('cpu')
-
-
-@pytest.mark.parametrize(
-    'time_gran',
-    ['s', 'm', 'r'],
-)
-def test_dgraph_from_raw_time_gran(time_gran):
-    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.LongTensor([1, 5, 20])
-    edge_feats = torch.rand(3, 5)
-
-    dg = DGraph.from_raw(
-        edge_timestamps,
-        edge_index,
-        edge_feats,
-        time_delta=time_gran,
-    )
-    assert dg.time_delta == TimeDeltaDG(time_gran)
-
-
-@pytest.mark.parametrize(
-    'device',
-    ['cpu'],
-)
-def test_dgraph_from_raw_device(device):
-    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.LongTensor([1, 5, 20])
-    edge_feats = torch.rand(3, 5)
-
-    dg = DGraph.from_raw(
-        edge_timestamps,
-        edge_index,
-        edge_feats,
-        device=device,
-    )
-    assert dg.device == torch.device('cpu')
-
-
-def test_dgraph_from_pandas():
-    import pandas as pd
-
-    edge_dict = {
-        'src': [2, 10],
-        'dst': [3, 20],
-        't': [1337, 1338],
-        'edge_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
-    }  # edge events
-
-    node_dict = {
-        'node': [7, 8],
-        't': [3, 6],
-        'node_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
-    }  # node events, optional
-
-    dg = DGraph.from_pandas(
-        edge_df=pd.DataFrame(edge_dict),
-        edge_src_col='src',
-        edge_dst_col='dst',
-        edge_time_col='t',
-        edge_feats_col='edge_feat',
-        node_df=pd.DataFrame(node_dict),
-        node_id_col='node',
-        node_time_col='t',
-        dynamic_node_feats_col='node_feat',
-    )
-
-    assert dg.time_delta.is_ordered
-    assert dg.num_events == len(dg) == 4
-    assert dg.start_time == 3
-    assert dg.num_nodes == 21
-    assert dg.num_edges == 2
-    assert dg.num_timestamps == 4
-    assert dg.nodes == {2, 3, 7, 8, 10, 20}
-    assert dg.dynamic_node_feats_dim == 5
-    assert dg.edge_feats_dim == 5
-    assert dg.device == torch.device('cpu')
-
-
-@pytest.mark.parametrize(
-    'time_gran',
-    ['s', 'm', 'r'],
-)
-def test_dgraph_from_pandas_time_gran(time_gran):
-    import pandas as pd
-
-    edge_dict = {
-        'src': [2, 10],
-        'dst': [3, 20],
-        't': [1337, 1338],
-        'edge_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
-    }  # edge events
-
-    dg = DGraph.from_pandas(
-        edge_df=pd.DataFrame(edge_dict),
-        edge_src_col='src',
-        edge_dst_col='dst',
-        edge_time_col='t',
-        edge_feats_col='edge_feat',
-        time_delta=time_gran,
-    )
-    assert dg.time_delta == TimeDeltaDG(time_gran)
-
-
-@pytest.mark.parametrize(
-    'device',
-    ['cpu'],
-)
-def test_dgraph_from_pandas_device(device):
-    import pandas as pd
-
-    edge_dict = {
-        'src': [2, 10],
-        'dst': [3, 20],
-        't': [1337, 1338],
-        'edge_feat': [torch.rand(5).tolist(), torch.rand(5).tolist()],
-    }  # edge events
-    dg = DGraph.from_pandas(
-        edge_df=pd.DataFrame(edge_dict),
-        edge_src_col='src',
-        edge_dst_col='dst',
-        edge_time_col='t',
-        edge_feats_col='edge_feat',
-        device=device,
-    )
-    assert dg.device == torch.device('cpu')
-
-
-def test_dgraph_from_csv():
-    data = 'foo.csv'
-    with patch.object(DGraph, 'from_csv') as mock_csv:
-        _ = DGraph.from_csv(data)
-        mock_csv.assert_called_once_with(data)
-
-
-def test_dgraph_from_tgb():
-    data = 'tgbl-mock'
-    with patch.object(DGraph, 'from_tgb') as mock_tgb:
-        _ = DGraph.from_tgb(name=data, time_delta=None)
-        mock_tgb.assert_called_once_with(name=data, time_delta=None)
 
 
 def test_str(data):
@@ -292,50 +106,9 @@ def test_str(data):
     assert isinstance(dg.__str__(), str)
 
 
-def test_discretize_bad_ordered_graph(data):
-    dg = DGraph(data)
-    with pytest.raises(ValueError):
-        dg.discretize(time_granularity='s')
-
-
-def test_discretize_bad_too_granular(data):
-    dg = DGraph(data, time_delta='m')
-    with pytest.raises(ValueError):
-        dg.discretize(time_granularity='s')
-
-
-def test_discretize_bad_reduce_op(data):
-    dg = DGraph(data, time_delta='s')
-    with pytest.raises(ValueError):
-        dg.discretize(time_granularity='m', reduce_op='foo')
-
-
-@pytest.mark.parametrize('reduce_op', ['first'])
-def test_discretize_api(data, reduce_op):
-    dg = DGraph(data, time_delta='s')
-    dg_coarse = dg.discretize(time_granularity='m', reduce_op=reduce_op)
-    assert isinstance(dg_coarse, DGraph)
-    assert id(dg._storage) != id(dg_coarse._storage)
-    assert dg_coarse.time_delta.unit == 'm'
-    assert dg_coarse.device == dg.device
-    assert dg_coarse.num_nodes == dg.num_nodes
-    assert dg_coarse.nodes == dg.nodes
-    torch.testing.assert_close(dg_coarse.static_node_feats, dg.static_node_feats)
-    assert id(dg_coarse.static_node_feats) != id(dg.static_node_feats)
-
-
-@pytest.mark.parametrize('reduce_op', ['first'])
-def test_discretize_reduce_first_call(data, reduce_op):
-    dg = DGraph(data, time_delta='s')
-    with patch.object(DGStorage, 'discretize') as mock:
-        mock.return_value = dg._storage
-
-        _ = dg.discretize(time_granularity='m', reduce_op=reduce_op)
-        mock.assert_called_once_with(
-            old_time_granularity=TimeDeltaDG('s'),
-            new_time_granularity=TimeDeltaDG('m'),
-            reduce_op='first',
-        )
+def test_init_bad_data():
+    with pytest.raises(TypeError):
+        DGraph('foo')
 
 
 def test_materialize(data):

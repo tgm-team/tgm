@@ -10,8 +10,8 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
-from tgm.hooks import NegativeEdgeSamplerHook
+from tgm import DGBatch, DGData, DGraph
+from tgm.hooks import HookManager, NegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.util.seed import seed_everything
 
@@ -27,6 +27,9 @@ parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument(
+    '--node-dim', type=int, default=100, help='node feat dimension if not provided'
+)
 parser.add_argument(
     '--time-gran',
     type=str,
@@ -115,31 +118,26 @@ class GCNEncoder(torch.nn.Module):
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        return self.fc2(h).sigmoid().view(-1)
 
 
 def train(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     model: nn.Module,
     opt: torch.optim.Optimizer,
-    node_feat: torch.Tensor,
 ) -> float:
     model.train()
     total_loss = 0
     for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
-
         opt.zero_grad()
-        pos_out, neg_out = model(batch, node_feat)
+        pos_out, neg_out = model(batch, static_node_feats)
         loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
         loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
@@ -151,17 +149,13 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     model: nn.Module,
     metrics: Metric,
-    node_feat: torch.Tensor,
 ) -> dict:
     model.eval()
     for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
-
-        pos_out, neg_out = model(batch, node_feat)
+        pos_out, neg_out = model(batch, static_node_feats)
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = (
             torch.cat(
@@ -178,43 +172,45 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-# TODO: Fix discretize api
-train_dg = DGraph(args.dataset, time_delta='s', split='train', device=args.device)
-train_dg = train_dg.discretize(args.time_gran)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 
-val_dg = DGraph(args.dataset, time_delta='s', split='val', device=args.device)
-val_dg = val_dg.discretize(args.time_gran)
+train_data = train_data.discretize(args.time_gran)
+val_data = val_data.discretize(args.time_gran)
+test_data = test_data.discretize(args.time_gran)
 
-test_dg = DGraph(args.dataset, time_delta='s', split='test', device=args.device)
-test_dg = test_dg.discretize(args.time_gran)
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
 
-train_loader = DGDataLoader(
-    train_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes),
-    batch_unit=args.batch_time_gran,
+train_neg_hook = NegativeEdgeSamplerHook(
+    low=int(train_dg.edges[1].min()), high=int(train_dg.edges[1].max())
 )
-val_loader = DGDataLoader(
-    val_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
-    batch_unit=args.batch_time_gran,
+val_neg_hook = NegativeEdgeSamplerHook(
+    low=int(val_dg.edges[1].min()), high=int(val_dg.edges[1].max())
 )
-test_loader = DGDataLoader(
-    test_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
-    batch_unit=args.batch_time_gran,
+test_neg_hook = NegativeEdgeSamplerHook(
+    low=int(test_dg.edges[1].min()), high=int(test_dg.edges[1].max())
 )
 
-if train_dg.dynamic_node_feats_dim is not None:
-    raise ValueError(
-        'node features are not supported yet, make sure to incorporate them in the model'
+hm = HookManager(keys=['train', 'val', 'test'])
+hm.register('train', train_neg_hook)
+hm.register('val', val_neg_hook)
+hm.register('test', test_neg_hook)
+
+train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
+
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-# TODO: add static node features to DGraph
-args.node_dim = args.embed_dim
-static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
 
 model = GCN(
-    in_channels=args.embed_dim,
+    in_channels=static_node_feats.shape[1],
     embed_dim=args.embed_dim,
     num_layers=args.n_layers,
     dropout=float(args.dropout),
@@ -226,17 +222,20 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
-    start_time = time.perf_counter()
-    loss = train(train_loader, model, opt, static_node_feats)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
+    with hm.activate('train'):
+        start_time = time.perf_counter()
+        loss = train(train_loader, static_node_feats, model, opt)
+        end_time = time.perf_counter()
+        latency = end_time - start_time
 
-    val_results = eval(val_loader, model, val_metrics, static_node_feats)
-    val_metrics.reset()
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
-    )
+    with hm.activate('val'):
+        val_results = eval(val_loader, static_node_feats, model, val_metrics)
+        val_metrics.reset()
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+            + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+        )
 
-test_results = eval(test_loader, model, test_metrics, static_node_feats)
-print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+with hm.activate('test'):
+    test_results = eval(test_loader, static_node_feats, model, test_metrics)
+    print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

@@ -1,27 +1,98 @@
 from __future__ import annotations
 
-from typing import Any, List
+from abc import ABC, abstractmethod
+from typing import Any, Iterator, List, Literal
 
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm.hooks import DGHook, HookManager
+from tgm.exceptions import (
+    EmptyBatchError,
+    InvalidDiscretizationError,
+    OrderedGranularityConversionError,
+)
+from tgm.hooks import HookManager
 from tgm.timedelta import TimeDeltaDG
 
 
-class DGDataLoader(torch.utils.data.DataLoader):
-    r"""Iterate and materialize from a DGraph.
+class _SkippableDataLoaderMixin(ABC):
+    """Mixin to optionally skip or raise on empty batches.
+
+    This mixin adds the ability to either skip or raise an error when an
+    empty batch is encountered during iteration over a dataset.
+
+    Args:
+        on_empty (Literal['skip', 'raise', None], optional): Action to take
+            on empty batches. 'skip' to silently skip, 'raise' to raise an error,
+            None for no action. Defaults to None.
+
+    Raises:
+        ValueError: If `on_empty` is not one of 'skip', 'raise', or None.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        on_empty: Literal['skip', 'raise', None] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+
+        valid_on_empty = ['skip', 'raise', None]
+        if on_empty not in valid_on_empty:
+            raise ValueError(
+                f'Invalid on_empty={on_empty}, expected one of: {valid_on_empty}'
+            )
+        self._on_empty = on_empty
+
+    @abstractmethod
+    def _is_batch_empty(self, batch: Any) -> bool: ...
+
+    def __iter__(self) -> Iterator[Any]:
+        for batch in super().__iter__():  # type: ignore
+            if self._is_batch_empty(batch):
+                if self._on_empty == 'raise':
+                    raise EmptyBatchError('Empty batch encountered')
+                elif self._on_empty == 'skip':
+                    continue
+            yield batch
+
+
+class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # type: ignore
+    """Iterate and materialize batches from a `DGraph`.
+
+    This DataLoader supports both ordered and non-ordered temporal graphs.
+    Optional hooks can be applied to each batch, and empty batches can be skipped
+    or raise an exception depending on configuration.
 
     Args:
         dg (DGraph): The dynamic graph to iterate.
-        batch_size (int): The batch size to yield at each iteration.
-        batch_unit (str): The unit corresponding to the batch_size.
-        hook (HookManager | Hook | List[Hook] | None): Arbitrary transform behaviour to execute before materializing a batch.
-        **kwargs (Any): Additional arguments to torch.utils.data.DataLoader.
+        batch_size (int, optional): The batch size to yield at each iteration.
+        batch_unit (str, optional): The unit corresponding to the batch_size
+            ('r' for ordered batches, or a time unit for non-ordered). Defaults to 'r'.
+        on_empty (Literal['skip', 'raise', None], optional): Behavior for empty batches.
+            'skip' to ignore, 'raise' to throw an error. Defaults to 'skip'.
+        hook_manager (HookManager | None, optional): Optional hooks to apply
+            transformations to each batch before returning. Defaults to None.
+        **kwargs (Any): Additional arguments passed to `torch.utils.data.DataLoader`.
 
     Raises:
-        ValueError: If the batch_unit and dg time unit are not both ordered or both not ordered.
-        ValueError: If the batch_unit and dg time unit are both ordered but the graph is coarser than the batch.
+        ValueError: If `batch_size` <= 0.
+        OrderedGranularityConversionError: If iterating an ordered DGraph using a non-ordered batch_unit.
+        InvalidDiscretizationError: If a non-ordered DGraph has a time unit coarser than the batch_unit.
+        EmptyBatchError: If an empty batch is encountered with on_empty='raise'.
+
+    Note:
+        - Ordered batching ('r') iterates sequentially over event indices.
+          Non-ordered batching iterates over temporal slices according to `batch_unit`.
+        - For non-ordered batching, `batch_unit` must not be coarser than the DGraph
+          time delta. Otherwise, a ValueError is raised.
+        - The effective batch size may be adjusted internally when using non-ordered
+          batching to match the graph's time granularity.
+        - The length returned by `len(DGDataLoader)` may be inaccurate for non-ordered
+          batches with `on_empty='skip'`, since skipped batches are still counted.
+        - Slices and batch materialization return new `DGBatch` objects; underlying
+          graph storage is not copied but views are used for efficiency.
     """
 
     def __init__(
@@ -29,7 +100,8 @@ class DGDataLoader(torch.utils.data.DataLoader):
         dg: DGraph,
         batch_size: int = 1,
         batch_unit: str = 'r',
-        hook: HookManager | DGHook | List[DGHook] | None = None,
+        on_empty: Literal['skip', 'raise', None] = 'skip',
+        hook_manager: HookManager | None = None,
         **kwargs: Any,
     ) -> None:
         if batch_size <= 0:
@@ -39,12 +111,14 @@ class DGDataLoader(torch.utils.data.DataLoader):
         batch_ordered = batch_unit == 'r'
 
         if dg_ordered and not batch_ordered:
-            raise ValueError('Cannot iterate ordered dg using non-ordered batch_unit')
+            raise OrderedGranularityConversionError(
+                'Cannot iterate ordered dg using non-ordered batch_unit'
+            )
         if not dg_ordered and not batch_ordered:
             # Ensure the graph time unit is more granular than batch time unit.
             batch_time_delta = TimeDeltaDG(batch_unit, value=batch_size)
             if dg.time_delta.is_coarser_than(batch_time_delta):
-                raise ValueError(
+                raise InvalidDiscretizationError(
                     f'Tried to construct a data loader on a DGraph with time delta: {dg.time_delta} '
                     f'which is strictly coarser than the batch_unit: {batch_unit}, batch_size: {batch_size}. '
                     'Either choose a larger batch size, batch unit or consider iterate using ordered batching.'
@@ -52,12 +126,11 @@ class DGDataLoader(torch.utils.data.DataLoader):
             batch_size = int(batch_time_delta.convert(dg.time_delta))
 
         # Warning: Cache miss
-        assert dg.start_time is not None
-        assert dg.end_time is not None
+        assert dg.start_time is not None and dg.end_time is not None
 
         self._dg = dg
         self._batch_size = batch_size
-        self._hook = HookManager.from_any(dg, hook)
+        self._hook_manager = hook_manager
         self._slice_op = dg.slice_events if batch_ordered else dg.slice_time
 
         start_idx = 0 if batch_ordered else dg.start_time
@@ -67,9 +140,18 @@ class DGDataLoader(torch.utils.data.DataLoader):
             slice_start = range(start_idx, stop_idx - batch_size, batch_size)
         else:
             slice_start = range(start_idx, stop_idx, batch_size)
-        super().__init__(slice_start, 1, shuffle=False, collate_fn=self, **kwargs)  # type: ignore
+
+        super().__init__(
+            slice_start, 1, shuffle=False, collate_fn=self, on_empty=on_empty, **kwargs
+        )
 
     def __call__(self, slice_start: List[int]) -> DGBatch:
         slice_end = slice_start[0] + self._batch_size
-        batch = self._slice_op(slice_start[0], slice_end)
-        return self._hook(batch)
+        dg = self._slice_op(slice_start[0], slice_end)
+        batch = dg.materialize()
+        if self._hook_manager is not None:
+            batch = self._hook_manager.execute_active_hooks(dg, batch)
+        return batch
+
+    def _is_batch_empty(self, batch: DGBatch) -> bool:
+        return batch.src.numel() == 0

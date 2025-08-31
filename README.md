@@ -55,8 +55,6 @@ Work in progress.
 
 ## Installation
 
-The current recommended way to install TGM is from source.
-
 #### Using [uv](https://docs.astral.sh/uv/) (recommended)
 
 ```sh
@@ -64,10 +62,10 @@ The current recommended way to install TGM is from source.
 uv venv my_venv --python 3.10 && source my_venv/bin/activate
 
 # Install the wheels into the venv
-uv pip install git+https://github.com/tgm-team/tgm.git
+uv add tgm-lib
 
 # Test the install
-python -c 'import tgm; print(tgm.__version__)'
+uv run python -c 'import tgm; print(tgm.__version__)'
 ```
 
 #### Using [pip](https://pip.pypa.io/en/stable/installation/)
@@ -77,7 +75,7 @@ python -c 'import tgm; print(tgm.__version__)'
 python3.10 -m venv my_venv && source my_venv/bin/activate
 
 # Install the wheels into the venv
-pip install git+https://github.com/tgm-team/tgm.git
+pip install tgm-lib
 
 # Test the install
 python -c 'import tgm; print(tgm.__version__)'

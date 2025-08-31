@@ -1,3 +1,1 @@
-## TimeDeltaDG
-
 ::: tgm.timedelta

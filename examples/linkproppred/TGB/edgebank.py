@@ -6,8 +6,8 @@ from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGraph
-from tgm.hooks import TGBNegativeEdgeSamplerHook
+from tgm import DGData, DGraph
+from tgm.hooks import HookManager, TGBNegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
 from tgm.util.seed import seed_everything
@@ -48,8 +48,8 @@ def eval(
             y_pred = model(query_src, query_dst)
             # compute MRR
             input_dict = {
-                'y_pred_pos': np.array([y_pred[0]]),
-                'y_pred_neg': np.array(y_pred[1:]),
+                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
+                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
@@ -69,21 +69,21 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(args.dataset, split='train')
-val_dg = DGraph(args.dataset, split='val')
-test_dg = DGraph(args.dataset, split='test')
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+train_dg = DGraph(train_data)
+val_dg = DGraph(val_data)
+test_dg = DGraph(test_data)
 
 train_data = train_dg.materialize(materialize_features=False)
-val_loader = DGDataLoader(
-    val_dg,
-    hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')],
-    batch_size=args.bsize,
-)
-test_loader = DGDataLoader(
-    test_dg,
-    hook=[TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')],
-    batch_size=args.bsize,
-)
+val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
+test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
+
+hm = HookManager(keys=['val', 'test'])
+hm.register('val', val_neg_hook)
+hm.register('test', test_neg_hook)
+
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = EdgeBankPredictor(
     train_data.src,
@@ -94,7 +94,10 @@ model = EdgeBankPredictor(
     pos_prob=args.pos_prob,
 )
 
-val_results = eval(val_loader, model, eval_metric, evaluator)
-print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
-test_results = eval(test_loader, model, eval_metric, evaluator)
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+with hm.activate('val'):
+    val_results = eval(val_loader, model, eval_metric, evaluator)
+    print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
+
+with hm.activate('test'):
+    test_results = eval(test_loader, model, eval_metric, evaluator)
+    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

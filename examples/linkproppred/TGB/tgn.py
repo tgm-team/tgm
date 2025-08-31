@@ -1,7 +1,7 @@
 import argparse
 import time
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import torch
@@ -11,9 +11,10 @@ from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
+from tgm import DGBatch, DGData, DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import (
-    DGHook,
+    HookManager,
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
     RecencyNeighborHook,
@@ -53,6 +54,18 @@ parser.add_argument(
 )
 
 
+class MergeLayer(nn.Module):
+    def __init__(self, in_dim1: int, in_dim2: int, hidden_dim: int, output_dim: int):
+        super().__init__()
+        self.fc1 = nn.Linear(in_dim1 + in_dim2, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor):
+        h = self.fc1(torch.cat([x1, x2], dim=1))
+        h = h.relu()
+        return self.fc2(h)
+
+
 class TGN(torch.nn.Module):
     def __init__(
         self,
@@ -82,7 +95,9 @@ class TGN(torch.nn.Module):
             time_encoder=self.time_encoder,
         )
 
-    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, batch: DGBatch, static_node_feats: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         agg_msgs = self.msg_agg(self.nodes, self.memory.msgs)
         memory, _ = self.memory_updater.get_updated_memory(*agg_msgs)
         # TODO: I think this is only needed for multi-hop?
@@ -92,7 +107,7 @@ class TGN(torch.nn.Module):
         # batch.time[batch.dst] -= last_update[batch.dst].long()
         # batch.time[batch.neg] -= last_update[batch.neg].long()
 
-        z = self.gat(batch, memory=memory)
+        z = self.gat(batch, static_node_feats, memory=memory)
         self._update_memory(batch)
         return z
 
@@ -261,7 +276,6 @@ class GraphAttentionEmbedding(nn.Module):
                     node_dim=embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
-                    out_dim=embed_dim,
                     dropout=dropout,
                 )
                 for _ in range(num_layers)
@@ -271,6 +285,7 @@ class GraphAttentionEmbedding(nn.Module):
     def forward(
         self,
         batch: DGBatch,
+        static_node_feats: torch.Tensor,
         memory: Memory,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = batch.src.device
@@ -284,11 +299,11 @@ class GraphAttentionEmbedding(nn.Module):
                 continue
 
             # TODO: Check and read static node features
-            node_feat = STATIC_NODE_FEAT[seed_nodes]
+            node_feat = static_node_feats[seed_nodes]
             node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
 
             # If next next hops embeddings exist, use them instead of raw features
-            nbr_feat = STATIC_NODE_FEAT[nbrs]
+            nbr_feat = static_node_feats[nbrs]
             if hop < self.num_layers - 1:
                 valid_nbrs = nbrs[nbr_mask]
                 nbr_feat[nbr_mask] = z[batch.global_to_local(valid_nbrs)]
@@ -303,7 +318,7 @@ class GraphAttentionEmbedding(nn.Module):
                 edge_feat=batch.nbr_feats[hop],
                 nbr_node_feat=nbr_feat,
                 nbr_time_feat=nbr_time_feat,
-                nbr_mask=nbr_mask,
+                valid_nbr_mask=nbr_mask != PADDED_NODE_ID,
             )
             z[batch.global_to_local(seed_nodes)] = out
         return z
@@ -312,18 +327,18 @@ class GraphAttentionEmbedding(nn.Module):
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        return self.fc2(h).sigmoid().view(-1)
 
 
 def train(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -335,7 +350,7 @@ def train(
     total_loss = 0
     for batch in tqdm(loader):
         opt.zero_grad()
-        z = encoder(batch)
+        z = encoder(batch, static_node_feats)
 
         z_src = z[batch.global_to_local(batch.src)]
         z_dst = z[batch.global_to_local(batch.dst)]
@@ -357,6 +372,7 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     eval_metric: str,
@@ -366,7 +382,7 @@ def eval(
     decoder.eval()
     perf_list = []
     for batch in tqdm(loader):
-        z = encoder(batch)
+        z = encoder(batch, static_node_feats)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
@@ -399,50 +415,52 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(args.dataset, split='train', device=args.device)
-val_dg = DGraph(args.dataset, split='val', device=args.device)
-test_dg = DGraph(args.dataset, split='test', device=args.device)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 
-# TODO: Read from graph
-NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
-STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
 
-
-def _init_hooks(
-    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
-) -> List[DGHook]:
-    if sampling_type == 'uniform':
-        nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
-    elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(
-            num_nbrs=args.n_nbrs,
-            num_nodes=dg.num_nodes,
-            edge_feats_dim=dg.edge_feats_dim,
-        )
-    else:
-        raise ValueError(f'Unknown sampling type: {args.sampling}')
-
-    # Always produce negative edge prior to neighbor sampling for link prediction
-    if split_mode in ['val', 'test']:
-        neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
-    else:
-        _, dst, _ = dg.edges
-        min_dst, max_dst = int(dst.min()), int(dst.max())
-        neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
-    return [neg_hook, nbr_hook]
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.embed_dim), device=args.device
+    )
 
 
-test_loader = DGDataLoader(
-    test_dg,
-    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'test'),
-    batch_size=args.bsize,
-)
+# Neighbor Sampler is shared across loaders
+if args.sampling == 'uniform':
+    nbr_hook = NeighborSamplerHook(num_nbrs=args.num_nbrs)
+elif args.sampling == 'recency':
+    nbr_hook = RecencyNeighborHook(
+        num_nbrs=args.n_nbrs,
+        num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+        edge_feats_dim=test_dg.edge_feats_dim,
+    )
+else:
+    raise ValueError(f'Unknown sampling type: {args.sampling}')
 
+
+_, dst, _ = train_dg.edges
+train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
+test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
+
+hm = HookManager(keys=['train', 'val', 'test'])
+hm.register('train', train_neg_hook)
+hm.register('val', val_neg_hook)
+hm.register('test', test_neg_hook)
+hm.register_shared(nbr_hook)
+
+train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 encoder = TGN(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
     time_dim=args.time_dim,
-    embed_dim=train_dg.static_node_feats_dim or args.embed_dim,
+    embed_dim=static_node_feats.shape[1],
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
@@ -456,31 +474,29 @@ opt = torch.optim.Adam(
 
 
 for epoch in range(1, args.epochs + 1):
-    # TODO: Need a clean way to clear nbr state across epochs
-    train_loader = DGDataLoader(
-        train_dg,
-        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
-        batch_size=args.bsize,
+    with hm.activate('train'):
+        start_time = time.perf_counter()
+        loss = train(train_loader, static_node_feats, encoder, decoder, opt)
+        end_time = time.perf_counter()
+        latency = end_time - start_time
+
+        with hm.activate('val'):
+            val_results = eval(
+                val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+            )
+            print(
+                f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+                + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+            )
+
+    # Clear memory state between epochs, except last epoch
+    if epoch < args.epochs:
+        hm.reset_state()
+        encoder.memory.clear_msgs(list(range(test_dg.num_nodes)))
+
+
+with hm.activate('test'):
+    test_results = eval(
+        test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
     )
-    val_loader = DGDataLoader(
-        val_dg,
-        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
-        batch_size=args.bsize,
-    )
-    start_time = time.perf_counter()
-    loss = train(train_loader, encoder, decoder, opt)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
-
-    val_results = eval(val_loader, encoder, decoder, eval_metric, evaluator)
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-    )
-
-    # Clear memory state between epochs
-    encoder.memory.clear_msgs(list(range(test_dg.num_nodes)))
-
-
-test_results = eval(test_loader, encoder, decoder, eval_metric, evaluator)
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
