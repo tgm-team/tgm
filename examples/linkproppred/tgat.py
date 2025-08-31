@@ -1,6 +1,6 @@
 import argparse
 import time
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -10,8 +10,9 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import (
-    DGHook,
+    HookManager,
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
     RecencyNeighborHook,
@@ -123,7 +124,7 @@ class TGAT(nn.Module):
                 edge_feat=batch.nbr_feats[hop],
                 nbr_node_feat=nbr_feat,
                 nbr_time_feat=nbr_time_feat,
-                nbr_mask=nbr_mask,
+                valid_nbr_mask=nbr_mask != PADDED_NODE_ID,
             )
             z[batch.global_to_local(seed_nodes)] = out
 
@@ -206,31 +207,38 @@ else:
         (test_dg.num_nodes, args.embed_dim), device=args.device
     )
 
+# Neighbor Sampler is shared across loaders
+if args.sampling == 'uniform':
+    nbr_hook = NeighborSamplerHook(num_nbrs=args.num_nbrs)
+elif args.sampling == 'recency':
+    nbr_hook = RecencyNeighborHook(
+        num_nbrs=args.n_nbrs,
+        num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+        edge_feats_dim=test_dg.edge_feats_dim,
+    )
+else:
+    raise ValueError(f'Unknown sampling type: {args.sampling}')
 
-def _init_hooks(dg: DGraph, sampling_type: str) -> List[DGHook]:
-    if sampling_type == 'uniform':
-        nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
-    elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(
-            num_nbrs=args.n_nbrs,
-            num_nodes=dg.num_nodes,
-            edge_feats_dim=dg.edge_feats_dim,
-        )
-    else:
-        raise ValueError(f'Unknown sampling type: {args.sampling}')
-
-    # Always produce negative edge prior to neighbor sampling for link prediction
-    _, dst, _ = dg.edges
-    min_dst, max_dst = int(dst.min()), int(dst.max())
-    neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
-    return [neg_hook, nbr_hook]
-
-
-test_loader = DGDataLoader(
-    test_dg,
-    hook=_init_hooks(test_dg, args.sampling),
-    batch_size=args.bsize,
+_, train_dst, _ = train_dg.edges
+_, val_dst, _ = val_dg.edges
+_, test_dst, _ = test_dg.edges
+train_neg_hook = NegativeEdgeSamplerHook(
+    low=int(train_dst.min()), high=int(train_dst.max())
 )
+val_neg_hook = NegativeEdgeSamplerHook(low=int(val_dst.min()), high=int(val_dst.max()))
+test_neg_hook = NegativeEdgeSamplerHook(
+    low=int(test_dst.min()), high=int(test_dst.max())
+)
+
+hm = HookManager(keys=['train', 'val', 'test'])
+hm.register('train', train_neg_hook)
+hm.register('val', val_neg_hook)
+hm.register('test', test_neg_hook)
+hm.register_shared(nbr_hook)
+
+train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = TGAT(
     edge_dim=train_dg.edge_feats_dim or args.embed_dim,
@@ -247,29 +255,23 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
-    # TODO: Need a clean way to clear nbr state across epochs
-    train_loader = DGDataLoader(
-        train_dg,
-        hook=_init_hooks(test_dg, args.sampling),
-        batch_size=args.bsize,
-    )
-    val_loader = DGDataLoader(
-        val_dg,
-        hook=_init_hooks(test_dg, args.sampling),
-        batch_size=args.bsize,
-    )
-    start_time = time.perf_counter()
-    loss = train(train_loader, static_node_feats, model, opt)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
+    with hm.activate('train'):
+        start_time = time.perf_counter()
+        loss = train(train_loader, static_node_feats, model, opt)
+        end_time = time.perf_counter()
+        latency = end_time - start_time
 
-    val_results = eval(val_loader, static_node_feats, model, val_metrics)
-    val_metrics.reset()
+    with hm.activate('test'):
+        val_results = eval(val_loader, static_node_feats, model, val_metrics)
+        val_metrics.reset()
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+            + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+        )
 
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
-    )
+    if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
+        hm.reset_state()
 
-test_results = eval(test_loader, static_node_feats, model, test_metrics)
-print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+with hm.activate('test'):
+    test_results = eval(test_loader, static_node_feats, model, test_metrics)
+    print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

@@ -8,7 +8,14 @@ import pandas as pd
 import pytest
 import torch
 
+from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
+from tgm.exceptions import (
+    EmptyGraphError,
+    InvalidDiscretizationError,
+    InvalidNodeIDError,
+    OrderedGranularityConversionError,
+)
 from tgm.split import TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TimeDeltaDG
 
@@ -150,9 +157,28 @@ def test_init_dg_data_sort_required():
     assert data.time_delta == TimeDeltaDG('r')
 
 
+def test_init_dg_data_bad_args_invalid_node_id():
+    edge_index = torch.LongTensor([[PADDED_NODE_ID, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    with pytest.raises(InvalidNodeIDError):
+        _ = DGData.from_raw(edge_timestamps, edge_index)
+
+    edge_index = torch.LongTensor([[1, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    node_ids = torch.LongTensor([PADDED_NODE_ID])
+    node_timestamps = torch.LongTensor([1])
+    with pytest.raises(InvalidNodeIDError):
+        _ = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_ids=node_ids,
+            node_timestamps=node_timestamps,
+        )
+
+
 def test_init_dg_data_bad_args_empty_graph():
     # Empty graph not supported
-    with pytest.raises(ValueError):
+    with pytest.raises(EmptyGraphError):
         _ = DGData.from_raw(
             torch.empty(0, dtype=torch.int), torch.empty((0, 2), dtype=torch.int)
         )
@@ -891,10 +917,10 @@ def test_discretize_bad_args():
     edge_index = torch.LongTensor([[2, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([1, 5])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(OrderedGranularityConversionError):
         data = DGData.from_raw(edge_timestamps, edge_index, time_delta='r')
         data.discretize('s')  # Cannot reduce from ordered
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidDiscretizationError):
         data = DGData.from_raw(edge_timestamps, edge_index, time_delta='h')
         data.discretize('s')  # Cannot reduce into more granular time
 

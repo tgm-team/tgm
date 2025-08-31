@@ -1,3 +1,1 @@
-## Utilities
-
 ::: tgm.util.seed

@@ -80,7 +80,6 @@ def eval(loader: DGDataLoader, model: PersistantForecaster) -> dict:
 args = parser.parse_args()
 seed_everything(args.seed)
 
-
 data = DGData.from_tgb(args.dataset).discretize(args.time_gran)
 train_data, val_data, test_data = data.split()
 

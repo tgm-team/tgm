@@ -34,7 +34,7 @@ def test_temporal_attention_forward():
     edge_feat = torch.rand(batch_size, num_nbr, edge_dim)
     nbr_node_feat = torch.rand(batch_size, num_nbr, node_dim)
     nbr_time_feat = torch.rand(batch_size, num_nbr, time_dim)
-    nbr_mask = torch.zeros(batch_size, num_nbr)
+    nbr_mask = torch.zeros(batch_size, num_nbr, dtype=bool)
 
     out = attn(node_feat, time_feat, edge_feat, nbr_node_feat, nbr_time_feat, nbr_mask)
     assert torch.is_tensor(out)
@@ -55,7 +55,7 @@ def test_temporal_attention_forward_with_padding():
     edge_feat = torch.rand(batch_size, num_nbr, edge_dim)
     nbr_node_feat = torch.rand(batch_size, num_nbr, node_dim)
     nbr_time_feat = torch.rand(batch_size, num_nbr, time_dim)
-    nbr_mask = torch.zeros(batch_size, num_nbr)
+    nbr_mask = torch.zeros(batch_size, num_nbr, dtype=bool)
 
     out = attn(node_feat, time_feat, edge_feat, nbr_node_feat, nbr_time_feat, nbr_mask)
     assert torch.is_tensor(out)
