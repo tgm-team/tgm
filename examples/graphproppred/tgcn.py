@@ -45,7 +45,7 @@ parser.add_argument(
 parser.add_argument(
     '--path-dataset',
     type=str,
-    default='examples/graphproppred/test_token.csv',
+    default='examples/graphproppred/tokens_data/test_token.csv',
     help='Path to dataset csv file',
 )
 
@@ -271,7 +271,7 @@ if __name__ == '__main__':
         full_dg, batch_unit=args.batch_time_gran, on_empty='raise'
     )
 
-    hm = HookManager(keys=['train', 'val', 'test'])
+    hm = HookManager()
     train_loader = DGDataLoader(
         train_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
     )

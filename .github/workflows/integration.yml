@@ -21,6 +21,7 @@ jobs:
     env:
       TGM_CI_LOG_BASE: $SLURM_TMPDIR/tgm_ci
       DATA_ROOT: $HOME/tgb_datasets
+      GRAPH_PROP_PRED_EXAMPLES: ./examples/graphproppred
 
     steps:
       - name: Checkout repository
@@ -51,6 +52,11 @@ jobs:
           echo "Preparing TGB datasets in $DATA_ROOT..."
           ./scripts/download_tgb_datasets.sh "$DATA_ROOT"
 
+      - name: Download sample datasets for Graph Property Prediction examples
+        run: |
+          echo "Preparing Graph Property prediction datasets in $GRAPH_PROP_PRED_EXAMPLES ..."
+          ./scripts/download_example_graphproppred_datasets.sh "$GRAPH_PROP_PRED_EXAMPLES"
+
       - name: Run Integration Tests
         run: uv run pytest -m "integration" -n 2 -vvv
 
@@ -79,3 +85,8 @@ jobs:
 
       - name: Minimize uv cache
         run: uv cache prune --ci
+
+      - name: Clean up artifacts
+        run: |
+          echo "Clean up artifacts ..."
+          ./scripts/clean_up.sh"

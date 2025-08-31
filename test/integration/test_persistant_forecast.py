@@ -20,7 +20,9 @@ python "$ROOT_DIR/examples/nodeproppred/persistant_forecast.py" \
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize('path-dataset', ['examples/graphproppred/test_token.csv'])
+@pytest.mark.parametrize(
+    'path-dataset', ['examples/graphproppred/tokens_data/test_token.csv']
+)
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
@@ -32,8 +34,6 @@ python "$ROOT_DIR/examples/nodeproppred/persistant_forecast.py" \
 )
 def test_persistant_forecast_graphprop_pred(slurm_job_runner, dataset):
     cmd = f"""
-echo "Downloading dataset: {dataset}"
-#@TODO: Need a script to download the testing dataset
 python "$ROOT_DIR/examples/graphproppred/persistant_forecast.py" \
     --path-dataset {dataset} \
     """

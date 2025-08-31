@@ -34,7 +34,7 @@ parser.add_argument('--test_ratio', type=float, default=0.15, help='test ratio')
 parser.add_argument(
     '--path-dataset',
     type=str,
-    default='examples/graphproppred/test_token.csv',
+    default='examples/graphproppred/tokens_data/test_token.csv',
     help='Path to dataset csv file',
 )
 
