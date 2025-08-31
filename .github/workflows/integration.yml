@@ -49,7 +49,7 @@ jobs:
       - name: Download TGB datasets
         run: |
           echo "Preparing TGB datasets in $DATA_ROOT..."
-          srun --mem=32G --job-name=download-tgb ./scripts/download_tgb_datasets.sh "$DATA_ROOT"
+          srun --mem=8G --job-name=download-tgb ./scripts/download_tgb_datasets.sh "$DATA_ROOT"
 
       - name: Run Integration Tests
         run: uv run pytest -m "integration" -n 2 -vvv
