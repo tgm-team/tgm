@@ -11,7 +11,7 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
-from tgm.hooks import HookManager
+from tgm.hooks import DeduplicationHook, HookManager
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
@@ -271,7 +271,8 @@ if __name__ == '__main__':
         full_dg, batch_unit=args.batch_time_gran, on_empty='raise'
     )
 
-    hm = HookManager()
+    hm = HookManager(keys=['global'])
+    hm.register('global', DeduplicationHook())
     train_loader = DGDataLoader(
         train_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
     )
@@ -304,38 +305,38 @@ if __name__ == '__main__':
         node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim, num_classes=1
     ).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+    with hm.activate('global'):
+        for epoch in range(1, args.epochs + 1):
+            start_time = time.perf_counter()
+            loss, h_0, train_results = train(
+                train_loader, train_labels, static_node_feats, model, opt, train_metrics
+            )
+            end_time = time.perf_counter()
+            latency = end_time - start_time
 
-    for epoch in range(1, args.epochs + 1):
-        start_time = time.perf_counter()
-        loss, h_0, train_results = train(
-            train_loader, train_labels, static_node_feats, model, opt, train_metrics
-        )
-        end_time = time.perf_counter()
-        latency = end_time - start_time
+            val_results, h_0 = eval(
+                val_loader,
+                val_labels,
+                static_node_feats,
+                model,
+                h_0,
+                val_metrics,
+                ignore_last_snapshot=False,
+            )
+            print(
+                f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+                + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
+                + ' '
+                + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+            )
 
-        val_results, h_0 = eval(
-            val_loader,
-            val_labels,
+        test_results, h_0 = eval(
+            test_loader,
+            test_labels,
             static_node_feats,
             model,
             h_0,
-            val_metrics,
-            ignore_last_snapshot=False,
+            test_metrics,
+            ignore_last_snapshot=True,
         )
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-            + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
-            + ' '
-            + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-        )
-
-    test_results, h_0 = eval(
-        test_loader,
-        test_labels,
-        static_node_feats,
-        model,
-        h_0,
-        test_metrics,
-        ignore_last_snapshot=True,
-    )
-    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+        print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
