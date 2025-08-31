@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List
 
 from tgm import DGBatch, DGraph
+from tgm.constants import DEFAULT_KEY_HOOK_MANAGER
 from tgm.exceptions import (
     BadHookProtocolError,
     UnresolvableHookDependenciesError,
@@ -30,17 +31,14 @@ class HookManager:
         ValueError: If `keys` is empty.
     """
 
-    def __init__(self, keys: List[str]) -> None:
-        if not len(keys):
-            raise ValueError('HookManager keys list must be non-empty')
-
+    def __init__(self, keys: List[str] = []) -> None:
+        keys.append(DEFAULT_KEY_HOOK_MANAGER)
         self._dirty: Dict[str, bool] = {k: False for k in keys}
         self._key_to_hooks: Dict[str, List[DGHook]] = {k: [] for k in keys}
-        self._shared_hooks: List[DGHook] = []
         self._active_key: str | None = None
 
         # Implicitly add deduplication shared hook
-        self._shared_hooks.append(DeduplicationHook())
+        self.register(DEFAULT_KEY_HOOK_MANAGER, DeduplicationHook())
 
     def __str__(self) -> str:
         def _stringify_hook(h: DGHook) -> str:
@@ -48,7 +46,7 @@ class HookManager:
 
         lines = ['HookManager:']
         lines.append('  Shared hooks:')
-        for h in self._shared_hooks:
+        for h in self._key_to_hooks[DEFAULT_KEY_HOOK_MANAGER]:
             lines.append(_stringify_hook(h))
 
         lines.append(f'  Active key: {self._active_key}')
@@ -75,7 +73,8 @@ class HookManager:
         """
         self._ensure_valid_hook(hook)
         self._ensure_no_active_key()
-        self._shared_hooks.append(hook)
+        self._key_to_hooks[DEFAULT_KEY_HOOK_MANAGER].append(hook)
+
         for k in self._dirty:  # Mark all keys as 'dirty'
             self._dirty[k] = True
 
@@ -123,8 +122,18 @@ class HookManager:
             RuntimeError: If no active key is set.
             UnresolvableHookDependenciesError: If required attributes are missing or hooks form a cyclic dependency.
         """
+        if self._active_key is None and len(self._key_to_hooks) == 1:
+            self._active_key = DEFAULT_KEY_HOOK_MANAGER
+
         if self._active_key is None:
-            raise RuntimeError('No active key set. Use activate() context manager.')
+            registered_key = [
+                key
+                for key in self._key_to_hooks.keys()
+                if key != DEFAULT_KEY_HOOK_MANAGER
+            ]
+            raise RuntimeError(
+                f'No active key set. Use activate() on following registered context {registered_key} from context manager.'
+            )
 
         # Lazily validate and topological sort if needed
         key = self._active_key
@@ -144,9 +153,6 @@ class HookManager:
         """
         if key is not None:
             self._ensure_valid_key(key)
-
-        for hook in self._shared_hooks:
-            hook.reset_state()
 
         keys_to_reset = [key] if key is not None else list(self._key_to_hooks.keys())
         for k in keys_to_reset:
@@ -169,8 +175,10 @@ class HookManager:
 
         keys_to_validate = [key] if key else list(self._key_to_hooks.keys())
         for k in keys_to_validate:
-            hooks = self._shared_hooks + [
-                h for h in self._key_to_hooks[k] if h not in self._shared_hooks
+            hooks = self._key_to_hooks[DEFAULT_KEY_HOOK_MANAGER] + [
+                h
+                for h in self._key_to_hooks[k]
+                if h not in self._key_to_hooks[DEFAULT_KEY_HOOK_MANAGER]
             ]
             self._key_to_hooks[k] = self._topological_sort_hooks(hooks)
             self._dirty[k] = False

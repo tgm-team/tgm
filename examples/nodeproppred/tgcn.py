@@ -170,7 +170,7 @@ num_nodes = DGraph(test_data).num_nodes
 label_dim = train_dg.dynamic_node_feats_dim
 evaluator = Evaluator(name=args.dataset)
 
-hm = HookManager(keys=['train', 'val', 'test'])
+hm = HookManager()
 
 train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, hook_manager=hm)

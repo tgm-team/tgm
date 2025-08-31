@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm.constants import DEFAULT_KEY_HOOK_MANAGER
 from tgm.data import DGData
 from tgm.exceptions import (
     BadHookProtocolError,
@@ -63,14 +64,12 @@ def test_str():
     assert isinstance(str(hm), str)
 
 
-def test_bad_init_empty_keys():
-    with pytest.raises(ValueError):
-        _ = HookManager(keys=[])
-
-
 def test_init_cpu():
     hm = HookManager(keys=['foo'])
-    assert any(isinstance(h, DeduplicationHook) for h in hm._shared_hooks)
+    assert any(
+        isinstance(h, DeduplicationHook)
+        for h in hm._key_to_hooks[DEFAULT_KEY_HOOK_MANAGER]
+    )
 
 
 def test_register():
@@ -96,8 +95,8 @@ def test_register_shared():
     hm = HookManager(keys=['foo'])
     hook = MockHook()
     hm.register_shared(hook)
-    assert hook in hm._shared_hooks
-    assert len(hm._shared_hooks) == 2
+    assert hook in hm._key_to_hooks[DEFAULT_KEY_HOOK_MANAGER]
+    assert len(hm._key_to_hooks[DEFAULT_KEY_HOOK_MANAGER]) == 2
 
 
 def test_attempt_register_bad_key():
@@ -375,3 +374,24 @@ def test_topo_sort_neg_before_nbr():
     # Ensure negatives precede nbrs in both cases
     assert foo_hooks.index(mock_neg_hook) < foo_hooks.index(mock_nbr_hook)
     assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)
+
+
+def test_not_active(dg):
+    h1 = MockHook()
+
+    hm = HookManager(keys=['train'])
+    hm.register('train', h1)
+
+    # if user register a key but active
+    with pytest.raises(RuntimeError):
+        hm.execute_active_hooks(dg, dg.materialize())
+
+
+def test_use_default_key(dg):
+    hm = HookManager()
+    hook = MockHook()
+    hm.register(DEFAULT_KEY_HOOK_MANAGER, hook)
+    exp_batch = dg.materialize()
+    exp_batch.time *= 2
+    batch = hm.execute_active_hooks(dg, dg.materialize())
+    assert batch == exp_batch
