@@ -7,6 +7,8 @@ import torch.nn as nn
 
 from .time_encoding import Time2Vec
 
+PADDED_NODE_ID = -1  # @TODO: No need to use this. Already define
+
 
 class RandomProjectionModule(nn.Module):
     def __init__(
@@ -81,11 +83,11 @@ class RandomProjectionModule(nn.Module):
                         )
                     )
 
-        pair_wise_feature_dim = (2 * self.num_layer + 2) ** 2
+        self.out_dim = (2 * self.num_layer + 2) ** 2
         self.mlp = nn.Sequential(
-            nn.Linear(pair_wise_feature_dim, pair_wise_feature_dim * 4),
+            nn.Linear(self.out_dim, self.out_dim * 4),
             nn.ReLU(),
-            nn.Linear(pair_wise_feature_dim * 4, pair_wise_feature_dim),
+            nn.Linear(self.out_dim * 4, self.out_dim),
         )
 
     def forward(self, src: torch.Tensor, dst: torch.Tensor) -> torch.Tensor:
@@ -204,7 +206,9 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        assert len(random_projections) == 2, (
+        assert (
+            len(random_projections) == 2
+        ), (
             'Expect a tuple of (now_time,random_projections)'
         )  # @TODO: Need to raise custom exception
         now_time, random_projections = random_projections
@@ -216,7 +220,9 @@ class RandomProjectionModule(nn.Module):
 
         self.now_time.data = now_time.clone()
         for i in range(1, self.num_layer + 1):
-            assert torch.is_tensor(random_projections[i - 1]), (
+            assert torch.is_tensor(
+                random_projections[i - 1]
+            ), (
                 'Not a valid state of random projection'
             )  # @TODO: Need to raise custom exception
             self.random_projections[i].data = random_projections[i - 1].clone()
@@ -305,16 +311,43 @@ class TPNet(nn.Module):
         edge_feat_dim: int,
         time_feat_dim: int,
         output_dim: int,
-        num_nodes: int,
         dropout: float,
         num_layers: int,
-        not_embedding: bool = False,
+        num_neighbors: int,
+        random_projections: RandomProjectionModule | None = None,
         device: str = 'cpu',
         time_encoder: Callable[..., nn.Module] = Time2Vec,
     ) -> None:
         super(TPNet, self).__init__()
-        # @TODO
-        raise Exception('Not yet implement')
+        self.device = device
+        self.time_encoder = time_encoder(time_feat_dim)
+        self.random_projections = random_projections
+        self.num_neighbors = num_neighbors
+        if self.random_projections is None:
+            self.random_feature_dim = 0
+        else:
+            self.random_feature_dim = self.random_projections.out_dim * 2
+
+        self.projection_layer = nn.Sequential(
+            nn.Linear(
+                node_feat_dim + edge_feat_dim + time_feat_dim + self.random_feature_dim,
+                output_dim * 2,
+            ),
+            nn.ReLU(),
+            nn.Linear(output_dim * 2, output_dim),
+        )
+        self.mlp_mixers = nn.ModuleList(
+            [
+                MLPMixer(
+                    num_tokens=num_neighbors,
+                    num_channels=output_dim,
+                    token_dim_expansion_factor=0.5,
+                    channel_dim_expansion_factor=4.0,
+                    dropout=dropout,
+                )
+                for _ in range(num_layers)
+            ]
+        )
 
     def forward(
         self,
@@ -340,19 +373,59 @@ class TPNet(nn.Module):
 
         *Note: Information of about neighbours of both src and dst nodes are concated together. Neighbour information of all src nodes comes first, then that of all dst nodes*
         """
-        # @TODO
-        raise Exception('Not yet implement')
+        src, dst = edge_index[0], edge_index[1]
+        num_src = src.shape[0]
+        node_ids = torch.cat([src, dst], dim=0)
+        neighbor_node_features = X[neighbours, :]
+        neighbor_node_features[neighbours == PADDED_NODE_ID] = 0
 
-    def update_random_projection(
-        self,
-        edge_index: torch.Tensor,
-        edge_time: torch.Tensor,
-    ) -> None:
-        f"""Update the random projections of temporal walk matrices after observing positive links
+        neighbours_time_feats = self.time_encoder(
+            torch.log((edge_time.unsqueeze(1) - neighbours_time) + 1)
+        )
+        neighbours_time_feats[(neighbours == PADDED_NODE_ID)] = 0
 
-        Args:
-            edge_index (PyTorch Tensor): Graph edge indices.
-            edge_time (PyTorch Tensor): Edge time vector.
-        """
-        # @TODO: This need to call update from RandomProjectionModule
-        raise Exception('Not yet implemented')
+        if self.random_projections is not None:
+            concat_neighbor_random_features = (
+                self.random_projections.get_pair_wise_feature(
+                    src_node_ids=neighbours.reshape(-1).repeat(2),
+                    dst_node_ids=torch.cat(
+                        [
+                            src.repeat_interleave(self.num_neighbors),
+                            dst.repeat_interleave(self.num_neighbors),
+                        ],
+                        dim=1,
+                    ),
+                )
+            )
+            neighbor_random_features = torch.cat(
+                [
+                    concat_neighbor_random_features[
+                        : len(node_ids) * self.num_neighbors
+                    ],
+                    concat_neighbor_random_features[
+                        len(node_ids) * self.num_neighbors :
+                    ],
+                ],
+                dim=1,
+            ).reshape(len(node_ids), self.num_neighbors, -1)
+            neighbor_combine_features = torch.cat(
+                [
+                    neighbor_node_features,
+                    neighbours_time_feats,
+                    neighbours_edge_feat,
+                    neighbor_random_features,
+                ],
+                dim=2,
+            )
+        else:
+            neighbor_combine_features = torch.cat(
+                [neighbor_node_features, neighbours_time_feats, neighbours_edge_feat],
+                dim=2,
+            )
+
+        embeddings = self.projection_layer(neighbor_combine_features)
+        embeddings.masked_fill((neighbours == 0)[:, :, None].to(self.device), 0)
+        for mlp_mixer in self.mlp_mixers:
+            embeddings = mlp_mixer(embeddings)
+        embeddings = torch.mean(embeddings, dim=1)
+        return embeddings[:num_src], embeddings[num_src:]
