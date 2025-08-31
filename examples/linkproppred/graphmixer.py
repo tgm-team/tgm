@@ -252,7 +252,7 @@ test_dg = DGraph(test_data, device=args.device)
 
 # Neighbor Sampler and GraphMixer Hook is shared across loaders
 nbr_hook = RecencyNeighborHook(
-    num_nbrs=args.n_nbrs,
+    num_nbrs=[args.n_nbrs],
     num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
     edge_feats_dim=test_dg.edge_feats_dim,
 )
@@ -301,7 +301,7 @@ class GraphMixerHook(StatefulHook):
         self._update(batch)
         return batch
 
-    def reset(self) -> None:
+    def reset_state(self) -> None:
         for node in self._nbrs:
             self._nbrs[node].clear()
 
