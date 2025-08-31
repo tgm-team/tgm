@@ -206,9 +206,7 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        assert (
-            len(random_projections) == 2
-        ), (
+        assert len(random_projections) == 2, (
             'Expect a tuple of (now_time,random_projections)'
         )  # @TODO: Need to raise custom exception
         now_time, random_projections = random_projections
@@ -220,9 +218,7 @@ class RandomProjectionModule(nn.Module):
 
         self.now_time.data = now_time.clone()
         for i in range(1, self.num_layer + 1):
-            assert torch.is_tensor(
-                random_projections[i - 1]
-            ), (
+            assert torch.is_tensor(random_projections[i - 1]), (
                 'Not a valid state of random projection'
             )  # @TODO: Need to raise custom exception
             self.random_projections[i].data = random_projections[i - 1].clone()
