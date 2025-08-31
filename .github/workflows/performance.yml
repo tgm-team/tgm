@@ -51,7 +51,7 @@ jobs:
         id: submit-download
         run: |
           echo "Preparing TGB datasets in $DATA_ROOT..."
-          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job.sh)
+          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh)
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
 
       - name: Wait for Download TGB job to finish
@@ -62,7 +62,7 @@ jobs:
       - name: Submit Performance Benchmark Job
         id: submit-bench
         run: |
-          JOB_ID=$(sbatch --parsable .github/scripts/run_perf_job.sh)
+          JOB_ID=$(sbatch --parsable .github/scripts/run_perf_job_sbatch.sh)
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
 
       - name: Wait for SLURM job to finish
