@@ -1,7 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=tgm_benchmarks
-#SBATCH --output=~/tgm_ci_perf/benchmarks-%j.out
-#SBATCH --error=~tgm_ci_perf/benchmarks-%j.err
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:a100l:1
@@ -21,4 +19,6 @@ echo "[$(date)] Starting TGM performance tests on $(hostname)"
 echo "Logs will be in $TGM_CI_PERF_LOG_BASE"
 
 # Run the performance tests
-./scripts/run_perf_tests.sh --gpu --small --medium
+./scripts/run_perf_tests.sh --gpu --small --medium \
+    >"$TGM_CI_PERF_LOG_BASE/benchmarks-$SLURM_JOB_ID.out" \
+    2>"$TGM_CI_PERF_LOG_BASE/benchmarks-$SLURM_JOB_ID.err"

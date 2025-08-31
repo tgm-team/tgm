@@ -20,7 +20,8 @@ jobs:
     if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang'
     env:
       TGM_CI_PERF_LOG_BASE: $SLURM_TMPDIR/tgm_ci_perf
-      DATA_ROOT: $HOME/tgb_datasets
+      REAL_HOME: /home/mila/j/jacob.chmura
+      DATA_ROOT: /home/mila/j/jacob.chmura/tgb_datasets
 
     steps:
       - name: Checkout repository
