@@ -43,8 +43,6 @@ jobs:
           restore-keys: |
             uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
             uv-${{ runner.os }}
-      - name: Install dependencies
-        run: uv sync --group examples
 
       - name: Download TGB datasets
         id: submit-download
@@ -57,6 +55,9 @@ jobs:
         run: |
           JOB_ID="${{ steps.submit-download.outputs.job_id }}"
           .github/scripts/poll_slurm_job.sh "$JOB_ID" --timeout 3600 --interval 10
+
+      - name: Install dependencies
+        run: uv sync --group examples
 
       - name: Run Integration Tests
         run: uv run pytest -m "integration" -n 2 -vvv

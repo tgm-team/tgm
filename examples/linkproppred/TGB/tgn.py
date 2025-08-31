@@ -299,8 +299,10 @@ class GraphAttentionEmbedding(nn.Module):
 
         # Layer 0 (leaf nodes): z[0][i] = static_node_feat
         z[0][0] = static_node_feat[batch.nids[0]]
+        z[0][0] += memory[batch.nids[0]]
         for i in range(1, self.num_layers + 1):
             z[0][i] = static_node_feat[batch.nbr_nids[i - 1].flatten()]
+            z[0][i] += memory[batch.nbr_nids[i - 1].flatten()]
 
         # Layers 1..H: aggregate z[j][i] = agg(z[j - 1][i], z[j - 1][i + 1])
         for j in range(1, self.num_layers + 1):
@@ -308,7 +310,7 @@ class GraphAttentionEmbedding(nn.Module):
                 num_nodes = z[j - 1][i].size(0)
                 num_nbr = batch.nbr_nids[j - 1].shape[-1]
                 out = self.attn[j - 1](
-                    node_feat=z[j - 1][i] + memory[batch.nbr_nids[i]],
+                    node_feat=z[j - 1][i],
                     time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
                     nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
                     edge_feat=batch.nbr_feats[i],
@@ -459,7 +461,7 @@ encoder = TGN(
     node_dim=static_node_feats.shape[1],
     edge_dim=train_dg.edge_feats_dim,
     time_dim=args.time_dim,
-    embed_dim=static_node_feats.shape[1],
+    embed_dim=args.embed_dim,
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),

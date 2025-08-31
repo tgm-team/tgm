@@ -44,9 +44,6 @@ jobs:
             uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
             uv-${{ runner.os }}
 
-      - name: Install dependencies
-        run: uv sync --group dev
-
       - name: Download TGB datasets
         id: submit-download
         run: |
@@ -58,6 +55,9 @@ jobs:
         run: |
           JOB_ID="${{ steps.submit-download.outputs.job_id }}"
           .github/scripts/poll_slurm_job.sh "$JOB_ID" --timeout 3600 --interval 10
+
+      - name: Install dependencies
+        run: uv sync --group dev
 
       - name: Submit Performance Benchmark Job
         id: submit-bench
