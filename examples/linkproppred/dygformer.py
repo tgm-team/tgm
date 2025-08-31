@@ -299,6 +299,7 @@ if __name__ == '__main__':
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
             + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+            + ' '
             + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
         )
 

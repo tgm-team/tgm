@@ -438,6 +438,9 @@ class DyGFormer(nn.Module):
         # Get node feat and time feat using Time Encoder
         src_neighbours_node_feats = X[src_neighbours, :]
         dst_neighbours_node_feats = X[dst_neighbours, :]
+        src_neighbours_node_feats[src_neighbours == PADDED_NODE_ID] = 0
+        dst_neighbours_node_feats[dst_neighbours == PADDED_NODE_ID] = 0
+
         src_neighbours_time_feats = self.time_encoder(
             edge_time.unsqueeze(1) - src_neighbours_time
         )
