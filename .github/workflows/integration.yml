@@ -50,7 +50,7 @@ jobs:
         id: submit-download
         run: |
           echo "Preparing TGB datasets in $DATA_ROOT..."
-          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh)
+          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh "$DATA_ROOT")
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
 
       - name: Wait for Download TGB job to finish

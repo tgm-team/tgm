@@ -9,7 +9,9 @@
 
 set -euo pipefail
 
+DATA_ROOT="$1"
+
 cd "$GITHUB_WORKSPACE"
 
 # Download the tgb datasets
-./scripts/download_tgb_datasets.sh
+./scripts/download_tgb_datasets.sh "$DATA_ROOT"
