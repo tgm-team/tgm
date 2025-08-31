@@ -47,7 +47,7 @@ jobs:
         run: uv sync --group examples
 
       - name: Download TGB datasets
-        id: submit-download
+        id: submit-
         run: |
           echo "Preparing TGB datasets in $DATA_ROOT..."
           JOB_ID=$(sbatch --parsable --mem=8G --job-name=download-tgb ./scripts/download_tgb_datasets.sh "$DATA_ROOT")
@@ -56,7 +56,7 @@ jobs:
       - name: Wait for Download TGB job to finish
         run: |
           JOB_ID="${{ steps.submit-download.outputs.job_id }}"
-          .github/scripts/wait_for_slurm.sh "$JOB_ID" --timeout 3600 --interval 10
+          .github/scripts/poll_slurm_job.sh "$JOB_ID" --timeout 3600 --interval 10
 
       - name: Run Integration Tests
         run: uv run pytest -m "integration" -n 2 -vvv

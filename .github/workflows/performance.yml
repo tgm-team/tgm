@@ -57,7 +57,7 @@ jobs:
       - name: Wait for Download TGB job to finish
         run: |
           JOB_ID="${{ steps.submit-download.outputs.job_id }}"
-          .github/scripts/wait_for_slurm.sh "$JOB_ID" --timeout 3600 --interval 10
+          .github/scripts/poll_slurm_job.sh "$JOB_ID" --timeout 3600 --interval 10
 
       - name: Submit Performance Benchmark Job
         id: submit-bench
@@ -68,7 +68,7 @@ jobs:
       - name: Wait for SLURM job to finish
         run: |
           JOB_ID="${{ steps.submit-bench.outputs.job_id }}"
-          .github/scripts/wait_for_slurm.sh "$JOB_ID" --timeout 3600 --interval 10
+          .github/scripts/poll_slurm_job.sh "$JOB_ID" --timeout 3600 --interval 10
 
       - name: Get Latest CI Run Log Path
         if: always()
