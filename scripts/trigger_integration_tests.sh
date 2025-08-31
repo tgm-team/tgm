@@ -3,28 +3,48 @@ set -eou pipefail
 
 OWNER="tgm-team"
 REPO="tgm"
-WORKFLOW="integration.yml"
+DEFAULT_WORKFLOW="integration.yml"
+PERF_WORKFLOW="performance.yml"
 ENV_FILE=".env"
 
 print_usage() {
     echo "Usage: $0 [branch]"
     echo
-    echo "Trigger GitHub Actions workflow '$WORKFLOW' in repo '$OWNER/$REPO'."
+    echo "Trigger GitHub Actions workflow in repo '$OWNER/$REPO'."
     echo
     echo "Arguments:"
-    echo "  branch    Optional branch name (default: main)"
+    echo "  branch    Optional branch name (default: current working branch)"
+    echo "  --perf    Optional flag to trigger performance workflow instead of integration tests"
     echo
     echo "Environment:"
     echo "  Requires TGM_CI_TOKEN in $ENV_FILE"
 }
 
 parse_args() {
-    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-        print_usage
-        exit 0
+    BRANCH="main"
+    WORKFLOW="$DEFAULT_WORKFLOW"
+
+    # Default branch: current Git branch
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    else
+        BRANCH="main"  # fallback if not in a git repo
     fi
 
-    BRANCH="${1:-main}"
+    for arg in "$@"; do
+        case "$arg" in
+            -h|--help)
+                print_usage
+                exit 0
+                ;;
+            --perf)
+                WORKFLOW="$PERF_WORKFLOW"
+                ;;
+            *)
+                BRANCH="$arg"
+                ;;
+        esac
+    done
 
     if [[ ! -f "$ENV_FILE" ]]; then
         echo "Error: $ENV_FILE file not found" >&2
