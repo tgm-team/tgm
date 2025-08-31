@@ -11,6 +11,7 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
+from tgm.hooks import HookManager
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
@@ -269,12 +270,16 @@ if __name__ == '__main__':
     full_loader = DGDataLoader(
         full_dg, batch_unit=args.batch_time_gran, on_empty='raise'
     )
+
+    hm = HookManager(keys=['train', 'val', 'test'])
     train_loader = DGDataLoader(
-        train_dg, batch_unit=args.batch_time_gran, on_empty='raise'
+        train_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
     )
-    val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+    val_loader = DGDataLoader(
+        val_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
+    )
     test_loader = DGDataLoader(
-        test_dg, batch_unit=args.batch_time_gran, on_empty='raise'
+        test_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
     )
 
     num_train_snapshots = len(train_loader)
