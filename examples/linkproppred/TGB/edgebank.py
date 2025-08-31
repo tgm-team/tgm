@@ -40,9 +40,7 @@ def eval(
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
-            query_src = torch.tensor(
-                [batch.src[idx] for _ in range(len(neg_batch) + 1)]
-            )
+            query_src = batch.src[idx].repeat(len(neg_batch) + 1)
             query_dst = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
 
             y_pred = model(query_src, query_dst)
