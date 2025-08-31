@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=tgm_benchmarks
-#SBATCH --output=/home/%u/tgm_ci_perf/benchmarks-%j.out
-#SBATCH --error=/home/%u/tgm_ci_perf/benchmarks-%j.err
+#SBATCH --output=~/tgm_ci_perf/benchmarks-%j.out
+#SBATCH --error=~tgm_ci_perf/benchmarks-%j.err
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:a100l:1

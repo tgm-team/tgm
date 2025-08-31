@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=download_tgb
-#SBATCH --output=/home/%u/tgm_ci/download_tgb-%j.out
-#SBATCH --error=/home/%u/tgm_ci/download_tgb-%j.err
+#SBATCH --output=~/tgm_ci/download_tgb-%j.out
+#SBATCH --error=~/tgm_ci/download_tgb-%j.err
 #SBATCH --cpus-per-task=1
 #SBATCH --partition=long-cpu
 #SBATCH --mem=32G
