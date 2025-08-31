@@ -47,10 +47,10 @@ jobs:
         run: uv sync --group examples
 
       - name: Download TGB datasets
-        id: submit-
+        id: submit-download
         run: |
           echo "Preparing TGB datasets in $DATA_ROOT..."
-          JOB_ID=$(sbatch --parsable --mem=8G --job-name=download-tgb ./scripts/download_tgb_datasets.sh "$DATA_ROOT")
+          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job.sh)
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
 
       - name: Wait for Download TGB job to finish
