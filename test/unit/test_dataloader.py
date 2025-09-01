@@ -3,6 +3,11 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
+from tgm.exceptions import (
+    EmptyBatchError,
+    InvalidDiscretizationError,
+    OrderedGranularityConversionError,
+)
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
@@ -29,7 +34,7 @@ def test_init_ordered_dg_non_ordered_batch(batch_unit):
     edge_timestamps = torch.LongTensor([1])
     data = DGData.from_raw(edge_timestamps, edge_index)
     dg = DGraph(data)
-    with pytest.raises(ValueError):
+    with pytest.raises(OrderedGranularityConversionError):
         _ = DGDataLoader(dg, batch_unit=batch_unit)
 
 
@@ -166,7 +171,7 @@ def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
     edge_timestamps = torch.LongTensor([1])
     data = DGData.from_raw(edge_timestamps, edge_index, time_delta='m')
     dg = DGraph(data)
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidDiscretizationError):
         # Seconds are too granular of an iteration unit for DG with minute time granularity
         _ = DGDataLoader(dg, batch_unit='s')
 
@@ -174,7 +179,7 @@ def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
         edge_timestamps, edge_index, time_delta=TimeDeltaDG('s', value=30)
     )
     dg = DGraph(data)
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidDiscretizationError):
         # Seconds are too granular of an iteration unit for DG with 'every 30 seconds' time granularity
         _ = DGDataLoader(dg, batch_unit='s')
 
@@ -223,5 +228,5 @@ def test_iteration_with_empty_batch_raise():
     it = iter(loader)
     next(it)  # First batch should yield correctly
 
-    with pytest.raises(ValueError):
+    with pytest.raises(EmptyBatchError):
         next(it)

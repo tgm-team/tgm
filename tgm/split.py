@@ -9,8 +9,23 @@ from torch import Tensor
 
 
 class SplitStrategy(ABC):
+    """Abstract base class for splitting temporal graph datasets.
+
+    Implementations of this class define the logic for dividing a `DGData` object
+    into one or more subsets (train/val/test) based on temporal information.
+    """
+
     @abstractmethod
-    def apply(self, data: 'DGData') -> Tuple['DGData', ...]: ...  # type: ignore
+    def apply(self, data: 'DGData') -> Tuple['DGData', ...]:  # type: ignore
+        r"""Split the dataset and return one or more subsets.
+
+        Args:
+            data (DGData): The temporal graph dataset to split.
+
+        Returns:
+            Tuple[DGData, ...]: Split datasets according to the strategy.
+        """
+        ...
 
     def _masked_copy(
         self,
@@ -58,6 +73,23 @@ class SplitStrategy(ABC):
 
 @dataclass
 class TemporalSplit(SplitStrategy):
+    """Split a temporal graph dataset based on absolute timestamp boundaries.
+
+    Args:
+        val_time (int): The timestamp separating training and validation data.
+        test_time (int): The timestamp separating validation and test data.
+
+    Raises:
+        ValueError: If not 0 <= val_time <= test_time.
+
+    Note:
+        This strategy assigns edges and nodes to splits based on whether their
+        timestamps fall within the corresponding intervals:
+        - Train: (-inf, val_time)
+        - Validation: [val_time, test_time)
+        - Test: [test_time, inf)
+    """
+
     val_time: int
     test_time: int
 
@@ -96,6 +128,22 @@ class TemporalSplit(SplitStrategy):
 
 @dataclass
 class TemporalRatioSplit(SplitStrategy):
+    """Split a temporal graph dataset according to relative ratios of time.
+
+    Args:
+        train_ratio (float, optional): Fraction of data to assign to training. Defaults to 0.7.
+        val_ratio (float, optional): Fraction of data to assign to validation. Defaults to 0.15.
+        test_ratio (float, optional): Fraction of data to assign to test. Defaults to 0.15.
+
+    Raises:
+        ValueError: If any ratio is negative.
+        ValueError: If the ratios do not sum to 1.0 within tolerance.
+
+    Note:
+        The dataset timestamps are assumed to be sorted. The ratios are applied
+        cumulatively to the total temporal span to determine absolute split boundaries.
+    """
+
     train_ratio: float = 0.7
     val_ratio: float = 0.15
     test_ratio: float = 0.15
@@ -124,6 +172,17 @@ class TemporalRatioSplit(SplitStrategy):
 
 @dataclass
 class TGBSplit(SplitStrategy):
+    """Split a temporal graph dataset using pre-specified edge time bounds.
+
+    Args:
+        split_bounds (Dict[str, Tuple[int, int]]): Mapping from split names
+            ('train', 'val', 'test') to (min_time, max_time) intervals for edges.
+
+    Note:
+        Nodes are included in a split if their timestamps fall within the
+        corresponding edge interval (or slightly before the min_time of edges).
+    """
+
     split_bounds: Dict[str, Tuple[int, int]]  # min/max edge times for each split
 
     def apply(self, data: 'DGData') -> Tuple['DGData', 'DGData', 'DGData']:  # type: ignore

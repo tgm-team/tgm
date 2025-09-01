@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import torch
 from torch import Tensor
 
+from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
 
 from ..base import DGSliceTracker, DGStorageBase
@@ -102,10 +103,11 @@ class DGStorageArrayBackend(DGStorageBase):
                 nbrs[d].append((i, s))
 
         B = len(seed_nodes)
-        nbr_nids = torch.full((B, num_nbrs), -1, dtype=torch.long, device=device)
+        nbr_nids = torch.full(
+            (B, num_nbrs), PADDED_NODE_ID, dtype=torch.long, device=device
+        )
         nbr_times = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
         nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
-        nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
 
         for i, node in enumerate(unique_nodes.tolist()):
             node_nbrs = nbrs[node]
@@ -129,9 +131,8 @@ class DGStorageArrayBackend(DGStorageBase):
             nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.long, device=device)
             if self._data.edge_feats is not None:
                 nbr_feats[mask, :nn] = torch.stack(feats).to(device).float()
-            nbr_mask[mask, :nn] = 1
 
-        return nbr_nids, nbr_times, nbr_feats, nbr_mask
+        return nbr_nids, nbr_times, nbr_feats
 
     def get_static_node_feats(self) -> Optional[Tensor]:
         return self._data.static_node_feats
