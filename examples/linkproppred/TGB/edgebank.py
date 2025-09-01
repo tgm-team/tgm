@@ -36,24 +36,23 @@ def eval(
     model: EdgeBankPredictor,
     eval_metric: str,
     evaluator: Evaluator,
-) -> dict:
+) -> float:
     perf_list = []
     for batch in tqdm(loader):
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             query_src = batch.src[idx].repeat(len(neg_batch) + 1)
-            query_dst = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
 
             y_pred = model(query_src, query_dst)
             input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'y_pred_pos': y_pred[0].cpu().numpy(),
+                'y_pred_neg': y_pred[1:].cpu().numpy(),
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
         model.update(batch.src, batch.dst, batch.time)
-    metric_dict = {}
-    metric_dict[eval_metric] = float(np.mean(perf_list))
-    return metric_dict
+
+    return float(np.mean(perf_list))
 
 
 args = parser.parse_args()
@@ -72,12 +71,10 @@ val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
 
 train_data = train_dg.materialize(materialize_features=False)
-val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
-test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
 hm = HookManager(keys=['val', 'test'])
-hm.register('val', val_neg_hook)
-hm.register('test', test_neg_hook)
+hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
 
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
@@ -93,14 +90,11 @@ model = EdgeBankPredictor(
 
 with hm.activate('val'):
     start_time = time.perf_counter()
-    val_results = eval(val_loader, model, eval_metric, evaluator)
+    val_mrr = eval(val_loader, model, eval_metric, evaluator)
     end_time = time.perf_counter()
     latency = end_time - start_time
-    print(
-        f'Latency={latency:.4f} '
-        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-    )
+    print(f'Latency={latency:.4f} Validation {eval_metric}={val_mrr:.4f}')
 
 with hm.activate('test'):
-    test_results = eval(test_loader, model, eval_metric, evaluator)
-    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    test_mrr = eval(test_loader, model, eval_metric, evaluator)
+    print(f'Test {eval_metric}={test_mrr:.4f}')
