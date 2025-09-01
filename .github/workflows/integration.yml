@@ -21,7 +21,7 @@ jobs:
     env:
       TGM_CI_LOG_BASE: $SLURM_TMPDIR/tgm_ci
       REAL_HOME: /home/mila/j/jacob.chmura
-      DATA_ROOT: /home/mila/j/jacob.chmura/tgb_datasets
+      DATA_ROOT: ${{ env.REAL_HOME }}/tgb_datasets
 
     steps:
       - name: Checkout repository
