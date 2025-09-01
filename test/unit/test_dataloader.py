@@ -184,6 +184,34 @@ def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
         _ = DGDataLoader(dg, batch_unit='s')
 
 
+def test_iteration_with_only_node_events_is_non_empty():
+    edge_index = torch.LongTensor([[2, 3], [2, 3]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    node_timestamps = torch.LongTensor([2, 3, 4])
+    node_ids = torch.LongTensor([2, 2, 2])
+
+    # Can't actually get node events without dynamic node feats
+    dynamic_node_feats = torch.rand(3, 3)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        node_timestamps=node_timestamps,
+        node_ids=node_ids,
+        dynamic_node_feats=dynamic_node_feats,
+        time_delta='s',
+    )
+    dg = DGraph(data)
+
+    loader = DGDataLoader(dg, batch_unit='s')
+    assert len(loader) == 5
+
+    num_yielded = 0
+    for _ in loader:
+        num_yielded += 1
+        continue
+    assert num_yielded == 5
+
+
 def test_iteration_with_empty_batch():
     edge_index = torch.LongTensor([[2, 3], [2, 3]])
     edge_timestamps = torch.LongTensor([1, 5])

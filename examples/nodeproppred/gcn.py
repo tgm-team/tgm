@@ -140,11 +140,7 @@ def eval(
         z_node = z[batch.node_ids]
         y_pred = decoder(z_node)
 
-        input_dict = {
-            'y_true': y_true,
-            'y_pred': y_pred,
-            'eval_metric': [eval_metric],
-        }
+        input_dict = {'y_true': y_true, 'y_pred': y_pred, 'eval_metric': [eval_metric]}
         perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
     return float(np.mean(perf_list))
