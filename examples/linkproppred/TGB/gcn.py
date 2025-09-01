@@ -1,7 +1,3 @@
-r"""python -u gcn.py --dataset tgbl-wiki --time-gran s --snapshot-time-gran h
-example commands to run this script.
-"""
-
 import argparse
 import time
 from typing import Tuple
@@ -26,61 +22,27 @@ from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='GCN TGB Example',
+    description='GCN LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=15, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
-    '--node-dim', type=int, default=100, help='node feat dimension if not provided'
+    '--node-dim', type=int, default=256, help='node feat dimension if not provided'
 )
-parser.add_argument(
-    '--bsize', type=int, default=200, help='batch size for TGN CTDG iteration'
-)
-parser.add_argument(
-    '--time-gran',
-    type=str,
-    default='s',
-    help='raw time granularity for dataset',
-)
+parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument(
     '--snapshot-time-gran',
     type=str,
     default='h',
     help='time granularity to operate on for snapshots',
 )
-
-
-class GCN(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        embed_dim: int,
-        num_layers: int,
-        dropout: float,
-    ) -> None:
-        super().__init__()
-        self.in_channels = in_channels
-        self.encoder = GCNEncoder(
-            in_channels=in_channels,
-            embed_dim=embed_dim,
-            out_channels=embed_dim,
-            num_layers=num_layers,
-            dropout=dropout,
-        )
-
-    def forward(
-        self, batch: DGBatch, node_feat: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
-        z = self.encoder(node_feat, edge_index)
-        return z
 
 
 class GCNEncoder(torch.nn.Module):
@@ -112,7 +74,9 @@ class GCNEncoder(torch.nn.Module):
         for bn in self.bns:
             bn.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+    def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
+        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        x = node_feat
         for i, conv in enumerate(self.convs[:-1]):
             x = conv(x, edge_index)
             x = self.bns[i](x)
@@ -134,7 +98,7 @@ class LinkPredictor(nn.Module):
         return self.fc2(h).sigmoid().view(-1)
 
 
-def train_in_batches(
+def train(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
     static_node_feats: torch.Tensor,
@@ -142,33 +106,35 @@ def train_in_batches(
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
     conversion_rate: int,
-) -> float:
+) -> Tuple[float, torch.Tensor]:
     encoder.train()
     decoder.train()
     total_loss = 0
-    criterion = torch.nn.MSELoss()
+
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
     z = encoder(snapshot_batch, static_node_feats)
+
     for batch in tqdm(loader):
         opt.zero_grad()
         z = encoder(snapshot_batch, static_node_feats)
+
         pos_out = decoder(z[batch.src], z[batch.dst])
         neg_out = decoder(z[batch.src], z[batch.neg])
-        loss = criterion(pos_out, torch.ones_like(pos_out))
-        loss += criterion(neg_out, torch.zeros_like(neg_out))
-        total_loss += float(loss) / batch.src.shape[0]
+
+        loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
+        loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
+        total_loss += float(loss) / batch.src.shape[0]
 
         # update the model if the prediction batch has moved to next snapshot.
-        while (
-            batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate
-        ):  # if batch timestamps greater than snapshot, process the snapshot
+        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
             try:
                 snapshot_batch = next(snapshots_iterator)
             except StopIteration:
                 pass
+
     return total_loss, z.detach()
 
 
@@ -183,47 +149,42 @@ def eval(
     eval_metric: str,
     evaluator: Evaluator,
     conversion_rate: int,
-) -> dict:
+) -> float:
     encoder.eval()
     decoder.eval()
     perf_list = []
+
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
+
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
             query_src = batch.src[idx].repeat(len(neg_batch) + 1)
             query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            y_pred = decoder(z[query_src], z[query_dst])
 
-            # compute MRR
+            y_pred = decoder(z[query_src], z[query_dst])
             input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
         # update the model if the prediction batch has moved to next snapshot.
-        while (
-            batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate
-        ):  # if batch timestamps greater than snapshot, process the snapshot
+        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+            # if batch timestamps greater than snapshot, process the snapshot
             z = encoder(snapshot_batch, static_node_feats).detach()
             try:
                 snapshot_batch = next(snapshots_iterator)
             except StopIteration:
                 pass
 
-    metric_dict = {}
-    metric_dict[eval_metric] = float(np.mean(perf_list))
-    return metric_dict
+    return float(np.mean(perf_list))
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
-snapshot_td = TimeDeltaDG(args.snapshot_time_gran)
-tgb_td = TimeDeltaDG(args.time_gran)
-conversion_rate = int(snapshot_td.convert(tgb_td))
 
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
 eval_metric = dataset.eval_metric
@@ -233,29 +194,27 @@ dataset.load_val_ns()
 dataset.load_test_ns()
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
+
+snapshot_td = TimeDeltaDG(args.snapshot_time_gran)
+conversion_rate = int(snapshot_td.convert(train_dg.time_delta))
 
 train_data_discretized = train_data.discretize(args.snapshot_time_gran)
-train_dg = DGraph(train_data, device=args.device)
-train_snapshots = DGraph(train_data_discretized, device=args.device)
-
 val_data_discretized = val_data.discretize(args.snapshot_time_gran)
-val_dg = DGraph(val_data, device=args.device)
-val_snapshots = DGraph(val_data_discretized, device=args.device)
-
 test_data_discretized = test_data.discretize(args.snapshot_time_gran)
-test_dg = DGraph(test_data, device=args.device)
+
+train_snapshots = DGraph(train_data_discretized, device=args.device)
+val_snapshots = DGraph(val_data_discretized, device=args.device)
 test_snapshots = DGraph(test_data_discretized, device=args.device)
 
-
 _, dst, _ = train_dg.edges
-train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
-val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
-test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
 hm = HookManager(keys=['train', 'val', 'test'])
-hm.register('train', train_neg_hook)
-hm.register('val', val_neg_hook)
-hm.register('test', test_neg_hook)
+hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
+hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
@@ -275,18 +234,14 @@ else:
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-node_dim = static_node_feats.shape[1]
-encoder = GCN(
-    in_channels=node_dim,
+encoder = GCNEncoder(
+    in_channels=static_node_feats.shape[1],
     embed_dim=args.embed_dim,
+    out_channels=args.embed_dim,
     num_layers=args.n_layers,
     dropout=float(args.dropout),
 ).to(args.device)
-
-decoder = LinkPredictor(
-    args.embed_dim,
-).to(args.device)
-
+decoder = LinkPredictor(args.embed_dim).to(args.device)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
@@ -294,7 +249,7 @@ opt = torch.optim.Adam(
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         start_time = time.perf_counter()
-        loss, z = train_in_batches(
+        loss, z = train(
             train_loader,
             train_snapshots_loader,
             static_node_feats,
@@ -307,7 +262,7 @@ for epoch in range(1, args.epochs + 1):
         latency = end_time - start_time
 
     with hm.activate('val'):
-        val_results = eval(
+        val_mrr = eval(
             val_loader,
             val_snapshots_loader,
             static_node_feats,
@@ -318,14 +273,13 @@ for epoch in range(1, args.epochs + 1):
             evaluator,
             conversion_rate,
         )
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-            + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-        )
+    print(
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
+    )
 
 
 with hm.activate('test'):
-    test_results = eval(
+    test_mrr = eval(
         test_loader,
         test_snapshots_loader,
         static_node_feats,
@@ -336,4 +290,4 @@ with hm.activate('test'):
         evaluator,
         conversion_rate,
     )
-    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    print(f'Test {eval_metric}={test_mrr:.4f}')
