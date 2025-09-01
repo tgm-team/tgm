@@ -1,4 +1,5 @@
 import argparse
+import time
 
 import numpy as np
 import torch
@@ -38,13 +39,11 @@ def eval(
 ) -> dict:
     perf_list = []
     for batch in tqdm(loader):
-        neg_batch_list = batch.neg_batch_list
-        for idx, neg_batch in enumerate(neg_batch_list):
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
             query_src = batch.src[idx].repeat(len(neg_batch) + 1)
             query_dst = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
 
             y_pred = model(query_src, query_dst)
-            # compute MRR
             input_dict = {
                 'y_pred_pos': y_pred[0].detach().cpu().numpy(),
                 'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
@@ -93,8 +92,14 @@ model = EdgeBankPredictor(
 )
 
 with hm.activate('val'):
+    start_time = time.perf_counter()
     val_results = eval(val_loader, model, eval_metric, evaluator)
-    print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+    print(
+        f'Latency={latency:.4f} '
+        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+    )
 
 with hm.activate('test'):
     test_results = eval(test_loader, model, eval_metric, evaluator)

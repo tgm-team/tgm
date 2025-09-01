@@ -4,7 +4,6 @@ from collections import defaultdict, deque
 from dataclasses import is_dataclass
 from typing import Any, Deque, Dict, List, Set, Tuple
 
-import numpy as np
 import torch
 
 from tgm import DGBatch, DGraph
@@ -134,16 +133,11 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         neg_batch_list = self.neg_sampler.query_batch(  # type: ignore
             batch.src, batch.dst, batch.time, split_mode=self.split_mode
         )
-        queries = []
-        tensor_batch_list = []
-        for neg_batch in neg_batch_list:
-            queries.append(neg_batch)
-            tensor_batch_list.append(
-                torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
-            )
-        unique_neg = np.unique(np.concatenate(queries))
-        batch.neg = torch.tensor(unique_neg, dtype=torch.long, device=dg.device)  # type: ignore
-        batch.neg_batch_list = tensor_batch_list  # type: ignore
+        batch.neg_batch_list = [  # type: ignore
+            torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+            for neg_batch in neg_batch_list
+        ]
+        batch.neg = torch.unique(torch.cat(batch.neg_batch_list))  # type: ignore
 
         # This is a heuristic. For our fake (negative) link times,
         # we pick random time stamps within [batch.start_time, batch.end_time].
