@@ -2,7 +2,7 @@
 set -eou pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKFLOW="integration.yml"
+WORKFLOW="performance.yml"
 
 print_usage() {
     echo "Usage: $0 [branch]"

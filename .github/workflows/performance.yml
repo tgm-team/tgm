@@ -19,13 +19,16 @@ jobs:
     timeout-minutes: 10
     if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang'
     env:
-      TGM_CI_PERF_LOG_BASE: $SLURM_TMPDIR/tgm_ci_perf
       REAL_HOME: /home/mila/j/jacob.chmura
-      DATA_ROOT: ${{ env.REAL_HOME }}/tgb_datasets
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set Runtime Environment Variables
+        run: |
+          echo "DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
+          echo "TGM_CI_PERF_LOG_BASE=$SLURM_TMPDIR/tgm_ci_perf" >> $GITHUB_ENV
 
       - name: Set up python
         id: setup-python
