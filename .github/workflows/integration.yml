@@ -28,7 +28,7 @@ jobs:
       - name: Set Runtime Environment Variables
         run: |
           echo "DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
-          echo "TGM_CI_LOG_BASE=$SLURM_TMPDIR/tgm_ci" >> $GITHUB_ENV
+          echo "TGM_CI_LOG_BASE=$REAL_HOME/tgm_ci" >> $GITHUB_ENV
 
       - name: Set up python
         id: setup-python
