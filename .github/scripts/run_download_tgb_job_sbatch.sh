@@ -7,13 +7,13 @@
 
 set -euo pipefail
 
+cd "$GITHUB_WORKSPACE"
+
 # Logs inside real home
 LOG_DIR="$REAL_HOME/tgm_ci"
 mkdir -p "$LOG_DIR"
 
 DATA_ROOT="$1"
-
-cd "$GITHUB_WORKSPACE"
 
 echo "[$(date)] Starting TGB dataset download into $DATA_ROOT on $(hostname)"
 echo "Logs: $LOG_DIR"

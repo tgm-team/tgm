@@ -12,7 +12,6 @@ module load cudatoolkit/11.7
 
 cd "$GITHUB_WORKSPACE"
 
-export TGM_CI_PERF_LOG_BASE=${TGM_CI_PERF_LOG_BASE:-/home/$USER/tgm_ci_perf}
 mkdir -p "$TGM_CI_PERF_LOG_BASE"
 
 echo "[$(date)] Starting TGM performance tests on $(hostname)"
