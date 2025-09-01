@@ -14,7 +14,7 @@ from tgm.nn import EdgeBankPredictor
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='EdgeBank TGB Example',
+    description='EdgeBank LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -45,8 +45,8 @@ def eval(
 
             y_pred = model(query_src, query_dst)
             input_dict = {
-                'y_pred_pos': y_pred[0].cpu().numpy(),
-                'y_pred_neg': y_pred[1:].cpu().numpy(),
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
