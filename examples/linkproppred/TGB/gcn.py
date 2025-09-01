@@ -1,7 +1,3 @@
-r"""python -u gcn.py --dataset tgbl-wiki --time-gran s --snapshot-time-gran h
-example commands to run this script.
-"""
-
 import argparse
 import time
 from typing import Tuple
