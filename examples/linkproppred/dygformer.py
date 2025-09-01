@@ -1,6 +1,6 @@
 import argparse
 import time
-from typing import Callable, List, Tuple
+from typing import Callable, Tuple
 
 import torch
 import torch.nn as nn
@@ -10,8 +10,8 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
-from tgm.hooks import DGHook, NegativeEdgeSamplerHook, RecencyNeighborHook
+from tgm.graph import DGBatch, DGData, DGraph
+from tgm.hooks import HookManager, NegativeEdgeSamplerHook, RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import DyGFormer, Time2Vec
 from tgm.util.seed import seed_everything
@@ -51,6 +51,13 @@ parser.add_argument(
     type=int,
     default=4,
     help='number of channels used in attention layer',
+)
+
+parser.add_argument(
+    '--time-gran',
+    type=str,
+    default='s',
+    help='raw time granularity for dataset',
 )
 
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
@@ -142,19 +149,6 @@ class DyGFormer_LinkPrediction(nn.Module):
         return pos_out, neg_out
 
 
-def _init_hooks(dg: DGraph) -> List[DGHook]:
-    nbr_hook = RecencyNeighborHook(
-        num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
-        num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
-    )
-    _, dst, _ = dg.edges
-    min_dst, max_dst = int(dst.min()), int(dst.max())
-    neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
-
-    return [neg_hook, nbr_hook]
-
-
 def train(
     loader: DGDataLoader,
     model: nn.Module,
@@ -215,48 +209,56 @@ if __name__ == '__main__':
     args = parser.parse_args()
     seed_everything(args.seed)
 
-    dgraph = DGraph(args.dataset)
-    train_dg = DGraph(
-        args.dataset,
-        split='train',
-        device=args.device,
+    full_data = DGData.from_tgb(args.dataset)
+    full_graph = DGraph(full_data)
+    num_nodes = full_graph.num_nodes
+    edge_feats_dim = full_graph.edge_feats_dim
+
+    train_data, val_data, test_data = full_data.split()
+
+    train_data = train_data.discretize(args.time_gran)
+    val_data = val_data.discretize(args.time_gran)
+    test_data = test_data.discretize(args.time_gran)
+
+    train_dg = DGraph(train_data, device=args.device)
+    val_dg = DGraph(val_data, device=args.device)
+    test_dg = DGraph(test_data, device=args.device)
+
+    train_neg_hook = NegativeEdgeSamplerHook(
+        low=int(train_dg.edges[1].min()), high=int(train_dg.edges[1].max())
     )
-    val_dg = DGraph(
-        args.dataset,
-        split='val',
-        device=args.device,
+    val_neg_hook = NegativeEdgeSamplerHook(
+        low=int(val_dg.edges[1].min()), high=int(val_dg.edges[1].max())
     )
-    test_dg = DGraph(
-        args.dataset,
-        split='test',
-        device=args.device,
+    test_neg_hook = NegativeEdgeSamplerHook(
+        low=int(test_dg.edges[1].min()), high=int(test_dg.edges[1].max())
     )
 
-    num_nodes = dgraph.num_nodes
-    edge_feats_dim = dgraph.edge_feats_dim
-    label_dim = train_dg.dynamic_node_feats_dim
-
-    train_loader = DGDataLoader(
-        train_dg,
-        batch_size=args.bsize,
-        hook=_init_hooks(dg=train_dg),
-    )
-    val_loader = DGDataLoader(
-        val_dg,
-        batch_size=args.bsize,
-        hook=_init_hooks(dg=val_dg),
-    )
-    test_loader = DGDataLoader(
-        test_dg,
-        batch_size=args.bsize,
-        hook=_init_hooks(dg=test_dg),
+    nbr_hook = RecencyNeighborHook(
+        num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
+        num_nodes=num_nodes,
+        edge_feats_dim=edge_feats_dim,
     )
 
-    # TODO: add static node features to DGraph
-    STATIC_NODE_FEAT = torch.randn((num_nodes, args.node_dim), device=args.device)
+    hm = HookManager(keys=['train', 'val', 'test'])
+    hm.register_shared(nbr_hook)
+    hm.register('train', train_neg_hook)
+    hm.register('val', val_neg_hook)
+    hm.register('test', test_neg_hook)
+
+    train_loader = DGDataLoader(train_dg, batch_size=args.bsize, hook_manager=hm)
+    val_loader = DGDataLoader(val_dg, batch_size=args.bsize, hook_manager=hm)
+    test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
+
+    if train_dg.static_node_feats is not None:
+        STATIC_NODE_FEAT = train_dg.static_node_feats
+    else:
+        STATIC_NODE_FEAT = torch.randn(
+            (test_dg.num_nodes, args.node_dim), device=args.device
+        )
 
     model = DyGFormer_LinkPrediction(
-        node_feat_dim=args.node_dim,
+        node_feat_dim=STATIC_NODE_FEAT.shape[1],
         edge_feat_dim=edge_feats_dim,
         time_feat_dim=args.time_dim,
         channel_embedding_dim=args.channel_embedding_dim,
@@ -278,30 +280,23 @@ if __name__ == '__main__':
     test_metrics = MetricCollection(metrics, prefix='Test')
 
     for epoch in range(1, args.epochs + 1):
-        # TODO: Need a clean way to clear nbr state across epochs
-        train_loader = DGDataLoader(
-            train_dg,
-            batch_size=args.bsize,
-            hook=_init_hooks(dg=train_dg),
-        )
-        val_loader = DGDataLoader(
-            val_dg,
-            batch_size=args.bsize,
-            hook=_init_hooks(dg=val_dg),
-        )
-
-        start_time = time.perf_counter()
-        loss, train_results = train(train_loader, model, opt, train_metrics)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
-
-        val_results = eval(evaluator, val_loader, model, val_metrics)
+        with hm.activate('train'):
+            start_time = time.perf_counter()
+            loss, train_results = train(train_loader, model, opt, train_metrics)
+            end_time = time.perf_counter()
+            latency = end_time - start_time
+        with hm.activate('val'):
+            val_results = eval(evaluator, val_loader, model, val_metrics)
+            val_metrics.reset()
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
             + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
             + ' '
             + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
         )
+        if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
+            hm.reset_state()
 
-    test_results = eval(evaluator, test_loader, model, test_metrics)
-    print('Test:', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    with hm.activate('test'):
+        test_results = eval(evaluator, test_loader, model, test_metrics)
+        print('Test:', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

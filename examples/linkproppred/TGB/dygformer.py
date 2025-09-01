@@ -1,7 +1,7 @@
 import argparse
 import copy
 import time
-from typing import Callable, List, Tuple
+from typing import Callable, Tuple
 
 import numpy as np
 import torch
@@ -11,9 +11,9 @@ from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm.graph import DGBatch, DGraph
+from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import (
-    DGHook,
+    HookManager,
     NegativeEdgeSamplerHook,
     RecencyNeighborHook,
     TGBNegativeEdgeSamplerHook,
@@ -177,24 +177,6 @@ class DyGFormer_LinkPrediction(nn.Module):
         return pos_out, neg_out
 
 
-def _init_hooks(dg: DGraph, neg_sampler: object, split_mode='train') -> List[DGHook]:
-    nbr_hook = RecencyNeighborHook(
-        num_nbrs=[args.max_sequence_length - 1],  # 1 remaining for seed node itself
-        num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
-    )
-
-    # Always produce negative edge prior to neighbor sampling for link prediction
-    if split_mode in ['val', 'test']:
-        neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
-    else:
-        _, dst, _ = dg.edges
-        min_dst, max_dst = int(dst.min()), int(dst.max())
-        neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
-
-    return [neg_hook, nbr_hook]
-
-
 def train(
     loader: DGDataLoader,
     model: nn.Module,
@@ -261,77 +243,88 @@ def eval(
     return metric_dict
 
 
-args = parser.parse_args()
-seed_everything(args.seed)
+if __name__ == '__main__':
+    args = parser.parse_args()
+    seed_everything(args.seed)
 
-dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
-eval_metric = dataset.eval_metric
-neg_sampler = dataset.negative_sampler
+    # loading negative sample from TGB
+    dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
+    eval_metric = dataset.eval_metric
+    neg_sampler = dataset.negative_sampler
+    evaluator = Evaluator(name=args.dataset)
+    dataset.load_val_ns()
+    dataset.load_test_ns()
 
-neg_sampler = dataset.negative_sampler
-evaluator = Evaluator(name=args.dataset)
-dataset.load_val_ns()
-dataset.load_test_ns()
+    full_data = DGData.from_tgb(args.dataset)
+    full_graph = DGraph(full_data)
+    num_nodes = full_graph.num_nodes
+    edge_feats_dim = full_graph.edge_feats_dim
+    train_data, val_data, test_data = full_data.split()
 
-dgraph = DGraph(args.dataset)
-train_dg = DGraph(args.dataset, split='train', device=args.device)
-val_dg = DGraph(args.dataset, split='val', device=args.device)
-test_dg = DGraph(args.dataset, split='test', device=args.device)
+    train_dg = DGraph(train_data, device=args.device)
+    val_dg = DGraph(val_data, device=args.device)
+    test_dg = DGraph(test_data, device=args.device)
 
-# TODO: Read from graph
-num_nodes = dgraph.num_nodes
-edge_feats_dim = dgraph.edge_feats_dim
-label_dim = train_dg.dynamic_node_feats_dim
-STATIC_NODE_FEAT = torch.randn((num_nodes, args.node_dim), device=args.device)
+    if train_dg.static_node_feats is not None:
+        STATIC_NODE_FEAT = train_dg.static_node_feats
+    else:
+        STATIC_NODE_FEAT = torch.randn(
+            (test_dg.num_nodes, args.node_dim), device=args.device
+        )
 
-
-test_loader = DGDataLoader(
-    test_dg,
-    batch_size=args.bsize,
-    hook=_init_hooks(dg=test_dg, neg_sampler=neg_sampler, split_mode='test'),
-)
-
-
-model = DyGFormer_LinkPrediction(
-    node_feat_dim=args.node_dim,
-    edge_feat_dim=edge_feats_dim,
-    time_feat_dim=args.time_dim,
-    channel_embedding_dim=args.channel_embedding_dim,
-    output_dim=args.embed_dim,
-    max_input_sequence_length=args.max_sequence_length,
-    dropout=args.dropout,
-    num_heads=args.num_heads,
-    num_channels=args.num_channels,
-    num_layers=args.num_layers,
-    device=args.device,
-    patch_size=args.patch_size,
-).to(args.device)
-
-opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
-
-for epoch in range(1, args.epochs + 1):
-    # TODO: Need a clean way to clear nbr state across epochs
-    train_loader = DGDataLoader(
-        train_dg,
-        hook=_init_hooks(dg=train_dg, neg_sampler=neg_sampler, split_mode='train'),
-        batch_size=args.bsize,
-    )
-    val_loader = DGDataLoader(
-        val_dg,
-        hook=_init_hooks(dg=test_dg, neg_sampler=neg_sampler, split_mode='val'),
-        batch_size=args.bsize,
+    _, dst, _ = train_dg.edges
+    train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+    val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
+    test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
+    nbr_hook = RecencyNeighborHook(
+        num_nbrs=[args.max_sequence_length - 1],  # 1 remaining for seed node itself
+        num_nodes=num_nodes,
+        edge_feats_dim=edge_feats_dim,
     )
 
-    start_time = time.perf_counter()
-    loss = train(train_loader, model, opt)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
-    # val_results = eval(evaluator, val_loader, model, eval_metric)
-    val_results = {}
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-    )
+    hm = HookManager(keys=['train', 'val', 'test'])
+    hm.register_shared(nbr_hook)
+    hm.register('train', train_neg_hook)
+    hm.register('val', val_neg_hook)
+    hm.register('test', test_neg_hook)
 
-test_results = eval(evaluator, test_loader, model, eval_metric)
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
+    val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+    test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
+
+    model = DyGFormer_LinkPrediction(
+        node_feat_dim=STATIC_NODE_FEAT.shape[1],
+        edge_feat_dim=edge_feats_dim,
+        time_feat_dim=args.time_dim,
+        channel_embedding_dim=args.channel_embedding_dim,
+        output_dim=args.embed_dim,
+        max_input_sequence_length=args.max_sequence_length,
+        dropout=args.dropout,
+        num_heads=args.num_heads,
+        num_channels=args.num_channels,
+        num_layers=args.num_layers,
+        device=args.device,
+        patch_size=args.patch_size,
+    ).to(args.device)
+
+    opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+
+    for epoch in range(1, args.epochs + 1):
+        with hm.activate('train'):
+            start_time = time.perf_counter()
+            loss = train(train_loader, model, opt)
+            end_time = time.perf_counter()
+            latency = end_time - start_time
+        with hm.activate('val'):
+            val_results = eval(evaluator, val_loader, model, eval_metric)
+            print(
+                f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+                + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+            )
+        # Clear memory state between epochs, except last epoch
+        if epoch < args.epochs:
+            hm.reset_state()
+
+    with hm.activate('test'):
+        test_results = eval(evaluator, test_loader, model, eval_metric)
+        print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
