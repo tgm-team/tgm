@@ -7,8 +7,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics import Metric, MetricCollection
-from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
+from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
+from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
@@ -18,13 +18,14 @@ from tgm.hooks import (
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
     RecencyNeighborHook,
+    TGBNegativeEdgeSamplerHook,
 )
 from tgm.loader import DGDataLoader
 from tgm.nn import TemporalAttention, Time2Vec
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='TGN Example',
+    description='TGN TGB Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -345,11 +346,16 @@ def train(
     # Reinitialize memory of the model at the start of each epoch
     encoder.memory.reset()
     encoder.train()
+    decoder.train()
     total_loss = 0
     for batch in tqdm(loader):
         opt.zero_grad()
         z = encoder(batch, static_node_feats)
-        z_src, z_dst, z_neg = torch.chunk(z, 3)
+
+        z_src = z[batch.global_to_local(batch.src)]
+        z_dst = z[batch.global_to_local(batch.dst)]
+        z_neg = z[batch.global_to_local(batch.neg)]
+
         pos_out = decoder(z_src, z_dst)
         neg_out = decoder(z_src, z_neg)
 
@@ -369,34 +375,47 @@ def eval(
     static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
-    metrics: Metric,
+    eval_metric: str,
+    evaluator: Evaluator,
 ) -> dict:
     encoder.eval()
     decoder.eval()
+    perf_list = []
     for batch in tqdm(loader):
         z = encoder(batch, static_node_feats)
-        z_src, z_dst, z_neg = torch.chunk(z, 3)
-        pos_out = decoder(z_src, z_dst)
-        neg_out = decoder(z_src, z_neg)
 
-        y_pred = torch.cat([pos_out, neg_out], dim=0).float()
-        y_true = (
-            torch.cat(
-                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-            )
-            .long()
-            .to(y_pred.device)
-        )
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long)
-        metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute()
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.src[idx].repeat(len(dst_ids))
+
+            z_src = z[batch.global_to_local(src_ids)]
+            z_dst = z[batch.global_to_local(dst_ids)]
+            y_pred = decoder(z_src, z_dst)
+
+            input_dict = {
+                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
+                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'eval_metric': [eval_metric],
+            }
+
+            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+    metric_dict = {}
+    metric_dict[eval_metric] = float(np.mean(perf_list))
+    return metric_dict
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
-data = DGData.from_tgb(args.dataset)
-train_data, val_data, test_data = data.split()
+# loading negative sample from TGB
+dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
+eval_metric = dataset.eval_metric
+neg_sampler = dataset.negative_sampler
+evaluator = Evaluator(name=args.dataset)
+dataset.load_val_ns()
+dataset.load_test_ns()
+
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
@@ -422,16 +441,11 @@ elif args.sampling == 'recency':
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
 
-_, train_dst, _ = train_dg.edges
-_, val_dst, _ = val_dg.edges
-_, test_dst, _ = test_dg.edges
-train_neg_hook = NegativeEdgeSamplerHook(
-    low=int(train_dst.min()), high=int(train_dst.max())
-)
-val_neg_hook = NegativeEdgeSamplerHook(low=int(val_dst.min()), high=int(val_dst.max()))
-test_neg_hook = NegativeEdgeSamplerHook(
-    low=int(test_dst.min()), high=int(test_dst.max())
-)
+
+_, dst, _ = train_dg.edges
+train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
+test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
 hm = HookManager(keys=['train', 'val', 'test'])
 hm.register('train', train_neg_hook)
@@ -443,9 +457,6 @@ train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
-# Get global number of nodes for TGN Memory
-num_nodes = DGraph(data).num_nodes
-
 encoder = TGN(
     node_dim=static_node_feats.shape[1],
     edge_dim=train_dg.edge_feats_dim,
@@ -456,15 +467,12 @@ encoder = TGN(
     dropout=float(args.dropout),
     num_nodes=test_dg.num_nodes,
 ).to(args.device)
-decoder = LinkPredictor(dim=args.embed_dim).to(args.device)
 encoder.memory.set_device(args.device)
+decoder = LinkPredictor(dim=args.embed_dim).to(args.device)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
-metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-val_metrics = MetricCollection(metrics, prefix='Validation')
-test_metrics = MetricCollection(metrics, prefix='Test')
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
@@ -473,20 +481,23 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-    with hm.activate('val'):
-        val_results = eval(val_loader, static_node_feats, encoder, decoder, val_metrics)
-        val_metrics.reset()
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-            + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
-        )
+        with hm.activate('val'):
+            val_results = eval(
+                val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+            )
+            print(
+                f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+                + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+            )
 
-    if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
+    # Clear memory state between epochs, except last epoch
+    if epoch < args.epochs:
         hm.reset_state()
-        # Clear memory state between epochs
-        encoder.memory.clear_msgs(list(range(num_nodes)))
+        encoder.memory.clear_msgs(list(range(test_dg.num_nodes)))
 
 
 with hm.activate('test'):
-    test_results = eval(test_loader, static_node_feats, encoder, decoder, test_metrics)
-    print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+    test_results = eval(
+        test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+    )
+    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
