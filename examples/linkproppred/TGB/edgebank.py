@@ -20,10 +20,10 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
-parser.add_argument('--window_ratio', type=float, default=0.15, help='Window ratio')
-parser.add_argument('--pos_prob', type=float, default=1.0, help='Positive edge prob')
+parser.add_argument('--window-ratio', type=float, default=0.15, help='Window ratio')
+parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
 parser.add_argument(
-    '--memory_mode',
+    '--memory-mode',
     type=str,
     default='unlimited',
     choices=['unlimited', 'fixed'],
