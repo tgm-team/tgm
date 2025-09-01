@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .time_encoding import Time2Vec
+from ..time_encoding import Time2Vec
 
 PADDED_NODE_ID = -1  # @TODO: No need to use this. Already define
 
@@ -16,7 +16,7 @@ class RandomProjectionModule(nn.Module):
         num_nodes: int,
         num_layer: int,
         time_decay_weight: float,
-        beginning_time: torch.FloatType,
+        beginning_time: float,
         use_matrix: bool = True,
         scale_random_projection: bool = True,
         enforce_dim: int | None = None,
@@ -29,10 +29,10 @@ class RandomProjectionModule(nn.Module):
 
         if enforce_dim is not None:
             self.dim = enforce_dim
-        elif num_edges is not None and dim_factor is not None:
-            self.dim = min(int(math.log(num_edges * 2)) * dim_factor, num_nodes)
         elif use_matrix:
             self.dim = num_nodes
+        elif num_edges is not None and dim_factor is not None:
+            self.dim = min(int(math.log(num_edges * 2)) * dim_factor, num_nodes)
         else:
             raise ValueError(
                 'Must provide enforce_dim or (num_edges and dim_factor) or set use_matrix to true'
@@ -134,7 +134,7 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        next_time = time[-1]
+        next_time = time[-1].unsqueeze(0)
         time_weight = torch.exp(-self.time_decay_weight * (next_time - time))[:, None]
 
         for i in range(1, self.num_layer + 1):
@@ -252,7 +252,7 @@ class FeedForwardNet(nn.Module):
         Returns:
             H : Output tensor
         """
-        raise self.ffn(X)
+        return self.ffn(X)
 
 
 class MLPMixer(nn.Module):
@@ -370,8 +370,12 @@ class TPNet(nn.Module):
         *Note: Information of about neighbours of both src and dst nodes are concated together. Neighbour information of all src nodes comes first, then that of all dst nodes*
         """
         src, dst = edge_index[0], edge_index[1]
-        num_src = src.shape[0]
         node_ids = torch.cat([src, dst], dim=0)
+        num_src = src.shape[0]
+
+        src = src.repeat(2)
+        dst = dst.repeat(2)
+        edge_time = edge_time.repeat(2)
         neighbor_node_features = X[neighbours, :]
         neighbor_node_features[neighbours == PADDED_NODE_ID] = 0
 
@@ -381,18 +385,17 @@ class TPNet(nn.Module):
         neighbours_time_feats[(neighbours == PADDED_NODE_ID)] = 0
 
         if self.random_projections is not None:
-            concat_neighbor_random_features = (
-                self.random_projections.get_pair_wise_feature(
-                    src_node_ids=neighbours.reshape(-1).repeat(2),
-                    dst_node_ids=torch.cat(
-                        [
-                            src.repeat_interleave(self.num_neighbors),
-                            dst.repeat_interleave(self.num_neighbors),
-                        ],
-                        dim=1,
-                    ),
-                )
+            concat_neighbor_random_features = self.random_projections(
+                src=neighbours.reshape(-1).repeat(2),  # repeat(2): to check
+                dst=torch.cat(
+                    [
+                        src.repeat_interleave(self.num_neighbors),
+                        dst.repeat_interleave(self.num_neighbors),
+                    ],
+                    dim=0,
+                ),
             )
+
             neighbor_random_features = torch.cat(
                 [
                     concat_neighbor_random_features[
