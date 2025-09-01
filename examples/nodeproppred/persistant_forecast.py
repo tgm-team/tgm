@@ -76,13 +76,10 @@ evaluator, eval_metric = Evaluator(name=args.dataset), 'ndcg'
 num_classes = train_dg.dynamic_node_feats_dim
 model = PersistantForecaster(num_classes=num_classes)
 
-from tgm.util.perf import Profiling
-
-with Profiling('foo'):
-    start_time = time.perf_counter()
-    eval(train_loader, model, eval_metric, evaluator)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
+start_time = time.perf_counter()
+eval(train_loader, model, eval_metric, evaluator)
+end_time = time.perf_counter()
+latency = end_time - start_time
 
 val_ndcg = eval(val_loader, model, eval_metric, evaluator)
 print(f'Latency={latency:.4f} Validation {eval_metric}={val_ndcg:.4f}')
