@@ -28,7 +28,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=15, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
@@ -106,9 +106,9 @@ def train(
         loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
+        total_loss += float(loss) / batch.src.shape[0]
 
         h_0, c_0 = h_0.detach(), c_0.detach()
-        total_loss += float(loss) / batch.src.shape[0]
 
         # update the model if the prediction batch has moved to next snapshot.
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
