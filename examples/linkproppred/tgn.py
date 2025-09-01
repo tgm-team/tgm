@@ -39,7 +39,7 @@ parser.add_argument(
     '--n-nbrs',
     type=int,
     nargs='+',
-    default=[20],
+    default=[10],
     help='num sampled nbrs at each hop',
 )
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
@@ -68,6 +68,7 @@ class MergeLayer(nn.Module):
 class TGN(torch.nn.Module):
     def __init__(
         self,
+        node_dim: int,
         edge_dim: int,
         time_dim: int,
         embed_dim: int,
@@ -85,13 +86,13 @@ class TGN(torch.nn.Module):
         self.memory = Memory(n_nodes=num_nodes, memory_dim=embed_dim)
         self.memory_updater = GRUMemoryUpdater(self.memory, msg_dim, embed_dim)
         self.gat = GraphAttentionEmbedding(
+            node_dim=node_dim,
             edge_dim=edge_dim,
             time_dim=time_dim,
             embed_dim=embed_dim,
             num_layers=num_layers,
             n_heads=n_heads,
             dropout=dropout,
-            time_encoder=self.time_encoder,
         )
 
     def forward(
@@ -106,9 +107,9 @@ class TGN(torch.nn.Module):
         # batch.time[batch.dst] -= last_update[batch.dst].long()
         # batch.time[batch.neg] -= last_update[batch.neg].long()
 
-        pos_out, neg_out = self.gat(batch, static_node_feats, memory=memory)
+        z = self.gat(batch, static_node_feats, memory=memory)
         self._update_memory(batch)
-        return pos_out, neg_out
+        return z
 
     def _update_memory(self, batch: DGBatch) -> None:
         device = batch.src.device
@@ -256,76 +257,70 @@ class GRUMemoryUpdater(nn.Module):
 class GraphAttentionEmbedding(nn.Module):
     def __init__(
         self,
+        node_dim: int,
         edge_dim: int,
         time_dim: int,
         embed_dim: int,
         num_layers: int,
-        time_encoder: Time2Vec,
         n_heads: int = 2,
         dropout: float = 0.1,
     ) -> None:
+        """In this implementation, the node embedding dimension must be the same as hidden embedding dimension."""
         super().__init__()
         self.num_layers = num_layers
         self.embed_dim = embed_dim
-        self.link_predictor = LinkPredictor(dim=embed_dim)
-        self.time_encoder = time_encoder
-        self.attn = nn.ModuleList(
-            [
+        self.time_encoder = Time2Vec(time_dim=time_dim)
+        self.attn, self.merge_layers = nn.ModuleList(), nn.ModuleList()
+        for i in range(num_layers):
+            self.attn.append(
                 TemporalAttention(
                     n_heads=n_heads,
-                    node_dim=embed_dim,
+                    node_dim=node_dim if i == 0 else embed_dim,
                     edge_dim=edge_dim,
                     time_dim=time_dim,
                     dropout=dropout,
                 )
-                for _ in range(num_layers)
-            ]
-        )
+            )
+            self.merge_layers.append(
+                MergeLayer(
+                    in_dim1=self.attn[-1].out_dim,
+                    in_dim2=node_dim,
+                    hidden_dim=embed_dim,
+                    output_dim=embed_dim,
+                )
+            )
 
     def forward(
-        self, batch: DGBatch, static_node_feats: torch.Tensor, memory: Memory
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self, batch: DGBatch, static_node_feat: torch.Tensor, memory: Memory
+    ) -> torch.Tensor:
         device = batch.src.device
-        z = torch.zeros(len(batch.unique_nids), self.embed_dim, device=device)
+        z = {j: {} for j in range(self.num_layers + 1)}  # z[j][i] = z of nbr^i at hop j
 
-        for hop in reversed(range(self.num_layers)):
-            seed_nodes = batch.nids[hop]
-            nbrs = batch.nbr_nids[hop]
-            nbr_mask = batch.nbr_mask[hop].bool()
-            if seed_nodes.numel() == 0:
-                continue
+        # Layer 0 (leaf nodes): z[0][i] = static_node_feat
+        z[0][0] = static_node_feat[batch.nids[0]]
+        z[0][0] += memory[batch.nids[0]]
+        for i in range(1, self.num_layers + 1):
+            z[0][i] = static_node_feat[batch.nbr_nids[i - 1].flatten()]
+            z[0][i] += memory[batch.nbr_nids[i - 1].flatten()]
 
-            # TODO: Check and read static node features
-            node_feat = static_node_feats[seed_nodes]
-            node_time_feat = self.time_encoder(torch.zeros_like(seed_nodes))
+        # Layers 1..H: aggregate z[j][i] = agg(z[j - 1][i], z[j - 1][i + 1])
+        for j in range(1, self.num_layers + 1):
+            for i in range(self.num_layers - j + 1):
+                num_nodes = z[j - 1][i].size(0)
+                num_nbr = batch.nbr_nids[j - 1].shape[-1]
+                out = self.attn[j - 1](
+                    node_feat=z[j - 1][i],
+                    time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
+                    nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
+                    edge_feat=batch.nbr_feats[i],
+                    valid_nbr_mask=batch.nbr_nids[i] != PADDED_NODE_ID,
+                    nbr_time_feat=self.time_encoder(
+                        batch.times[i][:, None] - batch.nbr_times[i]
+                    ),
+                )
+                z[j][i] = self.merge_layers[j - 1](out, z[0][i])
 
-            # If next next hops embeddings exist, use them instead of raw features
-            nbr_feat = static_node_feats[nbrs]
-            if hop < self.num_layers - 1:
-                valid_nbrs = nbrs[nbr_mask]
-                nbr_feat[nbr_mask] = z[batch.global_to_local(valid_nbrs)]
-
-            delta_time = batch.times[hop][:, None] - batch.nbr_times[hop]
-            delta_time = delta_time.masked_fill(~nbr_mask, 0)
-            nbr_time_feat = self.time_encoder(delta_time)
-
-            out = self.attn[hop](
-                node_feat=node_feat + memory[seed_nodes],
-                time_feat=node_time_feat,
-                edge_feat=batch.nbr_feats[hop],
-                nbr_node_feat=nbr_feat,
-                nbr_time_feat=nbr_time_feat,
-                valid_nbr_mask=nbr_mask != PADDED_NODE_ID,
-            )
-            z[batch.global_to_local(seed_nodes)] = out
-
-        z_src = z[batch.global_to_local(batch.src)]
-        z_dst = z[batch.global_to_local(batch.dst)]
-        z_neg = z[batch.global_to_local(batch.neg)]
-
-        pos_out = self.link_predictor(z_src, z_dst)
-        neg_out = self.link_predictor(z_src, z_neg)
-        return pos_out, neg_out
+        return z[self.num_layers][0]
 
 
 class LinkPredictor(nn.Module):
@@ -343,23 +338,28 @@ class LinkPredictor(nn.Module):
 def train(
     loader: DGDataLoader,
     static_node_feats: torch.Tensor,
-    model: nn.Module,
+    encoder: nn.Module,
+    decoder: nn.Module,
     opt: torch.optim.Optimizer,
 ) -> float:
     # Reinitialize memory of the model at the start of each epoch
-    model.memory.reset()
-    model.train()
+    encoder.memory.reset()
+    encoder.train()
     total_loss = 0
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out = model(batch, static_node_feats)
+        z = encoder(batch, static_node_feats)
+        z_src, z_dst, z_neg = torch.chunk(z, 3)
+        pos_out = decoder(z_src, z_dst)
+        neg_out = decoder(z_src, z_neg)
+
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
         # Detach memory so we don't backpropagate to the start of time
-        model.memory.detach_memory()
+        encoder.memory.detach_memory()
     return total_loss
 
 
@@ -367,12 +367,18 @@ def train(
 def eval(
     loader: DGDataLoader,
     static_node_feats: torch.Tensor,
-    model: nn.Module,
+    encoder: nn.Module,
+    decoder: nn.Module,
     metrics: Metric,
 ) -> dict:
-    model.eval()
+    encoder.eval()
+    decoder.eval()
     for batch in tqdm(loader):
-        pos_out, neg_out = model(batch, static_node_feats)
+        z = encoder(batch, static_node_feats)
+        z_src, z_dst, z_neg = torch.chunk(z, 3)
+        pos_out = decoder(z_src, z_dst)
+        neg_out = decoder(z_src, z_neg)
+
         y_pred = torch.cat([pos_out, neg_out], dim=0).float()
         y_true = (
             torch.cat(
@@ -440,17 +446,21 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 # Get global number of nodes for TGN Memory
 num_nodes = DGraph(data).num_nodes
 
-model = TGN(
-    edge_dim=train_dg.edge_feats_dim or args.embed_dim,
+encoder = TGN(
+    node_dim=static_node_feats.shape[1],
+    edge_dim=train_dg.edge_feats_dim,
     time_dim=args.time_dim,
-    embed_dim=static_node_feats.shape[1],
+    embed_dim=args.embed_dim,
     num_layers=len(args.n_nbrs),
     n_heads=args.n_heads,
     dropout=float(args.dropout),
-    num_nodes=num_nodes,
+    num_nodes=test_dg.num_nodes,
 ).to(args.device)
-model.memory.set_device(args.device)
-opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+decoder = LinkPredictor(dim=args.embed_dim).to(args.device)
+encoder.memory.set_device(args.device)
+opt = torch.optim.Adam(
+    set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
+)
 
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 val_metrics = MetricCollection(metrics, prefix='Validation')
@@ -459,12 +469,12 @@ test_metrics = MetricCollection(metrics, prefix='Test')
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         start_time = time.perf_counter()
-        loss = train(train_loader, static_node_feats, model, opt)
+        loss = train(train_loader, static_node_feats, encoder, decoder, opt)
         end_time = time.perf_counter()
         latency = end_time - start_time
 
     with hm.activate('val'):
-        val_results = eval(val_loader, static_node_feats, model, val_metrics)
+        val_results = eval(val_loader, static_node_feats, encoder, decoder, val_metrics)
         val_metrics.reset()
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
@@ -474,9 +484,9 @@ for epoch in range(1, args.epochs + 1):
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
         # Clear memory state between epochs
-        model.memory.clear_msgs(list(range(num_nodes)))
+        encoder.memory.clear_msgs(list(range(num_nodes)))
 
 
 with hm.activate('test'):
-    test_results = eval(test_loader, static_node_feats, model, test_metrics)
+    test_results = eval(test_loader, static_node_feats, encoder, decoder, test_metrics)
     print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))

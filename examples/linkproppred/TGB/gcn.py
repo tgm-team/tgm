@@ -33,7 +33,7 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
-parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
@@ -149,12 +149,12 @@ def train_in_batches(
     criterion = torch.nn.MSELoss()
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
-    embeddings = encoder(snapshot_batch, static_node_feats)
+    z = encoder(snapshot_batch, static_node_feats)
     for batch in tqdm(loader):
         opt.zero_grad()
-        embeddings = encoder(snapshot_batch, static_node_feats)
-        pos_out = decoder(embeddings[batch.src], embeddings[batch.dst])
-        neg_out = decoder(embeddings[batch.src], embeddings[batch.neg])
+        z = encoder(snapshot_batch, static_node_feats)
+        pos_out = decoder(z[batch.src], z[batch.dst])
+        neg_out = decoder(z[batch.src], z[batch.neg])
         loss = criterion(pos_out, torch.ones_like(pos_out))
         loss += criterion(neg_out, torch.zeros_like(neg_out))
         total_loss += float(loss) / batch.src.shape[0]
@@ -169,7 +169,7 @@ def train_in_batches(
                 snapshot_batch = next(snapshots_iterator)
             except StopIteration:
                 pass
-    return total_loss, embeddings.detach()
+    return total_loss, z.detach()
 
 
 @torch.no_grad()
@@ -192,9 +192,7 @@ def eval(
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
-            query_src = torch.tensor(
-                [batch.src[idx] for _ in range(len(neg_batch) + 1)]
-            )
+            query_src = batch.src[idx].repeat(len(neg_batch) + 1)
             query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             y_pred = decoder(z[query_src], z[query_dst])
 
@@ -223,8 +221,8 @@ def eval(
 
 args = parser.parse_args()
 seed_everything(args.seed)
-snapshot_td = TimeDeltaDG(args.snapshot_time_gran, 1)
-tgb_td = TimeDeltaDG(args.time_gran, 1)
+snapshot_td = TimeDeltaDG(args.snapshot_time_gran)
+tgb_td = TimeDeltaDG(args.time_gran)
 conversion_rate = int(snapshot_td.convert(tgb_td))
 
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
@@ -264,14 +262,10 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 train_snapshots_loader = DGDataLoader(
-    train_snapshots, batch_unit=args.snapshot_time_gran, hook_manager=hm
+    train_snapshots, batch_unit=args.snapshot_time_gran
 )
-val_snapshots_loader = DGDataLoader(
-    val_snapshots, batch_unit=args.snapshot_time_gran, hook_manager=hm
-)
-test_snapshots_loader = DGDataLoader(
-    test_snapshots, batch_unit=args.snapshot_time_gran, hook_manager=hm
-)
+val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time_gran)
+test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran)
 
 
 if train_dg.static_node_feats is not None:
@@ -311,7 +305,6 @@ for epoch in range(1, args.epochs + 1):
         )
         end_time = time.perf_counter()
         latency = end_time - start_time
-        print(f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f}')
 
     with hm.activate('val'):
         val_results = eval(

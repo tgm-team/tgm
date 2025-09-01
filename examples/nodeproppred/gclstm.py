@@ -14,7 +14,6 @@ from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
-from tgm.hooks import HookManager
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
 from tgm.util.seed import seed_everything
@@ -63,7 +62,7 @@ class GCLSTM_Model(nn.Module):
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
-        z_node = z[batch.global_to_local(batch.node_ids)]  # type: ignore
+        z_node = z[batch.node_ids]
         pred = self.decoder(z_node)
         return pred, h_0, c_0
 
@@ -173,10 +172,9 @@ num_nodes = DGraph(train_data).num_nodes
 label_dim = train_dg.dynamic_node_feats_dim
 evaluator = Evaluator(name=args.dataset)
 
-hm = HookManager(keys=['train', 'val', 'test'])
-train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
-val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
-test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, hook_manager=hm)
+train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran)
+val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran)
+test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran)
 
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
