@@ -1,11 +1,8 @@
-r"""python -u persistant_forecast.py --dataset tgbn-trade --time-gran Y --batch-time-gran Y
-python -u persistant_forecast.py --dataset tgbn-genre --time-gran s --batch-time-gran D
-example commands to run this script.
-"""
-
 import argparse
+import time
 
 import numpy as np
+import torch
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
@@ -14,91 +11,78 @@ from tgm.loader import DGDataLoader
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='Persistant Forecast Example',
+    description='Persistant Forecast NodePropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='tgbn-genre', help='Dataset name')
+parser.add_argument('--dataset', type=str, default='tgbn-trade', help='Dataset name')
 parser.add_argument(
-    '--time-gran',
+    '--snapshot-time-gran',
     type=str,
-    default='s',
-    help='raw time granularity for dataset',
-)
-parser.add_argument(
-    '--batch-time-gran',
-    type=str,
-    default='D',
+    default='Y',
     help='time granularity to operate on for snapshots',
 )
 
 
 class PersistantForecaster:
     def __init__(self, num_classes: int) -> None:
-        self.dict = {}
-        self.num_classes = num_classes
+        self.memory = {}
+        self._default_prediction = torch.zeros(num_classes)
 
-    def update(self, node_id: int, label: np.ndarray) -> None:
-        self.dict[node_id] = label
+    def update(self, node_id: int, label: torch.Tensor) -> None:
+        self.memory[node_id] = label
 
-    def __call__(self, node_id: int) -> np.ndarray:
-        if node_id in self.dict:
-            return self.dict[node_id]
-        else:
-            return np.zeros(self.num_classes)
+    def __call__(self, node_id: int) -> torch.Tensor:
+        return self.memory.get(node_id, self._default_prediction)
 
 
-def eval(loader: DGDataLoader, model: PersistantForecaster) -> dict:
-    eval_metric = 'ndcg'
-    total_score, num_batches = 0, 0
+def eval(
+    loader: DGDataLoader,
+    model: PersistantForecaster,
+    eval_metric: str,
+    evaluator: Evaluator,
+) -> float:
+    perf_list = []
 
     for batch in tqdm(loader):
-        if batch.dynamic_node_feats is None:
+        y_true = batch.dynamic_node_feats
+        if y_true is None:
             continue
 
-        labels = batch.dynamic_node_feats.cpu().detach().numpy()
-        node_ids = batch.node_ids.cpu().detach().numpy()
+        y_pred = torch.zeros_like(y_true)
+        for i, node_id in enumerate(batch.node_ids.tolist()):
+            y_pred[i] = model(node_id)
+            model.update(node_id, y_true[i])
 
-        preds = []
-        for node_id, label in zip(node_ids, labels):
-            preds.append(model(node_id))
-            model.update(node_id, label)
+        input_dict = {'y_true': y_true, 'y_pred': y_pred, 'eval_metric': [eval_metric]}
+        perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
-        result = evaluator.eval(
-            {
-                'y_true': labels,
-                'y_pred': np.stack(preds),
-                'eval_metric': [eval_metric],
-            }
-        )
-        total_score += result[eval_metric]
-        num_batches += 1
-
-    return {eval_metric: total_score / num_batches}
+    return float(np.mean(perf_list))
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
-data = DGData.from_tgb(args.dataset).discretize(args.time_gran)
-train_data, val_data, test_data = data.split()
-
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
 
-train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran)
-val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran)
-test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran)
+train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
+val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
+test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
-evaluator = Evaluator(name=args.dataset)
-model = PersistantForecaster(num_classes=test_dg.dynamic_node_feats_dim)
+evaluator, eval_metric = Evaluator(name=args.dataset), 'ndcg'
+num_classes = train_dg.dynamic_node_feats_dim
+model = PersistantForecaster(num_classes=num_classes)
 
-train_results = eval(train_loader, model)
-print('Training results: ', ' '.join(f'{k}={v:.4f}' for k, v in train_results.items()))
+start_time = time.perf_counter()
+eval(train_loader, model, eval_metric, evaluator)
+end_time = time.perf_counter()
+latency = end_time - start_time
 
-val_results = eval(val_loader, model)
-print('Validation results: ', ' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
+val_ndcg = eval(val_loader, model, eval_metric, evaluator)
+print(f'Latency={latency:.4f} Validation {eval_metric}={val_ndcg:.4f}')
 
-test_results = eval(test_loader, model)
-print('Test results: ', ' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+test_ndcg = eval(test_loader, model, eval_metric, evaluator)
+print(f'Test {eval_metric}={test_ndcg:.4f}')
