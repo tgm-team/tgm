@@ -7,9 +7,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..time_encoding import Time2Vec
+from tgm.constants import PADDED_NODE_ID
 
-PADDED_NODE_ID = -1
+from ..time_encoding import Time2Vec
 
 
 class NeighborCooccurrenceEncoder(nn.Module):
@@ -60,7 +60,7 @@ class NeighborCooccurrenceEncoder(nn.Module):
             dst_unique_keys, dst_inverse_indices, dst_counts = np.unique(
                 dst_neighbors, return_inverse=True, return_counts=True
             )
-            # Fequency of each destination's neighbor within destination's neighbors
+            # Frequency of each destination's neighbor within destination's neighbors
             dst_neighbors_freq_dst_neighbors = (
                 torch.from_numpy(dst_counts[dst_inverse_indices])
                 .float()
@@ -68,14 +68,14 @@ class NeighborCooccurrenceEncoder(nn.Module):
             )
             dst_mapping_dict = dict(zip(dst_unique_keys, dst_counts))
 
-            # Fequency of each source's neighbor within destination's neighbors
+            # Frequency of each source's neighbor within destination's neighbors
             src_neighbors_freq_dst_neighbors = (
                 torch.from_numpy(src_neighbors.copy())
                 .apply_(lambda neighbor_id: dst_mapping_dict.get(neighbor_id, 0.0))
                 .float()
                 .to(self.device)
             )
-            # Fequency of each source's neighbor within destination's neighbors
+            # Frequency of each source's neighbor within destination's neighbors
             dst_neighbors_freq_src_neighbors = (
                 torch.from_numpy(dst_neighbors.copy())
                 .apply_(lambda neighbor_id: src_mapping_dict.get(neighbor_id, 0.0))
@@ -318,9 +318,9 @@ class DyGFormer(nn.Module):
         device: str = 'cpu',
     ) -> None:
         super(DyGFormer, self).__init__()
-        assert max_input_sequence_length % patch_size == 0, (
-            'Max sequence length must be a multiple of path size'
-        )
+        assert (
+            max_input_sequence_length % patch_size == 0
+        ), 'Max sequence length must be a multiple of path size'
 
         self.node_feat_dim = node_feat_dim
         self.edge_feat_dim = edge_feat_dim
