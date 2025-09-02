@@ -29,11 +29,11 @@ parser.add_argument('--test-ratio', type=float, default=0.15, help='test ratio')
 parser.add_argument(
     '--path-dataset',
     type=str,
-    default='examples/graphproppred/tokens_data/test-df.csv',
+    default='examples/graphproppred/tokens_data/test-token.csv',
     help=(
         'Path to dataset csv file. '
         'You can run `./scripts/download_graph_prop_datasets.sh examples/graphproppred` '
-        'to download the relevant df data to the default path.'
+        'to download the relevant token data to the default path.'
     ),
 )
 parser.add_argument(

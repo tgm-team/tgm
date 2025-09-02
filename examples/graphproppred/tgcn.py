@@ -11,18 +11,15 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
-from tgm.hooks import DeduplicationHook, HookManager
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
 from tgm.util.seed import seed_everything
 
-r"""
-Adapted the setting for graph property prediction proposed in
-https://openreview.net/forum?id=DZqic2sPTY
+"""
+Adapted graph property prediction as proposed in https://openreview.net/forum?id=DZqic2sPTY
 
-This example can be run with any token networks provided in
-https://arxiv.org/abs/2406.10426
+Note: `lag` is excluded from this example's setting.
 """
 
 parser = argparse.ArgumentParser(
@@ -34,26 +31,26 @@ parser.add_argument('--train-ratio', type=float, default=0.7, help='train ratio'
 parser.add_argument('--val-ratio', type=float, default=0.15, help='validation ratio')
 parser.add_argument('--test-ratio', type=float, default=0.15, help='test ratio')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=250, help='number of epochs')
-parser.add_argument('--lr', type=float, default=0.00015, help='learning rate')
+parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-layers', type=int, default=2, help='number of TGCN layers')
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
-    '--node-dim', type=int, default=100, help='node feat dimension if not provided'
+    '--node-dim', type=int, default=256, help='node feat dimension if not provided'
 )
 parser.add_argument(
     '--path-dataset',
     type=str,
-    default='examples/graphproppred/tokens_data/test_token.csv',
-    help='Path to dataset csv file',
+    default='examples/graphproppred/tokens_data/test-token.csv',
+    help=(
+        'Path to dataset csv file. '
+        'You can run `./scripts/download_graph_prop_datasets.sh examples/graphproppred` '
+        'to download the relevant token data to the default path.'
+    ),
 )
-
 parser.add_argument(
-    '--raw-time-gran',
-    type=str,
-    default='s',
-    help='raw time granularity for dataset',
+    '--raw-time-gran', type=str, default='s', help='raw time granularity for dataset'
 )
 parser.add_argument(
     '--batch-time-gran',
@@ -63,17 +60,15 @@ parser.add_argument(
 )
 
 
-def edge_count(snapshot: DGBatch):
-    # return number of edges of current snapshot
+def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
     return snapshot.src.shape[0]
 
 
-def node_count(snapshot: DGBatch):
-    # return number of nodes of current snapshot
+def node_count(snapshot: DGBatch):  # return number of nodes of current snapshot
     return len(snapshot.unique_nids)
 
 
-def label_generator_next_binary_classification(
+def generate_binary_trend_labels(
     loader: DGDataLoader, snapshot_measurement: Callable = edge_count
 ) -> torch.Tensor:
     labels = []
@@ -90,30 +85,24 @@ def label_generator_next_binary_classification(
 
 
 # ETL step
-def preproccess_raw_data(dataframe: pd.DataFrame) -> pd.DataFrame:
+def preprocess_raw_data(df: pd.DataFrame) -> pd.DataFrame:
     # time offset
-    dataframe['timestamp'] = dataframe['timestamp'] - dataframe['timestamp'].min()
+    df['timestamp'] = df['timestamp'] - df['timestamp'].min()
 
     # normalize edge weight
-    max_weight = float(dataframe['value'].max())
-    min_weight = float(dataframe['value'].min())
-    dataframe['value'] = dataframe['value'].apply(
+    max_weight = float(df['value'].max())
+    min_weight = float(df['value'].min())
+    df['value'] = df['value'].apply(
         lambda x: [1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))]
     )
 
     # Key generator
     node_id_map = {}
-    dataframe['from'] = dataframe['from'].apply(
-        lambda x: node_id_map.setdefault(x, len(node_id_map))
-    )
-    dataframe['to'] = dataframe['to'].apply(
-        lambda x: node_id_map.setdefault(x, len(node_id_map))
-    )
-
-    return dataframe
+    df['from'] = df['from'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
+    df['to'] = df['to'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
+    return df
 
 
-# graph pooling
 def sum_pooling(z: torch.Tensor) -> torch.Tensor:
     return torch.sum(z, dim=0).squeeze()
 
@@ -143,9 +132,10 @@ class TGCN_Model(nn.Module):
     ) -> Tuple[torch.Tensor, ...]:
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
+
         z, h_0 = self.encoder(node_feat, edge_index, edge_weight, h_0)
 
-        z_node = z[batch.global_to_local(batch.unique_nids)]  # type: ignore
+        z_node = z[batch.node_ids]
         z_graph = self.graph_pooling(z_node)
         pred = self.decoder(z_graph)
         return pred, h_0
@@ -183,6 +173,33 @@ class GraphPredictor(torch.nn.Module):
         return h.sigmoid()
 
 
+def train(
+    loader: DGDataLoader,
+    labels: torch.Tensor,
+    node_feat: torch.Tensor,
+    model: nn.Module,
+    opt: torch.optim.Optimizer,
+) -> Tuple[float, torch.Tensor]:
+    model.train()
+    total_loss = 0
+    h_0 = None
+
+    criterion = torch.nn.BCELoss()
+    for idx, snapshot in enumerate(tqdm(loader)):
+        opt.zero_grad()
+        pred, h_0 = model(snapshot, node_feat, h_0)
+        print(pred.shape, labels.shape)
+
+        loss = criterion(pred.float(), labels[idx].unsqueeze(0).float())
+        loss.backward()
+        opt.step()
+        total_loss += float(loss)
+
+        h_0 = h_0.detach()
+
+    return total_loss, h_0
+
+
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -192,151 +209,98 @@ def eval(
     h_0: torch.Tensor,
     metrics: Metric,
     ignore_last_snapshot=False,
-) -> dict:
-    all_preds = []
-    number_of_snapshot = len(loader)
-    for idx, snapshot in enumerate(tqdm(loader)):
-        if not (ignore_last_snapshot and idx == number_of_snapshot - 1):
-            pred, h_0 = model(snapshot, static_node_feats, h_0)
-            all_preds.append(pred)
-    y_pred = torch.Tensor(all_preds).float()
-    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
+) -> Tuple[dict, torch.Tensor]:
+    model.eval()
 
+    y_pred = torch.zeros_like(y_true, dtype=torch.float)
+    for i, snapshot in enumerate(tqdm(loader)):
+        if not (ignore_last_snapshot and i == len(loader) - 1):
+            y_pred[i], h_0 = model(snapshot, static_node_feats, h_0)
+    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, y_true, indexes=indexes)
     return metrics.compute(), h_0
 
 
-def train(
-    loader: DGDataLoader,
-    labels: torch.Tensor,
-    node_feat: torch.Tensor,
-    model: nn.Module,
-    opt: torch.optim.Optimizer,
-    metrics: Metric,
-) -> Tuple[float, torch.Tensor, torch.Tensor]:
-    model.train()
-    total_loss = 0
-    h_0 = None
-    criterion = torch.nn.BCELoss()
-    all_preds = []
-    for idx, snapshot in enumerate(tqdm(loader)):
-        opt.zero_grad()
-        pred, h_0 = model(snapshot, node_feat, h_0)
-        loss = criterion(pred.float(), labels[idx].unsqueeze(0).float())
-        all_preds.append(pred)
-        loss.backward()
-        opt.step()
-        total_loss += float(loss)
-        h_0 = h_0.detach()
-    y_pred = torch.Tensor(all_preds).float()
-    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
+args = parser.parse_args()
+seed_everything(args.seed)
 
-    metrics(y_pred, labels, indexes=indexes)
-    return total_loss, h_0, metrics.compute()
+metrics = [BinaryAveragePrecision(), BinaryAUROC()]
+val_metrics = MetricCollection(metrics, prefix='Validation')
+test_metrics = MetricCollection(metrics, prefix='Test')
 
+df = pd.read_csv(args.path_dataset)
+df = preprocess_raw_data(df)
 
-if __name__ == '__main__':
-    args = parser.parse_args()
-    seed_everything(args.seed)
-    metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-    train_metrics = MetricCollection(metrics, prefix='Train')
-    val_metrics = MetricCollection(metrics, prefix='Validation')
-    test_metrics = MetricCollection(metrics, prefix='Test')
+full_data = DGData.from_pandas(
+    edge_df=df,
+    edge_src_col='from',
+    edge_dst_col='to',
+    edge_time_col='timestamp',
+    edge_feats_col='value',
+    time_delta=args.raw_time_gran,
+).discretize(args.batch_time_gran)
 
-    token = pd.read_csv(args.path_dataset)
-    token = preproccess_raw_data(token)
+train_data, val_data, test_data = full_data.split(
+    TemporalRatioSplit(
+        train_ratio=args.train_ratio,
+        val_ratio=args.val_ratio,
+        test_ratio=args.test_ratio,
+    )
+)
 
-    full_data = DGData.from_pandas(
-        edge_df=token,
-        edge_src_col='from',
-        edge_dst_col='to',
-        edge_time_col='timestamp',
-        edge_feats_col='value',
-        time_delta=args.raw_time_gran,
-    ).discretize(args.batch_time_gran)
-    train_data, val_data, test_data = full_data.split(
-        TemporalRatioSplit(
-            train_ratio=args.train_ratio,
-            val_ratio=args.val_ratio,
-            test_ratio=args.test_ratio,
-        )
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
+
+train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+
+train_labels = generate_binary_trend_labels(
+    train_loader, snapshot_measurement=edge_count
+)
+val_labels = generate_binary_trend_labels(val_loader, snapshot_measurement=edge_count)
+test_labels = generate_binary_trend_labels(test_loader, snapshot_measurement=edge_count)
+
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-    full_dg = DGraph(full_data, device=args.device)
-    train_dg = DGraph(train_data, device=args.device)
-    val_dg = DGraph(val_data, device=args.device)
-    test_dg = DGraph(test_data, device=args.device)
+model = TGCN_Model(
+    node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim, num_classes=1
+).to(args.device)
+opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
-    full_loader = DGDataLoader(
-        full_dg, batch_unit=args.batch_time_gran, on_empty='raise'
+for epoch in range(1, args.epochs + 1):
+    start_time = time.perf_counter()
+    loss, h_0 = train(train_loader, train_labels, static_node_feats, model, opt)
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+
+    val_results, h_0 = eval(
+        val_loader,
+        val_labels,
+        static_node_feats,
+        model,
+        h_0,
+        val_metrics,
+        ignore_last_snapshot=False,
+    )
+    print(
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
     )
 
-    hm = HookManager(keys=['global'])
-    hm.register('global', DeduplicationHook())
-    train_loader = DGDataLoader(
-        train_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
-    )
-    val_loader = DGDataLoader(
-        val_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
-    )
-    test_loader = DGDataLoader(
-        test_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
-    )
-
-    num_train_snapshots = len(train_loader)
-    num_val_snapshots = len(val_loader)
-    num_test_snapshots = len(test_loader) - 1
-
-    labels = label_generator_next_binary_classification(
-        loader=full_loader, snapshot_measurement=edge_count
-    )  # shape: number of snapshots - 1
-
-    train_labels = labels[:num_train_snapshots]
-    val_labels = labels[num_train_snapshots : num_train_snapshots + num_val_snapshots]
-    test_labels = labels[-num_test_snapshots:]
-
-    if train_dg.static_node_feats is not None:
-        static_node_feats = train_dg.static_node_feats
-    else:
-        static_node_feats = torch.randn(
-            (test_dg.num_nodes, args.node_dim), device=args.device
-        )
-    model = TGCN_Model(
-        node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim, num_classes=1
-    ).to(args.device)
-    opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
-    with hm.activate('global'):
-        for epoch in range(1, args.epochs + 1):
-            start_time = time.perf_counter()
-            loss, h_0, train_results = train(
-                train_loader, train_labels, static_node_feats, model, opt, train_metrics
-            )
-            end_time = time.perf_counter()
-            latency = end_time - start_time
-
-            val_results, h_0 = eval(
-                val_loader,
-                val_labels,
-                static_node_feats,
-                model,
-                h_0,
-                val_metrics,
-                ignore_last_snapshot=False,
-            )
-            print(
-                f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-                + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
-                + ' '
-                + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-            )
-
-        test_results, h_0 = eval(
-            test_loader,
-            test_labels,
-            static_node_feats,
-            model,
-            h_0,
-            test_metrics,
-            ignore_last_snapshot=True,
-        )
-        print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+test_results, h_0 = eval(
+    test_loader,
+    test_labels,
+    static_node_feats,
+    model,
+    h_0,
+    test_metrics,
+    ignore_last_snapshot=True,
+)
+print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
