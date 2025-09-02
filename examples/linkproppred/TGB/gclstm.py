@@ -22,7 +22,7 @@ from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='GCLSTM TGB Example',
+    description='GCLSTM LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -149,8 +149,8 @@ def eval(
 
             y_pred = decoder(z[query_src], z[query_dst])
             input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
@@ -159,7 +159,6 @@ def eval(
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
             # if batch timestamps greater than snapshot, process the snapshot
             z, h_0, c_0 = encoder(batch, static_node_feats, h_0, c_0)
-            z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()
             try:
                 snapshot_batch = next(snapshots_iterator)
             except StopIteration:
