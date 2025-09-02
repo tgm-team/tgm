@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 
@@ -20,9 +22,7 @@ python "$ROOT_DIR/examples/nodeproppred/persistant_forecast.py" \
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(
-    'path-dataset', ['examples/graphproppred/tokens_data/test_token.csv']
-)
+@pytest.mark.parametrize('dataset_csv', ['test_token.csv'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
@@ -32,10 +32,14 @@ python "$ROOT_DIR/examples/nodeproppred/persistant_forecast.py" \
         '--gres=gpu:a100l:1',
     ]
 )
-def test_persistant_forecast_graphprop_pred(slurm_job_runner, dataset):
+def test_persistant_forecast_graphprop_pred(slurm_job_runner, dataset_csv):
+    data_root = os.environ.get(
+        'GRAPH_PROP_PRED_DATA_ROOT', '$ROOT_DIR/examples/graphproppred/tokens_data'
+    )
+    dataset_path = f'{data_root}/{dataset_csv}'
     cmd = f"""
 python "$ROOT_DIR/examples/graphproppred/persistant_forecast.py" \
-    --path-dataset {dataset} \
+    --path-dataset {dataset_path} \
     """
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
