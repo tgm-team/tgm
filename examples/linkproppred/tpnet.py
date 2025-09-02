@@ -111,8 +111,8 @@ class TPNet_LinkPrediction(nn.Module):
             device=device,
             time_encoder=time_encoder,
         )
-        self.rp_module = random_projection_module
-        self.decoder = LinkPredictor(output_dim)
+        self.rp_module = random_projection_module.to(device)
+        self.decoder = LinkPredictor(output_dim).to(device)
 
     def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
         src = batch.src

@@ -1,7 +1,6 @@
 import math
 from typing import Callable, List, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -140,10 +139,8 @@ class RandomProjectionModule(nn.Module):
         for i in range(1, self.num_layer + 1):
             self.random_projections[i].data = self.random_projections[
                 i
-            ].data * np.power(
-                np.exp(
-                    -self.time_decay_weight * (next_time - self.now_time.cpu().numpy())
-                ),
+            ].data * torch.pow(
+                torch.exp(-self.time_decay_weight * (next_time - self.now_time)),
                 i,
             )
 
@@ -316,7 +313,7 @@ class TPNet(nn.Module):
     ) -> None:
         super(TPNet, self).__init__()
         self.device = device
-        self.time_encoder = time_encoder(time_feat_dim)
+        self.time_encoder = time_encoder(time_feat_dim).to(device)
         self.random_projections = random_projections
         self.num_neighbors = num_neighbors
         if self.random_projections is None:
@@ -331,7 +328,7 @@ class TPNet(nn.Module):
             ),
             nn.ReLU(),
             nn.Linear(output_dim * 2, output_dim),
-        )
+        ).to(device)
         self.mlp_mixers = nn.ModuleList(
             [
                 MLPMixer(
@@ -340,7 +337,7 @@ class TPNet(nn.Module):
                     token_dim_expansion_factor=0.5,
                     channel_dim_expansion_factor=4.0,
                     dropout=dropout,
-                )
+                ).to(device)
                 for _ in range(num_layers)
             ]
         )
