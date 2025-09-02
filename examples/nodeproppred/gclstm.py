@@ -140,9 +140,9 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran)
-val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran)
-test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran)
+train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
+val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
+test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
