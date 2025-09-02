@@ -11,11 +11,10 @@ DATASETS_URLS[tokens_data]="https://raw.githubusercontent.com/Jacob-Chmura/mint-
 print_usage() {
     echo "Usage: $0 DATA_ROOT"
     echo
-    echo "Pre-download graph property prediction sample datasets and copy them into the example/graphproppred"
+    echo "Pre-download graph property prediction sample datasets and copy them into DATA_ROOT"
     echo
     echo "Arguments:"
     echo "  DATA_ROOT   Required path to store datasets."
-    echo
 }
 
 parse_args() {
@@ -32,6 +31,7 @@ parse_args() {
 
     DATA_ROOT="$1"
     echo "Storing datasets at: $DATA_ROOT"
+    mkdir -p "$DATA_ROOT"
 }
 
 download_dataset() {
@@ -68,7 +68,7 @@ main() {
         fi
     done
 
-    echo "All sample datasets are available in example/graphproppred"
+    echo "All sample datasets are available in $DATA_ROOT/tokens_data"
 }
 
 main "$@"
