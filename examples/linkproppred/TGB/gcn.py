@@ -114,10 +114,10 @@ def train(
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
     z = encoder(snapshot_batch, static_node_feats)
+    z = z.detach()
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        z = encoder(snapshot_batch, static_node_feats)
 
         pos_out = decoder(z[batch.src], z[batch.dst])
         neg_out = decoder(z[batch.src], z[batch.neg])
@@ -132,10 +132,12 @@ def train(
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
             try:
                 snapshot_batch = next(snapshots_iterator)
+                z = encoder(snapshot_batch, static_node_feats)
+                z = z.detach()
             except StopIteration:
                 pass
 
-    return total_loss, z.detach()
+    return total_loss, z
 
 
 @torch.no_grad()
@@ -173,10 +175,9 @@ def eval(
 
         # update the model if the prediction batch has moved to next snapshot.
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
-            # if batch timestamps greater than snapshot, process the snapshot
-            z = encoder(snapshot_batch, static_node_feats).detach()
             try:
                 snapshot_batch = next(snapshots_iterator)
+                z = encoder(snapshot_batch, static_node_feats)
             except StopIteration:
                 pass
 

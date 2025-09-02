@@ -93,11 +93,10 @@ def train(
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
     z, h_0, c_0 = encoder(snapshot_batch, static_node_feats)
-    h_0, c_0 = h_0.detach(), c_0.detach()
+    z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
 
         pos_out = decoder(z[batch.src], z[batch.dst])
         neg_out = decoder(z[batch.src], z[batch.neg])
@@ -108,16 +107,16 @@ def train(
         opt.step()
         total_loss += float(loss) / batch.src.shape[0]
 
-        h_0, c_0 = h_0.detach(), c_0.detach()
-
         # update the model if the prediction batch has moved to next snapshot.
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
             try:
                 snapshot_batch = next(snapshots_iterator)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
+                z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()  # Truncate BPTT
             except StopIteration:
                 pass
 
-    return total_loss, z.detach(), h_0, c_0
+    return total_loss, z, h_0, c_0
 
 
 @torch.no_grad()
@@ -158,9 +157,10 @@ def eval(
         # update the model if the prediction batch has moved to next snapshot.
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
             # if batch timestamps greater than snapshot, process the snapshot
-            z, h_0, c_0 = encoder(batch, static_node_feats, h_0, c_0)
+            # z, h_0, c_0 = encoder(batch, static_node_feats, h_0, c_0)
             try:
                 snapshot_batch = next(snapshots_iterator)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
             except StopIteration:
                 pass
 
