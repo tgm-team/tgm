@@ -7,12 +7,7 @@ from tgm.exceptions import (
     BadHookProtocolError,
     UnresolvableHookDependenciesError,
 )
-from tgm.hooks import (
-    DeduplicationHook,
-    HookManager,
-    StatefulHook,
-    StatelessHook,
-)
+from tgm.hooks import HookManager, StatefulHook, StatelessHook
 
 
 class MockHook(StatelessHook):
@@ -68,11 +63,6 @@ def test_bad_init_empty_keys():
         _ = HookManager(keys=[])
 
 
-def test_init_cpu():
-    hm = HookManager(keys=['foo'])
-    assert any(isinstance(h, DeduplicationHook) for h in hm._shared_hooks)
-
-
 def test_register():
     hm = HookManager(keys=['foo'])
     hook = MockHook()
@@ -97,7 +87,7 @@ def test_register_shared():
     hook = MockHook()
     hm.register_shared(hook)
     assert hook in hm._shared_hooks
-    assert len(hm._shared_hooks) == 2
+    assert len(hm._shared_hooks) == 1
 
 
 def test_attempt_register_bad_key():
@@ -145,8 +135,8 @@ def test_resolve_hooks_all_hooks():
     hm.register('val', h1)
 
     hm.resolve_hooks()
-    assert len(hm._key_to_hooks['train']) == 3
-    assert len(hm._key_to_hooks['val']) == 3
+    assert len(hm._key_to_hooks['train']) == 2
+    assert len(hm._key_to_hooks['val']) == 2
     assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)
     assert hm._key_to_hooks['val'].index(h1) < hm._key_to_hooks['val'].index(h2)
 
@@ -160,7 +150,7 @@ def test_resolve_hooks_by_key():
     hm.register('train', h1)
 
     hm.resolve_hooks('train')
-    assert len(hm._key_to_hooks['train']) == 3
+    assert len(hm._key_to_hooks['train']) == 2
     assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)
 
 

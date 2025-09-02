@@ -119,9 +119,7 @@ class GraphMixer(nn.Module):
 
         # Link Decoder
         z = self.output_layer(torch.cat([z_link, z_node], dim=1))
-        z_src = z[batch.global_to_local(batch.src)]
-        z_dst = z[batch.global_to_local(batch.dst)]
-        z_neg = z[batch.global_to_local(batch.neg)]
+        z_src, z_dst, z_neg = torch.chunk(z, 3)
         pos_out = self.link_predictor(z_src, z_dst)
         neg_out = self.link_predictor(z_src, z_neg)
         return pos_out, neg_out
@@ -252,7 +250,7 @@ test_dg = DGraph(test_data, device=args.device)
 
 # Neighbor Sampler and GraphMixer Hook is shared across loaders
 nbr_hook = RecencyNeighborHook(
-    num_nbrs=args.n_nbrs,
+    num_nbrs=[args.n_nbrs],
     num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
     edge_feats_dim=test_dg.edge_feats_dim,
 )
@@ -301,7 +299,7 @@ class GraphMixerHook(StatefulHook):
         self._update(batch)
         return batch
 
-    def reset(self) -> None:
+    def reset_state(self) -> None:
         for node in self._nbrs:
             self._nbrs[node].clear()
 
