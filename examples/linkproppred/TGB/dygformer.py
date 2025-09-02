@@ -29,7 +29,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=3, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--max_sequence_length',

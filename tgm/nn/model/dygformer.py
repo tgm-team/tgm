@@ -49,7 +49,7 @@ class NeighborCooccurrenceEncoder(nn.Module):
             src_unique_keys, src_inverse_indices, src_counts = np.unique(
                 src_neighbors, return_inverse=True, return_counts=True
             )
-            # Fequency of each source's neighbor within source's neighbors
+            # Frequency of each source's neighbor within source's neighbors
             src_neighbors_freq_src_neighbors = (
                 torch.from_numpy(src_counts[src_inverse_indices])
                 .float()

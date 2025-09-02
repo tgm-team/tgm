@@ -18,8 +18,6 @@ python "$ROOT_DIR/examples/linkproppred/TGB/dygformer.py" \
     --dataset {dataset} \
     --device cuda \
     --epochs 1 \
-    --sampling recency \
-    --n-nbrs 20 20
     """
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
