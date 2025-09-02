@@ -13,12 +13,9 @@ from tgm.split import TemporalRatioSplit
 from tgm.util.seed import seed_everything
 
 """
-Adapted the setting for graph property prediction proposed in
-https://openreview.net/forum?id=DZqic2sPTY
-(`lag` is excluded from this example's setting)
+Adapted graph property prediction as proposed in https://openreview.net/forum?id=DZqic2sPTY
 
-This example can be run with any token networks provided in
-https://arxiv.org/abs/2406.10426
+Note: `lag` is excluded from this example's setting.
 """
 
 parser = argparse.ArgumentParser(
@@ -26,23 +23,21 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-
 parser.add_argument('--train-ratio', type=float, default=0.7, help='train ratio')
 parser.add_argument('--val-ratio', type=float, default=0.15, help='validation ratio')
 parser.add_argument('--test-ratio', type=float, default=0.15, help='test ratio')
-
 parser.add_argument(
     '--path-dataset',
     type=str,
-    default='examples/graphproppred/tokens_data/test_token.csv',
-    help='Path to dataset csv file',
+    default='examples/graphproppred/tokens_data/test-df.csv',
+    help=(
+        'Path to dataset csv file. '
+        'You can run `./scripts/download_graph_prop_datasets.sh examples/graphproppred` '
+        'to download the relevant df data to the default path.'
+    ),
 )
-
 parser.add_argument(
-    '--raw-time-gran',
-    type=str,
-    default='s',
-    help='raw time granularity for dataset',
+    '--raw-time-gran', type=str, default='s', help='raw time granularity for dataset'
 )
 parser.add_argument(
     '--batch-time-gran',
@@ -52,17 +47,15 @@ parser.add_argument(
 )
 
 
-def edge_count(snapshot: DGBatch):
-    # return number of edges of current snapshot
+def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
     return snapshot.src.shape[0]
 
 
-def node_count(snapshot: DGBatch):
-    # return number of nodes of current snapshot
+def node_count(snapshot: DGBatch):  # return number of nodes of current snapshot
     return len(snapshot.unique_nids)
 
 
-def label_generator_next_binary_classification(
+def generate_binary_trend_labels(
     loader: DGDataLoader, snapshot_measurement: Callable = node_count
 ) -> torch.Tensor:
     labels = []
@@ -79,27 +72,22 @@ def label_generator_next_binary_classification(
 
 
 # ETL step
-def preproccess_raw_data(dataframe: pd.DataFrame) -> pd.DataFrame:
+def preprocess_raw_data(df: pd.DataFrame) -> pd.DataFrame:
     # time offset
-    dataframe['timestamp'] = dataframe['timestamp'] - dataframe['timestamp'].min()
+    df['timestamp'] = df['timestamp'] - df['timestamp'].min()
 
     # normalize edge weight
-    max_weight = float(dataframe['value'].max())
-    min_weight = float(dataframe['value'].min())
-    dataframe['value'] = dataframe['value'].apply(
+    max_weight = float(df['value'].max())
+    min_weight = float(df['value'].min())
+    df['value'] = df['value'].apply(
         lambda x: [1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))]
     )
 
     # Key generator
     node_id_map = {}
-    dataframe['from'] = dataframe['from'].apply(
-        lambda x: node_id_map.setdefault(x, len(node_id_map))
-    )
-    dataframe['to'] = dataframe['to'].apply(
-        lambda x: node_id_map.setdefault(x, len(node_id_map))
-    )
-
-    return dataframe
+    df['from'] = df['from'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
+    df['to'] = df['to'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
+    return df
 
 
 class PersistantForecast:
@@ -118,7 +106,6 @@ class PersistantForecast:
         else:
             pred = torch.tensor(int(current_measurement > self.prev_measurement))
         self.prev_measurement = current_measurement
-
         return pred
 
 
@@ -129,13 +116,10 @@ def eval(
     metrics: Metric,
     ignore_last_snapshot=False,
 ) -> dict:
-    all_preds = []
-    number_of_snapshot = len(loader)
-    for idx, snapshot in tqdm(enumerate(loader)):
-        if not (ignore_last_snapshot and idx == number_of_snapshot - 1):
-            pred = model(snapshot)
-            all_preds.append(pred)
-    y_pred = torch.Tensor(all_preds).float()
+    y_pred = torch.zeros_like(y_true, dtype=torch.float)
+    for i, snapshot in tqdm(enumerate(loader)):
+        if not (ignore_last_snapshot and i == len(loader) - 1):
+            y_pred[i] = model(snapshot)
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
 
     assert torch.all(y_pred[1:] == y_true[: y_true.shape[0] - 1])
@@ -143,59 +127,43 @@ def eval(
     return metrics.compute()
 
 
-if __name__ == '__main__':
-    args = parser.parse_args()
-    seed_everything(args.seed)
-    metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-    val_metrics = MetricCollection(metrics, prefix='Test')
+args = parser.parse_args()
+seed_everything(args.seed)
 
-    token = pd.read_csv(args.path_dataset)
-    token = preproccess_raw_data(token)
+df = pd.read_csv(args.path_dataset)
+df = preprocess_raw_data(df)
 
-    full_data = DGData.from_pandas(
-        edge_df=token,
-        edge_src_col='from',
-        edge_dst_col='to',
-        edge_time_col='timestamp',
-        edge_feats_col='value',
-        time_delta=args.raw_time_gran,
-    ).discretize(args.batch_time_gran)
-    train_data, val_data, test_data = full_data.split(
-        TemporalRatioSplit(
-            train_ratio=args.train_ratio,
-            val_ratio=args.val_ratio,
-            test_ratio=args.test_ratio,
-        )
+full_data = DGData.from_pandas(
+    edge_df=df,
+    edge_src_col='from',
+    edge_dst_col='to',
+    edge_time_col='timestamp',
+    edge_feats_col='value',
+    time_delta=args.raw_time_gran,
+).discretize(args.batch_time_gran)
+
+_, val_data, test_data = full_data.split(
+    TemporalRatioSplit(
+        train_ratio=args.train_ratio,
+        val_ratio=args.val_ratio,
+        test_ratio=args.test_ratio,
     )
+)
 
-    full_dg = DGraph(full_data)
-    train_dg = DGraph(train_data)
-    val_dg = DGraph(val_data)
-    test_dg = DGraph(test_data)
+val_dg, test_dg = DGraph(val_data), DGraph(test_data)
+val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 
-    full_loader = DGDataLoader(
-        full_dg, batch_unit=args.batch_time_gran, on_empty='raise'
-    )
-    train_loader = DGDataLoader(
-        train_dg, batch_unit=args.batch_time_gran, on_empty='raise'
-    )
-    val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
-    test_loader = DGDataLoader(
-        test_dg, batch_unit=args.batch_time_gran, on_empty='raise'
-    )
+model = PersistantForecast(edge_count)
 
-    num_train_snapshots = len(train_loader)
-    num_val_snapshots = len(val_loader)
-    num_test_snapshots = len(test_loader) - 1
+metrics = [BinaryAveragePrecision(), BinaryAUROC()]
+val_metrics = MetricCollection(metrics, prefix='Validation')
+test_metrics = MetricCollection(metrics, prefix='Test')
 
-    labels = label_generator_next_binary_classification(
-        loader=full_loader, snapshot_measurement=edge_count
-    )  # shape: number of snapshots - 1
+val_labels = generate_binary_trend_labels(val_loader, snapshot_measurement=edge_count)
+val_results = eval(val_loader, val_labels, model, val_metrics, True)
+print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
 
-    train_labels = labels[:num_train_snapshots]
-    val_labels = labels[num_train_snapshots : num_train_snapshots + num_val_snapshots]
-    test_labels = labels[-num_test_snapshots:]
-
-    baseline = PersistantForecast(edge_count)
-    test_results = eval(test_loader, test_labels, baseline, val_metrics, True)
-    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+test_labels = generate_binary_trend_labels(test_loader, snapshot_measurement=edge_count)
+test_results = eval(test_loader, test_labels, model, test_metrics, True)
+print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
