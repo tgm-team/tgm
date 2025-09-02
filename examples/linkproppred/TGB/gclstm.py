@@ -156,8 +156,6 @@ def eval(
 
         # update the model if the prediction batch has moved to next snapshot.
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
-            # if batch timestamps greater than snapshot, process the snapshot
-            # z, h_0, c_0 = encoder(batch, static_node_feats, h_0, c_0)
             try:
                 snapshot_batch = next(snapshots_iterator)
                 z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
