@@ -12,6 +12,7 @@ authors = [
 dependencies = [
     "numpy>=2.2.6",
     "torch>=2.5.1",
+    "torch-geometric>=2.6.1",
 ]
 
 [dependency-groups]
@@ -36,7 +37,6 @@ examples = [
     "py-tgb>=2.1.0",
     "torchmetrics>=1.7.0",
     "tqdm>=4.67.1",
-    "torch_geometric>=2.6.1",
 ]
 
 [build-system]
