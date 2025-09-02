@@ -30,9 +30,9 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--train_ratio', type=float, default=0.7, help='train ratio')
-parser.add_argument('--val_ratio', type=float, default=0.15, help='validation ratio')
-parser.add_argument('--test_ratio', type=float, default=0.15, help='test ratio')
+parser.add_argument('--train-ratio', type=float, default=0.7, help='train ratio')
+parser.add_argument('--val-ratio', type=float, default=0.15, help='validation ratio')
+parser.add_argument('--test-ratio', type=float, default=0.15, help='test ratio')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=250, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.00015, help='learning rate')

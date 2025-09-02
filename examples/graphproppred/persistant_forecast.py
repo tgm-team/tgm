@@ -27,9 +27,9 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 
-parser.add_argument('--train_ratio', type=float, default=0.7, help='train ratio')
-parser.add_argument('--val_ratio', type=float, default=0.15, help='validation ratio')
-parser.add_argument('--test_ratio', type=float, default=0.15, help='test ratio')
+parser.add_argument('--train-ratio', type=float, default=0.7, help='train ratio')
+parser.add_argument('--val-ratio', type=float, default=0.15, help='validation ratio')
+parser.add_argument('--test-ratio', type=float, default=0.15, help='test ratio')
 
 parser.add_argument(
     '--path-dataset',
