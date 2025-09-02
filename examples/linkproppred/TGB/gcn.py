@@ -22,7 +22,7 @@ from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='GCN TGB Example',
+    description='GCN LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -43,28 +43,6 @@ parser.add_argument(
     default='h',
     help='time granularity to operate on for snapshots',
 )
-
-
-class GCN(nn.Module):
-    def __init__(
-        self, in_channels: int, embed_dim: int, num_layers: int, dropout: float
-    ) -> None:
-        super().__init__()
-        self.in_channels = in_channels
-        self.encoder = GCNEncoder(
-            in_channels=in_channels,
-            embed_dim=embed_dim,
-            out_channels=embed_dim,
-            num_layers=num_layers,
-            dropout=dropout,
-        )
-
-    def forward(
-        self, batch: DGBatch, node_feat: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
-        z = self.encoder(node_feat, edge_index)
-        return z
 
 
 class GCNEncoder(torch.nn.Module):
@@ -96,7 +74,9 @@ class GCNEncoder(torch.nn.Module):
         for bn in self.bns:
             bn.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+    def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
+        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        x = node_feat
         for i, conv in enumerate(self.convs[:-1]):
             x = conv(x, edge_index)
             x = self.bns[i](x)
@@ -134,10 +114,10 @@ def train(
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
     z = encoder(snapshot_batch, static_node_feats)
+    z = z.detach()
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        z = encoder(snapshot_batch, static_node_feats)
 
         pos_out = decoder(z[batch.src], z[batch.dst])
         neg_out = decoder(z[batch.src], z[batch.neg])
@@ -152,10 +132,12 @@ def train(
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
             try:
                 snapshot_batch = next(snapshots_iterator)
+                z = encoder(snapshot_batch, static_node_feats)
+                z = z.detach()
             except StopIteration:
                 pass
 
-    return total_loss, z.detach()
+    return total_loss, z
 
 
 @torch.no_grad()
@@ -185,18 +167,17 @@ def eval(
 
             y_pred = decoder(z[query_src], z[query_dst])
             input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
         # update the model if the prediction batch has moved to next snapshot.
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
-            # if batch timestamps greater than snapshot, process the snapshot
-            z = encoder(snapshot_batch, static_node_feats).detach()
             try:
                 snapshot_batch = next(snapshots_iterator)
+                z = encoder(snapshot_batch, static_node_feats)
             except StopIteration:
                 pass
 
@@ -254,9 +235,10 @@ else:
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-encoder = GCN(
+encoder = GCNEncoder(
     in_channels=static_node_feats.shape[1],
     embed_dim=args.embed_dim,
+    out_channels=args.embed_dim,
     num_layers=args.n_layers,
     dropout=float(args.dropout),
 ).to(args.device)

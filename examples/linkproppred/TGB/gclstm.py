@@ -22,15 +22,15 @@ from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='GCLSTM TGB Example',
+    description='GCLSTM LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument('--embed-dim', type=int, default=256, help='embedding dimension')
 parser.add_argument(
     '--node-dim', type=int, default=256, help='node feat dimension if not provided'
 )
@@ -93,11 +93,10 @@ def train(
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
     z, h_0, c_0 = encoder(snapshot_batch, static_node_feats)
-    h_0, c_0 = h_0.detach(), c_0.detach()
+    z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
 
         pos_out = decoder(z[batch.src], z[batch.dst])
         neg_out = decoder(z[batch.src], z[batch.neg])
@@ -108,16 +107,16 @@ def train(
         opt.step()
         total_loss += float(loss) / batch.src.shape[0]
 
-        h_0, c_0 = h_0.detach(), c_0.detach()
-
         # update the model if the prediction batch has moved to next snapshot.
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
             try:
                 snapshot_batch = next(snapshots_iterator)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
+                z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()  # Truncate BPTT
             except StopIteration:
                 pass
 
-    return total_loss, z.detach(), h_0, c_0
+    return total_loss, z, h_0, c_0
 
 
 @torch.no_grad()
@@ -149,19 +148,17 @@ def eval(
 
             y_pred = decoder(z[query_src], z[query_dst])
             input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
         # update the model if the prediction batch has moved to next snapshot.
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
-            # if batch timestamps greater than snapshot, process the snapshot
-            z, h_0, c_0 = encoder(batch, static_node_feats, h_0, c_0)
-            z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()
             try:
                 snapshot_batch = next(snapshots_iterator)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
             except StopIteration:
                 pass
 

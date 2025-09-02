@@ -154,4 +154,6 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         return batch
 
     def _is_batch_empty(self, batch: DGBatch) -> bool:
-        return batch.src.numel() == 0
+        num_edge_events = batch.src.numel()
+        num_node_events = batch.node_ids.numel() if batch.node_ids is not None else 0
+        return num_edge_events + num_node_events == 0
