@@ -33,7 +33,7 @@ parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset na
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
-parser.add_argument('--lr', type=str, default=0.0002, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.0002, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
@@ -389,7 +389,7 @@ for epoch in range(1, args.epochs + 1):
 
     with hm.activate('val'):
         val_mrr = eval(
-            val_loader, static_node_feats, encoder, decoder, evaluator, eval_metric
+            val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
         )
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
@@ -400,6 +400,6 @@ for epoch in range(1, args.epochs + 1):
 
 with hm.activate('test'):
     test_mrr = eval(
-        test_loader, static_node_feats, encoder, decoder, evaluator, eval_metric
+        test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
     )
     print(f'Test {eval_metric}={test_mrr:.4f}')
