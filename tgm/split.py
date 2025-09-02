@@ -198,7 +198,7 @@ class TGBSplit(SplitStrategy):
                 node_times = data.timestamps[data.node_event_idx]
                 if edge_mask.any():
                     node_mask = (node_times >= (edge_start_time - 1)) & (
-                        node_times <= edge_end_time
+                        node_times < edge_end_time
                     )
 
             splits.append(self._masked_copy(data, edge_mask, node_mask))

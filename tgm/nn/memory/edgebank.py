@@ -102,12 +102,12 @@ class EdgeBankPredictor:
                 - Otherwise, the probability is ``0.0``.
         """
         pred = torch.zeros_like(query_src)
-        for i, edge in enumerate(zip(query_src, query_dst)):
-            edge = (edge[0].item(), edge[1].item())
-            if edge in self.memory:
-                hit = not self._fixed_memory
-                hit |= self._fixed_memory and self.memory[edge] >= self.window_start
-                if hit:
+        src_list = query_src.tolist()
+        dst_list = query_dst.tolist()
+        for i, (s, d) in enumerate(zip(src_list, dst_list)):
+            mem_val = self.memory.get((s, d))
+            if mem_val is not None:
+                if not self._fixed_memory or mem_val >= self.window_start:
                     pred[i] = self.pos_prob
         return pred
 

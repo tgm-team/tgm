@@ -1,4 +1,5 @@
 import argparse
+import time
 
 import numpy as np
 import torch
@@ -13,16 +14,16 @@ from tgm.nn import EdgeBankPredictor
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='EdgeBank TGB Example',
+    description='EdgeBank LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
-parser.add_argument('--window_ratio', type=float, default=0.15, help='Window ratio')
-parser.add_argument('--pos_prob', type=float, default=1.0, help='Positive edge prob')
+parser.add_argument('--window-ratio', type=float, default=0.15, help='Window ratio')
+parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
 parser.add_argument(
-    '--memory_mode',
+    '--memory-mode',
     type=str,
     default='unlimited',
     choices=['unlimited', 'fixed'],
@@ -35,28 +36,23 @@ def eval(
     model: EdgeBankPredictor,
     eval_metric: str,
     evaluator: Evaluator,
-) -> dict:
+) -> float:
     perf_list = []
     for batch in tqdm(loader):
-        neg_batch_list = batch.neg_batch_list
-        for idx, neg_batch in enumerate(neg_batch_list):
-            query_src = torch.tensor(
-                [batch.src[idx] for _ in range(len(neg_batch) + 1)]
-            )
-            query_dst = torch.cat([torch.tensor([batch.dst[idx]]), neg_batch])
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
+            query_src = batch.src[idx].repeat(len(neg_batch) + 1)
+            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
 
             y_pred = model(query_src, query_dst)
-            # compute MRR
             input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
         model.update(batch.src, batch.dst, batch.time)
-    metric_dict = {}
-    metric_dict[eval_metric] = float(np.mean(perf_list))
-    return metric_dict
+
+    return float(np.mean(perf_list))
 
 
 args = parser.parse_args()
@@ -75,12 +71,10 @@ val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
 
 train_data = train_dg.materialize(materialize_features=False)
-val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
-test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
 hm = HookManager(keys=['val', 'test'])
-hm.register('val', val_neg_hook)
-hm.register('test', test_neg_hook)
+hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
 
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
@@ -95,9 +89,12 @@ model = EdgeBankPredictor(
 )
 
 with hm.activate('val'):
-    val_results = eval(val_loader, model, eval_metric, evaluator)
-    print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
+    start_time = time.perf_counter()
+    val_mrr = eval(val_loader, model, eval_metric, evaluator)
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+    print(f'Latency={latency:.4f} Validation {eval_metric}={val_mrr:.4f}')
 
 with hm.activate('test'):
-    test_results = eval(test_loader, model, eval_metric, evaluator)
-    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    test_mrr = eval(test_loader, model, eval_metric, evaluator)
+    print(f'Test {eval_metric}={test_mrr:.4f}')

@@ -19,13 +19,17 @@ jobs:
     timeout-minutes: 60
     if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang'
     env:
-      TGM_CI_LOG_BASE: $SLURM_TMPDIR/tgm_ci
-      DATA_ROOT: $HOME/tgb_datasets
+      REAL_HOME: /home/mila/j/jacob.chmura
       GRAPH_PROP_PRED_EXAMPLES: ./examples/graphproppred
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set Runtime Environment Variables
+        run: |
+          echo "DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
+          echo "TGM_CI_LOG_BASE=$REAL_HOME/tgm_ci" >> $GITHUB_ENV
 
       - name: Set up python
         id: setup-python
@@ -44,13 +48,21 @@ jobs:
           restore-keys: |
             uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
             uv-${{ runner.os }}
-      - name: Install dependencies
-        run: uv sync --group examples
 
       - name: Download TGB datasets
+        id: submit-download
         run: |
           echo "Preparing TGB datasets in $DATA_ROOT..."
-          ./scripts/download_tgb_datasets.sh "$DATA_ROOT"
+          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh "$DATA_ROOT")
+          echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait for Download TGB job to finish
+        run: |
+          JOB_ID="${{ steps.submit-download.outputs.job_id }}"
+          .github/scripts/poll_slurm_job.sh "$JOB_ID" --timeout 3600 --interval 10
+
+      - name: Install dependencies
+        run: uv sync --group examples
 
       - name: Download sample datasets for Graph Property Prediction examples
         run: |
