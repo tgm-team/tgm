@@ -1,5 +1,7 @@
 import argparse
 import time
+from collections import defaultdict, deque
+from typing import Any, Deque, Dict
 
 import numpy as np
 import torch
@@ -10,6 +12,7 @@ from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import (
     HookManager,
     NegativeEdgeSamplerHook,
@@ -29,10 +32,10 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
-parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--lr', type=str, default=0.0002, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
-parser.add_argument('--n-nbrs', type=int, default=10, help='num sampled nbrs')
+parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=128, help='attention dimension')
 parser.add_argument(
@@ -50,7 +53,7 @@ parser.add_argument(
 parser.add_argument(
     '--channel-dim-expansion',
     type=float,
-    default=0.5,
+    default=4.0,
     help='channel dimension expansion factor in MLP sub-blocks',
 )
 
@@ -93,27 +96,22 @@ class GraphMixerEncoder(nn.Module):
         )
 
     def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
+        # Link Encoder
         edge_feat = batch.nbr_feats[0]
-        nbr_time_feat = self.time_encoder(
-            batch.time.unsqueeze(dim=1).repeat(3, 1) - batch.nbr_times[0]
-        )
-        z_link = torch.cat([edge_feat, nbr_time_feat], dim=-1)
-        z_link = self.projection_layer(z_link)
+        nbr_time_feat = self.time_encoder(batch.times[0][:, None] - batch.nbr_times[0])
+        nbr_time_feat[batch.nbr_nids[0] == PADDED_NODE_ID] = 0.0
+        z_link = self.projection_layer(torch.cat([edge_feat, nbr_time_feat], dim=-1))
         for mixer in self.mlp_mixers:
             z_link = mixer(x=z_link)
         z_link = torch.mean(z_link, dim=1)
 
         # Node Encoder
-        time_gap_node_feat = node_feat[batch.time_gap_node_nids]
-        masked_feat = time_gap_node_feat.masked_fill(
-            batch.time_gap_node_mask.unsqueeze(-1) == 0, -1e10
-        )
-        scores = torch.softmax(masked_feat, dim=1)
-
-        # Handle rows with no valid neighbors
-        scores[batch.time_gap_node_mask.sum(dim=1) == 0] = 0
-        z_node = torch.sum(time_gap_node_feat * scores, dim=1)
-        z_node += node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
+        time_gap_node_feats = node_feat[batch.time_gap_node_nids]
+        mask = (batch.time_gap_node_nids != PADDED_NODE_ID).float()
+        masked_feats = time_gap_node_feats * mask.unsqueeze(-1)
+        nbr_count = mask.sum(dim=1, keepdim=True).clamp(min=1)  # Mean over valid nbrs
+        agg_feats = masked_feats.sum(dim=1) / nbr_count
+        z_node = agg_feats + node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
 
         z = self.output_layer(torch.cat([z_link, z_node], dim=1))
         return z
@@ -200,8 +198,10 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+
     for batch in tqdm(loader):
         opt.zero_grad()
+
         z = encoder(batch, static_node_feats)
         z_src, z_dst, z_neg = torch.chunk(z, 3)
 
@@ -228,6 +228,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+
     for batch in tqdm(loader):
         z = encoder(batch, static_node_feats)
         id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
@@ -242,8 +243,8 @@ def eval(
             y_pred = decoder(z_src, z_dst)
 
             input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
@@ -275,60 +276,75 @@ class GraphMixerHook(StatefulHook):
     """
 
     requires = {'neg'}
-    produces = {'time_gap_node_nids', 'time_gap_node_mask'}
+    produces = {'time_gap_node_nids'}
 
-    def __init__(self, time_gap: int, num_nodes: int) -> None:
-        self._time_gap = time_gap
-        self._nbrs = {}
-        for node in range(num_nodes):
-            self._nbrs[node] = deque(maxlen=self._time_gap)
+    def __init__(self, time_gap: int) -> None:
+        self._num_nbrs = time_gap
+        self._history: Dict[int, Deque[Any]] = defaultdict(
+            lambda: deque(maxlen=self._num_nbrs)
+        )
+        self._device = torch.device('cpu')
+
+    def reset_state(self) -> None:
+        self._history = defaultdict(lambda: deque(maxlen=self._num_nbrs))
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        batch.neg = batch.neg.to(dg.device)
-        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])  # type: ignore
+        device = dg.device
+        self._move_queues_to_device_if_needed(device)  # No-op after first batch
 
-        unique, inverse_indices = seed_nodes.unique(return_inverse=True)
+        batch.neg = batch.neg.to(device)
 
-        batch_size = len(seed_nodes)
-        nbr_nids = torch.zeros(
-            batch_size, self._time_gap, dtype=torch.long, device=dg.device
+        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
+        seed_times = torch.cat([batch.time.repeat(2), batch.neg_time])
+
+        batch.time_gap_node_nids = self._get_recency_neighbors(
+            seed_nodes, seed_times, self._num_nbrs
         )
-        nbr_mask = torch.zeros(
-            batch_size, self._time_gap, dtype=torch.long, device=dg.device
-        )
-        for i, node in enumerate(unique.tolist()):
-            if nn := len(self._nbrs[node]):
-                mask = inverse_indices == i
-                nbr_nids[mask, :nn] = torch.tensor(
-                    self._nbrs[node], device=dg.device, dtype=torch.long
-                )
-                nbr_mask[mask, :nn] = nn >= self._time_gap
-
-        batch.time_gap_node_nids = nbr_nids  # type: ignore
-        batch.time_gap_node_mask = nbr_mask  # type: ignore
 
         self._update(batch)
         return batch
 
-    def reset_state(self) -> None:
-        for node in self._nbrs:
-            self._nbrs[node].clear()
+    def _get_recency_neighbors(
+        self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
+    ) -> torch.Tensor:
+        num_nodes = node_ids.size(0)
+        device = node_ids.device
+        nbr_nids = torch.full(
+            (num_nodes, k), PADDED_NODE_ID, dtype=torch.long, device=device
+        )
+
+        for i in range(num_nodes):
+            nid, qtime = int(node_ids[i]), int(query_times[i])
+            history = self._history[nid]
+            valid = [(nbr, t) for (nbr, t) in history if t < qtime]
+            if not valid:
+                continue
+            valid = valid[-k:]  # most recent k
+
+            nbr_nids[i, -len(valid) :] = torch.tensor(
+                [x[0] for x in valid], dtype=torch.long, device=device
+            )
+
+        return nbr_nids
 
     def _update(self, batch: DGBatch) -> None:
-        for i in range(batch.src.size(0)):
-            src_nbr = int(batch.src[i].item())
-            dst_nbr = int(batch.dst[i].item())
-            self._nbrs[src_nbr].append(dst_nbr)
-            self._nbrs[dst_nbr].append(src_nbr)
+        src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
+        for s, d, t in zip(src, dst, time):
+            self._history[s].append((d, t))
+            self._history[d].append((s, t))  # undirected
+
+    def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
+        if device != self._device:
+            self._device = device
 
 
 _, dst, _ = train_dg.edges
-
 
 hm = HookManager(keys=['train', 'val', 'test'])
 hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
 hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
 hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+hm.register_shared(GraphMixerHook(args.time_gap))
 hm.register_shared(
     RecencyNeighborHook(
         num_nbrs=[args.n_nbrs],
@@ -336,7 +352,6 @@ hm.register_shared(
         edge_feats_dim=test_dg.edge_feats_dim,
     )
 )
-hm.register_shared(GraphMixerHook(args.time_gap, num_nodes=test_dg.num_nodes))
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
