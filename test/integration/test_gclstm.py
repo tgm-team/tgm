@@ -8,7 +8,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:10:00',
+        '--time=0:15:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -17,7 +17,7 @@ def test_gclstm_linkprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/linkproppred/gclstm.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 15
+    --epochs 20
     """
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
