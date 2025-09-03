@@ -27,7 +27,8 @@ jobs:
 
       - name: Set Runtime Environment Variables
         run: |
-          echo "DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
+          echo "TGB_DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
+          echo "GRAPH_PROP_PRED_DATA_ROOT=$REAL_HOME/graph_prop_datasets" >> $GITHUB_ENV
           echo "TGM_CI_LOG_BASE=$REAL_HOME/tgm_ci" >> $GITHUB_ENV
 
       - name: Set up python
@@ -51,9 +52,14 @@ jobs:
       - name: Download TGB datasets
         id: submit-download
         run: |
-          echo "Preparing TGB datasets in $DATA_ROOT..."
-          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh "$DATA_ROOT")
+          echo "Preparing TGB datasets in $TGB_DATA_ROOT..."
+          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh "$TGB_DATA_ROOT")
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+
+      - name: Download sample datasets for Graph Property Prediction examples
+        run: |
+          echo "Preparing Graph Property prediction datasets in $GRAPH_PROP_PRED_DATA_ROOT ..."
+          ./scripts/download_graph_prop_datasets.sh "$GRAPH_PROP_PRED_DATA_ROOT"
 
       - name: Wait for Download TGB job to finish
         run: |
