@@ -4,7 +4,7 @@ import pytest
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize('dataset', ['tgbn-genre'])
+@pytest.mark.parametrize('dataset', ['tgbn-trade'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
@@ -26,7 +26,7 @@ python "$ROOT_DIR/examples/nodeproppred/tgcn.py" \
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize('dataset_csv', ['test_token.csv'])
+@pytest.mark.parametrize('dataset_csv', ['test-token.csv'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',

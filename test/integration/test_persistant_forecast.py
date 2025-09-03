@@ -22,7 +22,7 @@ python "$ROOT_DIR/examples/nodeproppred/persistant_forecast.py" \
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize('dataset_csv', ['test_token.csv'])
+@pytest.mark.parametrize('dataset_csv', ['test-token.csv'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
