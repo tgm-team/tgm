@@ -114,11 +114,10 @@ def eval(
     y_true: torch.Tensor,
     model: PersistantForecast,
     metrics: Metric,
-    ignore_last_snapshot=False,
 ) -> dict:
     y_pred = torch.zeros_like(y_true, dtype=torch.float)
     for i, snapshot in enumerate(tqdm(loader)):
-        if not (ignore_last_snapshot and i == len(loader) - 1):
+        if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             y_pred[i] = model(snapshot)
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
 
@@ -161,9 +160,9 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 val_labels = generate_binary_trend_labels(val_loader, snapshot_measurement=edge_count)
-val_results = eval(val_loader, val_labels, model, val_metrics, True)
+val_results = eval(val_loader, val_labels, model, val_metrics)
 print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
 
 test_labels = generate_binary_trend_labels(test_loader, snapshot_measurement=edge_count)
-test_results = eval(test_loader, test_labels, model, test_metrics, True)
+test_results = eval(test_loader, test_labels, model, test_metrics)
 print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

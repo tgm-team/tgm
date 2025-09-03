@@ -180,7 +180,6 @@ def train(
     model: nn.Module,
     opt: torch.optim.Optimizer,
     metrics: Metric,
-    ignore_last_snapshot=False,
 ) -> Tuple[float, torch.Tensor, torch.Tensor]:
     model.train()
     total_loss = 0
@@ -188,7 +187,7 @@ def train(
 
     y_pred = torch.zeros_like(labels, dtype=torch.float)
     for i, snapshot in enumerate(tqdm(loader)):
-        if not (ignore_last_snapshot and i == len(loader) - 1):
+        if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             opt.zero_grad()
             pred, h_0 = model(snapshot, node_feat, h_0)
             loss = F.binary_cross_entropy(pred, labels[i].unsqueeze(0).float())
@@ -212,11 +211,10 @@ def eval(
     model: torch.nn.Module,
     h_0: torch.Tensor,
     metrics: Metric,
-    ignore_last_snapshot=False,
 ) -> Tuple[dict, torch.Tensor]:
     y_pred = torch.zeros_like(y_true, dtype=torch.float)
     for i, snapshot in enumerate(tqdm(loader)):
-        if not (ignore_last_snapshot and i == len(loader) - 1):
+        if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             y_pred[i], h_0 = model(snapshot, static_node_feats, h_0)
 
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
@@ -295,25 +293,13 @@ with hm.activate('global'):
     for epoch in range(1, args.epochs + 1):
         start_time = time.perf_counter()
         loss, h_0, train_results = train(
-            train_loader,
-            train_labels,
-            static_node_feats,
-            model,
-            opt,
-            train_metrics,
-            ignore_last_snapshot=True,
+            train_loader, train_labels, static_node_feats, model, opt, train_metrics
         )
         end_time = time.perf_counter()
         latency = end_time - start_time
 
         val_results, h_0 = eval(
-            val_loader,
-            val_labels,
-            static_node_feats,
-            model,
-            h_0,
-            val_metrics,
-            ignore_last_snapshot=True,
+            val_loader, val_labels, static_node_feats, model, h_0, val_metrics
         )
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
@@ -323,12 +309,6 @@ with hm.activate('global'):
         )
 
     test_results, h_0 = eval(
-        test_loader,
-        test_labels,
-        static_node_feats,
-        model,
-        h_0,
-        test_metrics,
-        ignore_last_snapshot=True,
+        test_loader, test_labels, static_node_feats, model, h_0, test_metrics
     )
     print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
