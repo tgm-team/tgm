@@ -13,10 +13,10 @@ cd "$GITHUB_WORKSPACE"
 LOG_DIR="$REAL_HOME/tgm_ci"
 mkdir -p "$LOG_DIR"
 
-DATA_ROOT="$1"
+TGB_DATA_ROOT="$1"
 
-echo "[$(date)] Starting TGB dataset download into $DATA_ROOT on $(hostname)"
+echo "[$(date)] Starting TGB dataset download into $TGB_DATA_ROOT on $(hostname)"
 echo "Logs: $LOG_DIR"
 
 # Download the tgb datasets
-./scripts/download_tgb_datasets.sh "$DATA_ROOT" >"$LOG_DIR/download-$SLURM_JOB_ID.out" 2>"$LOG_DIR/download-$SLURM_JOB_ID.err"
+./scripts/download_tgb_datasets.sh "$TGB_DATA_ROOT" >"$LOG_DIR/download-$SLURM_JOB_ID.out" 2>"$LOG_DIR/download-$SLURM_JOB_ID.err"
