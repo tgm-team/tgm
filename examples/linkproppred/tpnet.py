@@ -94,7 +94,7 @@ class TPNet_LinkPrediction(nn.Module):
         dropout: float,
         num_layers: int,
         num_neighbors: int,
-        random_projections: RandomProjectionModule | None = None,
+        random_projection_module: RandomProjectionModule | None = None,
         device: str = 'cpu',
         time_encoder: Callable[..., nn.Module] = Time2Vec,
     ) -> None:
@@ -107,7 +107,7 @@ class TPNet_LinkPrediction(nn.Module):
             dropout=dropout,
             num_layers=num_layers,
             num_neighbors=num_neighbors,
-            random_projections=random_projections,
+            random_projections=random_projection_module,
             device=device,
             time_encoder=time_encoder,
         )
@@ -222,8 +222,6 @@ if __name__ == '__main__':
         STATIC_NODE_FEAT = dgraph.static_node_feats
     else:
         STATIC_NODE_FEAT = torch.randn((num_nodes, args.node_dim), device=args.device)
-
-    node_dim = STATIC_NODE_FEAT.shape[1]
 
     train_data, val_data, test_data = data.split()
     train_data.discretize(args.time_gran)

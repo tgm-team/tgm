@@ -2,7 +2,7 @@ from .attention import TemporalAttention
 from .memory import EdgeBankPredictor
 from .time_encoding import Time2Vec
 from .recurrent import GCLSTM
-from .model import TPNet, RandomProjectionModule
+from .model import DyGFormer, TPNet, RandomProjectionModule
 
 
 __all__ = [
@@ -10,6 +10,7 @@ __all__ = [
     'GCLSTM',
     'Time2Vec',
     'TemporalAttention',
+    'DyGFormer',
     'TPNet',
     'RandomProjectionModule',
 ]
