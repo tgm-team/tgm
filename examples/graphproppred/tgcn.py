@@ -180,6 +180,7 @@ def train(
     model: nn.Module,
     opt: torch.optim.Optimizer,
     metrics: Metric,
+    ignore_last_snapshot=False,
 ) -> Tuple[float, torch.Tensor, torch.Tensor]:
     model.train()
     total_loss = 0
@@ -187,16 +188,17 @@ def train(
 
     criterion = torch.nn.BCELoss()
     all_preds = []
-    for idx, snapshot in enumerate(tqdm(loader)):
-        opt.zero_grad()
-        pred, h_0 = model(snapshot, node_feat, h_0)
-        loss = criterion(pred.float(), labels[idx].unsqueeze(0).float())
-        all_preds.append(pred)
-        loss.backward()
-        opt.step()
+    for i, snapshot in enumerate(tqdm(loader)):
+        if not (ignore_last_snapshot and i == len(loader) - 1):
+            opt.zero_grad()
+            pred, h_0 = model(snapshot, node_feat, h_0)
+            loss = criterion(pred.float(), labels[i].unsqueeze(0).float())
+            all_preds.append(pred)
+            loss.backward()
+            opt.step()
 
-        total_loss += float(loss)
-        h_0 = h_0.detach()
+            total_loss += float(loss)
+            h_0 = h_0.detach()
 
     y_pred = torch.tensor(all_preds, device=labels.device).float()
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
@@ -215,7 +217,6 @@ def eval(
     ignore_last_snapshot=False,
 ) -> Tuple[dict, torch.Tensor]:
     y_pred = torch.zeros_like(y_true, dtype=torch.float)
-
     for i, snapshot in enumerate(tqdm(loader)):
         if not (ignore_last_snapshot and i == len(loader) - 1):
             y_pred[i], h_0 = model(snapshot, static_node_feats, h_0)
@@ -227,10 +228,6 @@ def eval(
 
 args = parser.parse_args()
 seed_everything(args.seed)
-metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-train_metrics = MetricCollection(metrics, prefix='Train')
-val_metrics = MetricCollection(metrics, prefix='Validation')
-test_metrics = MetricCollection(metrics, prefix='Test')
 
 df = pd.read_csv(args.path_dataset)
 df = preprocess_raw_data(df)
@@ -243,6 +240,7 @@ full_data = DGData.from_pandas(
     edge_feats_col='value',
     time_delta=args.raw_time_gran,
 ).discretize(args.batch_time_gran)
+
 train_data, val_data, test_data = full_data.split(
     TemporalRatioSplit(
         train_ratio=args.train_ratio,
@@ -251,15 +249,13 @@ train_data, val_data, test_data = full_data.split(
     )
 )
 
-full_dg = DGraph(full_data, device=args.device)
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-full_loader = DGDataLoader(full_dg, batch_unit=args.batch_time_gran, on_empty='raise')
-
 hm = HookManager(keys=['global'])
 hm.register('global', DeduplicationHook())
+
 train_loader = DGDataLoader(
     train_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
 )
@@ -270,17 +266,16 @@ test_loader = DGDataLoader(
     test_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
 )
 
-num_train_snapshots = len(train_loader)
-num_val_snapshots = len(val_loader)
-num_test_snapshots = len(test_loader) - 1
-
-labels = generate_binary_trend_labels(
-    loader=full_loader, snapshot_measurement=edge_count
-).to(args.device)
-
-train_labels = labels[:num_train_snapshots]
-val_labels = labels[num_train_snapshots : num_train_snapshots + num_val_snapshots]
-test_labels = labels[-num_test_snapshots:]
+with hm.activate('global'):
+    train_labels = generate_binary_trend_labels(
+        train_loader, snapshot_measurement=edge_count
+    ).to(args.device)
+    val_labels = generate_binary_trend_labels(
+        val_loader, snapshot_measurement=edge_count
+    ).to(args.device)
+    test_labels = generate_binary_trend_labels(
+        test_loader, snapshot_measurement=edge_count
+    ).to(args.device)
 
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
@@ -294,11 +289,22 @@ model = TGCN_Model(
 ).to(args.device)
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
+metrics = [BinaryAveragePrecision(), BinaryAUROC()]
+train_metrics = MetricCollection(metrics, prefix='Train')
+val_metrics = MetricCollection(metrics, prefix='Validation')
+test_metrics = MetricCollection(metrics, prefix='Test')
+
 with hm.activate('global'):
     for epoch in range(1, args.epochs + 1):
         start_time = time.perf_counter()
         loss, h_0, train_results = train(
-            train_loader, train_labels, static_node_feats, model, opt, train_metrics
+            train_loader,
+            train_labels,
+            static_node_feats,
+            model,
+            opt,
+            train_metrics,
+            ignore_last_snapshot=True,
         )
         end_time = time.perf_counter()
         latency = end_time - start_time
@@ -310,7 +316,7 @@ with hm.activate('global'):
             model,
             h_0,
             val_metrics,
-            ignore_last_snapshot=False,
+            ignore_last_snapshot=True,
         )
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '

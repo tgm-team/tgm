@@ -117,7 +117,7 @@ def eval(
     ignore_last_snapshot=False,
 ) -> dict:
     y_pred = torch.zeros_like(y_true, dtype=torch.float)
-    for i, snapshot in tqdm(enumerate(loader)):
+    for i, snapshot in enumerate(tqdm(loader)):
         if not (ignore_last_snapshot and i == len(loader) - 1):
             y_pred[i] = model(snapshot)
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
