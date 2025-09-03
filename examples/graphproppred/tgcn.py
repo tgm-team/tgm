@@ -111,32 +111,6 @@ def mean_pooling(z: torch.Tensor) -> torch.Tensor:
     return torch.mean(z, dim=0).squeeze()
 
 
-class TGCN_Model(nn.Module):
-    def __init__(
-        self,
-        node_dim: int,
-        embed_dim: int,
-        num_classes: int,
-        graph_pooling: Callable = mean_pooling,
-    ) -> None:
-        super().__init__()
-        self.encoder = RecurrentGCN(node_dim=node_dim, embed_dim=embed_dim)
-        self.graph_pooling = graph_pooling
-        self.decoder = GraphPredictor(in_dim=embed_dim, out_dim=num_classes)
-
-    def forward(
-        self,
-        batch: DGBatch,
-        node_feat: torch.Tensor,
-        h_0: torch.Tensor | None = None,
-    ) -> Tuple[torch.Tensor, ...]:
-        z, h_0 = self.encoder(batch, node_feat, h_0)
-        z_node = z[torch.cat([batch.src, batch.dst])]
-        z_graph = self.graph_pooling(z_node)
-        pred = self.decoder(z_graph)
-        return pred, h_0
-
-
 class RecurrentGCN(torch.nn.Module):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
