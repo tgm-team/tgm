@@ -186,21 +186,19 @@ def train(
     total_loss = 0
     h_0 = None
 
-    criterion = torch.nn.BCELoss()
-    all_preds = []
+    y_pred = torch.zeros_like(labels, dtype=torch.float)
     for i, snapshot in enumerate(tqdm(loader)):
         if not (ignore_last_snapshot and i == len(loader) - 1):
             opt.zero_grad()
             pred, h_0 = model(snapshot, node_feat, h_0)
-            loss = criterion(pred.float(), labels[i].unsqueeze(0).float())
-            all_preds.append(pred)
+            loss = F.binary_cross_entropy(pred, labels[i].unsqueeze(0).float())
             loss.backward()
             opt.step()
 
             total_loss += float(loss)
+            y_pred[i] = pred
             h_0 = h_0.detach()
 
-    y_pred = torch.tensor(all_preds, device=labels.device).float()
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, labels, indexes=indexes)
     return total_loss, h_0, metrics.compute()
@@ -266,17 +264,6 @@ test_loader = DGDataLoader(
     test_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
 )
 
-with hm.activate('global'):
-    train_labels = generate_binary_trend_labels(
-        train_loader, snapshot_measurement=edge_count
-    ).to(args.device)
-    val_labels = generate_binary_trend_labels(
-        val_loader, snapshot_measurement=edge_count
-    ).to(args.device)
-    test_labels = generate_binary_trend_labels(
-        test_loader, snapshot_measurement=edge_count
-    ).to(args.device)
-
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
 else:
@@ -295,6 +282,16 @@ val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
 with hm.activate('global'):
+    train_labels = generate_binary_trend_labels(
+        train_loader, snapshot_measurement=edge_count
+    ).to(args.device)
+    val_labels = generate_binary_trend_labels(
+        val_loader, snapshot_measurement=edge_count
+    ).to(args.device)
+    test_labels = generate_binary_trend_labels(
+        test_loader, snapshot_measurement=edge_count
+    ).to(args.device)
+
     for epoch in range(1, args.epochs + 1):
         start_time = time.perf_counter()
         loss, h_0, train_results = train(
