@@ -159,22 +159,25 @@ class RecurrentGCN(torch.nn.Module):
 
 
 class GraphPredictor(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int) -> None:
+    def __init__(
+        self, in_dim: int, out_dim: int, graph_pooling: Callable = mean_pooling
+    ) -> None:
         super().__init__()
-        self.lin_node = nn.Linear(in_dim, in_dim)
-        self.out = nn.Linear(in_dim, out_dim)
+        self.fc1 = nn.Linear(in_dim, in_dim)
+        self.fc2 = nn.Linear(in_dim, out_dim)
+        self.graph_pooling = graph_pooling
 
-    def forward(self, node_embed):
-        h = self.lin_node(node_embed)
+    def forward(self, z_node: torch.Tensor) -> torch.Tensor:
+        z_graph = self.graph_pooling(z_node)
+        h = self.fc1(z_graph)
         h = h.relu()
-        h = self.out(h)
-        return h.sigmoid()
+        return self.fc2(h).sigmoid()
 
 
 def train(
     loader: DGDataLoader,
     labels: torch.Tensor,
-    static_node_feat: torch.Tensor,
+    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -191,8 +194,7 @@ def train(
             opt.zero_grad()
             z, h_0 = encoder(batch, static_node_feats, h_0)
             z_node = z[torch.cat([batch.src, batch.dst])]
-            z_graph = torch.mean(z_node, dim=0).squeeze()
-            pred = decoder(z_graph)
+            pred = decoder(z_node)
 
             loss = F.binary_cross_entropy(pred, labels[i].unsqueeze(0).float())
             loss.backward()
@@ -225,8 +227,7 @@ def eval(
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             z, h_0 = encoder(batch, static_node_feats, h_0)
             z_node = z[torch.cat([batch.src, batch.dst])]
-            z_graph = torch.mean(z_node, dim=0).squeeze()
-            y_pred[i] = decoder(z_graph)
+            y_pred[i] = decoder(z_node)
 
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, y_true, indexes=indexes)
