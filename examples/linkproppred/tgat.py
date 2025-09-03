@@ -23,7 +23,7 @@ from tgm.nn import TemporalAttention, Time2Vec
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='TGAT TGB Example',
+    description='TGAT LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -80,6 +80,7 @@ class TGAT(nn.Module):
         self.num_layers = num_layers
         self.embed_dim = embed_dim
         self.time_encoder = Time2Vec(time_dim=time_dim)
+
         self.attn, self.merge_layers = nn.ModuleList(), nn.ModuleList()
         for i in range(num_layers):
             self.attn.append(
@@ -151,8 +152,10 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+
     for batch in tqdm(loader):
         opt.zero_grad()
+
         z = encoder(batch, static_node_feats)
         z_src, z_dst, z_neg = torch.chunk(z, 3)
 
@@ -175,10 +178,11 @@ def eval(
     decoder: nn.Module,
     eval_metric: str,
     evaluator: Evaluator,
-) -> dict:
+) -> float:
     encoder.eval()
     decoder.eval()
     perf_list = []
+
     for batch in tqdm(loader):
         z = encoder(batch, static_node_feats)
         id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
@@ -193,15 +197,13 @@ def eval(
             y_pred = decoder(z_src, z_dst)
 
             input_dict = {
-                'y_pred_pos': y_pred[0].detach().cpu().numpy(),
-                'y_pred_neg': y_pred[1:].detach().cpu().numpy(),
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
-    metric_dict = {}
-    metric_dict[eval_metric] = float(np.mean(perf_list))
-    return metric_dict
+    return float(np.mean(perf_list))
 
 
 args = parser.parse_args()
@@ -215,7 +217,6 @@ dataset.load_val_ns()
 dataset.load_test_ns()
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
-
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
@@ -225,7 +226,6 @@ if train_dg.static_node_feats is not None:
 else:
     static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
 
-# Neighbor Sampler is shared across loaders
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(num_nbrs=args.num_nbrs)
 elif args.sampling == 'recency':
@@ -239,14 +239,11 @@ else:
 
 
 _, dst, _ = train_dg.edges
-train_neg_hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
-val_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
-test_neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
 
 hm = HookManager(keys=['train', 'val', 'test'])
-hm.register('train', train_neg_hook)
-hm.register('val', val_neg_hook)
-hm.register('test', test_neg_hook)
+hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
+hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
 hm.register_shared(nbr_hook)
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
@@ -275,20 +272,18 @@ for epoch in range(1, args.epochs + 1):
         latency = end_time - start_time
 
     with hm.activate('val'):
-        val_results = eval(
+        val_mrr = eval(
             val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
         )
-
     print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
     )
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 with hm.activate('test'):
-    test_results = eval(
+    test_mrr = eval(
         test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
     )
-    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    print(f'Test {eval_metric}={test_mrr:.4f}')
