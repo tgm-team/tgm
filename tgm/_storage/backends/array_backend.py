@@ -99,8 +99,6 @@ class DGStorageArrayBackend(DGStorageBase):
         for s, d, i in zip(src_list, dst_list, eid_list):
             if s in nbrs:
                 nbrs[s].append((i, d))
-            if d in nbrs:
-                nbrs[d].append((i, s))
 
         B = len(seed_nodes)
         nbr_nids = torch.full(

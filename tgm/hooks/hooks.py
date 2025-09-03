@@ -339,7 +339,6 @@ class RecencyNeighborHook(StatefulHook):
 
         for s, d, t, f in zip(src, dst, time, edge_feats):
             self._history[s].append((d, t, f.clone()))  # may need to f.clone()
-            self._history[d].append((s, t, f.clone()))  # undirected
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
