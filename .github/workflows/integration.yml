@@ -28,7 +28,7 @@ jobs:
       - name: Set Runtime Environment Variables
         run: |
           echo "TGB_DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
-          echo "GRAPH_PROP_PRED_DATA_ROOT=$REAL_HOME/graph_prop_datasets/tokens_data" >> $GITHUB_ENV
+          echo "GRAPH_PROP_PRED_DATA_ROOT=$REAL_HOME/graph_prop_datasets" >> $GITHUB_ENV
           echo "TGM_CI_LOG_BASE=$REAL_HOME/tgm_ci" >> $GITHUB_ENV
 
       - name: Set up python

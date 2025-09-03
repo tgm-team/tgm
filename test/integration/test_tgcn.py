@@ -38,9 +38,9 @@ python "$ROOT_DIR/examples/nodeproppred/tgcn.py" \
 )
 def test_tgcn_graphprop_pred(slurm_job_runner, dataset_csv):
     data_root = os.environ.get(
-        'GRAPH_PROP_PRED_DATA_ROOT', '$ROOT_DIR/examples/graphproppred/tokens_data'
+        'GRAPH_PROP_PRED_DATA_ROOT', '$ROOT_DIR/examples/graphproppred'
     )
-    dataset_path = f'{data_root}/{dataset_csv}'
+    dataset_path = f'{data_root}/tokens_data/{dataset_csv}'
     cmd = f"""
 python "$ROOT_DIR/examples/graphproppred/tgcn.py" \
     --path-dataset {dataset_path} \
