@@ -14,7 +14,7 @@ import pytest
 )
 def test_dygformer_tgb_recency_sampler_linkprop_pred(slurm_job_runner, dataset):
     cmd = f"""
-python "$ROOT_DIR/examples/linkproppred/TGB/dygformer.py" \
+python "$ROOT_DIR/examples/linkproppred/dygformer.py" \
     --dataset {dataset} \
     --device cuda \
     --epochs 1 \
