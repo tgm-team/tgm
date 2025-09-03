@@ -97,8 +97,8 @@ class DGStorageArrayBackend(DGStorageBase):
         # user know that this is not the right backend for this.
         nbrs: Dict[int, List[Tuple[int, int]]] = {node: [] for node in seed_nodes_set}
         for s, d, i in zip(src_list, dst_list, eid_list):
-            if s in nbrs:
-                nbrs[s].append((i, d))
+            if d in nbrs:
+                nbrs[d].append((i, s))
 
         B = len(seed_nodes)
         nbr_nids = torch.full(
