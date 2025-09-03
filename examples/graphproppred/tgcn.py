@@ -184,6 +184,7 @@ def train(
     model.train()
     total_loss = 0
     h_0 = None
+
     criterion = torch.nn.BCELoss()
     all_preds = []
     for idx, snapshot in enumerate(tqdm(loader)):
@@ -193,11 +194,12 @@ def train(
         all_preds.append(pred)
         loss.backward()
         opt.step()
+
         total_loss += float(loss)
         h_0 = h_0.detach()
-    y_pred = torch.Tensor(all_preds).float()
-    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
 
+    y_pred = torch.tensor(all_preds, device=labels.device).float()
+    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, labels, indexes=indexes)
     return total_loss, h_0, metrics.compute()
 
@@ -211,16 +213,14 @@ def eval(
     h_0: torch.Tensor,
     metrics: Metric,
     ignore_last_snapshot=False,
-) -> dict:
-    all_preds = []
-    number_of_snapshot = len(loader)
-    for idx, snapshot in enumerate(tqdm(loader)):
-        if not (ignore_last_snapshot and idx == number_of_snapshot - 1):
-            pred, h_0 = model(snapshot, static_node_feats, h_0)
-            all_preds.append(pred)
-    y_pred = torch.Tensor(all_preds).float()
-    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
+) -> Tuple[dict, torch.Tensor]:
+    y_pred = torch.zeros_like(y_true, dtype=torch.float)
 
+    for i, snapshot in enumerate(tqdm(loader)):
+        if not (ignore_last_snapshot and i == len(loader) - 1):
+            y_pred[i], h_0 = model(snapshot, static_node_feats, h_0)
+
+    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, y_true, indexes=indexes)
     return metrics.compute(), h_0
 
@@ -276,7 +276,7 @@ num_test_snapshots = len(test_loader) - 1
 
 labels = generate_binary_trend_labels(
     loader=full_loader, snapshot_measurement=edge_count
-)  # shape: number of snapshots - 1
+).to(args.device)
 
 train_labels = labels[:num_train_snapshots]
 val_labels = labels[num_train_snapshots : num_train_snapshots + num_val_snapshots]
