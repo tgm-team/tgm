@@ -14,7 +14,10 @@ import pytest
 )
 def test_graphmixer_linkprop_pred(slurm_job_runner, dataset):
     cmd = f"""
-python "$ROOT_DIR/examples/linkproppred/graphmixer.py" \
-    --dataset {dataset}"""
+python "$ROOT_DIR/examples/linkproppred/TGB/graphmixer.py" \
+    --dataset {dataset} \
+    --device cuda \
+    --epochs 1
+    """
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
