@@ -75,6 +75,7 @@ class DGStorageArrayBackend(DGStorageBase):
         seed_nodes: Tensor,
         num_nbrs: int,
         slice: DGSliceTracker,
+        directed: bool,
     ) -> Tuple[Tensor, ...]:
         # TODO: Take in a sample_func to enable more than uniform sampling
         device = seed_nodes.device
@@ -99,7 +100,7 @@ class DGStorageArrayBackend(DGStorageBase):
         for s, d, i in zip(src_list, dst_list, eid_list):
             if s in nbrs:
                 nbrs[s].append((i, d))
-            if d in nbrs:
+            if not directed and d in nbrs:
                 nbrs[d].append((i, s))
 
         B = len(seed_nodes)
