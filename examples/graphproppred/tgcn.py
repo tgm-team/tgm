@@ -11,7 +11,6 @@ from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
-from tgm.hooks import DeduplicationHook, HookManager
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
@@ -112,35 +111,6 @@ def mean_pooling(z: torch.Tensor) -> torch.Tensor:
     return torch.mean(z, dim=0).squeeze()
 
 
-class TGCN_Model(nn.Module):
-    def __init__(
-        self,
-        node_dim: int,
-        embed_dim: int,
-        num_classes: int,
-        graph_pooling: Callable = mean_pooling,
-    ) -> None:
-        super().__init__()
-        self.encoder = RecurrentGCN(node_dim=node_dim, embed_dim=embed_dim)
-        self.graph_pooling = graph_pooling
-        self.decoder = GraphPredictor(in_dim=embed_dim, out_dim=num_classes)
-
-    def forward(
-        self,
-        batch: DGBatch,
-        node_feat: torch.Tensor,
-        h_0: torch.Tensor | None = None,
-    ) -> Tuple[torch.Tensor, ...]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
-        edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
-        z, h_0 = self.encoder(node_feat, edge_index, edge_weight, h_0)
-
-        z_node = z[batch.global_to_local(batch.unique_nids)]  # type: ignore
-        z_graph = self.graph_pooling(z_node)
-        pred = self.decoder(z_graph)
-        return pred, h_0
-
-
 class RecurrentGCN(torch.nn.Module):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
@@ -149,47 +119,57 @@ class RecurrentGCN(torch.nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
-        edge_index: torch.Tensor,
-        edge_weight: torch.Tensor | None,
-        h: torch.Tensor | None,
-    ) -> Tuple[torch.Tensor, ...]:
-        h_0 = self.recurrent(x, edge_index, edge_weight, h)
-        h = F.relu(h_0)
-        h = self.linear(h)
-        return h, h_0
+        batch: DGBatch,
+        node_feat: torch.tensor,
+        h: torch.Tensor | None = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
+
+        h_0 = self.recurrent(node_feat, edge_index, edge_weight, h)
+        z = F.relu(h_0)
+        z = self.linear(z)
+        return z, h_0
 
 
 class GraphPredictor(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int) -> None:
+    def __init__(
+        self, in_dim: int, out_dim: int, graph_pooling: Callable = mean_pooling
+    ) -> None:
         super().__init__()
-        self.lin_node = nn.Linear(in_dim, in_dim)
-        self.out = nn.Linear(in_dim, out_dim)
+        self.fc1 = nn.Linear(in_dim, in_dim)
+        self.fc2 = nn.Linear(in_dim, out_dim)
+        self.graph_pooling = graph_pooling
 
-    def forward(self, node_embed):
-        h = self.lin_node(node_embed)
+    def forward(self, z_node: torch.Tensor) -> torch.Tensor:
+        z_graph = self.graph_pooling(z_node)
+        h = self.fc1(z_graph)
         h = h.relu()
-        h = self.out(h)
-        return h.sigmoid()
+        return self.fc2(h).sigmoid()
 
 
 def train(
     loader: DGDataLoader,
     labels: torch.Tensor,
-    node_feat: torch.Tensor,
-    model: nn.Module,
+    static_node_feats: torch.Tensor,
+    encoder: nn.Module,
+    decoder: nn.Module,
     opt: torch.optim.Optimizer,
     metrics: Metric,
 ) -> Tuple[float, torch.Tensor, torch.Tensor]:
-    model.train()
+    encoder.train()
+    decoder.train()
     total_loss = 0
     h_0 = None
 
     y_pred = torch.zeros_like(labels, dtype=torch.float)
-    for i, snapshot in enumerate(tqdm(loader)):
+    for i, batch in enumerate(tqdm(loader)):
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             opt.zero_grad()
-            pred, h_0 = model(snapshot, node_feat, h_0)
+            z, h_0 = encoder(batch, static_node_feats, h_0)
+            z_node = z[torch.cat([batch.src, batch.dst])]
+            pred = decoder(z_node)
+
             loss = F.binary_cross_entropy(pred, labels[i].unsqueeze(0).float())
             loss.backward()
             opt.step()
@@ -208,14 +188,20 @@ def eval(
     loader: DGDataLoader,
     y_true: torch.Tensor,
     static_node_feats: torch.Tensor,
-    model: torch.nn.Module,
+    encoder: nn.Module,
+    decoder: nn.Module,
     h_0: torch.Tensor,
     metrics: Metric,
 ) -> Tuple[dict, torch.Tensor]:
+    encoder.eval()
+    decoder.eval()
     y_pred = torch.zeros_like(y_true, dtype=torch.float)
-    for i, snapshot in enumerate(tqdm(loader)):
+
+    for i, batch in enumerate(tqdm(loader)):
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
-            y_pred[i], h_0 = model(snapshot, static_node_feats, h_0)
+            z, h_0 = encoder(batch, static_node_feats, h_0)
+            z_node = z[torch.cat([batch.src, batch.dst])]
+            y_pred[i] = decoder(z_node)
 
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, y_true, indexes=indexes)
@@ -249,18 +235,9 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-hm = HookManager(keys=['global'])
-hm.register('global', DeduplicationHook())
-
-train_loader = DGDataLoader(
-    train_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
-)
-val_loader = DGDataLoader(
-    val_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
-)
-test_loader = DGDataLoader(
-    test_dg, batch_unit=args.batch_time_gran, on_empty='raise', hook_manager=hm
-)
+train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
@@ -269,46 +246,54 @@ else:
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-model = TGCN_Model(
-    node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim, num_classes=1
+encoder = RecurrentGCN(
+    node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
 ).to(args.device)
-opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+decoder = GraphPredictor(in_dim=args.embed_dim, out_dim=1).to(args.device)
+opt = torch.optim.Adam(
+    set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
+)
 
 metrics = [BinaryAveragePrecision(), BinaryAUROC()]
 train_metrics = MetricCollection(metrics, prefix='Train')
 val_metrics = MetricCollection(metrics, prefix='Validation')
 test_metrics = MetricCollection(metrics, prefix='Test')
 
-with hm.activate('global'):
-    train_labels = generate_binary_trend_labels(
-        train_loader, snapshot_measurement=edge_count
-    ).to(args.device)
-    val_labels = generate_binary_trend_labels(
-        val_loader, snapshot_measurement=edge_count
-    ).to(args.device)
-    test_labels = generate_binary_trend_labels(
-        test_loader, snapshot_measurement=edge_count
-    ).to(args.device)
+train_labels = generate_binary_trend_labels(
+    train_loader, snapshot_measurement=edge_count
+).to(args.device)
+val_labels = generate_binary_trend_labels(
+    val_loader, snapshot_measurement=edge_count
+).to(args.device)
+test_labels = generate_binary_trend_labels(
+    test_loader, snapshot_measurement=edge_count
+).to(args.device)
 
-    for epoch in range(1, args.epochs + 1):
-        start_time = time.perf_counter()
-        loss, h_0, train_results = train(
-            train_loader, train_labels, static_node_feats, model, opt, train_metrics
-        )
-        end_time = time.perf_counter()
-        latency = end_time - start_time
-
-        val_results, h_0 = eval(
-            val_loader, val_labels, static_node_feats, model, h_0, val_metrics
-        )
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-            + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
-            + ' '
-            + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-        )
-
-    test_results, h_0 = eval(
-        test_loader, test_labels, static_node_feats, model, h_0, test_metrics
+for epoch in range(1, args.epochs + 1):
+    start_time = time.perf_counter()
+    loss, h_0, train_results = train(
+        train_loader,
+        train_labels,
+        static_node_feats,
+        encoder,
+        decoder,
+        opt,
+        train_metrics,
     )
-    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+
+    val_results, h_0 = eval(
+        val_loader, val_labels, static_node_feats, encoder, decoder, h_0, val_metrics
+    )
+    print(
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+        + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
+        + ' '
+        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+    )
+
+test_results, h_0 = eval(
+    test_loader, test_labels, static_node_feats, encoder, decoder, h_0, test_metrics
+)
+print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
