@@ -162,6 +162,7 @@ class NeighborSamplerHook(StatelessHook):
 
     Args:
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
+        directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
 
     Raises:
         ValueError: If the num_nbrs list is empty.
@@ -170,12 +171,13 @@ class NeighborSamplerHook(StatelessHook):
     requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats'}
 
-    def __init__(self, num_nbrs: List[int]) -> None:
+    def __init__(self, num_nbrs: List[int], directed: bool = False) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
         self._num_nbrs = num_nbrs
+        self._directed = directed
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -211,6 +213,7 @@ class NeighborSamplerHook(StatelessHook):
                 seed_nodes,
                 num_nbrs=num_nbrs,
                 slice=DGSliceTracker(end_time=int(batch.time.min()) - 1),
+                directed=self._directed,
             )
 
             batch.nids.append(seed_nodes)  # type: ignore

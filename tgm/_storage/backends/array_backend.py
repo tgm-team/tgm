@@ -75,7 +75,7 @@ class DGStorageArrayBackend(DGStorageBase):
         seed_nodes: Tensor,
         num_nbrs: int,
         slice: DGSliceTracker,
-        directed: bool = False,
+        directed: bool,
     ) -> Tuple[Tensor, ...]:
         # TODO: Take in a sample_func to enable more than uniform sampling
         device = seed_nodes.device
