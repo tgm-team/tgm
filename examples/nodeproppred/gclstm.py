@@ -88,7 +88,7 @@ def train(
         if y_true is None:
             continue
 
-        z, h_0, c_0 = encoder(batch, static_node_feats)
+        z, h_0, c_0 = encoder(batch, static_node_feats, h_0, c_0)
         z_node = z[batch.node_ids]
         y_pred = decoder(z_node)
 

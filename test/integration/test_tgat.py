@@ -23,3 +23,16 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     """
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
+
+
+def test_tgat_linkprop_pred_uniform_sampler(slurm_job_runner, dataset):
+    cmd = f"""
+python "$ROOT_DIR/examples/linkproppred/tgat.py" \
+    --dataset {dataset} \
+    --device cuda \
+    --epochs 1 \
+    --sampling uniform \
+    --n-nbrs 5 5
+    """
+    state = slurm_job_runner(cmd)
+    assert state == 'COMPLETED'
