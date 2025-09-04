@@ -1668,6 +1668,7 @@ docs = [
     { name = "mkdocstrings", extra = ["python"] },
 ]
 examples = [
+    { name = "pandas" },
     { name = "py-tgb" },
     { name = "torchmetrics" },
     { name = "tqdm" },
@@ -1699,6 +1700,7 @@ docs = [
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.0" },
 ]
 examples = [
+    { name = "pandas", specifier = ">=2.3.0" },
     { name = "py-tgb", specifier = ">=2.1.0" },
     { name = "torchmetrics", specifier = ">=1.7.0" },
     { name = "tqdm", specifier = ">=4.67.1" },

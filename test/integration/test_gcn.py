@@ -14,7 +14,7 @@ import pytest
 )
 def test_gcn_linkprop_pred(slurm_job_runner, dataset):
     cmd = f"""
-python "$ROOT_DIR/examples/linkproppred/TGB/gcn.py" \
+python "$ROOT_DIR/examples/linkproppred/gcn.py" \
     --dataset {dataset} \
     --device cuda \
     --epochs 15

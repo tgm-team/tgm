@@ -3,6 +3,7 @@ import random
 import pytest
 import torch
 
+from tgm import DGraph
 from tgm._storage import (
     DGSliceTracker,
     DGStorageBackends,
@@ -10,6 +11,7 @@ from tgm._storage import (
     set_dg_storage_backend,
 )
 from tgm._storage.backends import DGStorageArrayBackend
+from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
 
 
@@ -341,107 +343,6 @@ def test_get_static_node_feats(DGStorageImpl, data_with_features):
     assert storage.get_static_node_feats_dim() == 11
 
 
-@pytest.mark.skip('TODO: Add get_nbr')
-def test_get_nbrs_single_hop(DGStorageImpl):
-    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.LongTensor([1, 5, 20])
-    data = DGData.from_raw(edge_timestamps, edge_index)
-    storage = DGStorageImpl(data)
-
-    nbrs = storage.get_nbrs(
-        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8], num_nbrs=[-1], slice=DGSliceTracker()
-    )
-    exp_nbrs = {
-        1: [[(8, 20)]],
-        2: [[(2, 1), (4, 5)]],
-        3: [[]],
-        4: [[(2, 5)]],
-        5: [[]],
-        6: [[]],
-        7: [[]],
-        8: [[(1, 20)]],
-    }
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-    nbrs = storage.get_nbrs(
-        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
-        num_nbrs=[-1],
-        slice=DGSliceTracker(start_time=5),
-    )
-    exp_nbrs = {
-        1: [[(8, 20)]],
-        2: [[(4, 5)]],
-        3: [[]],
-        4: [[(2, 5)]],
-        5: [[]],
-        6: [[]],
-        7: [[]],
-        8: [[(1, 20)]],
-    }
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-    nbrs = storage.get_nbrs(
-        seed_nodes=[1, 2, 3, 4, 5, 6, 7, 8],
-        num_nbrs=[-1],
-        slice=DGSliceTracker(start_time=5, end_time=9),
-    )
-    exp_nbrs = {
-        1: [[]],
-        2: [[(4, 5)]],
-        3: [[]],
-        4: [[(2, 5)]],
-        5: [[]],
-        6: [[]],
-        7: [[]],
-        8: [[]],
-    }
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-
-@pytest.mark.skip('TODO: Add get_nbr tests')
-def test_get_nbrs_single_hop_sampling_required(DGStorageImpl):
-    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.LongTensor([1, 5, 20])
-    data = DGData.from_raw(edge_timestamps, edge_index)
-    storage = DGStorageImpl(data)
-
-    nbrs = storage.get_nbrs(seed_nodes=[2], num_nbrs=[1], slice=DGSliceTracker())
-    exp_nbrs = {
-        2: [[(2, 1)]],
-    }
-    # TODO: Either return a set or make this easier to check
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-    nbrs = storage.get_nbrs(
-        seed_nodes=[2], num_nbrs=[1], slice=DGSliceTracker(end_time=4)
-    )
-    exp_nbrs = {
-        2: [[(2, 1)]],
-    }
-    # TODO: Either return a set or make this easier to check
-    assert nbrs.keys() == exp_nbrs.keys()
-    for k, v in nbrs.items():
-        for hop_num, nbrs in enumerate(v):
-            assert sorted(nbrs) == sorted(exp_nbrs[k][hop_num])
-
-
-@pytest.mark.skip(reason='Multi-hop get_nbrs not implemented')
-def test_get_nbrs_multiple_hops(DGStorageImpl):
-    pass
-
-
 def test_get_dg_storage_backend():
     assert get_dg_storage_backend() == DGStorageArrayBackend
 
@@ -459,3 +360,155 @@ def test_set_dg_storage_backend_with_str():
 def test_set_dg_storage_backend_with_bad_str():
     with pytest.raises(ValueError):
         set_dg_storage_backend('foo')
+
+
+@pytest.fixture
+def basic_sample_graph():
+    """Initializes the following graph.
+
+    #############                    ###########
+    # Alice (0) # ->    t = 1     -> # Bob (1) #
+    #############                    ###########
+         |
+         v
+       t = 2
+         |
+         v
+    #############                    ############
+    # Carol (2) # ->   t = 3      -> # Dave (3) #
+    #############                    ############
+         |
+         v
+       t = 4
+         |
+         v
+    #############
+    # Alice (0) #
+    #############
+    """
+    edge_index = torch.LongTensor([[0, 1], [0, 2], [2, 3], [2, 0]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 4])
+    edge_feats = torch.LongTensor(
+        [[1], [2], [5], [2]]
+    )  # edge feat is simply summing the node IDs at two end points
+    data = DGData.from_raw(edge_timestamps, edge_index, edge_feats)
+    return data
+
+
+def test_dg_storage_get_nbrs_one_hop(DGStorageImpl, basic_sample_graph):
+    null_value = 0
+
+    storage = DGStorageImpl(basic_sample_graph)
+    dg = DGraph(basic_sample_graph)
+    n_nbrs = 3  # 3 neighbor for each node
+    end_time = 1
+    nbr_nids, nbr_times, nbr_feats = storage.get_nbrs(
+        torch.tensor([0, 1]),
+        num_nbrs=n_nbrs,
+        slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+    )
+    assert nbr_nids.shape == (2, 3)
+    assert nbr_nids[0][0] == PADDED_NODE_ID
+    assert nbr_nids[0][1] == PADDED_NODE_ID
+    assert nbr_nids[0][2] == PADDED_NODE_ID
+    assert nbr_nids[1][0] == PADDED_NODE_ID
+    assert nbr_nids[1][1] == PADDED_NODE_ID
+    assert nbr_nids[1][2] == PADDED_NODE_ID
+    assert nbr_times.shape == (2, 3)
+    assert nbr_times[0][0] == null_value
+    assert nbr_times[0][1] == null_value
+    assert nbr_times[0][2] == null_value
+    assert nbr_times[1][0] == null_value
+    assert nbr_times[1][1] == null_value
+    assert nbr_times[1][2] == null_value
+    assert nbr_feats.shape == (2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0] == null_value
+    assert nbr_feats[0][1][0] == null_value
+    assert nbr_feats[0][2][0] == null_value
+    assert nbr_feats[1][0][0] == null_value
+    assert nbr_feats[1][1][0] == null_value
+    assert nbr_feats[1][2][0] == null_value
+
+    end_time = 2
+    nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
+        torch.tensor([0, 2]),
+        num_nbrs=n_nbrs,
+        slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+    )
+    assert nbr_nids.shape == (2, 3)
+    assert nbr_nids[0][0] == 1
+    assert nbr_nids[0][1] == PADDED_NODE_ID
+    assert nbr_nids[0][2] == PADDED_NODE_ID
+    assert nbr_nids[1][0] == PADDED_NODE_ID
+    assert nbr_nids[1][1] == PADDED_NODE_ID
+    assert nbr_nids[1][2] == PADDED_NODE_ID
+    assert nbr_times.shape == (2, 3)
+    assert nbr_times[0][0] == 1
+    assert nbr_times[0][1] == null_value
+    assert nbr_times[0][2] == null_value
+    assert nbr_times[1][0] == null_value
+    assert nbr_times[1][1] == null_value
+    assert nbr_times[1][2] == null_value
+    assert nbr_feats.shape == (2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0] == 1.0
+    assert nbr_feats[0][1][0] == null_value
+    assert nbr_feats[0][2][0] == null_value
+    assert nbr_feats[1][0][0] == null_value
+    assert nbr_feats[1][1][0] == null_value
+    assert nbr_feats[1][2][0] == null_value
+
+    end_time = 3
+    nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
+        torch.tensor([2, 3]),
+        num_nbrs=n_nbrs,
+        slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+    )
+    assert nbr_nids.shape == (2, 3)
+    assert nbr_nids[0][0] == 0
+    assert nbr_nids[0][1] == PADDED_NODE_ID
+    assert nbr_nids[0][2] == PADDED_NODE_ID
+    assert nbr_nids[1][0] == PADDED_NODE_ID
+    assert nbr_nids[1][1] == PADDED_NODE_ID
+    assert nbr_nids[1][2] == PADDED_NODE_ID
+    assert nbr_times.shape == (2, 3)
+    assert nbr_times[0][0] == 2
+    assert nbr_times[0][1] == null_value
+    assert nbr_times[0][2] == null_value
+    assert nbr_times[1][0] == null_value
+    assert nbr_times[1][1] == null_value
+    assert nbr_times[1][2] == null_value
+    assert nbr_feats.shape == (2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0] == 2.0
+    assert nbr_feats[0][1][0] == null_value
+    assert nbr_feats[0][2][0] == null_value
+    assert nbr_feats[1][0][0] == null_value
+    assert nbr_feats[1][1][0] == null_value
+    assert nbr_feats[1][2][0] == null_value
+
+    end_time = 4
+    nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
+        torch.tensor([2, 0]),
+        num_nbrs=n_nbrs,
+        slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+    )
+    assert nbr_nids.shape == (2, 3)
+    assert nbr_nids[0][0] == 0
+    assert nbr_nids[0][1] == 3
+    assert nbr_nids[0][2] == PADDED_NODE_ID
+    assert nbr_nids[1][0] == 1
+    assert nbr_nids[1][1] == 2
+    assert nbr_nids[1][2] == PADDED_NODE_ID
+    assert nbr_times.shape == (2, 3)
+    assert nbr_times[0][0] == 2
+    assert nbr_times[0][1] == 3
+    assert nbr_times[0][2] == null_value
+    assert nbr_times[1][0] == 1
+    assert nbr_times[1][1] == 2
+    assert nbr_times[1][2] == null_value
+    assert nbr_feats.shape == (2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0] == 2.0
+    assert nbr_feats[0][1][0] == 5.0
+    assert nbr_feats[0][2][0] == null_value
+    assert nbr_feats[1][0][0] == 1.0
+    assert nbr_feats[1][1][0] == 2.0
+    assert nbr_feats[1][2][0] == null_value
