@@ -210,7 +210,7 @@ class NeighborSamplerHook(StatelessHook):
             nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
-                slice=DGSliceTracker(end_time=(int(batch.time.min()) - 1)),
+                slice=DGSliceTracker(end_time=int(batch.time.min()) - 1),
             )
 
             batch.nids.append(seed_nodes)  # type: ignore
