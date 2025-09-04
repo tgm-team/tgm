@@ -29,14 +29,14 @@ setup_venv_if_missing() {
     if [ ! -d ".venv" ]; then
         echo ".venv not found. Setting up environment. This might take a while..."
         uv venv .venv
-        uv sync --group dev
     fi
+    uv sync --group dev
 }
 
 run_tests() {
-    local marker_arg="-m not gpu"
-    if [[ "$GPU" == "1" ]]; then
-        marker_arg=""
+    local marker_arg=""
+    if [[ "$GPU" == "0" ]]; then
+        marker_arg="-m not gpu"
     fi
 
     echo "Running unit tests..."

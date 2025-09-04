@@ -61,7 +61,7 @@ class TGCN_Model(nn.Module):
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
         z, h_0 = self.encoder(node_feat, edge_index, edge_weight, h_0)
-        z_node = z[batch.global_to_local(batch.node_ids)]  # type: ignore
+        z_node = z[batch.node_ids]
         pred = self.decoder(z_node)
         return pred, h_0
 
@@ -179,6 +179,7 @@ else:
     static_node_feats = torch.randn(
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
+
 model = TGCN_Model(
     node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim, num_classes=label_dim
 ).to(args.device)

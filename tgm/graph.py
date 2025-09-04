@@ -14,7 +14,42 @@ from tgm.timedelta import TimeDeltaDG
 
 
 class DGraph:
-    r"""Dynamic Graph Object provides a 'view' over a DGStorage backend."""
+    """Dynamic Graph object providing a view over a DGStorage backend.
+
+    This class allows efficient slicing, batching, and materialization of
+    temporal/dynamic graph data. It exposes properties for node and edge counts,
+    features, timestamps, and supports device placement for tensors.
+
+    Args:
+        data (DGData): The source DGData object to construct the dynamic graph view.
+        device (str | torch.device, optional): The device to place tensors on. Defaults to 'cpu'.
+
+    Raises:
+        TypeError: If `data` is not a DGData instance.
+
+    Note:
+        - Slicing operations (`slice_events` or `slice_time`) return a new `DGraph`
+          view sharing the underlying storage; they do not copy data unless
+          explicitly materialized via `materialize()`.
+        - Cached properties (e.g., `num_nodes`, `edges`, `static_node_feats`) are
+          computed on first access and then stored. Modifying the underlying
+          storage does not automatically invalidate these cached values.
+        - `materialize()` returns dense tensors for src, dst, time, and optionally
+          dynamic node and edge features. This operation may be memory-intensive
+          for large graphs.
+        - `slice_events` uses **event indices** (position in chronological order),
+          while `slice_time` uses **timestamp values**. For `slice_time`, the
+          end_time is exclusive but internally adjusted to include events at
+          end_time - 1.
+        - `num_nodes` counts the maximum node ID in the slice + 1; this may differ
+          from the number of nodes in the underlying DGData if slicing excludes
+          some nodes.
+        - `static_node_feats` shape is `(num_nodes_global, d_node_static)` and
+          is **independent of slices**, whereas `dynamic_node_feats` reflects the
+          current slice.
+        - Operations such as `.to(device)` or slicing create **views**; data is not
+          copied unless explicitly materialized.
+    """
 
     def __init__(self, data: DGData, device: str | torch.device = 'cpu') -> None:
         if not isinstance(data, DGData):
@@ -26,7 +61,16 @@ class DGraph:
         self._slice = DGSliceTracker()
 
     def materialize(self, materialize_features: bool = True) -> DGBatch:
-        r"""Materialize dense tensors: src, dst, time, and optionally {'node': dynamic_node_feats, node_times, node_ids, 'edge': edge_features}."""
+        """Materialize the current DGraph slice into a dense `DGBatch`.
+
+        Args:
+            materialize_features (bool, optional): If True, includes dynamic node
+                features, node IDs/times, and edge features. Defaults to True.
+
+        Returns:
+            DGBatch: A batch containing src, dst, timestamps, and optionally
+                features from the current slice.
+        """
         batch = DGBatch(*self.edges)
         if materialize_features and self.dynamic_node_feats is not None:
             batch.node_times, batch.node_ids = self.dynamic_node_feats._indices()
@@ -38,7 +82,15 @@ class DGraph:
     def slice_events(
         self, start_idx: Optional[int] = None, end_idx: Optional[int] = None
     ) -> DGraph:
-        r"""Create and return a new view by slicing events (end_idx exclusive)."""
+        """Return a new DGraph view sliced by event indices (end_idx exclusive).
+
+        Args:
+            start_idx (int, optional): Starting event index.
+            end_idx (int, optional): Ending event index (exclusive).
+
+        Raises:
+            ValueError: If start_idx > end_idx.
+        """
         if start_idx is not None and end_idx is not None and start_idx > end_idx:
             raise ValueError(f'start_idx ({start_idx}) must be <= end_idx ({end_idx})')
 
@@ -50,7 +102,15 @@ class DGraph:
     def slice_time(
         self, start_time: Optional[int] = None, end_time: Optional[int] = None
     ) -> DGraph:
-        r"""Create and return a new view by slicing temporally (end_time exclusive)."""
+        """Return a new DGraph view sliced by timestamps (end_time exclusive).
+
+        Args:
+            start_time (int, optional): Starting timestamp.
+            end_time (int, optional): Ending timestamp (exclusive).
+
+        Raises:
+            ValueError: If start_time > end_time.
+        """
         if start_time is not None and end_time is not None and start_time > end_time:
             raise ValueError(
                 f'start_time ({start_time}) must be <= end_time ({end_time})'
@@ -64,7 +124,7 @@ class DGraph:
         return DGraph._from_storage(self._storage, self.time_delta, self.device, slice)
 
     def __len__(self) -> int:
-        r"""The number of timestamps in the dynamic graph."""
+        """The number of timestamps in the dynamic graph."""
         return self.num_timestamps
 
     def __str__(self) -> str:
@@ -79,63 +139,72 @@ class DGraph:
         return self._time_delta  # type: ignore
 
     def to(self, device: str | torch.device) -> DGraph:
+        """Return a copy of the DGraph view on a different device.
+
+        Args:
+            device (str | torch.device): The target device.
+
+        Returns:
+            DGraph: A new view on the specified device.
+        """
         device = torch.device(device)
         slice = replace(self._slice)
         return DGraph._from_storage(self._storage, self.time_delta, device, slice)
 
     @cached_property
     def start_time(self) -> Optional[int]:
-        r"""The start time of the dynamic graph. None if the graph is empty."""
+        """The start time of the dynamic graph. None if the graph is empty."""
         if self._slice.start_time is None:
             self._slice.start_time = self._storage.get_start_time(self._slice)
         return self._slice.start_time
 
     @cached_property
     def end_time(self) -> Optional[int]:
-        r"""The end time of the dynamic graph. None, if the graph is empty."""
+        """The end time of the dynamic graph. None, if the graph is empty."""
         if self._slice.end_time is None:
             self._slice.end_time = self._storage.get_end_time(self._slice)
         return self._slice.end_time
 
     @cached_property
     def num_nodes(self) -> int:
-        r"""The total number of unique nodes encountered over the dynamic graph."""
+        """The total number of unique nodes encountered over the dynamic graph."""
         nodes = self._storage.get_nodes(self._slice)
         return max(nodes) + 1 if len(nodes) else 0
 
     @cached_property
     def num_edges(self) -> int:
-        r"""The total number of unique edges encountered over the dynamic graph."""
+        """The total number of unique edges encountered over the dynamic graph."""
         src, *_ = self.edges
         return len(src)
 
     @cached_property
     def num_timestamps(self) -> int:
-        r"""The total number of unique timestamps encountered over the dynamic graph."""
+        """The total number of unique timestamps encountered over the dynamic graph."""
         return self._storage.get_num_timestamps(self._slice)
 
     @cached_property
     def num_events(self) -> int:
-        r"""The total number of events encountered over the dynamic graph."""
+        """The total number of events encountered over the dynamic graph."""
         return self._storage.get_num_events(self._slice)
 
     @cached_property
     def nodes(self) -> Set[int]:
-        r"""The set of node ids over the dynamic graph."""
+        """The set of node ids over the dynamic graph."""
         return self._storage.get_nodes(self._slice)
 
     @cached_property
     def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
-        r"""The src, dst, time tensors over the dynamic graph."""
+        """The src, dst, time tensors over the dynamic graph."""
         src, dst, time = self._storage.get_edges(self._slice)
         src, dst, time = src.to(self.device), dst.to(self.device), time.to(self.device)
         return src, dst, time
 
     @cached_property
     def static_node_feats(self) -> Optional[Tensor]:
-        r"""If static node features exist, returns a dense Tensor(num_nodes_global x d_node_static).
-        num_nodes_global is the global number of nodes from the underlying DGData and it will be independent of the slice.
-        This means that it won't be necessarily the same as the number of nodes in the current slice.
+        """If static node features exist, returns a dense Tensor(num_nodes_global x d_node_static).
+
+        Note:
+            - num_nodes_global is the global number of nodes from the underlying DGData and it will be independent of the slice.
         """
         feats = self._storage.get_static_node_feats()
         if feats is not None:
@@ -144,7 +213,7 @@ class DGraph:
 
     @cached_property
     def dynamic_node_feats(self) -> Optional[Tensor]:
-        r"""The aggregated dynamic node features over the dynamic graph.
+        """The aggregated dynamic node features over the dynamic graph.
 
         If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
         """
@@ -155,7 +224,7 @@ class DGraph:
 
     @cached_property
     def edge_feats(self) -> Optional[Tensor]:
-        r"""The aggregated edge features over the dynamic graph.
+        """The aggregated edge features over the dynamic graph.
 
         If edge features exist, returns a Tensor.sparse_coo_tensor(T x V x V x d_edge).
         """
@@ -166,17 +235,17 @@ class DGraph:
 
     @cached_property
     def static_node_feats_dim(self) -> Optional[int]:
-        r"""Static Node feature dimension or None if not Node features on the Graph."""
+        """Static Node feature dimension or None if not Node features on the Graph."""
         return self._storage.get_static_node_feats_dim()
 
     @cached_property
     def dynamic_node_feats_dim(self) -> Optional[int]:
-        r"""Dynamic Node feature dimension or None if not Node features on the Graph."""
+        """Dynamic Node feature dimension or None if not Node features on the Graph."""
         return self._storage.get_dynamic_node_feats_dim()
 
     @cached_property
     def edge_feats_dim(self) -> Optional[int]:
-        r"""Edge feature dimension or None if not Node features on the Graph."""
+        """Edge feature dimension or None if not Node features on the Graph."""
         return self._storage.get_edge_feats_dim()
 
     @staticmethod
@@ -209,6 +278,25 @@ class DGraph:
 
 @dataclass
 class DGBatch:
+    """Container for a batch of events/materialized data from a DGraph.
+
+    Each `DGBatch` holds edge and node information for a slice of a dynamic graph,
+    including optional dynamic node features and edge features. Hooks read and write
+    additional attributes to the container transparently during dataloading.
+
+    Args:
+        src (Tensor): Source node indices for edges in the batch. Shape `(E,)`.
+        dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
+        time (Tensor): Timestamps of each edge event. Shape `(E,)`.
+        dynamic_node_feats (Tensor | None, optional): Dynamic node features for nodes
+            in the batch. Typically sparse tensor of shape `(T x V x d_node_dynamic)`.
+        edge_feats (Tensor | None, optional): Edge features for the batch. Typically
+            sparse tensor of shape `(E x d_edge)` or `(T x V x V x d_edge)` depending
+            on storage.
+        node_times (Tensor | None, optional): Timestamps corresponding to dynamic node features.
+        node_ids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
+    """
+
     src: Tensor
     dst: Tensor
     time: Tensor

@@ -8,10 +8,10 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:10:00',
+        '--time=0:03:00',
     ]
 )
-def test_edgebank_linkprop_pred(slurm_job_runner, dataset):
+def test_edgebank_linkprop_pred_unlimited_memory(slurm_job_runner, dataset):
     cmd = f"""
 python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
     --dataset {dataset}"""
@@ -26,12 +26,12 @@ python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:10:00',
+        '--time=0:03:00',
     ]
 )
-def test_edgebank_tgb_linkprop_pred(slurm_job_runner, dataset):
+def test_edgebank_linkprop_pred_fixed_memory(slurm_job_runner, dataset):
     cmd = f"""
-python "$ROOT_DIR/examples/linkproppred/TGB/edgebank.py" \
-    --dataset {dataset}"""
+python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
+    --dataset {dataset} --memory-mode fixed"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'

@@ -12,6 +12,7 @@ authors = [
 dependencies = [
     "numpy>=2.2.6",
     "torch>=2.5.1",
+    "torch-geometric>=2.6.1",
 ]
 
 [dependency-groups]
@@ -25,6 +26,7 @@ dev = [
     "py-tgb>=2.1.0",
     "pandas>=1.5.3",
     "pytest-xdist>=3.7.0",
+    "pytest-benchmark>=5.1.0",
 ]
 docs = [
     "mkdocs-material>=9.6.9",
@@ -32,10 +34,10 @@ docs = [
     "mkdocstrings[python]>=0.29.0",
 ]
 examples = [
+    "pandas>=2.3.0",
     "py-tgb>=2.1.0",
     "torchmetrics>=1.7.0",
     "tqdm>=4.67.1",
-    "torch_geometric>=2.6.1",
 ]
 
 [build-system]
@@ -102,6 +104,9 @@ markers = [
     "gpu: Tests that require a GPU",
     "slow: Tests that are slow",
     "integration: Integration tests to be run with slurm",
+    "small: Run performance tests on small TGB datasets",
+    "medium: Run performance tests on medium TGB datasets",
+    "large: Run performance tests on large TGB datasets",
 ]
 
 [tool.coverage.run]
