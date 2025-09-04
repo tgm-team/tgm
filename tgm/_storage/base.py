@@ -91,6 +91,7 @@ class DGStorageBase(ABC):
         seed_nodes: Tensor,
         num_nbrs: int,
         slice: DGSliceTracker,
+        directed: bool = False,
     ) -> Tuple[Tensor, ...]:
         """Return neighbors for the given seed nodes within the slice.
 
@@ -98,6 +99,7 @@ class DGStorageBase(ABC):
             seed_nodes: Tensor of node ids to query neighbors for.
             num_nbrs: Number of neighbors to sample per node.
             slice: The temporal/event slice to consider.
+            directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
 
         Returns:
             (nbr_nids, nbr_times, nbr_feats) tensors containing the relevant neighborhood
