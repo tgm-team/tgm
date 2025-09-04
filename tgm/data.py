@@ -295,27 +295,25 @@ class DGData:
             if ids.ndim == 1:
                 id_key = ids
             else:
-                # Collision free radix-style encoding of edge id [src, dst]
-                # assuming edge ids >= 0, and no overflow
-                base = ids.max().item() + 1
+                # Radix-style encoding of edge [src, dst].
+                # Collision-free assuming ids >= 0 and no overflow
                 src, dst = ids[:, 0], ids[:, 1]
+                base = ids.max().item() + 1
                 id_key = src * base + dst
 
             # Radix-style encoding of [bucket, flat_id]
             base = id_key.max().item() + 1
             final_key = event_buckets * base + id_key
 
-            # Stable sort to get adjacent duplicates while preserving ties
-            # with respect to the original event ordering prior to time conversion
+            # Stable sort to get adjacent duplicates while preserving original event order
             sort_key, sort_idx = torch.sort(final_key, stable=True)
 
             # Mark first occurrence in each [bucket, flat_id] group
             is_first = torch.ones_like(sort_key, dtype=torch.bool)
             is_first[1:] = sort_key[1:] != sort_key[:-1]
 
-            # Extract the 'first' [bucket, flat_id] based on our is_first mask
-            # We subsequently re-sort the final indices so that they index our
-            # global timeline chronologically.
+            # Extract the first [bucket, flat_id] based on our is_first mask
+            # Re-sort the final indices so that they index our global timeline chronologically
             keep = sort_idx[is_first]
             keep = keep.sort().values
             return keep
