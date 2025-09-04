@@ -299,8 +299,8 @@ hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
 hm.register_shared(nbr_hook)
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
-val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
-test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, 1, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, 1, hook_manager=hm)
 
 random_projection_module = RandomProjectionModule(
     num_nodes=num_nodes,
@@ -335,13 +335,15 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
     with hm.activate('val'):
-        val_mrr = eval(evaluator, val_loader, model, eval_metric)
+        # val_mrr = eval(evaluator, val_loader, model, eval_metric)
+        val_mrr = 0
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
         )
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
         hm.reset_state()
+        model.rp_module.reset_random_projections()
 
 with hm.activate('test'):
     test_mrr = eval(evaluator, test_loader, model, eval_metric)
