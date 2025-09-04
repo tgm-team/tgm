@@ -2,214 +2,274 @@ import argparse
 import time
 from typing import Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics import Metric, MetricCollection
-from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
+from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
+from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
-from tgm.hooks import NegativeEdgeSamplerHook
+from tgm import DGBatch, DGData, DGraph
+from tgm.hooks import (
+    HookManager,
+    NegativeEdgeSamplerHook,
+    TGBNegativeEdgeSamplerHook,
+)
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
+from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='GCLSTM Example',
+    description='GCLSTM LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
-parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
-parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+parser.add_argument('--embed-dim', type=int, default=256, help='embedding dimension')
 parser.add_argument(
-    '--time-gran',
-    type=str,
-    default='s',
-    help='raw time granularity for dataset',
+    '--node-dim', type=int, default=256, help='node feat dimension if not provided'
 )
+parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument(
-    '--batch-time-gran',
+    '--snapshot-time-gran',
     type=str,
     default='h',
     help='time granularity to operate on for snapshots',
 )
 
 
-class GCLSTM_Model(nn.Module):
-    def __init__(self, node_dim: int, embed_dim: int) -> None:
-        super().__init__()
-        self.encoder = RecurrentGCN(node_dim=node_dim, embed_dim=embed_dim, K=1)
-        self.decoder = LinkPredictor(embed_dim)
-
-    def forward(
-        self,
-        batch: DGBatch,
-        node_feat: torch.Tensor,
-        h_0: torch.Tensor | None = None,
-        c_0: torch.Tensor | None = None,
-    ) -> Tuple[torch.Tensor, ...]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
-        edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
-        z, h_0, c_0 = self.encoder(node_feat, edge_index, edge_weight, h_0, c_0)
-        z_src = z[batch.global_to_local(batch.src)]
-        z_dst = z[batch.global_to_local(batch.dst)]
-        z_neg = z[batch.global_to_local(batch.neg)]
-        pos_out = self.decoder(z_src, z_dst)
-        neg_out = self.decoder(z_src, z_neg)
-        return pos_out, neg_out, h_0, c_0
-
-
 class RecurrentGCN(torch.nn.Module):
-    def __init__(self, node_dim: int, embed_dim: int, K=1) -> None:
+    def __init__(self, node_dim: int, embed_dim: int, K: int = 1) -> None:
         super().__init__()
         self.recurrent = GCLSTM(in_channels=node_dim, out_channels=embed_dim, K=K)
         self.linear = nn.Linear(embed_dim, embed_dim)
 
     def forward(
         self,
-        x: torch.Tensor,
-        edge_index: torch.Tensor,
-        edge_weight: torch.Tensor,
-        h: torch.Tensor | None,
-        c: torch.Tensor | None,
-    ) -> Tuple[torch.Tensor, ...]:
-        h_0, c_0 = self.recurrent(x, edge_index, edge_weight, h, c)
-        h = F.relu(h_0)
-        h = self.linear(h)
-        return h, h_0, c_0
+        batch: DGBatch,
+        node_feat: torch.tensor,
+        h: torch.Tensor | None = None,
+        c: torch.Tensor | None = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
+
+        h_0, c_0 = self.recurrent(node_feat, edge_index, edge_weight, h, c)
+        z = F.relu(h_0)
+        z = self.linear(z)
+        return z, h_0, c_0
 
 
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        return self.fc2(h).sigmoid().view(-1)
 
 
 def train(
     loader: DGDataLoader,
-    model: nn.Module,
+    snapshots_loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
+    encoder: nn.Module,
+    decoder: nn.Module,
     opt: torch.optim.Optimizer,
-    node_feat: torch.Tensor,
-) -> Tuple[float, torch.Tensor, torch.Tensor]:
-    model.train()
+    conversion_rate: int,
+) -> Tuple[float, torch.Tensor, torch.Tensor, torch.Tensor]:
+    encoder.train()
+    decoder.train()
     total_loss = 0
-    h_0, c_0 = None, None
-    for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
 
+    snapshots_iterator = iter(snapshots_loader)
+    snapshot_batch = next(snapshots_iterator)
+    z, h_0, c_0 = encoder(snapshot_batch, static_node_feats)
+    z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()
+
+    for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out, h_0, c_0 = model(batch, node_feat, h_0, c_0)
+
+        pos_out = decoder(z[batch.src], z[batch.dst])
+        neg_out = decoder(z[batch.src], z[batch.neg])
+
         loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
         loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
-        total_loss += float(loss)
-        h_0, c_0 = h_0.detach(), c_0.detach()
-    return total_loss, h_0, c_0
+        total_loss += float(loss) / batch.src.shape[0]
+
+        # update the model if the prediction batch has moved to next snapshot.
+        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+            try:
+                snapshot_batch = next(snapshots_iterator)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
+                z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()  # Truncate BPTT
+            except StopIteration:
+                pass
+
+    return total_loss, z, h_0, c_0
 
 
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
-    model: nn.Module,
-    metrics: Metric,
-    node_feat: torch.Tensor,
-    h_0: torch.Tensor | None = None,
-    c_0: torch.Tensor | None = None,
-) -> Tuple[dict, torch.Tensor, torch.Tensor]:
-    model.eval()
-    for batch in tqdm(loader):
-        # TODO: Consider skipping empty batches natively, when iterating by time (instead of events)
-        if not len(batch.src):
-            continue
+    snapshots_loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
+    z: torch.Tensor,
+    h_0: torch.Tensor,
+    c_0: torch.Tensor,
+    encoder: nn.Module,
+    decoder: nn.Module,
+    eval_metric: str,
+    evaluator: Evaluator,
+    conversion_rate: int,
+) -> float:
+    encoder.eval()
+    decoder.eval()
+    perf_list = []
 
-        pos_out, neg_out, h_0, c_0 = model(batch, node_feat, h_0, c_0)
-        y_pred = torch.cat([pos_out, neg_out], dim=0).float()
-        y_true = (
-            torch.cat(
-                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-            )
-            .long()
-            .to(y_pred.device)
-        )
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
-        metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute(), h_0, c_0
+    snapshots_iterator = iter(snapshots_loader)
+    snapshot_batch = next(snapshots_iterator)
+
+    for batch in tqdm(loader):
+        neg_batch_list = batch.neg_batch_list
+        for idx, neg_batch in enumerate(neg_batch_list):
+            query_src = batch.src[idx].repeat(len(neg_batch) + 1)
+            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+
+            y_pred = decoder(z[query_src], z[query_dst])
+            input_dict = {
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
+                'eval_metric': [eval_metric],
+            }
+            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+
+        # update the model if the prediction batch has moved to next snapshot.
+        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+            try:
+                snapshot_batch = next(snapshots_iterator)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
+            except StopIteration:
+                pass
+
+    return float(np.mean(perf_list))
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
-# TODO: Fix discretize api
-train_dg = DGraph(args.dataset, time_delta='s', split='train', device=args.device)
-train_dg = train_dg.discretize(args.time_gran)
+dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
+eval_metric = dataset.eval_metric
+neg_sampler = dataset.negative_sampler
+evaluator = Evaluator(name=args.dataset)
+dataset.load_val_ns()
+dataset.load_test_ns()
 
-val_dg = DGraph(args.dataset, time_delta='s', split='val', device=args.device)
-val_dg = val_dg.discretize(args.time_gran)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
 
-test_dg = DGraph(args.dataset, time_delta='s', split='test', device=args.device)
-test_dg = test_dg.discretize(args.time_gran)
+snapshot_td = TimeDeltaDG(args.snapshot_time_gran)
+conversion_rate = int(snapshot_td.convert(train_dg.time_delta))
 
-train_loader = DGDataLoader(
-    train_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=train_dg.num_nodes),
-    batch_unit=args.batch_time_gran,
+train_data_discretized = train_data.discretize(args.snapshot_time_gran)
+val_data_discretized = val_data.discretize(args.snapshot_time_gran)
+test_data_discretized = test_data.discretize(args.snapshot_time_gran)
+
+train_snapshots = DGraph(train_data_discretized, device=args.device)
+val_snapshots = DGraph(val_data_discretized, device=args.device)
+test_snapshots = DGraph(test_data_discretized, device=args.device)
+
+_, dst, _ = train_dg.edges
+
+hm = HookManager(keys=['train', 'val', 'test'])
+hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
+hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+
+train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
+
+train_snapshots_loader = DGDataLoader(
+    train_snapshots, batch_unit=args.snapshot_time_gran
 )
-val_loader = DGDataLoader(
-    val_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=val_dg.num_nodes),
-    batch_unit=args.batch_time_gran,
-)
-test_loader = DGDataLoader(
-    test_dg,
-    hook=NegativeEdgeSamplerHook(low=0, high=test_dg.num_nodes),
-    batch_unit=args.batch_time_gran,
-)
+val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time_gran)
+test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran)
 
-if train_dg.dynamic_node_feats is not None:
-    raise ValueError(
-        'node features are not supported yet, make sure to incorporate them in the model'
+
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-# TODO: add static node features to DGraph
-args.node_dim = args.embed_dim
-static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
-
-model = GCLSTM_Model(node_dim=args.node_dim, embed_dim=args.embed_dim).to(args.device)
-
-opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
-metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-val_metrics = MetricCollection(metrics, prefix='Validation')
-test_metrics = MetricCollection(metrics, prefix='Test')
+encoder = RecurrentGCN(
+    node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
+).to(args.device)
+decoder = LinkPredictor(args.embed_dim).to(args.device)
+opt = torch.optim.Adam(
+    set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
+)
 
 for epoch in range(1, args.epochs + 1):
-    start_time = time.perf_counter()
-    loss, h_0, c_0 = train(train_loader, model, opt, static_node_feats)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
+    with hm.activate('train'):
+        start_time = time.perf_counter()
+        loss, z, h_0, c_0 = train(
+            train_loader,
+            train_snapshots_loader,
+            static_node_feats,
+            encoder,
+            decoder,
+            opt,
+            conversion_rate,
+        )
+        end_time = time.perf_counter()
+        latency = end_time - start_time
 
-    val_results, h_0, c_0 = eval(
-        val_loader, model, val_metrics, static_node_feats, h_0, c_0
-    )
-    val_metrics.reset()
-
+    with hm.activate('val'):
+        val_mrr = eval(
+            val_loader,
+            val_snapshots_loader,
+            static_node_feats,
+            z,
+            h_0,
+            c_0,
+            encoder,
+            decoder,
+            eval_metric,
+            evaluator,
+            conversion_rate,
+        )
     print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
     )
 
-test_results, h_0, c_0 = eval(test_loader, model, test_metrics, static_node_feats)
-print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+
+with hm.activate('test'):
+    test_mrr = eval(
+        test_loader,
+        test_snapshots_loader,
+        static_node_feats,
+        z,
+        h_0,
+        c_0,
+        encoder,
+        decoder,
+        eval_metric,
+        evaluator,
+        conversion_rate,
+    )
+    print(f'Test {eval_metric}={test_mrr:.4f}')

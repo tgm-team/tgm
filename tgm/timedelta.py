@@ -1,12 +1,32 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar, Dict
+from typing import ClassVar, Dict, Final
+
+from tgm.exceptions import OrderedGranularityConversionError
 
 
 @dataclass(frozen=True, slots=True)
 class TimeDeltaDG:
-    r"""Time granularity for temporal index in a dynamic graph."""
+    """Represents the time granularity for a temporal index in a dynamic graph.
+
+    This class is used to define the resolution at which events or interactions
+    are indexed in a dynamic/temporal graph. It supports both standard temporal
+    units (e.g., seconds, minutes, days) and a special ordered unit for strictly
+    sequential indices.
+
+    Args:
+        unit (str): The time unit, e.g., 's', 'm', 'h', 'D', or 'r' for ordered.
+        value (int, optional): Multiplier for the unit. Must be a positive integer.
+
+    Raises:
+        ValueError: If `value` is not a positive integer.
+        ValueError: If `unit` is ordered and `value` != 1.
+        ValueError: If `unit` is not recognized among allowed temporal units.
+
+    Note:
+        For ordered units ('r'), only value = 1 is permitted.
+    """
 
     unit: str
     value: int = 1
@@ -37,26 +57,38 @@ class TimeDeltaDG:
 
     @property
     def is_ordered(self) -> bool:
+        """Return True if this is the special ordered unit ('r')."""
         return self.unit == TimeDeltaDG._ORDERED
 
     def is_coarser_than(self, other: str | TimeDeltaDG) -> bool:
-        r"""Return True iff self is strictly coarser than other.
+        """Return True if this granularity is strictly coarser than `other`.
+
+        Args:
+            other (str | TimeDeltaDG): The time delta to compare against.
 
         Raises:
-            ValueError if either self or other is ordered.
+            ValueError: If either self or `other` is ordered.
         """
         return self.convert(other) > 1
 
     def convert(self, time_delta: str | TimeDeltaDG) -> float:
-        r"""Convert the current granularity to the specified time_delta.
+        """Convert this granularity into the scale of another time delta.
+
+        Args:
+            time_delta (str | TimeDeltaDG): Target time delta to convert into.
+
+        Returns:
+            float: Ratio of self to target granularity.
 
         Raises:
-            ValueError if either self or other is ordered.
+            OrderedGranularityConversionError If either self or target granularity is ordered.
         """
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
         if self.is_ordered or time_delta.is_ordered:
-            raise ValueError('Cannot compare granularity for ordered TimeDeltaDG')
+            raise OrderedGranularityConversionError(
+                'Cannot compare granularity for ordered TimeDeltaDG'
+            )
         return self._convert(time_delta)
 
     def _convert(self, other: TimeDeltaDG) -> float:
@@ -75,7 +107,7 @@ class TimeDeltaDG:
         return value_ratio / unit_ratio if invert_unit else value_ratio * unit_ratio
 
 
-TGB_TIME_DELTAS = {
+TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
     'tgbl-wiki': TimeDeltaDG('s'),
     'tgbl-subreddit': TimeDeltaDG('s'),
     'tgbl-lastfm': TimeDeltaDG('s'),

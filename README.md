@@ -43,7 +43,8 @@ We aim to support the following temporal graph learning methods. If you want us 
 - :white_check_mark: [GraphMixer](https://arxiv.org/abs/2302.11636)
 - :white_check_mark: [TGAT](https://arxiv.org/abs/2002.07962)
 - :white_check_mark: [TGN](https://arxiv.org/abs/2006.10637)
-- :white_large_square: [DygFormer](https://arxiv.org/abs/2303.13047)
+- :white_check_mark: [DygFormer](https://arxiv.org/abs/2303.13047)
+- :white_large_square: [TPNet](https://arxiv.org/abs/2410.04013)
 - :white_large_square: [TNCN](https://arxiv.org/abs/2406.07926)
 - :white_large_square: [DyGMamba](https://arxiv.org/abs/2408.04713)
 - :white_large_square: [NLB](https://arxiv.org/abs/2402.01964)
@@ -55,8 +56,6 @@ Work in progress.
 
 ## Installation
 
-The current recommended way to install TGM is from source.
-
 #### Using [uv](https://docs.astral.sh/uv/) (recommended)
 
 ```sh
@@ -64,10 +63,10 @@ The current recommended way to install TGM is from source.
 uv venv my_venv --python 3.10 && source my_venv/bin/activate
 
 # Install the wheels into the venv
-uv pip install git+https://github.com/tgm-team/tgm.git
+uv add tgm-lib
 
 # Test the install
-python -c 'import tgm; print(tgm.__version__)'
+uv run python -c 'import tgm; print(tgm.__version__)'
 ```
 
 #### Using [pip](https://pip.pypa.io/en/stable/installation/)
@@ -77,7 +76,7 @@ python -c 'import tgm; print(tgm.__version__)'
 python3.10 -m venv my_venv && source my_venv/bin/activate
 
 # Install the wheels into the venv
-pip install git+https://github.com/tgm-team/tgm.git
+pip install tgm-lib
 
 # Test the install
 python -c 'import tgm; print(tgm.__version__)'

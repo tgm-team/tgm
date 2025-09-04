@@ -1,35 +1,46 @@
 import argparse
 import time
-from collections import deque
-from typing import List, Tuple
+from collections import defaultdict, deque
+from typing import Any, Deque, Dict
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics import Metric, MetricCollection
-from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
+from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
+from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
-from tgm.hooks import DGHook, NegativeEdgeSamplerHook, RecencyNeighborHook
+from tgm import DGBatch, DGData, DGraph
+from tgm.constants import PADDED_NODE_ID
+from tgm.hooks import (
+    HookManager,
+    NegativeEdgeSamplerHook,
+    RecencyNeighborHook,
+    StatefulHook,
+    TGBNegativeEdgeSamplerHook,
+)
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='GraphMixer Example',
+    description='GraphMixer LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
-parser.add_argument('--bsize', type=int, default=600, help='batch size')
+parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
-parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--epochs', type=int, default=3, help='number of epochs')
+parser.add_argument('--lr', type=float, default=0.0002, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
+parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
-parser.add_argument('--n-nbrs', type=int, default=10, help='num sampled nbrs')
+parser.add_argument('--embed-dim', type=int, default=128, help='attention dimension')
+parser.add_argument(
+    '--node-dim', type=int, default=100, help='node feat dimension if not provided'
+)
 parser.add_argument(
     '--time-gap', type=int, default=2000, help='graphmixer time slot size'
 )
@@ -42,12 +53,12 @@ parser.add_argument(
 parser.add_argument(
     '--channel-dim-expansion',
     type=float,
-    default=0.5,
+    default=4.0,
     help='channel dimension expansion factor in MLP sub-blocks',
 )
 
 
-class GraphMixer(nn.Module):
+class GraphMixerEncoder(nn.Module):
     def __init__(
         self,
         time_dim: int,
@@ -61,8 +72,6 @@ class GraphMixer(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
-
-        self.link_predictor = LinkPredictor(dim=embed_dim)
 
         # GraphMixer time encoding function is not trainable
         self.time_encoder = Time2Vec(time_dim=time_dim)
@@ -86,41 +95,26 @@ class GraphMixer(nn.Module):
             in_features=edge_dim + node_dim, out_features=embed_dim
         )
 
-    def forward(
-        self, batch: DGBatch, node_feat: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
         # Link Encoder
-        hop = 0
-        edge_feat = batch.nbr_feats[hop]
-        nbr_time_feat = self.time_encoder(
-            batch.time.unsqueeze(dim=1).repeat(3, 1) - batch.nbr_times[hop]
-        )
-        z_link = torch.cat([edge_feat, nbr_time_feat], dim=-1)
-        z_link = self.projection_layer(z_link)
+        edge_feat = batch.nbr_feats[0]
+        nbr_time_feat = self.time_encoder(batch.times[0][:, None] - batch.nbr_times[0])
+        nbr_time_feat[batch.nbr_nids[0] == PADDED_NODE_ID] = 0.0
+        z_link = self.projection_layer(torch.cat([edge_feat, nbr_time_feat], dim=-1))
         for mixer in self.mlp_mixers:
             z_link = mixer(x=z_link)
         z_link = torch.mean(z_link, dim=1)
 
         # Node Encoder
-        time_gap_node_feat = node_feat[batch.time_gap_node_nids]
-        masked_feat = time_gap_node_feat.masked_fill(
-            batch.time_gap_node_mask.unsqueeze(-1) == 0, -1e10
-        )
-        scores = torch.softmax(masked_feat, dim=1)
+        time_gap_node_feats = node_feat[batch.time_gap_node_nids]
+        mask = (batch.time_gap_node_nids != PADDED_NODE_ID).float()
+        masked_feats = time_gap_node_feats * mask.unsqueeze(-1)
+        nbr_count = mask.sum(dim=1, keepdim=True).clamp(min=1)  # Mean over valid nbrs
+        agg_feats = masked_feats.sum(dim=1) / nbr_count
+        z_node = agg_feats + node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
 
-        # Handle rows with no valid neighbors
-        scores[batch.time_gap_node_mask.sum(dim=1) == 0] = 0
-        z_node = torch.sum(time_gap_node_feat * scores, dim=1)
-        z_node += node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
-
-        # Link Decoder
         z = self.output_layer(torch.cat([z_link, z_node], dim=1))
-        z_src = z[batch.global_to_local(batch.src)]
-        z_dst = z[batch.global_to_local(batch.dst)]
-        z_neg = z[batch.global_to_local(batch.neg)]
-        pos_out = self.link_predictor(z_src, z_dst)
-        neg_out = self.link_predictor(z_src, z_neg)
-        return pos_out, neg_out
+        return z
 
 
 class FeedForwardNet(nn.Module):
@@ -185,29 +179,37 @@ class MLPMixer(nn.Module):
 class LinkPredictor(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = nn.Linear(dim, dim)
-        self.lin_dst = nn.Linear(dim, dim)
-        self.lin_out = nn.Linear(dim, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_out(h).sigmoid().view(-1)
+        return self.fc2(h).sigmoid().view(-1)
 
 
 def train(
     loader: DGDataLoader,
-    model: nn.Module,
+    static_node_feats: torch.Tensor,
+    encoder: nn.Module,
+    decoder: nn.Module,
     opt: torch.optim.Optimizer,
-    node_feat: torch.Tensor,
 ) -> float:
-    model.train()
+    encoder.train()
+    decoder.train()
     total_loss = 0
+
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out = model(batch, node_feat)
-        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
-        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
+
+        z = encoder(batch, static_node_feats)
+        z_src, z_dst, z_neg = torch.chunk(z, 3)
+
+        pos_out = decoder(z_src, z_dst)
+        neg_out = decoder(z_src, z_neg)
+
+        loss = F.binary_cross_entropy(pos_out, torch.ones_like(pos_out))
+        loss += F.binary_cross_entropy(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -217,145 +219,187 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
-    model: nn.Module,
-    metrics: Metric,
-    node_feat: torch.Tensor,
-) -> dict:
-    model.eval()
+    static_node_feats: torch.Tensor,
+    encoder: nn.Module,
+    decoder: nn.Module,
+    eval_metric: str,
+    evaluator: Evaluator,
+) -> float:
+    encoder.eval()
+    decoder.eval()
+    perf_list = []
+
     for batch in tqdm(loader):
-        pos_out, neg_out = model(batch, node_feat)
-        y_pred = torch.cat([pos_out, neg_out], dim=0).float()
-        y_true = (
-            torch.cat(
-                [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-            )
-            .long()
-            .to(y_pred.device)
-        )
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
-        metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute()
+        z = encoder(batch, static_node_feats)
+        id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.src[idx].repeat(len(dst_ids))
+
+            src_idx = torch.tensor([id_map[n.item()] for n in src_ids], device=z.device)
+            dst_idx = torch.tensor([id_map[n.item()] for n in dst_ids], device=z.device)
+            z_src = z[src_idx]
+            z_dst = z[dst_idx]
+            y_pred = decoder(z_src, z_dst)
+
+            input_dict = {
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
+                'eval_metric': [eval_metric],
+            }
+            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+
+    return float(np.mean(perf_list))
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_dg = DGraph(args.dataset, split='train', device=args.device)
-val_dg = DGraph(args.dataset, split='val', device=args.device)
-test_dg = DGraph(args.dataset, split='test', device=args.device)
+dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
+eval_metric = dataset.eval_metric
+neg_sampler = dataset.negative_sampler
+evaluator = Evaluator(name=args.dataset)
+dataset.load_val_ns()
+dataset.load_test_ns()
+
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
 
 
-def _init_hooks(dg: DGraph, time_gap: int) -> List[DGHook]:
-    # Graphmixer always uses 1-hop recent neighbors
-    nbr_hook = RecencyNeighborHook(
-        num_nbrs=[args.n_nbrs], num_nodes=dg.num_nodes, edge_feats_dim=dg.edge_feats_dim
+class GraphMixerHook(StatefulHook):
+    r"""Custom hook that gets 1-hop neighbors in a specific window.
+
+    If N(v_i, t_s, t_e) = nbrs of v_i from [t_s, t_e], then we materialize
+    N(node_ids, t - TIME_GAP, t) for all seed nodes in a given batch.
+    """
+
+    requires = {'neg'}
+    produces = {'time_gap_node_nids'}
+
+    def __init__(self, time_gap: int) -> None:
+        self._num_nbrs = time_gap
+        self._history: Dict[int, Deque[Any]] = defaultdict(
+            lambda: deque(maxlen=self._num_nbrs)
+        )
+        self._device = torch.device('cpu')
+
+    def reset_state(self) -> None:
+        self._history = defaultdict(lambda: deque(maxlen=self._num_nbrs))
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        device = dg.device
+        self._move_queues_to_device_if_needed(device)  # No-op after first batch
+
+        batch.neg = batch.neg.to(device)
+
+        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
+        seed_times = torch.cat([batch.time.repeat(2), batch.neg_time])
+
+        batch.time_gap_node_nids = self._get_recency_neighbors(
+            seed_nodes, seed_times, self._num_nbrs
+        )
+
+        self._update(batch)
+        return batch
+
+    def _get_recency_neighbors(
+        self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
+    ) -> torch.Tensor:
+        num_nodes = node_ids.size(0)
+        device = node_ids.device
+        nbr_nids = torch.full(
+            (num_nodes, k), PADDED_NODE_ID, dtype=torch.long, device=device
+        )
+
+        for i in range(num_nodes):
+            nid, qtime = int(node_ids[i]), int(query_times[i])
+            history = self._history[nid]
+            valid = [(nbr, t) for (nbr, t) in history if t < qtime]
+            if not valid:
+                continue
+            valid = valid[-k:]  # most recent k
+
+            nbr_nids[i, -len(valid) :] = torch.tensor(
+                [x[0] for x in valid], dtype=torch.long, device=device
+            )
+
+        return nbr_nids
+
+    def _update(self, batch: DGBatch) -> None:
+        src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
+        for s, d, t in zip(src, dst, time):
+            self._history[s].append((d, t))
+            self._history[d].append((s, t))  # undirected
+
+    def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
+        if device != self._device:
+            self._device = device
+
+
+_, dst, _ = train_dg.edges
+
+hm = HookManager(keys=['train', 'val', 'test'])
+hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
+hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+hm.register_shared(GraphMixerHook(args.time_gap))
+hm.register_shared(
+    RecencyNeighborHook(
+        num_nbrs=[args.n_nbrs],
+        num_nodes=test_dg.num_nodes,
+        edge_feats_dim=test_dg.edge_feats_dim,
+    )
+)
+
+train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
+
+
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.randn(
+        (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-    # Always produce negative edge prior to neighbor sampling for link prediction
-    neg_hook = NegativeEdgeSamplerHook(low=0, high=dg.num_nodes)
-
-    class GraphMixerHook:
-        r"""Custom hook that gets 1-hop neighbors in a specific window.
-
-        If N(v_i, t_s, t_e) = nbrs of v_i from [t_s, t_e], then we materialize
-        N(node_ids, t - TIME_GAP, t) for all seed nodes in a given batch.
-        """
-
-        requires = {'neg'}
-        produces = {'time_gap_node_nids', 'time_gap_node_mask'}
-
-        def __init__(self, time_gap: int, num_nodes: int) -> None:
-            self._time_gap = time_gap
-            self._nbrs = {}
-            for node in range(num_nodes):
-                self._nbrs[node] = deque(maxlen=self._time_gap)
-
-        def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-            batch.neg = batch.neg.to(dg.device)
-            seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
-
-            unique, inverse_indices = seed_nodes.unique(return_inverse=True)
-
-            batch_size = len(seed_nodes)
-            nbr_nids = torch.zeros(
-                batch_size, self._time_gap, dtype=torch.long, device=dg.device
-            )
-            nbr_mask = torch.zeros(
-                batch_size, self._time_gap, dtype=torch.long, device=dg.device
-            )
-            for i, node in enumerate(unique.tolist()):
-                if nn := len(self._nbrs[node]):
-                    mask = inverse_indices == i
-                    nbr_nids[mask, :nn] = torch.tensor(
-                        self._nbrs[node], device=dg.device, dtype=torch.long
-                    )
-                    nbr_mask[mask, :nn] = nn >= self._time_gap
-
-            batch.time_gap_node_nids = nbr_nids
-            batch.time_gap_node_mask = nbr_mask
-
-            self._update(batch)
-            return batch
-
-        def _update(self, batch: DGBatch) -> None:
-            for i in range(batch.src.size(0)):
-                src_nbr = int(batch.src[i].item())
-                dst_nbr = int(batch.dst[i].item())
-                self._nbrs[src_nbr].append(dst_nbr)
-                self._nbrs[dst_nbr].append(src_nbr)
-
-    graph_mixer_hook = GraphMixerHook(time_gap, num_nodes=dg.num_nodes)
-    return [neg_hook, nbr_hook, graph_mixer_hook]
-
-
-train_loader = DGDataLoader(
-    train_dg, hook=_init_hooks(train_dg, args.time_gap), batch_size=args.bsize
-)
-val_loader = DGDataLoader(
-    val_dg, hook=_init_hooks(val_dg, args.time_gap), batch_size=args.bsize
-)
-test_loader = DGDataLoader(
-    test_dg, hook=_init_hooks(test_dg, args.time_gap), batch_size=args.bsize
-)
-
-
-if train_dg.dynamic_node_feats_dim is not None:
-    raise ValueError(
-        'node features are not supported yet, make sure to incorporate them in the model'
-    )
-
-# TODO: add static node features to DGraph
-args.node_dim = args.embed_dim
-static_node_feats = torch.randn((test_dg.num_nodes, args.node_dim), device=args.device)
-
-model = GraphMixer(
+encoder = GraphMixerEncoder(
     embed_dim=args.embed_dim,
     time_dim=args.time_dim,
     num_tokens=args.n_nbrs,
     token_dim_expansion=float(args.token_dim_expansion),
     channel_dim_expansion=float(args.channel_dim_expansion),
     dropout=float(args.dropout),
-    node_dim=args.node_dim,
+    node_dim=static_node_feats.shape[1],
     edge_dim=train_dg.edge_feats_dim | args.embed_dim,
 ).to(args.device)
-opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
-
-metrics = [BinaryAveragePrecision(), BinaryAUROC()]
-val_metrics = MetricCollection(metrics, prefix='Validation')
-test_metrics = MetricCollection(metrics, prefix='Test')
+decoder = LinkPredictor(args.embed_dim).to(args.device)
+opt = torch.optim.Adam(
+    set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
+)
 
 for epoch in range(1, args.epochs + 1):
-    start_time = time.perf_counter()
-    loss = train(train_loader, model, opt, static_node_feats)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
+    with hm.activate('train'):
+        start_time = time.perf_counter()
+        loss = train(train_loader, static_node_feats, encoder, decoder, opt)
+        end_time = time.perf_counter()
+        latency = end_time - start_time
 
-    val_results = eval(val_loader, model, val_metrics, static_node_feats)
-    val_metrics.reset()
+    with hm.activate('val'):
+        val_mrr = eval(
+            val_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+        )
     print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v.item():.4f}' for k, v in val_results.items())
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
     )
 
-test_results = eval(test_loader, model, test_metrics, static_node_feats)
-print(' '.join(f'{k}={v.item():.4f}' for k, v in test_results.items()))
+    if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
+        hm.reset_state()
+
+with hm.activate('test'):
+    test_mrr = eval(
+        test_loader, static_node_feats, encoder, decoder, eval_metric, evaluator
+    )
+    print(f'Test {eval_metric}={test_mrr:.4f}')

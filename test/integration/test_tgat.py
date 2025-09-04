@@ -12,11 +12,8 @@ import pytest
         '--gres=gpu:a100l:1',
     ]
 )
-def test_tgat_recency_sampler_linkprop_pred(slurm_job_runner, dataset):
+def test_tgat_linkprop_pred_recency_sampler(slurm_job_runner, dataset):
     cmd = f"""
-echo "Downloading dataset: {dataset}"
-echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('{dataset}')"
-
 python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     --dataset {dataset} \
     --device cuda \
@@ -28,28 +25,14 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     assert state == 'COMPLETED'
 
 
-@pytest.mark.integration
-@pytest.mark.parametrize('dataset', ['tgbl-wiki'])
-@pytest.mark.slurm(
-    resources=[
-        '--partition=main',
-        '--cpus-per-task=2',
-        '--mem=8G',
-        '--time=3:00:00',
-        '--gres=gpu:a100l:1',
-    ]
-)
-def test_tgat_tgb_recency_sampler_linkprop_pred(slurm_job_runner, dataset):
+def test_tgat_linkprop_pred_uniform_sampler(slurm_job_runner, dataset):
     cmd = f"""
-echo "Downloading dataset: {dataset}"
-echo "y" | python -c "from tgb.linkproppred.dataset import LinkPropPredDataset; LinkPropPredDataset('{dataset}')"
-
-python "$ROOT_DIR/examples/linkproppred/TGB/tgat.py" \
+python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     --dataset {dataset} \
     --device cuda \
     --epochs 1 \
-    --sampling recency \
-    --n-nbrs 20 20
+    --sampling uniform \
+    --n-nbrs 5 5
     """
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'

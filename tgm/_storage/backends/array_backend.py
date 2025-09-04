@@ -1,11 +1,11 @@
 import random
-from typing import Any, Dict, List, Literal, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import torch
 from torch import Tensor
 
+from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
-from tgm.timedelta import TimeDeltaDG
 
 from ..base import DGSliceTracker, DGStorageBase
 
@@ -19,74 +19,6 @@ class DGStorageArrayBackend(DGStorageBase):
         # Binary search caches for finding timestamps in event array
         self._lb_cache: Dict[Optional[int], int] = {}
         self._ub_cache: Dict[Optional[int], int] = {}
-
-    def discretize(
-        self,
-        old_time_granularity: TimeDeltaDG,
-        new_time_granularity: TimeDeltaDG,
-        reduce_op: Literal['first'],
-    ) -> 'DGStorageBase':
-        # TODO: Vectorize this as a groupby([bucket, edge_ids].reduce(reduce_op))
-
-        # We can assume that new granularity is coarser than old time granularity
-        # since we checked args in the caller.
-        time_factor = old_time_granularity.convert(new_time_granularity)
-        buckets = (self._data.timestamps.float() * time_factor).floor().long()
-
-        if reduce_op != 'first':
-            raise NotImplementedError(f'No reduction implemented for op: {reduce_op}')
-
-        def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
-            event_buckets = buckets[event_idx]
-            seen: Set[Any] = set()
-            keep, prev_bucket = [], None
-
-            for i in range(event_idx.numel()):
-                bucket = int(event_buckets[i])
-                node_or_edge = tuple(ids[i].tolist()) if ids.ndim > 1 else int(ids[i])
-                if bucket != prev_bucket:
-                    seen.clear()
-                    prev_bucket = bucket
-                if node_or_edge not in seen:
-                    seen.add(node_or_edge)
-                    keep.append(i)
-            return torch.tensor(keep, dtype=torch.long)
-
-        # Edge events
-        edge_mask = _get_keep_indices(self._data.edge_event_idx, self._data.edge_index)
-        edge_timestamps = buckets[self._data.edge_event_idx][edge_mask]
-        edge_index = self._data.edge_index[edge_mask]
-        edge_feats = None
-        if self._data.edge_feats is not None:
-            edge_feats = self._data.edge_feats[edge_mask]
-
-        # Node events
-        node_timestamps, node_ids, dynamic_node_feats = None, None, None
-        if self._data.node_event_idx is not None:
-            node_mask = _get_keep_indices(
-                self._data.node_event_idx,
-                self._data.node_ids,  # type: ignore
-            )
-            node_timestamps = buckets[self._data.node_event_idx][node_mask]
-            node_ids = self._data.node_ids[node_mask]  # type: ignore
-            dynamic_node_feats = None
-            if self._data.dynamic_node_feats is not None:
-                dynamic_node_feats = self._data.dynamic_node_feats[node_mask]
-
-        static_node_feats = None
-        if self._data.static_node_feats is not None:  # Need a deep copy
-            static_node_feats = self._data.static_node_feats.clone()
-
-        new_data = DGData.from_raw(
-            edge_timestamps=edge_timestamps,
-            edge_index=edge_index,
-            edge_feats=edge_feats,
-            node_timestamps=node_timestamps,
-            node_ids=node_ids,
-            dynamic_node_feats=dynamic_node_feats,
-            static_node_feats=static_node_feats,
-        )
-        return DGStorageArrayBackend(new_data)
 
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
@@ -171,10 +103,11 @@ class DGStorageArrayBackend(DGStorageBase):
                 nbrs[d].append((i, s))
 
         B = len(seed_nodes)
-        nbr_nids = torch.full((B, num_nbrs), -1, dtype=torch.long, device=device)
+        nbr_nids = torch.full(
+            (B, num_nbrs), PADDED_NODE_ID, dtype=torch.long, device=device
+        )
         nbr_times = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
         nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
-        nbr_mask = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
 
         for i, node in enumerate(unique_nodes.tolist()):
             node_nbrs = nbrs[node]
@@ -182,7 +115,7 @@ class DGStorageArrayBackend(DGStorageBase):
                 continue
 
             # Subsample if we have more neighbours than was queried
-            if num_nbrs != -1 and len(node_nbrs) > num_nbrs:
+            if len(node_nbrs) > num_nbrs:
                 node_nbrs = random.sample(node_nbrs, k=num_nbrs)
 
             nbr_ids, times, feats = [], [], []
@@ -198,9 +131,8 @@ class DGStorageArrayBackend(DGStorageBase):
             nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.long, device=device)
             if self._data.edge_feats is not None:
                 nbr_feats[mask, :nn] = torch.stack(feats).to(device).float()
-            nbr_mask[mask, :nn] = 1
 
-        return nbr_nids, nbr_times, nbr_feats, nbr_mask
+        return nbr_nids, nbr_times, nbr_feats
 
     def get_static_node_feats(self) -> Optional[Tensor]:
         return self._data.static_node_feats
