@@ -113,7 +113,7 @@ class DGStorageArrayBackend(DGStorageBase):
                 continue
 
             # Subsample if we have more neighbours than was queried
-            if num_nbrs != -1 and len(node_nbrs) > num_nbrs:
+            if len(node_nbrs) > num_nbrs:
                 node_nbrs = random.sample(node_nbrs, k=num_nbrs)
 
             nbr_ids, times, feats = [], [], []

@@ -7,7 +7,7 @@ import torch
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
-from tgm.hooks import NeighborSamplerHook
+from tgm.hooks import HookManager, NeighborSamplerHook
 from tgm.loader import DGDataLoader
 
 
@@ -115,74 +115,85 @@ def basic_sample_graph():
     return data
 
 
-@pytest.mark.skip('TODO: unskip')
 def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     """The goal of this test is to provide a simple TG with 1-hop neighbors
     and test the basic functionality of the neighbor sampler.
     also make sure recency and uniform samplers return the same output.
     """
     dg = DGraph(basic_sample_graph)
-    n_nbrs = [1]  # 1 neighbor for each node
+    n_nbrs = [3]  # 3 neighbor for each node
     uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs)
-    loader = DGDataLoader(dg, hook=[uniform_hook], batch_size=1)
+    hm = HookManager(keys=['unit'])
+    hm.register_shared(uniform_hook)
+    loader = DGDataLoader(dg, batch_size=1, hook_manager=hm)
     assert loader._batch_size == 1
+    with hm.activate('unit'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+        assert nids.shape == (1, 2)
+        assert nids[0][0] == 0
+        assert nids[0][1] == 1
+        assert nbr_nids.shape == (1, 2, 3)
+        assert nbr_nids[0][0][0] == PADDED_NODE_ID
+        assert nbr_nids[0][0][1] == PADDED_NODE_ID
+        assert nbr_nids[0][0][2] == PADDED_NODE_ID
+        assert nbr_nids[0][1][0] == PADDED_NODE_ID
+        assert nbr_nids[0][1][1] == PADDED_NODE_ID
+        assert nbr_nids[0][1][2] == PADDED_NODE_ID
+        assert nbr_times.shape == (1, 2, 3)
+        assert nbr_feats.shape == (1, 2, 3, 1)  # 1 feature per edge
 
-    batch_iter = iter(loader)
-    batch_1 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
-    assert nids.shape == (1, 2)
-    assert nids[0][0] == 0
-    assert nids[0][1] == 1
-    assert nbr_nids.shape == (1, 2, 1)
-    assert nbr_nids[0][0][0] == PADDED_NODE_ID
-    assert nbr_nids[0][1][0] == PADDED_NODE_ID
-    assert nbr_times.shape == (1, 2, 1)
-    assert nbr_times[0][0][0] == PADDED_NODE_ID
-    assert nbr_times[0][1][0] == PADDED_NODE_ID
-    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
-    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == PADDED_NODE_ID
+        batch_2 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
+        assert nids.shape == (1, 2)
+        assert nids[0][0] == 0
+        assert nids[0][1] == 2
+        assert nbr_nids.shape == (1, 2, 3)
+        assert nbr_nids[0][0][0] == 1
+        assert nbr_nids[0][0][1] == PADDED_NODE_ID
+        assert nbr_nids[0][0][2] == PADDED_NODE_ID
+        assert nbr_nids[0][1][0] == PADDED_NODE_ID
+        assert nbr_nids[0][1][1] == PADDED_NODE_ID
+        assert nbr_nids[0][1][2] == PADDED_NODE_ID
+        assert nbr_times.shape == (1, 2, 3)
+        assert nbr_feats.shape == (1, 2, 3, 1)  # 1 feature per edge
+        assert nbr_feats[0][0][0][0] == 1.0
 
-    batch_2 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
-    assert nids.shape == (1, 2)
-    assert nids[0][0] == 0
-    assert nids[0][1] == 2
-    assert nbr_nids.shape == (1, 2, 1)
-    assert nbr_nids[0][0][0] == 1
-    assert nbr_nids[0][1][0] == PADDED_NODE_ID
-    assert nbr_times.shape == (1, 2, 1)
-    assert nbr_times[0][0][0] == 1
-    assert nbr_times[0][1][0] == PADDED_NODE_ID
-    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
-    assert nbr_feats[0][0][0][0] == 1.0
-    assert nbr_feats[0][1][0][0] == PADDED_NODE_ID
+        batch_3 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
+        assert nids.shape == (1, 2)
+        assert nids[0][0] == 2
+        assert nids[0][1] == 3
+        assert nbr_nids.shape == (1, 2, 3)
+        assert nbr_nids[0][0][0] == 0
+        assert nbr_nids[0][0][1] == PADDED_NODE_ID
+        assert nbr_nids[0][0][2] == PADDED_NODE_ID
+        assert nbr_nids[0][1][0] == PADDED_NODE_ID
+        assert nbr_nids[0][1][1] == PADDED_NODE_ID
+        assert nbr_nids[0][1][2] == PADDED_NODE_ID
+        assert nbr_times.shape == (1, 2, 3)
+        assert nbr_times[0][0][0] == 2
+        assert nbr_feats.shape == (1, 2, 3, 1)  # 1 feature per edge
+        assert nbr_feats[0][0][0][0] == 2.0
 
-    batch_3 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
-    assert nids.shape == (1, 2)
-    assert nids[0][0] == 2
-    assert nids[0][1] == 3
-    assert nbr_nids.shape == (1, 2, 1)
-    assert nbr_nids[0][0][0] == 0
-    assert nbr_nids[0][1][0] == PADDED_NODE_ID
-    assert nbr_times.shape == (1, 2, 1)
-    assert nbr_times[0][0][0] == 2
-    assert nbr_times[0][1][0] == PADDED_NODE_ID
-    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
-    assert nbr_feats[0][0][0][0] == 2.0
-    assert nbr_feats[0][1][0][0] == PADDED_NODE_ID
-
-    batch_4 = next(batch_iter)
-    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
-    assert nids.shape == (1, 2)
-    assert nids[0][0] == 2
-    assert nids[0][1] == 0
-    assert nbr_nids.shape == (1, 2, 1)
-    assert nbr_nids[0][0][0] == 3
-    assert nbr_nids[0][1][0] == 2
-    assert nbr_times.shape == (1, 2, 1)
-    assert nbr_times[0][0][0] == 3
-    assert nbr_times[0][1][0] == 2
-    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
-    assert nbr_feats[0][0][0][0] == 5.0
-    assert nbr_feats[0][1][0][0] == 2.0
+        batch_4 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
+        assert nids.shape == (1, 2)
+        assert nids[0][0] == 2
+        assert nids[0][1] == 0
+        assert nbr_nids.shape == (1, 2, 3)
+        assert nbr_nids[0][0][0] == 0
+        assert nbr_nids[0][0][1] == 3
+        assert nbr_nids[0][1][0] == 1
+        assert nbr_nids[0][1][1] == 2
+        assert nbr_times.shape == (1, 2, 3)
+        assert nbr_times[0][0][0] == 2
+        assert nbr_times[0][0][1] == 3
+        assert nbr_times[0][1][0] == 1
+        assert nbr_times[0][1][1] == 2
+        assert nbr_feats.shape == (1, 2, 3, 1)  # 1 feature per edge
+        assert nbr_feats[0][0][0][0] == 2.0
+        assert nbr_feats[0][0][1][0] == 5.0
+        assert nbr_feats[0][1][0][0] == 1.0
+        assert nbr_feats[0][1][1][0] == 2.0

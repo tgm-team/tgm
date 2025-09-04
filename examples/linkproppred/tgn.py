@@ -426,7 +426,7 @@ else:
     static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
 
 if args.sampling == 'uniform':
-    nbr_hook = NeighborSamplerHook(num_nbrs=args.num_nbrs)
+    nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,

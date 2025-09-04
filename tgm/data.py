@@ -4,7 +4,7 @@ import copy
 import csv
 import pathlib
 from dataclasses import dataclass, fields, replace
-from typing import Any, Callable, List, Set, Tuple
+from typing import Any, Callable, List, Tuple
 
 import numpy as np
 import torch
@@ -291,19 +291,32 @@ class DGData:
 
         def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
             event_buckets = buckets[event_idx]
-            seen: Set[Any] = set()
-            keep, prev_bucket = [], None
 
-            for i in range(event_idx.numel()):
-                bucket = int(event_buckets[i])
-                node_or_edge = tuple(ids[i].tolist()) if ids.ndim > 1 else int(ids[i])
-                if bucket != prev_bucket:
-                    seen.clear()
-                    prev_bucket = bucket
-                if node_or_edge not in seen:
-                    seen.add(node_or_edge)
-                    keep.append(i)
-            return torch.tensor(keep, dtype=torch.long)
+            if ids.ndim == 1:
+                id_key = ids
+            else:
+                # Radix-style encoding of edge [src, dst].
+                # Collision-free assuming ids >= 0 and no overflow
+                src, dst = ids[:, 0], ids[:, 1]
+                base = ids.max().item() + 1
+                id_key = src * base + dst
+
+            # Radix-style encoding of [bucket, flat_id]
+            base = id_key.max().item() + 1
+            final_key = event_buckets * base + id_key
+
+            # Stable sort to get adjacent duplicates while preserving original event order
+            sort_key, sort_idx = torch.sort(final_key, stable=True)
+
+            # Mark first occurrence in each [bucket, flat_id] group
+            is_first = torch.ones_like(sort_key, dtype=torch.bool)
+            is_first[1:] = sort_key[1:] != sort_key[:-1]
+
+            # Extract the first [bucket, flat_id] based on our is_first mask
+            # Re-sort the final indices so that they index our global timeline chronologically
+            keep = sort_idx[is_first]
+            keep = keep.sort().values
+            return keep
 
         # Edge events
         edge_mask = _get_keep_indices(self.edge_event_idx, self.edge_index)

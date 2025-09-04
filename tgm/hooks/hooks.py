@@ -173,8 +173,8 @@ class NeighborSamplerHook(StatelessHook):
     def __init__(self, num_nbrs: List[int]) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
-        if not all([isinstance(x, int) and (x == -1 or x > 0) for x in num_nbrs]):
-            raise ValueError('Each value in num_nbrs must be a positive integer or -1')
+        if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
+            raise ValueError('Each value in num_nbrs must be a positive integer')
         self._num_nbrs = num_nbrs
 
     @property
@@ -210,7 +210,7 @@ class NeighborSamplerHook(StatelessHook):
             nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
-                slice=DGSliceTracker(end_time=int(batch.time.min())),
+                slice=DGSliceTracker(end_time=int(batch.time.min()) - 1),
             )
 
             batch.nids.append(seed_nodes)  # type: ignore
