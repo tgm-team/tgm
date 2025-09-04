@@ -23,20 +23,13 @@ from tgm.nn import RandomProjectionModule, Time2Vec, TPNet
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='TPNet TGB Example',
+    description='TPNet LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
-parser.add_argument(
-    '--time_gran',
-    type=str,
-    default='s',
-    help='raw time granularity for dataset',
-)
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-
 parser.add_argument(
     '--num_neighbors',
     type=int,
@@ -335,8 +328,7 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
     with hm.activate('val'):
-        # val_mrr = eval(evaluator, val_loader, model, eval_metric)
-        val_mrr = 0
+        val_mrr = eval(evaluator, val_loader, model, eval_metric)
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
         )
