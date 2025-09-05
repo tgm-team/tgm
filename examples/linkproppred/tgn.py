@@ -52,6 +52,9 @@ parser.add_argument(
     choices=['uniform', 'recency'],
     help='sampling strategy',
 )
+parser.add_argument(
+    '--node-dim', type=int, default=256, help='node feat dimension if not provided'
+)
 
 
 class MergeLayer(nn.Module):
@@ -423,7 +426,9 @@ test_dg = DGraph(test_data, device=args.device)
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
 else:
-    static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
+    static_node_feats = torch.zeros(
+        (test_dg.num_nodes, args.node_dim), device=args.device
+    )
 
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
