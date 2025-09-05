@@ -180,7 +180,7 @@ class TPNet_LinkPrediction(nn.Module):
             torch.cat([src_nbr_feats, neg_nbr_feats], dim=0),
         )
         neg_out = self.decoder(z_src_neg, z_dst_neg)
-        self.rp_module.update(src, dst, time=batch.time)
+        self.rp_module.update(batch.src, batch.dst, time=batch.time)
 
         return pos_out, neg_out
 
@@ -214,7 +214,7 @@ def eval(
     model.eval()
     perf_list = []
     for batch in tqdm(loader):
-        for idx, neg_batch in enumerate(tqdm(batch.neg_batch_list)):
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
             copy_batch = copy.deepcopy(batch)
 
             copy_batch.src = batch.src[idx].unsqueeze(0)
