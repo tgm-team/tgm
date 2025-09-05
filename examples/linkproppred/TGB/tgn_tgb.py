@@ -1,7 +1,7 @@
 import argparse
 import copy
 import time
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, Tuple
 
 import numpy as np
 import torch
@@ -16,9 +16,9 @@ from torch_geometric.utils import scatter
 from torch_scatter import scatter_max
 from tqdm import tqdm
 
-from tgm import DGraph
+from tgm import DGData, DGraph
 from tgm.hooks import (
-    DGHook,
+    HookManager,
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
     RecencyNeighborHook,
@@ -394,8 +394,6 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
     return metric_dict
 
 
-MEM_DIM = 100
-
 args = parser.parse_args()
 seed_everything(args.seed)
 
@@ -407,16 +405,19 @@ evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
 dataset.load_test_ns()
 
-train_dg = DGraph(args.dataset, split='train', device=args.device)
-val_dg = DGraph(args.dataset, split='val', device=args.device)
-test_dg = DGraph(args.dataset, split='test', device=args.device)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
 
-# TODO: Read from graph
-NUM_NODES, NODE_FEAT_DIM = test_dg.num_nodes, args.embed_dim
-STATIC_NODE_FEAT = torch.zeros((NUM_NODES, NODE_FEAT_DIM), device=args.device)
+if train_dg.static_node_feats is not None:
+    static_node_feats = train_dg.static_node_feats
+else:
+    static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
 
+MEM_DIM = 100
 memory = TGNMemory(
-    NUM_NODES,
+    test_dg.num_nodes,
     test_dg.edge_feats_dim,
     MEM_DIM,
     args.time_dim,
@@ -441,59 +442,46 @@ opt = torch.optim.Adam(
     lr=args.lr,
 )
 
+if args.sampling == 'uniform':
+    nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
+elif args.sampling == 'recency':
+    nbr_hook = RecencyNeighborHook(
+        num_nbrs=args.n_nbrs,
+        num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+        edge_feats_dim=test_dg.edge_feats_dim,
+    )
+else:
+    raise ValueError(f'Unknown sampling type: {args.sampling}')
 
-def _init_hooks(
-    dg: DGraph, sampling_type: str, neg_sampler: object, split_mode: str
-) -> List[DGHook]:
-    if sampling_type == 'uniform':
-        nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
-    elif sampling_type == 'recency':
-        nbr_hook = RecencyNeighborHook(
-            num_nbrs=args.n_nbrs,
-            num_nodes=dg.num_nodes,
-            edge_feats_dim=dg.edge_feats_dim,
-        )
-    else:
-        raise ValueError(f'Unknown sampling type: {args.sampling}')
+_, dst, _ = train_dg.edges
+hm = HookManager(keys=['train', 'val', 'test'])
+hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
+hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+hm.register_shared(nbr_hook)
 
-    # Always produce negative edge prior to neighbor sampling for link prediction
-    if split_mode in ['val', 'test']:
-        neg_hook = TGBNegativeEdgeSamplerHook(neg_sampler, split_mode=split_mode)
-    else:
-        _, dst, _ = dg.edges
-        min_dst, max_dst = int(dst.min()), int(dst.max())
-        neg_hook = NegativeEdgeSamplerHook(low=min_dst, high=max_dst)
-    return [neg_hook, nbr_hook]
+train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
-
-test_loader = DGDataLoader(
-    test_dg,
-    hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'test'),
-    batch_size=args.bsize,
-)
 
 for epoch in range(1, args.epochs + 1):
-    # TODO: Need a clean way to clear nbr state across epochs
-    train_loader = DGDataLoader(
-        train_dg,
-        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'train'),
-        batch_size=args.bsize,
-    )
-    val_loader = DGDataLoader(
-        val_dg,
-        hook=_init_hooks(test_dg, args.sampling, neg_sampler, 'val'),
-        batch_size=args.bsize,
-    )
-    start_time = time.perf_counter()
-    loss = train(train_loader, opt)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
+    with hm.activate('train'):
+        start_time = time.perf_counter()
+        loss = train(train_loader, opt)
+        end_time = time.perf_counter()
+        latency = end_time - start_time
 
-    val_results = eval(val_loader, eval_metric, evaluator)
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-    )
+    with hm.activate('val'):
+        val_results = eval(val_loader, eval_metric, evaluator)
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+            + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+        )
+    if epoch < args.epochs:
+        hm.reset_state()
+        model['memory'].clear_msgs(list(range(test_dg.num_nodes)))
 
-test_results = eval(test_loader, eval_metric, evaluator)
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+with hm.activate('test'):
+    test_results = eval(test_loader, eval_metric, evaluator)
+    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
