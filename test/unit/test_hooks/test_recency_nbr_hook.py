@@ -16,44 +16,6 @@ _PADDED_TIME_ID = 0
 _PADDED_FEAT_ID = 0.0
 
 
-def test_hook_dependancies():
-    assert RecencyNeighborHook.requires == set()
-    assert RecencyNeighborHook.produces == {
-        'nids',
-        'nbr_nids',
-        'nbr_times',
-        'nbr_feats',
-        'times',
-    }
-
-
-def test_hook_reset_state():
-    assert RecencyNeighborHook.has_state == True
-
-
-def test_bad_neighbor_sampler_init():
-    with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[0], num_nodes=2, edge_feats_dim=1)
-    with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[-1], num_nodes=2, edge_feats_dim=1)
-    with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[], num_nodes=2, edge_feats_dim=1)
-
-
-def _nbrs_2_np(batch: DGBatch) -> List[np.ndarray]:
-    assert isinstance(batch, DGBatch)
-    assert hasattr(batch, 'nids')
-    assert hasattr(batch, 'nbr_nids')
-    assert hasattr(batch, 'nbr_times')
-    assert hasattr(batch, 'nbr_feats')
-
-    nids = np.array(batch.nids)
-    nbr_nids = np.array(batch.nbr_nids)
-    nbr_times = np.array(batch.nbr_times)
-    nbr_feats = np.array(batch.nbr_feats)
-    return [nids, nbr_nids, nbr_times, nbr_feats]
-
-
 @pytest.fixture
 def basic_sample_graph():
     """Initializes the following graph.
@@ -85,6 +47,124 @@ def basic_sample_graph():
     )  # edge feat is simply summing the node IDs at two end points
     data = DGData.from_raw(edge_timestamps, edge_index, edge_feats)
     return data
+
+
+def test_hook_dependancies():
+    assert RecencyNeighborHook.requires == set()
+    assert RecencyNeighborHook.produces == {
+        'nids',
+        'nbr_nids',
+        'nbr_times',
+        'nbr_feats',
+        'times',
+    }
+
+
+def test_hook_reset_state(basic_sample_graph):
+    assert RecencyNeighborHook.has_state == True
+
+    dg = DGraph(basic_sample_graph)
+    n_nbrs = [1]  # 1 neighbor for each node
+    recency_hook = RecencyNeighborHook(
+        num_nbrs=n_nbrs,
+        num_nodes=dg.num_nodes,
+        edge_feats_dim=dg.edge_feats_dim,
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register('unit', recency_hook)
+    hm.set_active_hooks('unit')
+    loader = DGDataLoader(dg, hook_manager=hm, batch_size=1)
+    assert loader._batch_size == 1
+
+    # Iterate the entire graph, reset state, then ensure the second iteration
+    # matches expected output as if the hook was freshly initialized
+    for _ in loader:
+        continue
+
+    hm.reset_state()
+
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+    assert nids.shape == (1, 2)
+    assert nids[0][0] == 0
+    assert nids[0][1] == 1
+    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == PADDED_NODE_ID
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
+    assert nbr_times[0][1][0] == _PADDED_TIME_ID
+    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == _PADDED_FEAT_ID
+
+    batch_2 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
+    assert nids.shape == (1, 2)
+    assert nids[0][0] == 0
+    assert nids[0][1] == 2
+    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == 1
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == 1
+    assert nbr_times[0][1][0] == _PADDED_TIME_ID
+    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0][0] == 1.0
+    assert nbr_feats[0][1][0][0] == _PADDED_FEAT_ID
+
+    batch_3 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
+    assert nids.shape == (1, 2)
+    assert nids[0][0] == 2
+    assert nids[0][1] == 3
+    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == 0
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == 2
+    assert nbr_times[0][1][0] == _PADDED_TIME_ID
+    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0][0] == 2.0
+    assert nbr_feats[0][1][0][0] == _PADDED_FEAT_ID
+
+    batch_4 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
+    assert nids.shape == (1, 2)
+    assert nids[0][0] == 2
+    assert nids[0][1] == 0
+    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == 3
+    assert nbr_nids[0][1][0] == 2
+    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == 3
+    assert nbr_times[0][1][0] == 2
+    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0][0] == 5.0
+    assert nbr_feats[0][1][0][0] == 2.0
+
+
+def test_bad_neighbor_sampler_init():
+    with pytest.raises(ValueError):
+        RecencyNeighborHook(num_nbrs=[0], num_nodes=2, edge_feats_dim=1)
+    with pytest.raises(ValueError):
+        RecencyNeighborHook(num_nbrs=[-1], num_nodes=2, edge_feats_dim=1)
+    with pytest.raises(ValueError):
+        RecencyNeighborHook(num_nbrs=[], num_nodes=2, edge_feats_dim=1)
+
+
+def _nbrs_2_np(batch: DGBatch) -> List[np.ndarray]:
+    assert isinstance(batch, DGBatch)
+    assert hasattr(batch, 'nids')
+    assert hasattr(batch, 'nbr_nids')
+    assert hasattr(batch, 'nbr_times')
+    assert hasattr(batch, 'nbr_feats')
+
+    nids = np.array(batch.nids)
+    nbr_nids = np.array(batch.nbr_nids)
+    nbr_times = np.array(batch.nbr_times)
+    nbr_feats = np.array(batch.nbr_feats)
+    return [nids, nbr_nids, nbr_times, nbr_feats]
 
 
 def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
