@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections import defaultdict, deque
 from dataclasses import is_dataclass
-from typing import Any, Deque, Dict, List, Set, Tuple
+from typing import Any, List, Set, Tuple
 
 import torch
 
@@ -247,21 +246,25 @@ class RecencyNeighborHook(StatefulHook):
 
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
-
-        # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
         self._edge_feats_dim = edge_feats_dim
-        self._history: Dict[int, Deque[Any]] = defaultdict(
-            lambda: deque(maxlen=self._max_nbrs)
-        )
-
         self._device = torch.device('cpu')
+
+        self._nbr_ids = torch.full(
+            (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.long
+        )
+        self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
+        self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
+        self._write_pos = torch.zeros(num_nodes, dtype=torch.long)
 
     @property
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
     def reset_state(self) -> None:
-        self._history = defaultdict(lambda: deque(maxlen=self._max_nbrs))
+        self._nbr_ids.fill_(PADDED_NODE_ID)
+        self._nbr_times.zero_()
+        self._nbr_feats.zero_()
+        self._write_pos.zero_()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # TODO: Consider the case where no edge features exist
@@ -269,8 +272,7 @@ class RecencyNeighborHook(StatefulHook):
         self._move_queues_to_device_if_needed(device)  # No-op after first batch
 
         batch.nids, batch.times = [], []  # type: ignore
-        batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
-        batch.nbr_feats = []  # type: ignore
+        batch.nbr_nids, batch.nbr_times, batch.nbr_feats = [], [], []  # type: ignore
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -310,21 +312,24 @@ class RecencyNeighborHook(StatefulHook):
         nbr_times = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
         nbr_feats = torch.zeros((num_nodes, k, self._edge_feats_dim), device=device)
 
-        for i in range(num_nodes):
-            nid, qtime = int(node_ids[i]), int(query_times[i])
-            history = self._history[nid]
-            valid = [(nbr, t, f) for (nbr, t, f) in history if t < qtime]
-            if not valid:
+        for i, (nid, qtime) in enumerate(zip(node_ids.tolist(), query_times.tolist())):
+            mask = self._nbr_times[nid] < qtime
+            if not mask.any():
                 continue
-            valid = valid[-k:]  # most recent k
 
-            nbr_nids[i, -len(valid) :] = torch.tensor(
-                [x[0] for x in valid], dtype=torch.long, device=device
-            )
-            nbr_times[i, -len(valid) :] = torch.tensor(
-                [x[1] for x in valid], dtype=torch.long, device=device
-            )
-            nbr_feats[i, -len(valid) :] = torch.stack([x[2] for x in valid])
+            valid_ids = self._nbr_ids[nid][mask]
+            valid_times = self._nbr_times[nid][mask]
+            valid_feats = self._nbr_feats[nid][mask]
+            num_valid = valid_ids.size(0)
+
+            if num_valid > k:
+                valid_ids = valid_ids[-k:]
+                valid_times = valid_times[-k:]
+                valid_feats = valid_feats[-k:]
+
+            nbr_nids[i, -num_valid:] = valid_ids
+            nbr_times[i, -num_valid:] = valid_times
+            nbr_feats[i, -num_valid:] = valid_feats
 
         return nbr_nids, nbr_times, nbr_feats
 
@@ -338,8 +343,12 @@ class RecencyNeighborHook(StatefulHook):
             edge_feats = batch.edge_feats
 
         for s, d, t, f in zip(src, dst, time, edge_feats):
-            self._history[s].append((d, t, f.clone()))  # may need to f.clone()
-            self._history[d].append((s, t, f.clone()))  # undirected
+            for u, v in [(s, d), (d, s)]:  # undirected
+                pos = self._write_pos[u].item()
+                self._nbr_ids[u, pos] = v
+                self._nbr_times[u, pos] = t
+                self._nbr_feats[u, pos] = f
+                self._write_pos[u] = (pos + 1) % self._max_nbrs
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:

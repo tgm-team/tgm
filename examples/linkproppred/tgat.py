@@ -153,7 +153,7 @@ def train(
     decoder.train()
     total_loss = 0
 
-    for batch in tqdm(loader):
+    for i, batch in enumerate(tqdm(loader)):
         opt.zero_grad()
 
         z = encoder(batch, static_node_feats)
@@ -167,6 +167,9 @@ def train(
         loss.backward()
         opt.step()
         total_loss += float(loss)
+
+        if i > 20:
+            break
     return total_loss
 
 
@@ -266,10 +269,13 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
-        start_time = time.perf_counter()
-        loss = train(train_loader, static_node_feats, encoder, decoder, opt)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
+        from tgm.util.perf import Profiling
+
+        with Profiling('foo'):
+            start_time = time.perf_counter()
+            loss = train(train_loader, static_node_feats, encoder, decoder, opt)
+            end_time = time.perf_counter()
+            latency = end_time - start_time
 
     with hm.activate('val'):
         val_mrr = eval(
