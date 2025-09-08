@@ -18,6 +18,7 @@ from tqdm import tqdm
 
 from tgm import DGData, DGraph
 from tgm.hooks import (
+    DeduplicationHook,
     HookManager,
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
@@ -296,21 +297,28 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
 
         src, pos_dst, t, msg = batch.src, batch.dst, batch.time, batch.edge_feats
         neg_dst = batch.neg
-
-        # n_id = torch.cat([src, pos_dst, neg_dst]).unique()
-        # n_id, edge_index, e_id = neighbor_loader(n_id)
-
-        seed_nodes = batch.nids[0].repeat_interleave(10)
         nbr_nodes = batch.nbr_nids[0].flatten()
+        num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
+        src_nodes = torch.cat(
+            (
+                batch.src.repeat_interleave(num_nbrs),
+                batch.dst.repeat_interleave(num_nbrs),
+                batch.neg.repeat_interleave(num_nbrs),
+            ),
+            0,
+        )
+        # src_nodes = batch.src.repeat_interleave(len(nbr_nodes) // len(batch.src))
+        #! mask out invalid nbrs
+        nbr_mask = nbr_nodes != -1
+        nbr_edge_index = torch.stack(
+            [
+                batch.global_to_local(src_nodes[nbr_mask]),
+                batch.global_to_local(nbr_nodes[nbr_mask]),
+            ]
+        )
 
-        seed_nodes = batch.global_to_local(seed_nodes)
-        nbr_nodes = batch.global_to_local(nbr_nodes)
-        nbr_edge_index = torch.stack([seed_nodes, nbr_nodes])
-
-        nbr_times = batch.nbr_times[0].flatten()
-        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()
-
-        # Get updated memory of all nodes involved in the computation.
+        nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
+        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
         z, last_update = model['memory'](batch.unique_nids)
         z = model['gnn'](
             z,
@@ -319,12 +327,11 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
             nbr_times,
             nbr_feats,
         )
-
         pos_out = model['link_pred'](
-            z[batch.global_to_local(src)], z[batch.global_to_local(pos_dst)]
+            z[batch.global_to_local(batch.src)], z[batch.global_to_local(pos_dst)]
         )
         neg_out = model['link_pred'](
-            z[batch.global_to_local(src)], z[batch.global_to_local(neg_dst)]
+            z[batch.global_to_local(batch.src)], z[batch.global_to_local(neg_dst)]
         )
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
@@ -341,7 +348,6 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
 
         total_loss += float(loss) * batch.src.size(0)
         num_edges += batch.src.size(0)
-
     return total_loss / num_edges
 
 
@@ -359,24 +365,35 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
             batch.time,
             batch.edge_feats,
         )
+        nbr_nodes = batch.nbr_nids[0].flatten()
+
+        num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
+        src_nodes = torch.cat(
+            (
+                batch.src.repeat_interleave(num_nbrs),
+                batch.dst.repeat_interleave(num_nbrs),
+                batch.neg.repeat_interleave(num_nbrs),
+            ),
+            0,
+        )
+        nbr_mask = nbr_nodes != -1
+        nbr_edge_index = torch.stack(
+            [
+                batch.global_to_local(src_nodes[nbr_mask]),
+                batch.global_to_local(nbr_nodes[nbr_mask]),
+            ]
+        )
+        nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
+        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+
+        z, last_update = model['memory'](batch.unique_nids)
+        z = model['gnn'](z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
             dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src = batch.src[idx].repeat(len(dst))
 
-            seed_nodes = batch.nids[0].repeat_interleave(10)
-            nbr_nodes = batch.nbr_nids[0].flatten()
-
-            seed_nodes = batch.global_to_local(seed_nodes)
-            nbr_nodes = batch.global_to_local(nbr_nodes)
-            nbr_edge_index = torch.stack([seed_nodes, nbr_nodes])
-
-            nbr_times = batch.nbr_times[0].flatten()
-            nbr_feats = batch.nbr_feats[0].flatten(0, -2)
-
-            z, last_update = model['memory'](batch.unique_nids)
-            z = model['gnn'](z, last_update, nbr_edge_index, nbr_times, nbr_feats)
             y_pred = model['link_pred'](
                 z[batch.global_to_local(src)], z[batch.global_to_local(dst)]
             )
@@ -459,8 +476,11 @@ else:
 _, dst, _ = train_dg.edges
 hm = HookManager(keys=['train', 'val', 'test'])
 hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
+hm.register('train', DeduplicationHook())
 hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('val', DeduplicationHook())
 hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+hm.register('test', DeduplicationHook())
 hm.register_shared(nbr_hook)
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
@@ -483,7 +503,8 @@ for epoch in range(1, args.epochs + 1):
         )
     if epoch < args.epochs:
         hm.reset_state()
-        model['memory'].clear_msgs(list(range(test_dg.num_nodes)))
+        model['memory'].reset_state()
+        # model['memory'].clear_msgs(list(range(test_dg.num_nodes)))
 
 with hm.activate('test'):
     test_results = eval(test_loader, eval_metric, evaluator)
