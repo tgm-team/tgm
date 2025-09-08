@@ -334,21 +334,23 @@ class RecencyNeighborHook(StatefulHook):
     def _update(self, batch: DGBatch) -> None:
         src, dst, time = batch.src, batch.dst, batch.time
         if batch.edge_feats is None:
-            feats = torch.zeros((len(src), self._edge_feats_dim), device=self._device)
+            edge_feats = torch.zeros(
+                (len(src), self._edge_feats_dim), device=self._device
+            )
         else:
-            feats = batch.edge_feats.float()  # TODO: Move all feats to fp32
+            edge_feats = batch.edge_feats
 
         # Undirected edges (s <-> d)
         node_ids = torch.cat([src, dst])
         nbr_ids = torch.cat([dst, src])
         times = torch.cat([time, time])
-        feats = torch.cat([feats, feats])
+        edge_feats = torch.cat([edge_feats, edge_feats]).float()  # TODO: Unify to fp32
 
         # Scatter updates
         idx = self._write_pos[node_ids] % self._max_nbrs
         self._nbr_ids[node_ids, idx] = nbr_ids
         self._nbr_times[node_ids, idx] = times
-        self._nbr_feats[node_ids, idx] = feats
+        self._nbr_feats[node_ids, idx] = edge_feats
 
         self._write_pos[node_ids] = idx + 1
 
