@@ -8,7 +8,7 @@ ______________________________________________________________________
 
 A `TimeDeltaDG` defines the **temporal granularity** of a dynamic graph. It specifies the “unit of time” at which events (edges or nodes) are recorded. Think of it as the resolution of your graph’s timeline.
 
-See :class:`tgm.timedelta.TimeDeltaDG` for full reference.
+See `tgm.timedelta.TimeDeltaDG` for full reference.
 
 ### Construction
 
@@ -27,7 +27,7 @@ td_biweekly = TimeDeltaDG("W", 2)   # 2-week (bi-weekly) granularity
 
 There are 2 broad classes of `TimeDeltaDG` which determine how timestamps on a graph are interpreted:
 
-- Ordered (`r`): Events are only guarenteed to have a relative order. No actual temporal measurement is associated.
+- Ordered (`r`): Events are only guaranteed to have a relative order. No actual temporal measurement is associated.
 - Non-Ordered (e.g. second-wise (`s`), or daily (`D`)): Standard time units like seconds, minutes, days, etc. Can perform coarsening or time conversion.
 
 ```python
