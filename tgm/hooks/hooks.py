@@ -304,55 +304,60 @@ class RecencyNeighborHook(StatefulHook):
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
-        num_nodes = node_ids.size(0)
-        device = node_ids.device
-        nbr_nids = torch.full(
-            (num_nodes, k), PADDED_NODE_ID, dtype=torch.long, device=device
+        hist_ids = self._nbr_ids[node_ids]
+        hist_times = self._nbr_times[node_ids]
+        hist_feats = self._nbr_feats[node_ids]
+
+        # Mask out invalid entries
+        mask = hist_times < query_times[:, None]
+        scores = torch.where(mask, hist_times, torch.full_like(hist_times, -1))
+
+        # Take last k = top k by time
+        _, idx = torch.topk(scores, k, dim=1, largest=True, sorted=True)
+
+        # Gather neighbors using idx
+        nbr_nids = torch.gather(hist_ids, 1, idx)
+        nbr_times = torch.gather(hist_times, 1, idx)
+        nbr_feats = torch.gather(
+            hist_feats, 1, idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
         )
-        nbr_times = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
-        nbr_feats = torch.zeros((num_nodes, k, self._edge_feats_dim), device=device)
 
-        for i, (nid, qtime) in enumerate(zip(node_ids.tolist(), query_times.tolist())):
-            mask = self._nbr_times[nid] < qtime
-            if not mask.any():
-                continue
-
-            valid_ids = self._nbr_ids[nid][mask]
-            valid_times = self._nbr_times[nid][mask]
-            valid_feats = self._nbr_feats[nid][mask]
-            num_valid = valid_ids.size(0)
-
-            if num_valid > k:
-                valid_ids = valid_ids[-k:]
-                valid_times = valid_times[-k:]
-                valid_feats = valid_feats[-k:]
-
-            nbr_nids[i, -num_valid:] = valid_ids
-            nbr_times[i, -num_valid:] = valid_times
-            nbr_feats[i, -num_valid:] = valid_feats
+        # Replace invalids (where score == -1) with padding
+        pad_mask = scores.gather(1, idx).eq(-1)
+        nbr_nids[pad_mask] = PADDED_NODE_ID
+        nbr_times[pad_mask] = 0
+        nbr_feats[pad_mask] = 0
 
         return nbr_nids, nbr_times, nbr_feats
 
     def _update(self, batch: DGBatch) -> None:
-        src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
+        src, dst, time = batch.src, batch.dst, batch.time
         if batch.edge_feats is None:
-            edge_feats = torch.zeros(
-                (len(src), self._edge_feats_dim), device=self._device
-            )
+            feats = torch.zeros((len(src), self._edge_feats_dim), device=self._device)
         else:
-            edge_feats = batch.edge_feats
+            feats = batch.edge_feats.float()  # TODO: Move all feats to fp32
 
-        for s, d, t, f in zip(src, dst, time, edge_feats):
-            for u, v in [(s, d), (d, s)]:  # undirected
-                pos = self._write_pos[u].item()
-                self._nbr_ids[u, pos] = v
-                self._nbr_times[u, pos] = t
-                self._nbr_feats[u, pos] = f
-                self._write_pos[u] = (pos + 1) % self._max_nbrs
+        # Undirected edges (s <-> d)
+        node_ids = torch.cat([src, dst])
+        nbr_ids = torch.cat([dst, src])
+        times = torch.cat([time, time])
+        feats = torch.cat([feats, feats])
+
+        # Scatter updates
+        idx = self._write_pos[node_ids] % self._max_nbrs
+        self._nbr_ids[node_ids, idx] = nbr_ids
+        self._nbr_times[node_ids, idx] = times
+        self._nbr_feats[node_ids, idx] = feats
+
+        self._write_pos[node_ids] = idx + 1
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
             self._device = device
+            self._nbr_ids = self._nbr_ids.to(device)
+            self._nbr_times = self._nbr_times.to(device)
+            self._nbr_feats = self._nbr_feats.to(device)
+            self._write_pos = self._write_pos.to(device)
 
 
 def _apply_to_tensors_inplace(obj: Any, fn: Any) -> Any:
