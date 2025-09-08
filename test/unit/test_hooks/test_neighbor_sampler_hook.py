@@ -195,10 +195,6 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
 
 
 def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
-    """The goal of this test is to provide a simple TG with 1-hop neighbors
-    and test the basic functionality of the neighbor sampler.
-    also make sure recency and uniform samplers return the same output.
-    """
     dg = DGraph(basic_sample_graph)
     n_nbrs = [3]  # 3 neighbor for each node
     uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs, directed=True)
