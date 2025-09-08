@@ -121,7 +121,7 @@ loader_time = DGDataLoader(dg_data, batch_size=3, batch_unit='D', on_empty='skip
 See `tgm.loader.DGDataLoader` for full reference.
 See [`tgm.loader.DGDataLoader`](../api/loader.md) for full reference.
 
-### Discretization: Coarsening Graphs
+## 4. Discretization: Coarsening Graphs
 
 Discretization allows you to *coarsen* a non-ordered graph to a new time granularity:
 
@@ -152,7 +152,61 @@ print(dg_data.edge_feats) # torch.tensor([[[100, 200, 400]])
 
 **Note**: Discretization is only defined for non-ordered graphs. Attempting to discretize an ordered `DGData` is undefined and will raise `InvalidDiscretizationError`.
 
-### Summary
+## 5. Workflows
+
+### TGB Datasets, Continuous-Time Temporal Graph Model
+
+This is the simplest setup. Simply use `DGData.from_tgb()` to load the TGB dataset with its native time granularity.
+By default, `batch_unit='r'` in the data loader so we can iterate by snapshots of 200 events with:
+
+```python
+from tgm import DGData, DGraph
+from tgm.loader import DGDataLoader
+
+data = DGData.from_tgb('tgbl-wiki')
+dg = DGraph(data)
+loader = DGDataLoader(dg, batch_size=200)
+```
+
+### TGB Datasets, Discrete-Time Temporal Graph Model
+
+In this case, we can still load the native time granularity for the given TGB dataset. However, we need to specify a valid `batch_unit` in our dataloader. Recall, that internally, this applies a `TimeDeltaDG` conversion, and therefore, our iterating batch unit must be coarser (or the same granularity) as the underlying graph time unit.
+
+Here, we use `tgbl-wiki` which has second-wise data, and we iterate over it in weekly snapshots:
+
+```python
+from tgm import DGData, DGraph
+from tgm.loader import DGDataLoader
+
+data = DGData.from_tgb('tgbl-wiki')
+dg = DGraph(data)
+loader = DGDataLoader(dg, batch_unit='W')
+```
+
+We can just as easily iterate over biweekly graph snapshots:
+
+```python
+from tgm import DGData, DGraph
+from tgm.loader import DGDataLoader
+
+data = DGData.from_tgb('tgbl-wiki')
+dg = DGraph(data)
+loader = DGDataLoader(dg, batch_unit='W', batch_size=2)
+```
+
+### Custom Datasets with Known TimeDelta
+
+When working with custom datasets, it's likely that you have an underlying time granularity as determined by your data feed. For instance, you may be streaming log events with unix timestamps, or have pre-aggregated data arriving daily from a cron job.
+
+In this case pretty much the same workflow as above can be used. Just make sure to pass the right unit when constructing your `DGData.from_raw()`.
+
+### Custom Datasets, unknown TimeDelta
+
+It could occur that the underlying source time unit is not known a priori. In this situation, you can use the ordered time unit `TimeDeltaDG('r')` which preserves the relative order of events without assuming a specific time unit. You may also be interested in discretizing your dataset into various granularities, and running some data analysis on the underlying graphs (e.g. figuring out number of nodes, edges, connected components etc).
+
+______________________________________________________________________
+
+## Summary
 
 The time delta is central to managing timestamps on your temporal graph. If using existing dataset (e.g. TGB), the time delta is already defined. For custom datasets, you need to provide either an ordered (`r`) or non-ordered (e.g. `s`) time unit.
 
