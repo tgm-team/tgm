@@ -395,7 +395,7 @@ def basic_sample_graph():
     return data
 
 
-def test_dg_storage_get_nbrs_one_hop(DGStorageImpl, basic_sample_graph):
+def test_dg_storage_get_nbrs(DGStorageImpl, basic_sample_graph):
     null_value = 0
 
     storage = DGStorageImpl(basic_sample_graph)
