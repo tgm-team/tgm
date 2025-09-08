@@ -288,8 +288,6 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
     model['gnn'].train()
     model['link_pred'].train()
 
-    model['memory'].reset_state()  # Start with a fresh memory.
-
     total_loss = 0
     num_edges = 0
     for batch in tqdm(loader):
@@ -405,7 +403,7 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
-        # Update memory and neighbor loader with ground-truth state.
+        # Update memory with ground-truth state.
         pos_msg = pos_msg.float()
         model['memory'].update_state(pos_src, pos_dst, pos_t, pos_msg)
 
@@ -504,7 +502,7 @@ for epoch in range(1, args.epochs + 1):
     if epoch < args.epochs:
         hm.reset_state()
         model['memory'].reset_state()
-        # model['memory'].clear_msgs(list(range(test_dg.num_nodes)))
+
 
 with hm.activate('test'):
     test_results = eval(test_loader, eval_metric, evaluator)
