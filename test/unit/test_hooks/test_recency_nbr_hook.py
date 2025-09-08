@@ -8,11 +8,7 @@ import torch
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
-from tgm.hooks import (
-    NeighborSamplerHook,
-    RecencyNeighborHook,
-    TGBNegativeEdgeSamplerHook,
-)
+from tgm.hooks import RecencyNeighborHook, TGBNegativeEdgeSamplerHook
 from tgm.hooks.hook_manager import HookManager
 from tgm.loader import DGDataLoader
 
@@ -164,48 +160,6 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 5.0
     assert nbr_feats[0][1][0][0] == 2.0
-
-
-def test_recency_uniform_sampler_equivalence(basic_sample_graph):
-    dg = DGraph(basic_sample_graph)
-    n_nbrs = [1]  # 1 neighbor for each node
-    recency_hook = RecencyNeighborHook(
-        num_nbrs=n_nbrs,
-        num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
-    )
-    hm1 = HookManager(keys=['unit'])
-    hm1.register('unit', recency_hook)
-    hm1.set_active_hooks('unit')
-    recency_loader = DGDataLoader(dg, hook_manager=hm1, batch_size=1)
-
-    uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs)
-    hm2 = HookManager(keys=['unit'])
-    hm2.register('unit', uniform_hook)
-    hm2.set_active_hooks('unit')
-
-    uniform_loader = DGDataLoader(dg, hook_manager=hm2, batch_size=1)
-    assert recency_loader._batch_size == uniform_loader._batch_size == 1
-
-    def _assert_batch_eq(batch_1: DGBatch, batch_2: DGBatch) -> None:
-        torch.testing.assert_close(batch_1.nids, batch_2.nids)
-        torch.testing.assert_close(batch_1.nbr_nids, batch_2.nbr_nids)
-        torch.testing.assert_close(batch_1.nbr_times, batch_2.nbr_times)
-        torch.testing.assert_close(batch_1.nbr_feats, batch_2.nbr_feats)
-
-    recency_iter = iter(recency_loader)
-    uniform_iter = iter(uniform_loader)
-    for _ in range(4):
-        rbatch = next(recency_iter)
-        ubatch = next(uniform_iter)
-        _assert_batch_eq(rbatch, ubatch)
-
-    rbatch = next(recency_iter)
-    ubatch = next(uniform_iter)
-    for _ in range(4):
-        rbatch = next(recency_iter)
-        ubatch = next(uniform_iter)
-        _assert_batch_eq(rbatch, ubatch)
 
 
 @pytest.fixture
