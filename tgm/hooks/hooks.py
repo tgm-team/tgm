@@ -162,7 +162,6 @@ class NeighborSamplerHook(StatelessHook):
 
     Args:
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
-        directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
 
     Raises:
         ValueError: If the num_nbrs list is empty.
@@ -171,13 +170,12 @@ class NeighborSamplerHook(StatelessHook):
     requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats'}
 
-    def __init__(self, num_nbrs: List[int], directed: bool = False) -> None:
+    def __init__(self, num_nbrs: List[int]) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
         self._num_nbrs = num_nbrs
-        self._directed = directed
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -213,7 +211,6 @@ class NeighborSamplerHook(StatelessHook):
                 seed_nodes,
                 num_nbrs=num_nbrs,
                 slice=DGSliceTracker(end_time=int(batch.time.min()) - 1),
-                directed=self._directed,
             )
 
             batch.nids.append(seed_nodes)  # type: ignore
@@ -235,18 +232,13 @@ class RecencyNeighborHook(StatefulHook):
         num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
         edge_feats_dim (int): Edge feature dimension on the dynamic graph.
-        directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
 
     Raises:
         ValueError: If the num_nbrs list is empty.
     """
 
     def __init__(
-        self,
-        num_nodes: int,
-        num_nbrs: List[int],
-        edge_feats_dim: int,
-        directed: bool = False,
+        self, num_nodes: int, num_nbrs: List[int], edge_feats_dim: int
     ) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
@@ -255,7 +247,6 @@ class RecencyNeighborHook(StatefulHook):
 
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
-        self._directed = directed
 
         # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
         self._edge_feats_dim = edge_feats_dim
@@ -348,8 +339,7 @@ class RecencyNeighborHook(StatefulHook):
 
         for s, d, t, f in zip(src, dst, time, edge_feats):
             self._history[s].append((d, t, f.clone()))  # may need to f.clone()
-            if not self._directed:
-                self._history[d].append((s, t, f.clone()))  # may need to f.clone()
+            self._history[d].append((s, t, f.clone()))  # undirected
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
