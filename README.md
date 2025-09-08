@@ -28,7 +28,7 @@ Our main goal is to provide an efficient abstraction over dynamic graphs to enab
 
 - :zap: It's not that fast yet but it will be soon :)
 - :hourglass_flowing_sand: First library to support both discrete and continuous-time graphs
-- :wrench: Built-in support for [TGB datasets](https://tgb.complexdatalab.com/), MRR-based link prediction, and Node Property Prediction
+- :wrench: Built-in support for [TGB datasets](https://tgb.complexdatalab.com/), MRR-based link prediction, Node Property Prediction and Graph level tasks
 - :sparkles: Modular, intuitive API for rapid model prototyping
 - :atom: Efficient dataloading with edge and time-based batching
 - :heavy_check_mark: Validated implementations of popular TG methods
@@ -47,7 +47,6 @@ We aim to support the following temporal graph learning methods. If you want us 
 - :white_large_square: [TPNet](https://arxiv.org/abs/2410.04013)
 - :white_large_square: [TNCN](https://arxiv.org/abs/2406.07926)
 - :white_large_square: [DyGMamba](https://arxiv.org/abs/2408.04713)
-- :white_large_square: [NLB](https://arxiv.org/abs/2402.01964)
 - :white_large_square: [NAT](https://arxiv.org/abs/2209.01084)
 
 ### Performance Benchmarks

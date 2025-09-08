@@ -8,7 +8,7 @@ ______________________________________________________________________
 
 A `TimeDeltaDG` defines the **temporal granularity** of a dynamic graph. It specifies the “unit of time” at which events (edges or nodes) are recorded. Think of it as the resolution of your graph’s timeline.
 
-See `tgm.timedelta.TimeDeltaDG` for full reference.
+See [`tgm.timedelta.TimeDeltaDG`](../api/timedelta.md) for full reference.
 
 ### Construction
 
@@ -36,18 +36,18 @@ td_ordered = TimeDeltaDG("r") # Only relative order matters
 
 The full list of non-ordered units is given below:
 
-```python
-'Y': Yearly
-'M': Monthy
-'W': Weekly
-'D': Daily
-'h': Hourly
-'m': Minute-wise
-'s': Second-wise
-'ms': Millisecond-wise
-'us': Microsecond-wise
-'ns': Nanosecond-wise
-```
+| Time Unit | Meaning          |
+| --------- | ---------------- |
+| "Y"       | Yearly           |
+| "M"       | Monthly          |
+| "W"       | Weekly           |
+| "D"       | Daily            |
+| "h"       | Hourly           |
+| "m"       | Minute-wise      |
+| "s"       | Second-wise      |
+| "ms"      | Millisecond-wise |
+| "us"      | Microsecond-wise |
+| "ns"      | Nanosecond-wise  |
 
 #### Coarser vs. Finer Granularities
 
@@ -56,8 +56,10 @@ The full list of non-ordered units is given below:
 ```python
 td_day = TimeDeltaDG("D")
 td_week = TimeDeltaDG("W")
+td_biweek = TimeDeltaDG("W", 2)
 
 print(td_week.is_coarser_than(td_day)) # True
+print(td_biweek.is_coarser_than(td_week)) # True
 ```
 
 **Note**: Checking whether an ordered time delta is coarser or finer than an non-ordered is undefined and will raise a `OrderedGranularityConversionError`.
@@ -86,7 +88,7 @@ dg_ordered = DGData(
 )
 ```
 
-See :class:`tgm.data.DGData` for full reference.
+See [`tgm.data.DGData`](../api/data.md) for full reference.
 
 ## 3. Temporal Data Iteration
 
@@ -97,16 +99,14 @@ The time delta also informs how you iterate over the graph. In this respect, the
 
 ### Iteration Modes
 
-1. By events (ordered) - default
+There are two different modes of iteration in TGM, depending on whether the `batch_unit` parameter is ordered or non-ordered:
 
-   - Iterates over a fixed number of events at a time.
-   - `batch_unit='r'` and `batch_size=N` yields N events per batch.
+| Iteration Mode        | Meaning                                          | Example                                                              | Requires Non-Ordered Graph TimeDelta | Can produce empty batches |
+| --------------------- | ------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------ | ------------------------- |
+| By Events (Ordered)   | Iterates over a fixed number of events at a time | Batch unit = `r` and batch size `N` yields N events per batch        | No                                   | No                        |
+| By Time (Non-Ordered) | Iterates over a time window                      | Batch unit = `h` and batch size `3` yields 3 hours of data per batch | Yes                                  | Yes                       |
 
-1. By time (non-ordered)
-
-   - Iterates over a time window (e.g. 3 hours at a time).
-   - Converts underyling timestamps to match the requested batch granularity
-   - Can result in empty batches if no events occur in the window. Can specify `on_empty='raise'` to error on empty batches of `on_empty='skip` to ignore them.
+**Note**: Time-based iteration can result in empty batches if no events occur in the window. You can specify `on_empty='raise'` to error on empty batches of `on_empty='skip'` to ignore them.
 
 ```python
 from tgm.loader import DGDataLoader
@@ -114,29 +114,46 @@ from tgm.loader import DGDataLoader
 # Ordered iteration
 loader = DGDataLoader(dg_data, batch_size=10, batch_unit='r')
 
-# Time-based iteration (non-ordered)
+# Time-based iteration (non-ordered), skip empty batches
 loader_time = DGDataLoader(dg_data, batch_size=3, batch_unit='D', on_empty='skip')
 ```
 
-See :class:`tgm.loader.DGDataLoader` for full reference.
+See `tgm.loader.DGDataLoader` for full reference.
+See [`tgm.loader.DGDataLoader`](../api/loader.md) for full reference.
 
 ### Discretization: Coarsening Graphs
 
 Discretization allows you to *coarsen* a non-ordered graph to a new time granularity:
 
-- multiple edge and node events are partitioned into time buckets
-- we keep the first occurrence of duplicate events per bucket (future versions will support other reduction ops)
+- multiple edge and node events are partitioned into time buckets based on the requested granularity
+- if multiple events map to the same edge in the same bucket, only the first occurence is kept (future versions will support other reduction ops)
 
 This is useful for tuning dataset granularity (e.g. converting from continuous to discrete temporal graphs).
 
 ```python
-dg_daily = dg_data.discretize(time_delta="D", reduce_op="first")
+dg_data_second_wise = DGData.from_raw(
+    time_delta="s",
+    edge_timestamps=torch.tensor([15, 30, 45, 60]),
+    edge_index=torch.tensor([[0, 1], [2, 3], [0, 1], [0, 1]),
+    edge_feats=torch.tensor([[100, 200, 300, 400]]),
+)
+
+# Discretize from second-wise to minutely data
+dg_data_minute_wise = dg_data_second_wise.discretize(time_delta="m", reduce_op="first")
+
+# After discretizing, note that the edge interaction between node 0 and 1 at time 15 and 45 are duplicates
+# after grouping to minute-wise buckets (minute 0). In this case, we keep the first event (edge_feats 100)
+# and drop the second event (edge_feats 400).
+print(dg_data.time_delta) # TimeDeltaDG("m")
+print(dg_data.edge_timestamps) # torch.tensor([0, 0, 1])
+print(dg_data.edge_index) # torch.tensor([[0, 1], [2, 3], [0, 1])
+print(dg_data.edge_feats) # torch.tensor([[[100, 200, 400]])
 ```
 
-**Note**: This is only applicable for non-ordered graphs. Attempting to discretize an ordered `DGData` is undefined and will raise `InvalidDiscretizationError`.
+**Note**: Discretization is only defined for non-ordered graphs. Attempting to discretize an ordered `DGData` is undefined and will raise `InvalidDiscretizationError`.
 
 ### Summary
 
 The time delta is central to managing timestamps on your temporal graph. If using existing dataset (e.g. TGB), the time delta is already defined. For custom datasets, you need to provide either an ordered (`r`) or non-ordered (e.g. `s`) time unit.
 
-Non-ordered time deltas are strictly more general in that they enable you to discretize (coarsen) you dataset, and iterate by temporal snapshots.
+Non-ordered time deltas are strictly more general in that they enable you to discretize your dataset, and iterate by temporal snapshots.
