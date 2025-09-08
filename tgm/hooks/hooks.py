@@ -313,7 +313,7 @@ class RecencyNeighborHook(StatefulHook):
         mask = hist_times < query_times[:, None]
         scores = torch.where(mask, hist_times, torch.full_like(hist_times, -1))
 
-        # Take last k = top k by time
+        # Take largest k (most recent) times excluding invalid ones
         _, idx = torch.topk(scores, k, dim=1, largest=True, sorted=True)
 
         # Gather neighbors using idx
@@ -333,14 +333,12 @@ class RecencyNeighborHook(StatefulHook):
 
     def _update(self, batch: DGBatch) -> None:
         src, dst, time = batch.src, batch.dst, batch.time
-        device = self._device
-
         if batch.edge_feats is None:
             edge_feats = torch.zeros(
-                (len(src), self._edge_feats_dim), device=device, dtype=torch.float
+                (len(src), self._edge_feats_dim), device=self._device
             )
         else:
-            edge_feats = batch.edge_feats.float()
+            edge_feats = batch.edge_feats.float()  # TODO: Keep all feats in fp32
 
         # Undirected edges (s <-> d)
         node_ids = torch.cat([src, dst])
@@ -348,20 +346,33 @@ class RecencyNeighborHook(StatefulHook):
         times = torch.cat([time, time])
         edge_feats = torch.cat([edge_feats, edge_feats])
 
-        # Process each unique node
-        unique_nodes = torch.unique(node_ids)
-        for node in unique_nodes:
-            mask = node_ids == node
-            edges_for_node = nbr_ids[mask]
-            times_for_node = times[mask]
-            feats_for_node = edge_feats[mask]
+        # Sort nodes so duplicates are consecutive
+        sorted_nodes, perm = torch.sort(node_ids)
+        sorted_nbr_ids = nbr_ids[perm]
+        sorted_times = times[perm]
+        sorted_feats = edge_feats[perm]
 
-            for e, t, f in zip(edges_for_node, times_for_node, feats_for_node):
-                idx = self._write_pos[node] % self._max_nbrs
-                self._nbr_ids[node, idx] = e
-                self._nbr_times[node, idx] = t
-                self._nbr_feats[node, idx] = f
-                self._write_pos[node] += 1
+        # Count number of occurrences per node (cumulative offset)
+        _, inverse, counts = torch.unique_consecutive(
+            sorted_nodes, return_inverse=True, return_counts=True
+        )
+        cumsum_counts = torch.cumsum(
+            torch.cat([torch.tensor([0], device=self._device), counts[:-1]]), dim=0
+        )
+        offsets = torch.arange(len(sorted_nodes), device=self._device)
+        offsets -= cumsum_counts[inverse]
+
+        # Compute write indices using circular buffer
+        idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs
+
+        # Scatter updates into buffers
+        self._nbr_ids[sorted_nodes, idx] = sorted_nbr_ids
+        self._nbr_times[sorted_nodes, idx] = sorted_times
+        self._nbr_feats[sorted_nodes, idx] = sorted_feats
+
+        # Increment write_pos per node by number of occurrences
+        num_updates = torch.ones_like(sorted_nodes, device=self._device)
+        self._write_pos.scatter_add_(0, sorted_nodes, num_updates)
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
