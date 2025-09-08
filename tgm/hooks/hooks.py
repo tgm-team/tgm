@@ -333,26 +333,35 @@ class RecencyNeighborHook(StatefulHook):
 
     def _update(self, batch: DGBatch) -> None:
         src, dst, time = batch.src, batch.dst, batch.time
+        device = self._device
+
         if batch.edge_feats is None:
             edge_feats = torch.zeros(
-                (len(src), self._edge_feats_dim), device=self._device
+                (len(src), self._edge_feats_dim), device=device, dtype=torch.float
             )
         else:
-            edge_feats = batch.edge_feats
+            edge_feats = batch.edge_feats.float()
 
         # Undirected edges (s <-> d)
         node_ids = torch.cat([src, dst])
         nbr_ids = torch.cat([dst, src])
         times = torch.cat([time, time])
-        edge_feats = torch.cat([edge_feats, edge_feats]).float()  # TODO: Unify to fp32
+        edge_feats = torch.cat([edge_feats, edge_feats])
 
-        # Scatter updates
-        idx = self._write_pos[node_ids] % self._max_nbrs
-        self._nbr_ids[node_ids, idx] = nbr_ids
-        self._nbr_times[node_ids, idx] = times
-        self._nbr_feats[node_ids, idx] = edge_feats
+        # Process each unique node
+        unique_nodes = torch.unique(node_ids)
+        for node in unique_nodes:
+            mask = node_ids == node
+            edges_for_node = nbr_ids[mask]
+            times_for_node = times[mask]
+            feats_for_node = edge_feats[mask]
 
-        self._write_pos[node_ids] = idx + 1
+            for e, t, f in zip(edges_for_node, times_for_node, feats_for_node):
+                idx = self._write_pos[node] % self._max_nbrs
+                self._nbr_ids[node, idx] = e
+                self._nbr_times[node, idx] = t
+                self._nbr_feats[node, idx] = f
+                self._write_pos[node] += 1
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
