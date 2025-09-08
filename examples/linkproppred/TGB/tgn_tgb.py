@@ -297,6 +297,9 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
         src, pos_dst, t, msg = batch.src, batch.dst, batch.time, batch.edge_feats
         neg_dst = batch.neg
 
+        # n_id = torch.cat([src, pos_dst, neg_dst]).unique()
+        # n_id, edge_index, e_id = neighbor_loader(n_id)
+
         seed_nodes = batch.nids[0].repeat_interleave(10)
         nbr_nodes = batch.nbr_nids[0].flatten()
 
