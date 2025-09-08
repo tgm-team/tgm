@@ -660,7 +660,7 @@ class DGData:
             raise ImportError('TGB required to load TGB data, try `pip install py-tgb`')
 
         def suppress_output(func: Callable, *args: Any, **kwargs: Any) -> Any:
-            # This is a hacky workaound that tries to lower the verbosity on TGB
+            # This is a hacky workaround that tries to lower the verbosity on TGB
             # logs which are currently directed to stdout. This should be removed
             # once https://github.com/shenyangHuang/TGB/issues/117 is addressed.
             import builtins
