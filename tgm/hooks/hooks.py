@@ -305,25 +305,23 @@ class RecencyNeighborHook(StatefulHook):
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
-        hist_ids = self._nbr_ids[node_ids]
-        hist_times = self._nbr_times[node_ids]
-        hist_feats = self._nbr_feats[node_ids]
+        nbr_nids = self._nbr_ids[node_ids]
+        nbr_times = self._nbr_times[node_ids]
+        nbr_feats = self._nbr_feats[node_ids]
 
-        # Mask out invalid entries
-        mask = hist_times < query_times[:, None]
-        scores = torch.where(mask, hist_times, torch.full_like(hist_times, -1))
-
-        # Take largest k (most recent) times excluding invalid ones
+        # Mask out invalid (forward-looking) nbr_times and get the most recent (largest) k per node
+        mask = nbr_times < query_times[:, None]
+        scores = torch.where(mask, nbr_times, torch.full_like(nbr_times, -1))
         _, idx = torch.topk(scores, k, dim=1, largest=True, sorted=True)
 
-        # Gather neighbors using idx
-        nbr_nids = torch.gather(hist_ids, 1, idx)
-        nbr_times = torch.gather(hist_times, 1, idx)
-        nbr_feats = torch.gather(
-            hist_feats, 1, idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
+        # Gather each nbr tensor using the node-wise idx
+        nbr_nids = nbr_nids.gather(1, idx)
+        nbr_times = nbr_times.gather(1, idx)
+        nbr_feats = nbr_feats.gather(
+            1, idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
         )
 
-        # Replace invalids (where score == -1) with padding
+        # Replace invalid entries (where score == -1) with padding
         pad_mask = scores.gather(1, idx).eq(-1)
         nbr_nids[pad_mask] = PADDED_NODE_ID
         nbr_times[pad_mask] = 0
@@ -342,13 +340,13 @@ class RecencyNeighborHook(StatefulHook):
 
         # Undirected edges (s <-> d)
         node_ids = torch.cat([src, dst])
-        nbr_ids = torch.cat([dst, src])
+        nbr_nids = torch.cat([dst, src])
         times = torch.cat([time, time])
         edge_feats = torch.cat([edge_feats, edge_feats])
 
         # Sort nodes so duplicates are consecutive
         sorted_nodes, perm = torch.sort(node_ids)
-        sorted_nbr_ids = nbr_ids[perm]
+        sorted_nbr_ids = nbr_nids[perm]
         sorted_times = times[perm]
         sorted_feats = edge_feats[perm]
 
