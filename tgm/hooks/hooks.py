@@ -272,7 +272,8 @@ class RecencyNeighborHook(StatefulHook):
         self._move_queues_to_device_if_needed(device)  # No-op after first batch
 
         batch.nids, batch.times = [], []  # type: ignore
-        batch.nbr_nids, batch.nbr_times, batch.nbr_feats = [], [], []  # type: ignore
+        batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
+        batch.nbr_feats = []  # type: ignore
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:

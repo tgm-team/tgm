@@ -167,7 +167,6 @@ def train(
         loss.backward()
         opt.step()
         total_loss += float(loss)
-
     return total_loss
 
 
