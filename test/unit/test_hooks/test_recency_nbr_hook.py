@@ -16,6 +16,9 @@ from tgm.hooks import (
 from tgm.hooks.hook_manager import HookManager
 from tgm.loader import DGDataLoader
 
+_PADDED_TIME_ID = 0
+_PADDED_FEAT_ID = 0.0
+
 
 def test_hook_dependancies():
     assert RecencyNeighborHook.requires == set()
@@ -112,10 +115,10 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nbr_nids[0][0][0] == PADDED_NODE_ID
     assert nbr_nids[0][1][0] == PADDED_NODE_ID
     assert nbr_times.shape == (1, 2, 1)
-    assert nbr_times[0][0][0] == 0
-    assert nbr_times[0][1][0] == 0
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
+    assert nbr_times[0][1][0] == _PADDED_TIME_ID
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
-    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == 0.0
+    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == _PADDED_FEAT_ID
 
     batch_2 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
@@ -127,10 +130,10 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nbr_nids[0][1][0] == PADDED_NODE_ID
     assert nbr_times.shape == (1, 2, 1)
     assert nbr_times[0][0][0] == 1
-    assert nbr_times[0][1][0] == 0
+    assert nbr_times[0][1][0] == _PADDED_TIME_ID
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 1.0
-    assert nbr_feats[0][1][0][0] == 0.0
+    assert nbr_feats[0][1][0][0] == _PADDED_FEAT_ID
 
     batch_3 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
@@ -142,10 +145,10 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nbr_nids[0][1][0] == PADDED_NODE_ID
     assert nbr_times.shape == (1, 2, 1)
     assert nbr_times[0][0][0] == 2
-    assert nbr_times[0][1][0] == 0
+    assert nbr_times[0][1][0] == _PADDED_TIME_ID
     assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0][0] == 2.0
-    assert nbr_feats[0][1][0][0] == 0.0
+    assert nbr_feats[0][1][0][0] == _PADDED_FEAT_ID
 
     batch_4 = next(batch_iter)
     nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
@@ -251,8 +254,8 @@ def test_recency_exceed_buffer(recency_buffer_graph):
     assert nbr_nids[0][0][0] == PADDED_NODE_ID
     assert nbr_nids[0][0][1] == PADDED_NODE_ID
     assert nbr_times.shape == (1, 4, 2)
-    assert nbr_times[0][0][0] == 0
-    assert nbr_times[0][0][1] == 0
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
+    assert nbr_times[0][0][1] == _PADDED_TIME_ID
     assert nbr_feats.shape == (1, 4, 2, 1)  # 1 feature per edge
 
     batch_2 = next(batch_iter)
@@ -262,7 +265,7 @@ def test_recency_exceed_buffer(recency_buffer_graph):
     assert nbr_nids[0][0][0] == 1
     assert nbr_nids[0][0][1] == 2
     assert nbr_times.shape == (1, 4, 2)
-    assert nbr_times[0][0][0] == 0
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
     assert nbr_times[0][0][1] == 1
     assert nbr_feats.shape == (1, 4, 2, 1)  # 1 feature per edge
 
@@ -324,8 +327,8 @@ def test_2_hop_graph(two_hop_basic_graph):
     assert nbr_nids[0][0][0] == PADDED_NODE_ID
     assert nbr_nids[1][0][0] == PADDED_NODE_ID
     assert nbr_times.shape == (2, 2, 1)
-    assert nbr_times[0][0][0] == 0
-    assert nbr_times[1][0][0] == 0
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
+    assert nbr_times[1][0][0] == _PADDED_TIME_ID
     assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
 
     batch_2 = next(batch_iter)
@@ -427,8 +430,8 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_g
     assert nbr_nids[0][0][0] == PADDED_NODE_ID
     assert nbr_nids[1][0][0] == PADDED_NODE_ID
     assert nbr_times.shape == (2, 6, 1)
-    assert nbr_times[0][0][0] == 0
-    assert nbr_times[1][0][0] == 0
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
+    assert nbr_times[1][0][0] == _PADDED_TIME_ID
     assert nbr_feats.shape == (2, 6, 1, 1)  # 1 feature per edge
 
     neg_batch_list = [[0, 3, 4, 5]]
