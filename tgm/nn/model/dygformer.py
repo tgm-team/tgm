@@ -113,78 +113,20 @@ class NeighborCooccurrenceEncoder(nn.Module):
         return source_freq_tensor, dst_freq_tensor
 
     def _count_nodes_freq_torch(
-        self, all_sources_neighbors: torch.Tensor, all_dsts_neighbors: torch.Tensor
+        self, src: torch.Tensor, dst: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        assert all_sources_neighbors.dim() == 2
-        assert all_sources_neighbors.shape == all_dsts_neighbors.shape
+        assert src.dim() == 2
+        assert src.shape == dst.shape
 
-        B, N = all_sources_neighbors.shape
+        cross_mask = src.unsqueeze(dim=1) == dst.unsqueeze(dim=-1)
+        src_mask = src.unsqueeze(dim=1) == src.unsqueeze(dim=-1)
+        dst_mask = dst.unsqueeze(dim=1) == dst.unsqueeze(dim=-1)
 
-        source_freq_list = []
-        dst_freq_list = []
-
-        for i in range(B):
-            src_neighbors = all_sources_neighbors[i]
-            dst_neighbors = all_dsts_neighbors[i]
-
-            # Unique IDs and counts in source's neighbors
-            src_unique, src_inverse_indices, src_counts = torch.unique(
-                src_neighbors, return_inverse=True, return_counts=True
-            )
-            src_neighbors_freq_src_neighbors = src_counts[src_inverse_indices].float()
-            src_mapping_dict = {
-                int(k.item()): int(v.item()) for k, v in zip(src_unique, src_counts)
-            }
-
-            # Unique IDs and counts in destination's neighbors
-            dst_unique, dst_inverse_indices, dst_counts = torch.unique(
-                dst_neighbors, return_inverse=True, return_counts=True
-            )
-            dst_neighbors_freq_dst_neighbors = dst_counts[dst_inverse_indices].float()
-            dst_mapping_dict = {
-                int(k.item()): int(v.item()) for k, v in zip(dst_unique, dst_counts)
-            }
-
-            # Cross frequencies
-            src_neighbors_freq_dst_neighbors = torch.tensor(
-                [dst_mapping_dict.get(int(n.item()), 0) for n in src_neighbors],
-                dtype=torch.float,
-                device=all_sources_neighbors.device,
-            )
-            dst_neighbors_freq_src_neighbors = torch.tensor(
-                [src_mapping_dict.get(int(n.item()), 0) for n in dst_neighbors],
-                dtype=torch.float,
-                device=all_sources_neighbors.device,
-            )
-
-            # Stack own + cross frequencies
-            source_freq_list.append(
-                torch.stack(
-                    [
-                        src_neighbors_freq_src_neighbors,
-                        src_neighbors_freq_dst_neighbors,
-                    ],
-                    dim=1,
-                )
-            )
-            dst_freq_list.append(
-                torch.stack(
-                    [
-                        dst_neighbors_freq_dst_neighbors,
-                        dst_neighbors_freq_src_neighbors,
-                    ],
-                    dim=1,
-                )
-            )
-
-        source_freq_tensor = torch.stack(source_freq_list, dim=0)
-        dst_freq_tensor = torch.stack(dst_freq_list, dim=0)
-
-        # Zero-out padded nodes
-        source_freq_tensor[all_sources_neighbors == PADDED_NODE_ID] = 0.0
-        dst_freq_tensor[all_dsts_neighbors == PADDED_NODE_ID] = 0.0
-
-        return source_freq_tensor.to(self.device), dst_freq_tensor.to(self.device)
+        src_freq = torch.stack([src_mask.sum(1), cross_mask.sum(1)], dim=2).float()
+        dst_freq = torch.stack([dst_mask.sum(1), cross_mask.sum(2)], dim=2).float()
+        src_freq[src == -1] = 0.0
+        dst_freq[dst == -1] = 0.0
+        return src_freq, dst_freq
 
     def forward(
         self,
@@ -200,11 +142,11 @@ class NeighborCooccurrenceEncoder(nn.Module):
         Returns:
             X (PyTorch Float Tensor): Neighbor co-occurrence features (`X^{t}_{*,C}`).
         """
-        src_neighbour_nodes_ids_np = src_neighbour_nodes_ids.cpu().numpy()
-        dst_neighbour_nodes_ids_np = dst_neighbour_nodes_ids.cpu().numpy()
+        # src_neighbour_nodes_ids_np = src_neighbour_nodes_ids.cpu().numpy()
+        # dst_neighbour_nodes_ids_np = dst_neighbour_nodes_ids.cpu().numpy()
 
-        source_freq, dst_freq = self._count_nodes_freq(
-            src_neighbour_nodes_ids_np, dst_neighbour_nodes_ids_np
+        source_freq, dst_freq = self._count_nodes_freq_torch(
+            src_neighbour_nodes_ids, dst_neighbour_nodes_ids
         )
         src_neighbors_co_occurrence_feat = self.neighbor_co_occurrence_encoder(
             source_freq.unsqueeze(dim=-1)
@@ -318,9 +260,9 @@ class DyGFormer(nn.Module):
         device: str = 'cpu',
     ) -> None:
         super(DyGFormer, self).__init__()
-        assert max_input_sequence_length % patch_size == 0, (
-            'Max sequence length must be a multiple of path size'
-        )
+        assert (
+            max_input_sequence_length % patch_size == 0
+        ), 'Max sequence length must be a multiple of path size'
 
         self.node_feat_dim = node_feat_dim
         self.edge_feat_dim = edge_feat_dim
