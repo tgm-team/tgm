@@ -86,7 +86,7 @@ class TimeDeltaDG:
             float: Ratio of self to target granularity.
 
         Raises:
-            EventOrderedConversionError If either self or target granularity is event-ordered.
+            EventOrderedConversionError: If either self or target granularity is event-ordered.
         """
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
