@@ -2,7 +2,6 @@
 
 from typing import Callable, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -33,99 +32,24 @@ class NeighborCooccurrenceEncoder(nn.Module):
             nn.Linear(in_features=self.feat_dim, out_features=self.feat_dim),
         ).to(device)
 
-    # @TODO: Optimize this function to work with torch.Tensor directly and vectorize everything
     def _count_nodes_freq(
-        self, all_sources_neighbors: np.ndarray, all_dsts_neighbors: np.ndarray
+        self, src_nbrs: torch.Tensor, dst_nbrs: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        assert (
-            all_sources_neighbors.ndim == 2
-            and all_sources_neighbors.shape == all_dsts_neighbors.shape
-        )
+        assert src_nbrs.ndim == 2 and src_nbrs.shape == dst_nbrs.shape
 
-        source_freq, dst_freq = [], []
-        for src_neighbors, dst_neighbors in zip(
-            all_sources_neighbors, all_dsts_neighbors
-        ):
-            src_unique_keys, src_inverse_indices, src_counts = np.unique(
-                src_neighbors, return_inverse=True, return_counts=True
-            )
-            # Frequency of each source's neighbor within source's neighbors
-            src_neighbors_freq_src_neighbors = (
-                torch.from_numpy(src_counts[src_inverse_indices])
-                .float()
-                .to(self.device)
-            )
-            src_mapping_dict = dict(zip(src_unique_keys, src_counts))
+        # cross occurrences count
+        cross_mask = src_nbrs.unsqueeze(dim=1) == dst_nbrs.unsqueeze(dim=-1)
 
-            dst_unique_keys, dst_inverse_indices, dst_counts = np.unique(
-                dst_neighbors, return_inverse=True, return_counts=True
-            )
-            # Frequency of each destination's neighbor within destination's neighbors
-            dst_neighbors_freq_dst_neighbors = (
-                torch.from_numpy(dst_counts[dst_inverse_indices])
-                .float()
-                .to(self.device)
-            )
-            dst_mapping_dict = dict(zip(dst_unique_keys, dst_counts))
-
-            # Frequency of each source's neighbor within destination's neighbors
-            src_neighbors_freq_dst_neighbors = (
-                torch.from_numpy(src_neighbors.copy())
-                .apply_(lambda neighbor_id: dst_mapping_dict.get(neighbor_id, 0.0))
-                .float()
-                .to(self.device)
-            )
-            # Frequency of each source's neighbor within destination's neighbors
-            dst_neighbors_freq_src_neighbors = (
-                torch.from_numpy(dst_neighbors.copy())
-                .apply_(lambda neighbor_id: src_mapping_dict.get(neighbor_id, 0.0))
-                .float()
-                .to(self.device)
-            )
-
-            source_freq.append(
-                torch.stack(
-                    [
-                        src_neighbors_freq_src_neighbors,
-                        src_neighbors_freq_dst_neighbors,
-                    ],
-                    dim=1,
-                )
-            )
-            dst_freq.append(
-                torch.stack(
-                    [
-                        dst_neighbors_freq_dst_neighbors,
-                        dst_neighbors_freq_src_neighbors,
-                    ],
-                    dim=1,
-                )
-            )
-
-        source_freq_tensor = torch.stack(source_freq, dim=0)
-        dst_freq_tensor = torch.stack(dst_freq, dim=0)
-
-        # set the frequencies of the padded nodes (with zero index) to zeros
-        source_freq_tensor[
-            torch.from_numpy(all_sources_neighbors == PADDED_NODE_ID)
-        ] = 0.0
-        dst_freq_tensor[torch.from_numpy(all_dsts_neighbors == PADDED_NODE_ID)] = 0.0
-        return source_freq_tensor, dst_freq_tensor
-
-    def _count_nodes_freq_torch(
-        self, src: torch.Tensor, dst: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        assert src.dim() == 2
-        assert src.shape == dst.shape
-
-        cross_mask = src.unsqueeze(dim=1) == dst.unsqueeze(dim=-1)
-        src_mask = src.unsqueeze(dim=1) == src.unsqueeze(dim=-1)
-        dst_mask = dst.unsqueeze(dim=1) == dst.unsqueeze(dim=-1)
+        # self occurrences count
+        src_mask = src_nbrs.unsqueeze(dim=1) == src_nbrs.unsqueeze(dim=-1)
+        dst_mask = dst_nbrs.unsqueeze(dim=1) == dst_nbrs.unsqueeze(dim=-1)
 
         src_freq = torch.stack([src_mask.sum(1), cross_mask.sum(1)], dim=2).float()
         dst_freq = torch.stack([dst_mask.sum(1), cross_mask.sum(2)], dim=2).float()
-        src_freq[src == -1] = 0.0
-        dst_freq[dst == -1] = 0.0
+
+        # Mask out PADDED_NODE_ID
+        src_freq[src_nbrs == PADDED_NODE_ID] = 0.0
+        dst_freq[dst_nbrs == PADDED_NODE_ID] = 0.0
         return src_freq, dst_freq
 
     def forward(
@@ -142,10 +66,7 @@ class NeighborCooccurrenceEncoder(nn.Module):
         Returns:
             X (PyTorch Float Tensor): Neighbor co-occurrence features (`X^{t}_{*,C}`).
         """
-        # src_neighbour_nodes_ids_np = src_neighbour_nodes_ids.cpu().numpy()
-        # dst_neighbour_nodes_ids_np = dst_neighbour_nodes_ids.cpu().numpy()
-
-        source_freq, dst_freq = self._count_nodes_freq_torch(
+        source_freq, dst_freq = self._count_nodes_freq(
             src_neighbour_nodes_ids, dst_neighbour_nodes_ids
         )
         src_neighbors_co_occurrence_feat = self.neighbor_co_occurrence_encoder(
