@@ -50,7 +50,7 @@ class TimeDeltaDG:
             raise ValueError(f'Value must be a positive integer, got: {self.value}')
         if self.is_event_ordered and self.value != 1:
             raise ValueError(f'Only value=1 is supported for event-ordered TimeDeltaDG')
-        if not self.is_event_ordered and self.unit not in TimeDeltaDG._UNIT_TO_NANOS:
+        if self.is_time_ordered and self.unit not in TimeDeltaDG._UNIT_TO_NANOS:
             raise ValueError(
                 f'Unknown unit: {self.unit}, expected one of {[TimeDeltaDG._EVENT_ORDERED] + list(TimeDeltaDG._UNIT_TO_NANOS.keys())}'
             )
@@ -59,6 +59,11 @@ class TimeDeltaDG:
     def is_event_ordered(self) -> bool:
         """Return True if this is the special event-ordered unit ('r')."""
         return self.unit == TimeDeltaDG._EVENT_ORDERED
+
+    @property
+    def is_time_ordered(self) -> bool:
+        """Return True if this is not special event-ordered unit ('r')."""
+        return not self.is_event_ordered
 
     def is_coarser_than(self, other: str | TimeDeltaDG) -> bool:
         """Return True if this granularity is strictly coarser than `other`.

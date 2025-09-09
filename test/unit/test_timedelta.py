@@ -13,7 +13,7 @@ def test_init_default_value(time_granularity):
     td = TimeDeltaDG(time_granularity)
     assert td.unit == time_granularity
     assert td.value == 1
-    assert not td.is_event_ordered
+    assert td.is_time_ordered
 
 
 def test_init_non_default_value(time_granularity):
@@ -21,7 +21,7 @@ def test_init_non_default_value(time_granularity):
     td = TimeDeltaDG(time_granularity, value)
     assert td.unit == time_granularity
     assert td.value == value
-    assert not td.is_event_ordered
+    assert td.is_time_ordered
 
 
 def test_init_event_ordered():

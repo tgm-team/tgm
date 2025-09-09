@@ -107,16 +107,15 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         if batch_size <= 0:
             raise ValueError(f'batch_size must be > 0 but got {batch_size}')
 
-        dg_event_ordered = dg.time_delta.is_event_ordered
-        batch_event_ordered = batch_unit == 'r'
+        batch_time_delta = TimeDeltaDG(batch_unit)
 
-        if dg_event_ordered and not batch_event_ordered:
+        if dg.time_delta.is_event_ordered and batch_time_delta.is_time_ordered:
             raise EventOrderedConversionError(
                 'Cannot iterate event-ordered dg using time-ordered batch_unit'
             )
-        if not dg_event_ordered and not batch_event_ordered:
-            # Ensure the graph time unit is more granular than batch time unit.
+        if dg.time_delta.is_time_ordered and batch_time_delta.is_time_ordered:
             batch_time_delta = TimeDeltaDG(batch_unit, value=batch_size)
+            # Ensure the graph time unit is more granular than batch time unit.
             if dg.time_delta.is_coarser_than(batch_time_delta):
                 raise InvalidDiscretizationError(
                     f'Tried to construct a data loader on a DGraph with time delta: {dg.time_delta} '
@@ -131,10 +130,13 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         self._dg = dg
         self._batch_size = batch_size
         self._hook_manager = hook_manager
-        self._slice_op = dg.slice_events if batch_event_ordered else dg.slice_time
 
-        start_idx = 0 if batch_event_ordered else dg.start_time
-        stop_idx = dg.num_events if batch_event_ordered else dg.end_time + 1
+        if batch_time_delta.is_event_ordered:
+            self._slice_op = dg.slice_events
+            start_idx, stop_idx = 0, dg.num_events
+        else:
+            self._slice_op = dg.slice_time  # type: ignore
+            start_idx, stop_idx = dg.start_time, dg.end_time + 1
 
         if kwargs.get('drop_last', False):
             slice_start = range(start_idx, stop_idx - batch_size, batch_size)
