@@ -1,4 +1,5 @@
 import argparse
+import time
 from typing import Callable, Tuple
 
 import numpy as np
@@ -163,36 +164,34 @@ def train(loader, encoder, decoder, opt):
     total_loss = 0
 
     seen_nodes = set()  # Use set for tracking, no tensor in graph
-
     for batch in tqdm(loader):
         opt.zero_grad()
 
         y_true = batch.dynamic_node_feats
-        if y_true is None:
-            continue
+        if len(batch.src) > 0:
+            z = encoder(batch)  # [num_nodes, embed_dim]
 
-        z = encoder(batch)  # [num_nodes, embed_dim]
+        if y_true is not None:
+            # Determine which nodes to compute loss for
+            batch_nodes = batch.node_ids.cpu().numpy()
+            keep_mask = [i for i, nid in enumerate(batch_nodes) if nid in seen_nodes]
 
-        # Determine which nodes to compute loss for
-        batch_nodes = batch.node_ids.cpu().numpy()
-        keep_mask = [i for i, nid in enumerate(batch_nodes) if nid in seen_nodes]
+            if len(keep_mask) == 0:
+                # First time all nodes are new, skip backward
+                seen_nodes.update(batch_nodes)
+                continue
 
-        if len(keep_mask) == 0:
-            # First time all nodes are new, skip backward
+            train_idx = torch.tensor(keep_mask, device=z.device)
+            z_node = z[train_idx]
+
+            y_pred = decoder(z_node)
+            loss = F.cross_entropy(y_pred, y_true[train_idx])
+            loss.backward()
+            opt.step()
+            total_loss += float(loss)
+
+            # Update seen nodes
             seen_nodes.update(batch_nodes)
-            continue
-
-        train_idx = torch.tensor(keep_mask, device=z.device)
-        z_node = z[train_idx]
-
-        y_pred = decoder(z_node)
-        loss = F.cross_entropy(y_pred, y_true[train_idx])
-        loss.backward()
-        opt.step()
-        total_loss += float(loss)
-
-        # Update seen nodes
-        seen_nodes.update(batch_nodes)
 
     return total_loss
 
@@ -208,18 +207,20 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-
     for batch in tqdm(loader):
         y_true = batch.dynamic_node_feats
-        if y_true is None:
-            continue
 
-        z = encoder(batch)
-        z_node = z[batch.node_ids]
-        y_pred = decoder(z_node)
-
-        input_dict = {'y_true': y_true, 'y_pred': y_pred, 'eval_metric': [eval_metric]}
-        perf_list.append(evaluator.eval(input_dict)[eval_metric])
+        if len(batch.src) != 0:
+            z = encoder(batch)
+        if y_true is not None:
+            z_node = z[batch.node_ids]
+            y_pred = decoder(z_node)
+            input_dict = {
+                'y_true': y_true,
+                'y_pred': y_pred,
+                'eval_metric': [eval_metric],
+            }
+            perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
     return float(np.mean(perf_list))
 
@@ -289,20 +290,20 @@ opt = torch.optim.Adam(
 )
 
 
-# for epoch in range(1, args.epochs + 1):
-#     with hm.activate('train'):
-#         start_time = time.perf_counter()
-#         loss, train_results = train(train_loader, encoder,decoder, opt)
-#         end_time = time.perf_counter()
-#         latency = end_time - start_time
-#     with hm.activate('val'):
-#         val_ndcg = eval(val_loader, encoder,decoder, eval_metric, evaluator)
+for epoch in range(1, args.epochs + 1):
+    with hm.activate('train'):
+        start_time = time.perf_counter()
+        loss = train(train_loader, encoder, decoder, opt)
+        end_time = time.perf_counter()
+        latency = end_time - start_time
+    with hm.activate('val'):
+        val_ndcg = eval(val_loader, encoder, decoder, eval_metric, evaluator)
 
-#     print(
-#         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_ndcg:.4f}'
-#     )
-#     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
-#         hm.reset_state()
+    print(
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_ndcg:.4f}'
+    )
+    if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
+        hm.reset_state()
 
 with hm.activate('test'):
     test_ndcg = eval(test_loader, encoder, decoder, eval_metric, evaluator)
