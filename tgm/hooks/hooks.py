@@ -318,7 +318,9 @@ class RecencyNeighborHook(StatefulHook):
         nbr_feats = self._nbr_feats[node_ids]
 
         # Mask out invalid (forward-looking) nbr_times and get the most recent (largest) k per node
+        # Also, mask out invalid seed nodes (PADDED_NODE_ID) which could occur on higher hops
         mask = nbr_times < query_times[:, None]
+        mask[nbr_nids.eq(PADDED_NODE_ID)] = False
         scores = torch.where(mask, nbr_times, torch.full_like(nbr_times, -1))
         _, idx = torch.topk(scores, k, dim=1, largest=True, sorted=True)
 
@@ -329,16 +331,16 @@ class RecencyNeighborHook(StatefulHook):
             1, idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
         )
 
-        # Reverse along neighbor dimension to match queue FIFO
-        nbr_nids = torch.flip(nbr_nids, dims=[1])
-        nbr_times = torch.flip(nbr_times, dims=[1])
-        nbr_feats = torch.flip(nbr_feats, dims=[1])
-
         # Replace invalid entries (where score == -1) with padding
         pad_mask = scores.gather(1, idx).eq(-1)
         nbr_nids[pad_mask] = PADDED_NODE_ID
         nbr_times[pad_mask] = 0
         nbr_feats[pad_mask] = 0
+
+        # Reverse along neighbor dimension to match queue FIFO
+        nbr_nids = torch.flip(nbr_nids, dims=[1])
+        nbr_times = torch.flip(nbr_times, dims=[1])
+        nbr_feats = torch.flip(nbr_feats, dims=[1])
 
         return nbr_nids, nbr_times, nbr_feats
 
@@ -373,14 +375,6 @@ class RecencyNeighborHook(StatefulHook):
         )
         offsets = torch.arange(len(sorted_nodes), device=self._device)
         offsets -= cumsum_counts[inverse]
-        # offsets = (
-        #    counts[inverse]
-        #    - 1
-        #    - (
-        #        torch.arange(len(sorted_nodes), device=self._device)
-        #        - cumsum_counts[inverse]
-        #    )
-        # )
 
         # Compute write indices using circular buffer
         idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs
