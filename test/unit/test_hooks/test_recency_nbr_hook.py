@@ -242,6 +242,82 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     assert nbr_feats[0][1][0][0] == 2.0
 
 
+def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    n_nbrs = [1]  # 1 neighbor for each node
+    recency_hook = RecencyNeighborHook(
+        num_nbrs=n_nbrs,
+        num_nodes=dg.num_nodes,
+        edge_feats_dim=dg.edge_feats_dim,
+        directed=True,
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register('unit', recency_hook)
+    hm.set_active_hooks('unit')
+    loader = DGDataLoader(dg, hook_manager=hm, batch_size=1)
+    assert loader._batch_size == 1
+
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+    assert nids.shape == (1, 2)
+    assert nids[0][0] == 0
+    assert nids[0][1] == 1
+    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == PADDED_NODE_ID
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
+    assert nbr_times[0][1][0] == _PADDED_TIME_ID
+    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][1][0][0] == nbr_feats[0][0][0][0] == _PADDED_FEAT_ID
+
+    batch_2 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
+    assert nids.shape == (1, 2)
+    assert nids[0][0] == 0
+    assert nids[0][1] == 2
+    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == 1
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == 1
+    assert nbr_times[0][1][0] == _PADDED_TIME_ID
+    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0][0] == 1.0
+    assert nbr_feats[0][1][0][0] == _PADDED_FEAT_ID
+
+    batch_3 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
+    assert nids.shape == (1, 2)
+    assert nids[0][0] == 2
+    assert nids[0][1] == 3
+    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == PADDED_NODE_ID
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
+    assert nbr_times[0][1][0] == _PADDED_TIME_ID
+    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0][0] == _PADDED_FEAT_ID
+    assert nbr_feats[0][1][0][0] == _PADDED_FEAT_ID
+
+    batch_4 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
+    assert nids.shape == (1, 2)
+    assert nids[0][0] == 2
+    assert nids[0][1] == 0
+    assert nbr_nids.shape == (1, 2, 1)
+    assert nbr_nids[0][0][0] == 3
+    assert nbr_nids[0][1][0] == 2
+    assert nbr_times.shape == (1, 2, 1)
+    assert nbr_times[0][0][0] == 3
+    assert nbr_times[0][1][0] == 2
+    assert nbr_feats.shape == (1, 2, 1, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0][0] == 5.0
+    assert nbr_feats[0][1][0][0] == 2.0
+
+
 @pytest.fixture
 def recency_buffer_graph():
     """Initializes the following graph.
@@ -422,6 +498,92 @@ def test_2_hop_graph(two_hop_basic_graph):
     assert nbr_nids[1][0][0] == PADDED_NODE_ID  # node 5 second hop has neighbor 1
     assert nbr_nids[0][1][0] == 4  # node 2 first hop has neighbor 4
     assert nbr_nids[1][1][0] == PADDED_NODE_ID  # node 2 second hop has no neighbor
+
+
+def test_2_hop_directed_graph(two_hop_basic_graph):
+    dg = DGraph(two_hop_basic_graph)
+    n_nbrs = [1, 1]  # 1 neighbor for each node
+    recency_hook = RecencyNeighborHook(
+        num_nbrs=n_nbrs,
+        num_nodes=dg.num_nodes,
+        edge_feats_dim=dg.edge_feats_dim,
+        directed=True,
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register('unit', recency_hook)
+    hm.set_active_hooks('unit')
+    loader = DGDataLoader(dg, hook_manager=hm, batch_size=1)
+    assert loader._batch_size == 1
+
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+    assert nids.shape == (2, 2)  # 2 hop, each has 2 node
+    assert nids[0][0] == 0
+    assert nids[0][1] == 1
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_nids[0][0][0] == PADDED_NODE_ID
+    assert nbr_nids[1][0][0] == PADDED_NODE_ID
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
+    assert nbr_times[1][0][0] == _PADDED_TIME_ID
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+
+    batch_2 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
+    assert nids.shape == (2, 2)
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+    assert nbr_nids[0][0][0] == PADDED_NODE_ID
+    assert nbr_nids[1][0][0] == PADDED_NODE_ID  # no second hop neighbors
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert nbr_nids[1][1][0] == PADDED_NODE_ID
+
+    batch_3 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
+    assert nids.shape == (2, 2)
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+    assert nbr_nids[0][0][0] == PADDED_NODE_ID  # first hop, node 3 has no neighbor yet
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert nbr_nids[1][0][0] == PADDED_NODE_ID
+    assert nbr_nids[1][1][0] == PADDED_NODE_ID  # second hop, node 2 has neighbor 0
+
+    batch_4 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
+    assert nids.shape == (2, 2)
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+    assert nbr_nids[0][0][0] == PADDED_NODE_ID  # first hop, node 4 has no neighbor yet
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert (
+        nbr_nids[1][1][0] == PADDED_NODE_ID
+    )  # second hop, node 2 has no neighbor now (as 1 is pushed out of cache)
+
+    batch_5 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_5)
+    assert nids.shape == (2, 2)
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+    assert nbr_nids[0][0][0] == PADDED_NODE_ID
+    assert nbr_nids[1][0][0] == PADDED_NODE_ID
+    assert nbr_nids[0][1][0] == 1
+    assert nbr_nids[1][1][0] == PADDED_NODE_ID
+
+    batch_6 = next(batch_iter)
+    nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_6)
+    assert nids.shape == (2, 2)
+    assert nbr_nids.shape == (2, 2, 1)
+    assert nbr_times.shape == (2, 2, 1)
+    assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+    assert nbr_nids[0][0][0] == 0  # node 5 first hop has neighbor 0
+    assert nbr_nids[1][0][0] == 1
+    assert nbr_nids[0][1][0] == PADDED_NODE_ID
+    assert nbr_nids[1][1][0] == PADDED_NODE_ID
 
 
 class FakeNegSampler:
