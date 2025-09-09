@@ -121,7 +121,7 @@ with hm.activate('test'):
         start = timeit.default_timer()
         source_freq_tensor_exp, dst_freq_tensor_exp = (
             neighbour_module._count_nodes_freq(
-                src_neighbour.numpy(), dst_neighbour.numpy()
+                src_neighbour.cpu().numpy(), dst_neighbour.cpu().numpy()
             )
         )
         end = timeit.default_timer()
