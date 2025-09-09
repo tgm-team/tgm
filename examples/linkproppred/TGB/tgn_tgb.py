@@ -405,11 +405,9 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
         for idx, neg_batch in enumerate(neg_batch_list):
             dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src = batch.src[idx].repeat(len(dst))
-
             y_pred = model['link_pred'](
                 z[batch.global_to_local(src)], z[batch.global_to_local(dst)]
             )
-
             input_dict = {
                 'y_pred_pos': np.array([y_pred[0, :].squeeze(dim=-1).cpu()]),
                 'y_pred_neg': np.array(y_pred[1:, :].squeeze(dim=-1).cpu()),
@@ -488,11 +486,8 @@ else:
 _, dst, _ = train_dg.edges
 hm = HookManager(keys=['train', 'val', 'test'])
 hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
-# hm.register('train', DeduplicationHook())
 hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
-# hm.register('val', DeduplicationHook())
 hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
-# hm.register('test', DeduplicationHook())
 hm.register_shared(nbr_hook)
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
