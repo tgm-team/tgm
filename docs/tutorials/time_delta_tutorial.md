@@ -162,7 +162,7 @@ print(dg_data.edge_feats) # torch.tensor([[[100, 200, 400]])
 ### TGB Datasets, Continuous-Time Temporal Graph Model
 
 This is the simplest setup. Simply use `DGData.from_tgb()` to load the TGB dataset with its native time granularity.
-By default, `batch_unit='r'` in the data loader so we can iterate by snapshots of 200 events with:
+By default, `batch_unit='r'` in the data loader so we can iterate by batches of 200 events with:
 
 ```python
 from tgm import DGData, DGraph
@@ -204,10 +204,11 @@ loader = DGDataLoader(dg, batch_unit='W', batch_size=2)
 When working with custom datasets, it's likely that you have an underlying time granularity as determined by your data feed. For instance, you may be streaming log events with unix timestamps, or have pre-aggregated data arriving daily from a cron job.
 
 In this case pretty much the same workflow as above can be used. Just make sure to pass the right unit when constructing your `DGData.from_raw()`.
+You may also be interested in discretizing your dataset into various granularities, and running some data analysis on the underlying graphs (e.g. figuring out number of nodes, edges, connected components etc).
 
 ### Custom Datasets with Unknown TimeDelta
 
-It could occur that the underlying source time unit is not known a priori. In this situation, you can use the even-ordered time unit `TimeDeltaDG('r')` which preserves the relative order of events without assuming a specific time unit. You may also be interested in discretizing your dataset into various granularities, and running some data analysis on the underlying graphs (e.g. figuring out number of nodes, edges, connected components etc).
+It could occur that the underlying source time unit is not known a priori. In this situation, you can use the even-ordered time unit `TimeDeltaDG('r')` which preserves the relative order of events without assuming a specific time unit.
 
 ______________________________________________________________________
 
