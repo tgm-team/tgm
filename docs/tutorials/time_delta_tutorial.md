@@ -27,7 +27,7 @@ td_biweekly = TimeDeltaDG("W", 2)   # 2-week (bi-weekly) granularity
 
 There are 2 broad classes of `TimeDeltaDG` which determine how timestamps on a graph are interpreted:
 
-- Ordered (`r`): Events are only guaranteed to have a relative order. No actual temporal measurement is associated.
+- Ordered (`r`): Events are only guaranteed to have a relative order. No real-world time unit is associated.
 - Non-Ordered (e.g. second-wise (`s`), or daily (`D`)): Standard time units like seconds, minutes, days, etc. Can perform coarsening or time conversion.
 
 ```python
@@ -57,9 +57,11 @@ The full list of non-ordered units is given below:
 td_day = TimeDeltaDG("D")
 td_week = TimeDeltaDG("W")
 td_biweek = TimeDeltaDG("W", 2)
+td_month = TimeDeltaDG("M")
 
 print(td_week.is_coarser_than(td_day)) # True
 print(td_biweek.is_coarser_than(td_week)) # True
+print(td_month.is_coarser_than(td_biweek)) # True
 ```
 
 **Note**: Checking whether an ordered time delta is coarser or finer than an non-ordered is undefined and will raise a `OrderedGranularityConversionError`.
@@ -68,7 +70,7 @@ print(td_biweek.is_coarser_than(td_week)) # True
 
 Every `DGData` requires an associated `TimeDeltaDG`. Predefined datasets (e.g. `tgbl-wiki`) have native time deltas, usually in seconds.
 
-If you are using a custom dataset, you must specify a time delta. If the exact temporal unit is unknown, you can resort to ordered granularity `TimeDelta('r')`:
+If you are using a custom dataset, you must specify a time delta. If the exact temporal unit is unknown, you can resort to ordered granularity `TimeDelta('r')`, which is the default:
 
 ```python
 from tgm.data import DGData
@@ -106,7 +108,7 @@ There are two different modes of iteration in TGM, depending on whether the `bat
 | By Events (Ordered)   | Iterates over a fixed number of events at a time | Batch unit = `r` and batch size `N` yields N events per batch        | No                                   | No                        |
 | By Time (Non-Ordered) | Iterates over a time window                      | Batch unit = `h` and batch size `3` yields 3 hours of data per batch | Yes                                  | Yes                       |
 
-**Note**: Time-based iteration can result in empty batches if no events occur in the window. You can specify `on_empty='raise'` to error on empty batches of `on_empty='skip'` to ignore them.
+**Note**: Time-based iteration can result in empty batches if no edge and no node events occur in the window. You can specify `on_empty='raise'` to error on empty batches, `on_empty='skip'` to ignore them, or `on_empty=None` to materialize the empty snapshots for your model. The default will materialize empty snapshots.
 
 ```python
 from tgm.loader import DGDataLoader
