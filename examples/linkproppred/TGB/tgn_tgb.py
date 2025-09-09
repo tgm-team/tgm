@@ -17,8 +17,8 @@ from torch_scatter import scatter_max
 from tqdm import tqdm
 
 from tgm import DGData, DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import (
-    DeduplicationHook,
     HookManager,
     NegativeEdgeSamplerHook,
     NeighborSamplerHook,
@@ -32,14 +32,12 @@ parser = argparse.ArgumentParser(
     description='TGN TGB Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
+parser.add_argument('--seed', type=int, default=1, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
-parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
-parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
 parser.add_argument(
     '--n-nbrs',
     type=int,
@@ -293,9 +291,18 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
     for batch in tqdm(loader):
         opt.zero_grad()
 
+        nbr_nodes = batch.nbr_nids[0].flatten()
+        nbr_mask = nbr_nodes != PADDED_NODE_ID  # mask out invalid nbrs
+
+        #! run my own deduplication
+        nids = [batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]]
+        all_nids = torch.cat(nids, dim=0)
+        unique_nids = torch.unique(all_nids, sorted=True)
+        batch.unique_nids = unique_nids  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
+
         src, pos_dst, t, msg = batch.src, batch.dst, batch.time, batch.edge_feats
         neg_dst = batch.neg
-        nbr_nodes = batch.nbr_nids[0].flatten()
         num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
         src_nodes = torch.cat(
             (
@@ -305,9 +312,6 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
             ),
             0,
         )
-        # src_nodes = batch.src.repeat_interleave(len(nbr_nodes) // len(batch.src))
-        #! mask out invalid nbrs
-        nbr_mask = nbr_nodes != -1
         nbr_edge_index = torch.stack(
             [
                 batch.global_to_local(src_nodes[nbr_mask]),
@@ -357,6 +361,16 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
 
     perf_list = []
     for batch in tqdm(loader):
+        nbr_nodes = batch.nbr_nids[0].flatten()
+        nbr_mask = nbr_nodes != PADDED_NODE_ID  # mask out invalid nbrs
+
+        #! run my own deduplication
+        nids = [batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]]
+        all_nids = torch.cat(nids, dim=0)
+        unique_nids = torch.unique(all_nids, sorted=True)
+        batch.unique_nids = unique_nids  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
+
         pos_src, pos_dst, pos_t, pos_msg = (
             batch.src,
             batch.dst,
@@ -474,11 +488,11 @@ else:
 _, dst, _ = train_dg.edges
 hm = HookManager(keys=['train', 'val', 'test'])
 hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
-hm.register('train', DeduplicationHook())
+# hm.register('train', DeduplicationHook())
 hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
-hm.register('val', DeduplicationHook())
+# hm.register('val', DeduplicationHook())
 hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
-hm.register('test', DeduplicationHook())
+# hm.register('test', DeduplicationHook())
 hm.register_shared(nbr_hook)
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
