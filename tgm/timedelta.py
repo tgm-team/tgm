@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar, Dict, Final
 
-from tgm.exceptions import OrderedGranularityConversionError
+from tgm.exceptions import EventOrderedConversionError
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,26 +12,26 @@ class TimeDeltaDG:
 
     This class is used to define the resolution at which events or interactions
     are indexed in a dynamic/temporal graph. It supports both standard temporal
-    units (e.g., seconds, minutes, days) and a special ordered unit for strictly
+    units (e.g., seconds, minutes, days) and a special event-ordered unit for strictly
     sequential indices.
 
     Args:
-        unit (str): The time unit, e.g., 's', 'm', 'h', 'D', or 'r' for ordered.
+        unit (str): The time unit, e.g., 's', 'm', 'h', 'D', or 'r' for event-ordered.
         value (int, optional): Multiplier for the unit. Must be a positive integer.
 
     Raises:
         ValueError: If `value` is not a positive integer.
-        ValueError: If `unit` is ordered and `value` != 1.
+        ValueError: If `unit` is event-ordered and `value` != 1.
         ValueError: If `unit` is not recognized among allowed temporal units.
 
     Note:
-        For ordered units ('r'), only value = 1 is permitted.
+        For event-ordered units ('r'), only value = 1 is permitted.
     """
 
     unit: str
     value: int = 1
 
-    _ORDERED: ClassVar[str] = 'r'
+    _EVENT_ORDERED: ClassVar[str] = 'r'
     _UNIT_TO_NANOS: ClassVar[Dict[str, int]] = {
         'Y': 1000 * 1000 * 1000 * 60 * 60 * 24 * 365,
         'M': 1000 * 1000 * 1000 * 60 * 60 * 24 * 30,
@@ -48,17 +48,17 @@ class TimeDeltaDG:
     def __post_init__(self) -> None:
         if not isinstance(self.value, int) or self.value <= 0:
             raise ValueError(f'Value must be a positive integer, got: {self.value}')
-        if self.is_ordered and self.value != 1:
-            raise ValueError(f'Only value=1 is supported for ordered TimeDeltaDG')
-        if not self.is_ordered and self.unit not in TimeDeltaDG._UNIT_TO_NANOS:
+        if self.is_event_ordered and self.value != 1:
+            raise ValueError(f'Only value=1 is supported for event-ordered TimeDeltaDG')
+        if not self.is_event_ordered and self.unit not in TimeDeltaDG._UNIT_TO_NANOS:
             raise ValueError(
-                f'Unknown unit: {self.unit}, expected one of {[TimeDeltaDG._ORDERED] + list(TimeDeltaDG._UNIT_TO_NANOS.keys())}'
+                f'Unknown unit: {self.unit}, expected one of {[TimeDeltaDG._EVENT_ORDERED] + list(TimeDeltaDG._UNIT_TO_NANOS.keys())}'
             )
 
     @property
-    def is_ordered(self) -> bool:
-        """Return True if this is the special ordered unit ('r')."""
-        return self.unit == TimeDeltaDG._ORDERED
+    def is_event_ordered(self) -> bool:
+        """Return True if this is the special event-ordered unit ('r')."""
+        return self.unit == TimeDeltaDG._EVENT_ORDERED
 
     def is_coarser_than(self, other: str | TimeDeltaDG) -> bool:
         """Return True if this granularity is strictly coarser than `other`.
@@ -67,7 +67,7 @@ class TimeDeltaDG:
             other (str | TimeDeltaDG): The time delta to compare against.
 
         Raises:
-            ValueError: If either self or `other` is ordered.
+            EventOrderedConversionError: If either self or `other` is event-ordered.
         """
         return self.convert(other) > 1
 
@@ -81,13 +81,13 @@ class TimeDeltaDG:
             float: Ratio of self to target granularity.
 
         Raises:
-            OrderedGranularityConversionError If either self or target granularity is ordered.
+            EventOrderedConversionError If either self or target granularity is event-ordered.
         """
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
-        if self.is_ordered or time_delta.is_ordered:
-            raise OrderedGranularityConversionError(
-                'Cannot compare granularity for ordered TimeDeltaDG'
+        if self.is_event_ordered or time_delta.is_event_ordered:
+            raise EventOrderedConversionError(
+                'Cannot compare granularity for event-ordered TimeDeltaDG'
             )
         return self._convert(time_delta)
 

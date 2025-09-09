@@ -12,9 +12,9 @@ from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
 from tgm.exceptions import (
     EmptyGraphError,
+    EventOrderedConversionError,
     InvalidDiscretizationError,
     InvalidNodeIDError,
-    OrderedGranularityConversionError,
 )
 from tgm.split import TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TimeDeltaDG
@@ -917,9 +917,9 @@ def test_discretize_bad_args():
     edge_index = torch.LongTensor([[2, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([1, 5])
 
-    with pytest.raises(OrderedGranularityConversionError):
+    with pytest.raises(EventOrderedConversionError):
         data = DGData.from_raw(edge_timestamps, edge_index, time_delta='r')
-        data.discretize('s')  # Cannot reduce from ordered
+        data.discretize('s')  # Cannot reduce from event-ordered
     with pytest.raises(InvalidDiscretizationError):
         data = DGData.from_raw(edge_timestamps, edge_index, time_delta='h')
         data.discretize('s')  # Cannot reduce into more granular time

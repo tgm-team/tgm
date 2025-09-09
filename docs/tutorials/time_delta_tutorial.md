@@ -23,18 +23,18 @@ td_days = TimeDeltaDG("D")          # 1-day granularity
 td_biweekly = TimeDeltaDG("W", 2)   # 2-week (bi-weekly) granularity
 ```
 
-#### Ordered vs. Non-Ordered
+#### Event-Ordered vs. Time-Ordered
 
 There are 2 broad classes of `TimeDeltaDG` which determine how timestamps on a graph are interpreted:
 
-- Ordered (`r`): Events are only guaranteed to have a relative order. No real-world time unit is associated.
-- Non-Ordered (e.g. second-wise (`s`), or daily (`D`)): Standard time units like seconds, minutes, days, etc. Can perform coarsening or time conversion.
+- Event-Ordered (`r`): Events are only guaranteed to have a relative order. No real-world time unit is associated.
+- Time-Ordered (e.g. second-wise (`s`), or daily (`D`)): Standard time units like seconds, minutes, days, etc. Can perform coarsening or time conversion.
 
 ```python
 td_ordered = TimeDeltaDG("r") # Only relative order matters
 ```
 
-The full list of non-ordered units is given below:
+The full list of time-ordered units is given below:
 
 | Time Unit | Meaning          |
 | --------- | ---------------- |
@@ -64,13 +64,13 @@ print(td_biweek.is_coarser_than(td_week)) # True
 print(td_month.is_coarser_than(td_biweek)) # True
 ```
 
-**Note**: Checking whether an ordered time delta is coarser or finer than an non-ordered is undefined and will raise a `OrderedGranularityConversionError`.
+**Note**: Checking whether an event-ordered time delta is coarser or finer than an non-ordered is undefined and will raise a `EventOrderedConversionError`.
 
 ## 2. DGData Construction
 
 Every `DGData` requires an associated `TimeDeltaDG`. Predefined datasets (e.g. `tgbl-wiki`) have native time deltas, usually in seconds.
 
-If you are using a custom dataset, you must specify a time delta. If the exact temporal unit is unknown, you can resort to ordered granularity `TimeDelta('r')`, which is the default:
+If you are using a custom dataset, you must specify a time delta. If the exact temporal unit is unknown, you can resort to event-ordered granularity `TimeDelta('r')`, which is the default:
 
 ```python
 from tgm.data import DGData
@@ -83,7 +83,7 @@ dg_data = DGData(
 )
 
 # Ordered dataset (relative order only)
-dg_ordered = DGData(
+dg_event_ordered = DGData(
     time_delta="r",
     timestamps=timestamps,
     ...
@@ -101,23 +101,26 @@ The time delta also informs how you iterate over the graph. In this respect, the
 
 ### Iteration Modes
 
-There are two different modes of iteration in TGM, depending on whether the `batch_unit` parameter is ordered or non-ordered:
+There are two different modes of iteration in TGM, depending on whether the `batch_unit` parameter is event-ordered or time-ordered:
 
-| Iteration Mode        | Meaning                                          | Example                                                              | Requires Non-Ordered Graph TimeDelta | Can produce empty batches |
-| --------------------- | ------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------ | ------------------------- |
-| By Events (Ordered)   | Iterates over a fixed number of events at a time | Batch unit = `r` and batch size `N` yields N events per batch        | No                                   | No                        |
-| By Time (Non-Ordered) | Iterates over a time window                      | Batch unit = `h` and batch size `3` yields 3 hours of data per batch | Yes                                  | Yes                       |
+| Iteration Mode            | Meaning                                          | Example                                                              | Requires Time-Ordered Graph TimeDelta | Can produce empty batches |
+| ------------------------- | ------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------- | ------------------------- |
+| By Events (Event-Ordered) | Iterates over a fixed number of events at a time | Batch unit = `r` and batch size `N` yields N events per batch        | No                                    | No                        |
+| By Time (Time-Ordered)    | Iterates over a time window                      | Batch unit = `h` and batch size `3` yields 3 hours of data per batch | Yes                                   | Yes                       |
 
 **Note**: Time-based iteration can result in empty batches if no edge and no node events occur in the window. You can specify `on_empty='raise'` to error on empty batches, `on_empty='skip'` to ignore them, or `on_empty=None` to materialize the empty snapshots for your model. The default will materialize empty snapshots.
 
 ```python
 from tgm.loader import DGDataLoader
 
-# Ordered iteration
-loader = DGDataLoader(dg_data, batch_size=10, batch_unit='r')
+# Event-ordered iteration: yield 10 events per batch
+loader = DGDataLoader(dg_data, batch_size=10)
 
-# Time-based iteration (non-ordered), skip empty batches
+# Time-ordered iteration: yield 3 days of data per batch, skip empty batches
 loader_time = DGDataLoader(dg_data, batch_size=3, batch_unit='D', on_empty='skip')
+
+# Time-ordered iteration: yield 3 days of data per batch, raise ValueError on empty batches
+loader_time = DGDataLoader(dg_data, batch_size=3, batch_unit='D', on_empty='raise')
 ```
 
 See `tgm.loader.DGDataLoader` for full reference.
@@ -125,7 +128,7 @@ See [`tgm.loader.DGDataLoader`](../api/loader.md) for full reference.
 
 ## 4. Discretization: Coarsening Graphs
 
-Discretization allows you to *coarsen* a non-ordered graph to a new time granularity:
+Discretization allows you to *coarsen* a time-ordered graph to a new time granularity:
 
 - multiple edge and node events are partitioned into time buckets based on the requested granularity
 - if multiple events map to the same edge in the same bucket, only the first occurence is kept (future versions will support other reduction ops)
@@ -152,7 +155,7 @@ print(dg_data.edge_index) # torch.tensor([[0, 1], [2, 3], [0, 1])
 print(dg_data.edge_feats) # torch.tensor([[[100, 200, 400]])
 ```
 
-**Note**: Discretization is only defined for non-ordered graphs. Attempting to discretize an ordered `DGData` is undefined and will raise `InvalidDiscretizationError`.
+**Note**: Discretization is only defined for time-ordered graphs. Attempting to discretize an even-ordered `DGData` is undefined and will raise `InvalidDiscretizationError`.
 
 ## 5. Workflows
 
@@ -202,14 +205,14 @@ When working with custom datasets, it's likely that you have an underlying time 
 
 In this case pretty much the same workflow as above can be used. Just make sure to pass the right unit when constructing your `DGData.from_raw()`.
 
-### Custom Datasets, unknown TimeDelta
+### Custom Datasets with Unknown TimeDelta
 
-It could occur that the underlying source time unit is not known a priori. In this situation, you can use the ordered time unit `TimeDeltaDG('r')` which preserves the relative order of events without assuming a specific time unit. You may also be interested in discretizing your dataset into various granularities, and running some data analysis on the underlying graphs (e.g. figuring out number of nodes, edges, connected components etc).
+It could occur that the underlying source time unit is not known a priori. In this situation, you can use the even-ordered time unit `TimeDeltaDG('r')` which preserves the relative order of events without assuming a specific time unit. You may also be interested in discretizing your dataset into various granularities, and running some data analysis on the underlying graphs (e.g. figuring out number of nodes, edges, connected components etc).
 
 ______________________________________________________________________
 
 ## Summary
 
-The time delta is central to managing timestamps on your temporal graph. If using existing dataset (e.g. TGB), the time delta is already defined. For custom datasets, you need to provide either an ordered (`r`) or non-ordered (e.g. `s`) time unit.
+The time delta is central to managing timestamps on your temporal graph. If using existing dataset (e.g. TGB), the time delta is already defined. For custom datasets, you need to provide either an event-ordered (`r`) or time-ordered (e.g. `s`) unit.
 
-Non-ordered time deltas are strictly more general in that they enable you to discretize your dataset, and iterate by temporal snapshots.
+Time-ordered units are strictly more general in that they enable you to discretize your dataset, and iterate by temporal snapshots.

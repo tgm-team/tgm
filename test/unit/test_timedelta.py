@@ -1,6 +1,6 @@
 import pytest
 
-from tgm.exceptions import OrderedGranularityConversionError
+from tgm.exceptions import EventOrderedConversionError
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
@@ -13,7 +13,7 @@ def test_init_default_value(time_granularity):
     td = TimeDeltaDG(time_granularity)
     assert td.unit == time_granularity
     assert td.value == 1
-    assert not td.is_ordered
+    assert not td.is_event_ordered
 
 
 def test_init_non_default_value(time_granularity):
@@ -21,15 +21,15 @@ def test_init_non_default_value(time_granularity):
     td = TimeDeltaDG(time_granularity, value)
     assert td.unit == time_granularity
     assert td.value == value
-    assert not td.is_ordered
+    assert not td.is_event_ordered
 
 
-def test_init_ordered():
+def test_init_event_ordered():
     time_granularity = 'r'
     td = TimeDeltaDG(time_granularity)
     assert td.unit == time_granularity
     assert td.value == 1
-    assert td.is_ordered
+    assert td.is_event_ordered
 
 
 @pytest.mark.parametrize('bad_unit', ['mock'])
@@ -45,8 +45,8 @@ def test_init_bad_value(time_granularity, bad_value):
 
 
 @pytest.mark.parametrize('bad_value', [-1, 0, 2])
-def test_init_ordered_bad_value(bad_value):
-    # Note: Only '1' accepted as the value for an ordered type
+def test_init_event_ordered_bad_value(bad_value):
+    # Note: Only '1' accepted as the value for an event-ordered type
     with pytest.raises(ValueError):
         _ = TimeDeltaDG('r', bad_value)
 
@@ -113,19 +113,19 @@ def test_convert_between_different_units():
     assert td_b.convert(td_a) == (value_b / value_a) / (365 * 24 * 60 * 60)
 
 
-def test_bad_convert_from_ordered():
+def test_bad_convert_from_event_ordered():
     td1 = TimeDeltaDG('r')
     td2 = TimeDeltaDG('Y', 1)
 
-    with pytest.raises(OrderedGranularityConversionError):
+    with pytest.raises(EventOrderedConversionError):
         _ = td2.convert(td1)
 
 
-def test_bad_convert_to_ordered():
+def test_bad_convert_to_event_ordered():
     td1 = TimeDeltaDG('Y', 1)
     td2 = TimeDeltaDG('r')
 
-    with pytest.raises(OrderedGranularityConversionError):
+    with pytest.raises(EventOrderedConversionError):
         _ = td1.convert(td2)
 
 
@@ -157,17 +157,17 @@ def test_time_delta_is_coarser_than_due_to_value():
     assert td1.is_coarser_than(td2)
 
 
-def test_time_delta_is_coarser_try_compare_ordered():
+def test_time_delta_is_coarser_try_compare_event_ordered():
     td1 = TimeDeltaDG('r')
     td2 = TimeDeltaDG('s')
 
-    with pytest.raises(OrderedGranularityConversionError):
+    with pytest.raises(EventOrderedConversionError):
         td1.is_coarser_than(td2)
 
-    with pytest.raises(OrderedGranularityConversionError):
+    with pytest.raises(EventOrderedConversionError):
         td2.is_coarser_than(td1)
 
-    with pytest.raises(OrderedGranularityConversionError):
+    with pytest.raises(EventOrderedConversionError):
         td1.is_coarser_than('r')
 
 
