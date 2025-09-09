@@ -329,6 +329,11 @@ class RecencyNeighborHook(StatefulHook):
             1, idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
         )
 
+        # Reverse along neighbor dimension to match queue FIFO
+        nbr_nids = torch.flip(nbr_nids, dims=[1])
+        nbr_times = torch.flip(nbr_times, dims=[1])
+        nbr_feats = torch.flip(nbr_feats, dims=[1])
+
         # Replace invalid entries (where score == -1) with padding
         pad_mask = scores.gather(1, idx).eq(-1)
         nbr_nids[pad_mask] = PADDED_NODE_ID
@@ -368,6 +373,14 @@ class RecencyNeighborHook(StatefulHook):
         )
         offsets = torch.arange(len(sorted_nodes), device=self._device)
         offsets -= cumsum_counts[inverse]
+        # offsets = (
+        #    counts[inverse]
+        #    - 1
+        #    - (
+        #        torch.arange(len(sorted_nodes), device=self._device)
+        #        - cumsum_counts[inverse]
+        #    )
+        # )
 
         # Compute write indices using circular buffer
         idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs

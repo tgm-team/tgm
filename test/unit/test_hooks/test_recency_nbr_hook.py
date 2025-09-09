@@ -372,11 +372,11 @@ def test_recency_exceed_buffer(recency_buffer_graph):
     nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
     assert nids.shape == (1, 4)
     assert nbr_nids.shape == (1, 4, 2)
-    assert nbr_nids[0][0][0] == 2
-    assert nbr_nids[0][0][1] == 1
+    assert nbr_nids[0][0][0] == 1
+    assert nbr_nids[0][0][1] == 2
     assert nbr_times.shape == (1, 4, 2)
-    assert nbr_times[0][0][0] == 1
-    assert nbr_times[0][0][1] == _PADDED_TIME_ID
+    assert nbr_times[0][0][0] == _PADDED_TIME_ID
+    assert nbr_times[0][0][1] == 1
     assert nbr_feats.shape == (1, 4, 2, 1)  # 1 feature per edge
 
     for batch in batch_iter:
