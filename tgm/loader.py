@@ -114,8 +114,8 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
                 'Cannot iterate event-ordered dg using time-ordered batch_unit'
             )
         if dg.time_delta.is_time_ordered and batch_time_delta.is_time_ordered:
-            batch_time_delta = TimeDeltaDG(batch_unit, value=batch_size)
             # Ensure the graph time unit is more granular than batch time unit.
+            batch_time_delta = TimeDeltaDG(batch_unit, value=batch_size)
             if dg.time_delta.is_coarser_than(batch_time_delta):
                 raise InvalidDiscretizationError(
                     f'Tried to construct a data loader on a DGraph with time delta: {dg.time_delta} '
