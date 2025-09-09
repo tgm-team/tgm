@@ -5,8 +5,8 @@ from tgm import DGBatch, DGraph
 from tgm.data import DGData
 from tgm.exceptions import (
     EmptyBatchError,
+    EventOrderedConversionError,
     InvalidDiscretizationError,
-    OrderedGranularityConversionError,
 )
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
@@ -34,7 +34,7 @@ def test_init_ordered_dg_non_ordered_batch(batch_unit):
     edge_timestamps = torch.LongTensor([1])
     data = DGData.from_raw(edge_timestamps, edge_index)
     dg = DGraph(data)
-    with pytest.raises(OrderedGranularityConversionError):
+    with pytest.raises(EventOrderedConversionError):
         _ = DGDataLoader(dg, batch_unit=batch_unit)
 
 
