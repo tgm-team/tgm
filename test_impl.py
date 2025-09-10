@@ -150,12 +150,12 @@ class SlowRecencyNeighborHook(StatefulHook):
             self._device = device
 
 
-def setup_loader(dg, nbr_class):
+def setup_loader(dg, nbr_class, directed):
     sampler = nbr_class(
         num_nbrs=[20, 20],
         num_nodes=dg.num_nodes,
         edge_feats_dim=dg.edge_feats_dim,
-        directed=True,
+        directed=directed,
     )
     hm = HookManager(keys=['global'])
     hm.register_shared(sampler)
@@ -164,13 +164,13 @@ def setup_loader(dg, nbr_class):
 
 
 def assert_batch_eq(batch, exp_batch):
+    # print('Batch: ', exp_batch.src, exp_batch.dst, exp_batch.time)
     for hop in range(2):
         # print(f'Hop: {hop}')
         # print(f'Query nodes: {batch.nids[hop]}')
         # print(f'Query times: {batch.times[hop]}')
         # print(f'Expected nbr nids: {exp_batch.nbr_nids[hop]}')
         # print(f'Actual nbr nids: {batch.nbr_nids[hop]}')
-
         assert torch.equal(batch.nbr_nids[hop], exp_batch.nbr_nids[hop])
         assert torch.equal(batch.nbr_times[hop], exp_batch.nbr_times[hop])
         # assert torch.allclose(batch.nbr_feats[hop], exp_batch.nbr_feats[hop], atol=1e-6)
@@ -178,11 +178,12 @@ def assert_batch_eq(batch, exp_batch):
 
 data = DGData.from_tgb('tgbl-wiki')
 dg = DGraph(data)
-slow_loader = setup_loader(dg, SlowRecencyNeighborHook)  # From master
-fast_loader = setup_loader(dg, RecencyNeighborHook)
 
-fast_loader_iter = iter(fast_loader)
-for exp_batch in tqdm(slow_loader):
-    # print('Batch: ', exp_batch.src, exp_batch.dst, exp_batch.time)
-    batch = next(fast_loader_iter)
-    assert_batch_eq(batch, exp_batch)
+for directed in [True, False]:
+    slow_loader = setup_loader(dg, SlowRecencyNeighborHook, directed)  # From master
+    fast_loader = setup_loader(dg, RecencyNeighborHook, directed)
+
+    fast_loader_iter = iter(fast_loader)
+    for exp_batch in tqdm(slow_loader):
+        batch = next(fast_loader_iter)
+        assert_batch_eq(batch, exp_batch)
