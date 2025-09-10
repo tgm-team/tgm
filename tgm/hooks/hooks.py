@@ -445,7 +445,7 @@ class RecencyNeighborHook(StatefulHook):
         ).cumsum(dim=0)
         offsets = torch.arange(len(sorted_nodes), device=self._device) - cum_cnts[inv]
 
-        # Compute write indices using current write position and offets
+        # Compute write indices using current write position and offsets
         write_idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs
 
         # Scatter into buffers. Correct "last write wins" for features, since we have at most B writes
