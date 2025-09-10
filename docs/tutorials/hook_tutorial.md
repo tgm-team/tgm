@@ -1,6 +1,6 @@
-# Hooks and Hook Management in Temporal Graph Learning
+# Hook Management in TGM
 
-Temporal graph learning pipelines often require dynamic transformations on graph batches—like sampling neighbors, generating negative edges, or moving data to GPU. TGM defines **hooks** to provide a flexible, composable way to perform these transformations automatically during batch iteration. We discuss them in this tutorial.
+Temporal graph learning pipelines often require dynamic transformations on graph batches—like sampling neighbors, generating negative edges, or moving data to GPU. TGM defines `DGHook`s to provide a flexible, composable way to perform these transformations automatically during batch iteration.
 
 ______________________________________________________________________
 
@@ -12,20 +12,18 @@ See [`tgm.graph.DGBatch`](../api/batch.md) for a full reference of the base `DGB
 
 Hooks declare the following information
 
-- `requires`: Set of attributes that the hook needs to exist on the batch
-- `produces`: Set of attributes that the hook adds to the batch
-- `has_state`: A boolean flag to denote whether the hook stores state internally
+- `requires: Set[str]`: Names of attributes that the hook needs to exist on the batch
+- `produces: Set[str]`: Names of attributes that the hook adds to the batch
+- `has_state: bool`: A flag to denote whether the hook stores state internally
 
 Note:
 
 - `StatelessHook`: only transforms the batch, no internal state (`has_state = False`)
-- `StatelefullHook`: maintains internal state, (`has_state = False`)
+- `StatefulHook`: maintains internal state, (`has_state = True`)
 
 ### Built-in Hooks
 
-TGM ships with several commonly used hooks for temporal graph learning.
-
-The table bellow summarizes them:
+TGM ships with several commonly used hooks. The table below summarizes them:
 
 | Hook Name                    | Type      | `requires` | `produces`                           | Description                                                                                          |
 | ---------------------------- | --------- | ---------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
@@ -33,7 +31,7 @@ The table bellow summarizes them:
 | `TGBNegativeEdgeSamplerHook` | Stateless | None       | `neg`, `neg_time`, `neg_batch_list`  | Loads pre-computed negative edges for TGB datasets                                                   |
 | `NeighborSamplerHook`        | Stateless | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Uniform sampler neighbor for a given number of hops                                                  |
 | `RecencyNeighborSamplerHook` | Stateful  | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Recency neighbor sampler for a given number of hops                                                  |
-| `PinMemoryHook`              | Stateless | None       | None                                 | Pins all `torch.Tensor` in `DGBatch` for fast cpu-gpu transfer                                       |
+| `PinMemoryHook`              | Stateless | None       | None                                 | Pins all `torch.Tensor` in `DGBatch` for fast CPU-GPU transfer                                       |
 | `DeduplicationHook`          | Stateful  | None       | `unique_nids`, `global_to_local`     | Computes unique node ids in `DGBatch` and a mapping from global (graph) to local (batch) coordinates |
 
 ### Custom Hooks
@@ -56,14 +54,14 @@ class MyNegativeHook(StatelessHook):
         return batch
 ```
 
-**Important**: Each hooks adds attributes to the batch. Hooks that run after it may dependend on these attributes (with `requires`). More on that later.
+**Important**: Each hooks adds attributes to the batch. Hooks that run after it may dependent on these attributes (with `requires`). More on that later.
 
 ## 2. HookManager: Orchestrator of Hooks
 
 `HookManager` manages which hooks are applied to a batch, and in what order. You can think of it like a key-value store where:
 
 - *Keys*: e.g. `'train'`, `'val'`, `'test'`
-- *Values*: List of hooks associated with that key
+- *Values*: List of hooks associated with each key
 
 Hooks are executed automatically during data loading, allowing different transformations to occur for different data splits. For instance:
 
@@ -113,11 +111,12 @@ with hm.activate('train'):
 with hm.activate('test'):
     for batch in test_loader:
         assert batch.dst.shape() == batch.my_neg.shape() # True
-        assert torch.all(batch.my_neg >= 0) # True
-        assert torch.all(batch.my_neg < 10) # True
+        assert torch.all(batch.my_neg >= 10) # True
+        assert torch.all(batch.my_neg < 100) # True
+        assert torch.equal(batch.my_neg_time, batch.time) # True
 ```
 
-**Note**: The context manager is just syntatical sugar for the following:
+**Note**: The context manager is just syntactical sugar for the following:
 
 ```python
 with hm.activate(key):
@@ -141,11 +140,15 @@ hm.reset_state()
 
 You can also selectively reset hooks for a particular key.
 
+```python
+hm.reset_state('train')
+```
+
 ## 4. Shared Hooks
 
-Sometimes it happens that you truly want the same hook instance (as in, the same object) to be shared among different keys. A good example is the `tgm.hooks.RecencyNeighborSampler` which buffers internal state for events for each node in the graph. We want this hook to be shared between 'train' and 'validation' splits, because we want the neighboures accumulates during training to *warm-start* the recent neighbour in the validation split.
+Sometimes it happens that you truly want the same hook instance (as in, the same python object) to be shared among different keys. A good example is the `tgm.hooks.RecencyNeighborSampler` which buffers internal state for events for each node in the graph. We want this hook to be shared between 'train' and 'validation' splits, because we want the neighbours accumulated during training to *warm-start* the recent neighbour in the validation split.
 
-For this purpose, we have the notion of `shared hooks`, which are automatically attributed to all key pairs in the `HookManager`:
+For this purpose, we have the notion of `shared hooks`, which are automatically attributed to **all** keys in the `HookManager`:
 
 ```python
 from tgm.loader import DGDataLoader
@@ -195,7 +198,7 @@ with hm.activate('train'): # Raises tgm.UnresolvableHookDependenciesError
     ...
 ```
 
-You will see the error message tell you that the manager could not find a valid ordering of hooks, and that's because no hook *produces* `'foo'`. If you encounter this, chances are you just mispelled either your `requires` or `produces` specification.
+You will see the error message tell you that the manager could not find a valid ordering of hooks, and that's because no hook *produces* `'foo'`. If you encounter this, chances are you just misspelled either your `requires` or `produces` specification.
 
 *Note*: You can also manually try to resolve hooks for a specific key without activating anything:
 
@@ -232,8 +235,12 @@ HookManager:
 
 ______________________________________________________________________
 
+## 6. Recipes
+
+Under construction.
+
 ## Summary
 
 `DGHook`s are modular transformation applied to batches under the hood during data loading. The `HookManager` orchestrates hooks by key-value pair, and ensures correct execution order given the set of `requires` and `produces` attributes. After activating a given key, the yielded batch from the dataloader will have all the `produces` attributes computed for you.
 
-By sub-classing either the `StatefullHook` or `StatelessHook`, you can define you own custom transformation and operators in `TGM`.
+By sub-classing either the `StatefulHook` or `StatelessHook`, you can define you own custom hooks in `TGM`.
