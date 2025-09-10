@@ -286,6 +286,14 @@ class RecencyNeighborHook(StatefulHook):
         # print(
         #    f'Circular checking 3: nbrs = {self._nbr_ids[3]}, times = {self._nbr_times[3]}, feats = {self._nbr_feats[3]}'
         # )
+        # def print_for_node(y):
+        #    print(
+        #        f'Circular buffer checking for node {y}: nbrs = {self._nbr_ids[y]}, times = {self._nbr_times[y]}'
+        #    )
+
+        # print_for_node(0)
+        # print_for_node(1)
+        # print_for_node(8228)
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -317,46 +325,71 @@ class RecencyNeighborHook(StatefulHook):
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
-        nbr_nids = self._nbr_ids[node_ids]
-        nbr_times = self._nbr_times[node_ids]
-        nbr_feats = self._nbr_feats[node_ids]
+        B = self._max_nbrs  # buffer size
 
-        # Mask out invalid (forward-looking) nbr_times and get the most recent (largest) k per node
-        # Also, mask out invalid seed nodes (PADDED_NODE_ID) which could occur on higher hops
-        mask = (nbr_times < query_times[:, None]) & (~nbr_nids.eq(PADDED_NODE_ID))
-        mask[node_ids.eq(PADDED_NODE_ID)] = False
+        nbr_nids = self._nbr_ids[node_ids]  # (N, B)
+        nbr_times = self._nbr_times[node_ids]  # (N, B)
+        nbr_feats = self._nbr_feats[node_ids]  # (N, B, edge_dim)
+        write_pos = self._write_pos[node_ids]  # (N,)
 
-        scores = torch.where(mask, nbr_times, torch.full_like(nbr_times, -1))
-        _, idx = torch.topk(scores, k, dim=1, largest=True, sorted=True)
+        # Unroll indices to all buffers, so that last write is at index -1
+        # If we had no query_time constraint, we would just take the last k entries
+        # Shape (N, B) with oldest ... newest
+        # candidate_idx = write_pos[:, None] - torch.arange(1, B + 1, device=self._device)
+        candidate_idx = write_pos[:, None] - torch.arange(B, 0, -1, device=self._device)
+        candidate_idx %= B
 
-        # Gather each nbr tensor using the node-wise idx
-        nbr_nids = nbr_nids.gather(1, idx)
-        nbr_times = nbr_times.gather(1, idx)
-        nbr_feats = nbr_feats.gather(
-            1, idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
+        # Read the neighbor times in that unrolled order, and get query_times mask
+        candidate_times = torch.gather(nbr_times, 1, candidate_idx)  # (N, B)
+        time_mask = candidate_times < query_times[:, None]  # (N, B)
+
+        # For each node, find the rightmost valid entry, i.e the last index which
+        # satisfies the time mask. We will read k slots backwards from there.
+        # Since we write out buffers chronologically, we just search for rightmost valid entry
+        pos = torch.arange(B, device=self._device)
+        last_valid_pos = (time_mask * pos).amax(dim=1)  # (N,)
+
+        # We figured out the last time constraint valid position, now build the k-window
+        # ending at last_valid_pos (with wraparound). Since last_valid_pos is relative to
+        # the unrolled buffer ordering, we can read backwards k slots, and know that any
+        # negative entries imply that less than k entries satisfies time mask. We clamp those to -1.
+        offset = torch.arange(k - 1, -1, -1, device=self._device)  # [k - 1, ..., 0]
+        gather_pos = last_valid_pos[:, None] - offset[:, None].T  # (N, k)
+        gather_pos = torch.clamp(gather_pos, min=-1)  # Map all invalid entries to -1
+
+        # For each node, we have something like [-1, -1, -1, 0, 1, 2, ..., x]
+        # where the whole array is of size k, the x + 1 non-negative entries refer
+        # to indices in the unrolled buffer which satisfy the time constraint.
+        # We need to now map back to the original buffer indices (not unrolled)
+        # Here, we take the actual circular buffer indices corresponding to the columns
+        # we want. We temporarily clamp gather_pos negatives (invalid time entries) to 0
+        # but they get replace with -1 according to the torch.where mask gather_pos >= 0
+        out_idx = torch.where(
+            gather_pos >= 0,
+            torch.gather(candidate_idx, 1, gather_pos.clamp(min=0)),
+            torch.full_like(gather_pos, -1),
         )
 
-        # Replace invalid entries (where score == -1) with padding
-        pad_mask = scores.gather(1, idx).eq(-1)
-        nbr_nids[pad_mask] = PADDED_NODE_ID
-        nbr_times[pad_mask] = 0
-        nbr_feats[pad_mask] = 0
+        # Gather the nbr information using the out_idx
+        out_nbrs = torch.gather(nbr_nids, 1, out_idx.clamp(min=0))
+        out_times = torch.gather(nbr_times, 1, out_idx.clamp(min=0))
 
-        # Reverse along neighbor dimension to match queue FIFO
-        # nbr_nids = torch.flip(nbr_nids, dims=[1])
-        # nbr_times = torch.flip(nbr_times, dims=[1])
-        # nbr_feats = torch.flip(nbr_feats, dims=[1])
+        out_idx_expanded = out_idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
+        out_feats = torch.gather(nbr_feats, 1, out_idx_expanded.clamp(min=0))
 
-        return nbr_nids, nbr_times, nbr_feats
+        # Mask invalid slots (not enough history) using PADDED_NODE_ID
+        mask = out_nbrs != PADDED_NODE_ID
+        out_times = torch.where(mask, out_times, torch.zeros_like(out_times))
+        out_feats = torch.where(
+            mask.unsqueeze(-1), out_feats, torch.zeros_like(out_feats)
+        )
+
+        return out_nbrs, out_times, out_feats
 
     def _update(self, batch: DGBatch) -> None:
-        # if batch.edge_feats is None:
-        if True:
-            edge_feats = (
-                torch.arange(len(batch.src) * self._edge_feats_dim)
-                .reshape((len(batch.src), self._edge_feats_dim))
-                .to(self._device)
-                .float()
+        if batch.edge_feats is None:
+            edge_feats = torch.zeros(
+                (len(batch.src), self._edge_feats_dim), device=self._device
             )
         else:
             edge_feats = batch.edge_feats.float()  # TODO: Keep all feats in fp32
@@ -371,8 +404,16 @@ class RecencyNeighborHook(StatefulHook):
 
             # TODO:Interleave src/dst to match the order of the for-loop
 
-        # Sort nodes so duplicates are consecutive
-        # Ensure times are positive + scaled correctly
+        # node_ids = torch.tensor([0, 0, 0, 0])
+        # nbr_nids = torch.tensor([1, 2, 3, 4])
+        # times = torch.tensor([5, 10, 20, 1])
+        # edge_feats = torch.tensor([[1, 10], [2, 20], [3, 30], [4, 40]]).float()
+        # print(
+        #    f'Circular buffer is updating node ids: {node_ids}, nbrs: {nbr_nids} and node times : {times}'
+        # )
+
+        # Lexigraphical sort by node id and time. Duplicate nodes will be adjacent.
+        # Each nodes events will be sorted chronologically
         max_time = times.max() + 1
         composite_key = node_ids * max_time + times
         perm = torch.argsort(composite_key, stable=True)
@@ -382,33 +423,49 @@ class RecencyNeighborHook(StatefulHook):
         sorted_times = times[perm]
         sorted_feats = edge_feats[perm]
 
-        # Count number of occurrences per node (cumulative offset)
-        uniq, inverse, counts = torch.unique_consecutive(
+        # print(
+        #    f'Circular buffer sorted node ids: {sorted_nodes}, sorted nbrs: {sorted_nbr_ids} and sorted node times : {sorted_times}'
+        # )
+
+        # Count number of writes per node as a cumulative offset
+        _, inv, cnts = torch.unique_consecutive(
             sorted_nodes, return_inverse=True, return_counts=True
         )
-        cumsum_counts = torch.cumsum(
-            torch.cat([torch.tensor([0], device=self._device), counts[:-1]]), dim=0
-        )
-        offsets = torch.arange(len(sorted_nodes), device=self._device)
-        offsets -= cumsum_counts[inverse]
+        cum_cnts = torch.cat(
+            [torch.tensor([0], device=self._device), cnts[:-1]]
+        ).cumsum(dim=0)
+        offsets = torch.arange(len(sorted_nodes), device=self._device) - cum_cnts[inv]
 
-        # Compute write indices using circular buffer
-        idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs
+        # print(f'Circular buffer cumsumcounts: {cum_cnts}')
+        # print(f'Circular buffer offsets: {offsets}')
+
+        # Compute write indices using current write position and offets
+        write_idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs
+        # print(f'Circular buffer idx: {idx}')
 
         # Scatter updates into buffers
-        # self._nbr_ids[sorted_nodes, idx] = sorted_nbr_ids
-        # self._nbr_times[sorted_nodes, idx] = sorted_times
-        # self._nbr_feats[sorted_nodes, idx] = sorted_feats
-        for node in uniq:
-            mask = sorted_nodes == node
-            node_idx = idx[mask]
-            self._nbr_ids[node, node_idx] = sorted_nbr_ids[mask]
-            self._nbr_times[node, node_idx] = sorted_times[mask]
-            self._nbr_feats[node, node_idx, :] = sorted_feats[mask]
+        # def print_for_node(y):
+        #    print(
+        #        f'Circular buffer checking for node {y}: nbrs = {self._nbr_ids[y]}, times = {self._nbr_times[y]}, feats: {self._nbr_feats[y]}'
+        #    )
 
-        # Increment write_pos per node by number of occurrences
-        num_updates = torch.ones_like(sorted_nodes, device=self._device)
-        self._write_pos.scatter_add_(0, sorted_nodes, num_updates)
+        # print('---- Pre scatter ----')
+        # print_for_node(0)
+        # print_for_node(1)
+        # print_for_node(2)
+
+        self._nbr_ids[sorted_nodes, write_idx] = sorted_nbr_ids
+        self._nbr_times[sorted_nodes, write_idx] = sorted_times
+        self._nbr_feats[sorted_nodes, write_idx] = sorted_feats
+
+        # print('---- Post scatter ----')
+        # print_for_node(0)
+        # print_for_node(1)
+        # print_for_node(2)
+
+        # Increment write_pos per node
+        num_writes = torch.ones_like(sorted_nodes, device=self._device)
+        self._write_pos.scatter_add_(0, sorted_nodes, num_writes)
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:

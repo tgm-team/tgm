@@ -68,9 +68,14 @@ class SlowRecencyNeighborHook(StatefulHook):
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
         batch.nbr_feats = []  # type: ignore
 
-        # print(
-        #    f'Queue checking 3: nbrs = {[x[0] for x in self._history[3]]}, times = {[x[1] for x in self._history[3]]}, feats: {[x[2] for x in self._history[3]]}'
-        # )
+        # def print_for_node(y):
+        #    print(
+        #        f'Queue checking for node {y}: nbrs = {[x[0] for x in self._history[y]]}, times = {[x[1] for x in self._history[y]]}'
+        #    )
+
+        # print_for_node(0)
+        # print_for_node(1)
+        # print_for_node(8228)
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -130,13 +135,12 @@ class SlowRecencyNeighborHook(StatefulHook):
 
     def _update(self, batch: DGBatch) -> None:
         src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
-        # if batch.edge_feats is None:
-        if True:
-            edge_feats = (
-                torch.arange(len(src) * self._edge_feats_dim)
-                .reshape((len(src), self._edge_feats_dim))
-                .to(self._device)
-                .float()
+        # src = 200 * [300]
+        # dst = [i for i in range(200)]
+        # time = [i for i in range(200)]
+        if batch.edge_feats is None:
+            edge_feats = torch.zeros(
+                (len(src), self._edge_feats_dim), device=self._device
             )
         else:
             edge_feats = batch.edge_feats
@@ -153,50 +157,61 @@ class SlowRecencyNeighborHook(StatefulHook):
 
 def setup_loader(dg, nbr_class):
     sampler = nbr_class(
-        num_nbrs=[1, 1],
+        num_nbrs=[3, 3],
         num_nodes=dg.num_nodes,
         edge_feats_dim=dg.edge_feats_dim,
-        # edge_feats_dim=1,
+        directed=True,
     )
     hm = HookManager(keys=['global'])
     hm.register_shared(sampler)
     hm.set_active_hooks('global')
-    return DGDataLoader(dg, batch_size=20, hook_manager=hm)
+    return DGDataLoader(dg, batch_size=200, hook_manager=hm)
 
 
 def assert_batch_eq(batch, exp_batch):
-    # print('Batch: ', batch.src, batch.dst, batch.time)
     # torch.set_printoptions(profile='full')  # disables summarization
-    for hop in range(1):
-        num_nodes, _ = batch.nbr_nids[hop].shape
+    for hop in range(2):
+        # print(f'Hop: {hop}')
+        # print(f'Query nodes: {batch.nids[hop]}')
+        # print(f'Query times: {batch.times[hop]}')
+        # print(f'Expected nbr nids: {exp_batch.nbr_nids[hop]}')
+        # print(f'Actual nbr nids: {batch.nbr_nids[hop]}')
+        # input()
 
-        for i in range(num_nodes):
-            actual_nids = batch.nbr_nids[hop][i]
-            expected_nids = exp_batch.nbr_nids[hop][i]
+        assert torch.equal(batch.nbr_nids[hop], exp_batch.nbr_nids[hop])
+        assert torch.equal(batch.nbr_times[hop], exp_batch.nbr_times[hop])
+        # assert torch.allclose(batch.nbr_feats[hop], exp_batch.nbr_feats[hop], atol=1e-6)
+        # num_nodes, _ = batch.nbr_nids[hop].shape
 
-            # Check that they are permutations
-            sorted_actual, actual_idx = torch.sort(actual_nids, stable=True)
-            sorted_expected, expected_idx = torch.sort(expected_nids, stable=True)
-            assert torch.equal(
-                sorted_actual, sorted_expected
-            ), f'nbr_nids mismatch  at {batch.nids[hop][i]}'
+        # for i in range(num_nodes):
+        #    actual_nids = batch.nbr_nids[hop][i]
+        #    expected_nids = exp_batch.nbr_nids[hop][i]
 
-            # Compute permutation from actual -> expected
-            # Map actual_idx -> expected_idx
-            perm = torch.empty_like(actual_idx)
-            perm[actual_idx] = expected_idx
+        #    # Check that they are permutations
+        #    sorted_actual, actual_idx = torch.sort(actual_nids, stable=True)
+        #    sorted_expected, expected_idx = torch.sort(expected_nids, stable=True)
+        #    assert torch.equal(sorted_actual, sorted_expected), (
+        #        f'nbr_nids mismatch  at {batch.nids[hop][i]}'
+        #    )
 
-            # Apply permutation to times and feats
-            permuted_times = batch.nbr_times[hop][i][perm]
-            permuted_feats = batch.nbr_feats[hop][i][perm, :]
+        #    # Compute permutation from actual -> expected
+        #    # Map actual_idx -> expected_idx
+        #    perm = torch.empty_like(actual_idx)
+        #    perm[actual_idx] = expected_idx
 
-            # Assert equality
-            assert torch.equal(
-                permuted_times, exp_batch.nbr_times[hop][i]
-            ), f'nbr_times mismatch at {batch.nids[hop][i]}, exp: {exp_batch.nbr_times[hop]}, actu: {batch.nbr_times[hop]}'
-            assert torch.allclose(
-                permuted_feats, exp_batch.nbr_feats[hop][i], atol=1e-6, rtol=1e-5
-            ), f'nbr_feats mismatch at {batch.nids[hop][i]}, exp: {exp_batch.nbr_feats[hop]}, actu: {batch.nbr_feats[hop]}'
+        #    # Apply permutation to times and feats
+        #    permuted_times = batch.nbr_times[hop][i][perm]
+        #    permuted_feats = batch.nbr_feats[hop][i][perm]
+
+        #    # Assert equality
+        #    assert torch.equal(permuted_times, exp_batch.nbr_times[hop][i]), (
+        #        f'nbr_times mismatch at {batch.nids[hop][i]}, exp: {exp_batch.nbr_times[hop]}, actu: {batch.nbr_times[hop]}'
+        #    )
+        #    assert torch.allclose(
+        #        permuted_feats, exp_batch.nbr_feats[hop][i], atol=1e-6, rtol=1e-5
+        #    ), (
+        #        f'nbr_feats mismatch at {batch.nids[hop][i]}, exp: {exp_batch.nbr_feats[hop]}, actu: {batch.nbr_feats[hop]}'
+        #    )
 
 
 data = DGData.from_tgb('tgbl-wiki')
@@ -206,7 +221,9 @@ fast_loader = setup_loader(dg, RecencyNeighborHook)
 
 fast_loader_iter = iter(fast_loader)
 for exp_batch in tqdm(slow_loader):
+    # print('Batch: ', exp_batch.src, exp_batch.dst, exp_batch.time)
     batch = next(fast_loader_iter)
+    # print('\n\n')
     assert_batch_eq(batch, exp_batch)
 
 slow_loader._hook_manager.reset_state()
