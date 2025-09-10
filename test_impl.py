@@ -69,12 +69,12 @@ class SlowRecencyNeighborHook(StatefulHook):
         batch.nbr_feats = []  # type: ignore
 
         def print_for_node(y):
-            # print(
-            #    f'Queue for node {y}: nbrs = {[x[0] for x in self._history[y]]}, times = {[x[1] for x in self._history[y]]}, feats: {[x[2] for x in self._history[y]]}'
-            # )
             print(
-                f'Queue for node {y}: nbrs = {[x[0] for x in self._history[y]]}, times = {[x[1] for x in self._history[y]]}'
+                f'Queue for node {y}: nbrs = {[x[0] for x in self._history[y]]}, times = {[x[1] for x in self._history[y]]}, feats: {[x[2] for x in self._history[y]]}'
             )
+            # print(
+            #    f'Queue for node {y}: nbrs = {[x[0] for x in self._history[y]]}, times = {[x[1] for x in self._history[y]]}'
+            # )
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -100,9 +100,9 @@ class SlowRecencyNeighborHook(StatefulHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
-        # print_for_node(1)
+        # print_for_node(3)
         self._update(batch)
-        # print_for_node(1)
+        # print_for_node(3)
         return batch
 
     def _get_recency_neighbors(
@@ -144,6 +144,8 @@ class SlowRecencyNeighborHook(StatefulHook):
             edge_feats = batch.edge_feats
 
         for s, d, t, f in zip(src, dst, time, edge_feats):
+            # if s == 3:
+            #    print(f'Updating {s} at {t} with feat: {f}')
             self._history[s].append((d, t, f.clone()))  # may need to f.clone()
             if not self._directed:
                 self._history[d].append((s, t, f.clone()))  # may need to f.clone()
@@ -171,16 +173,17 @@ def assert_batch_eq(batch, exp_batch):
     # torch.set_printoptions(threshold=10000, sci_mode=False)
     for hop in range(2):
         # print(f'Hop: {hop}')
-        # print(f'Query nodes: {batch.nids[hop]}')
-        # print(f'Query times: {batch.times[hop]}')
-        # print(f'Expected nbr ids: {exp_batch.nbr_nids[hop]}')
-        # print(f'Actual nbr ids: {batch.nbr_nids[hop]}')
+        # print(f'Query nodes: {batch.nids[hop][2]}')
+        # print(f'Query times: {batch.times[hop][2]}')
+        # print(f'Expected nbr feat: {exp_batch.nbr_feats[hop][2]}')
+        # print(f'Actual nbr feat: {batch.nbr_feats[hop][2]}')
         assert torch.equal(batch.nbr_nids[hop], exp_batch.nbr_nids[hop])
         assert torch.equal(batch.nbr_times[hop], exp_batch.nbr_times[hop])
-        # torch.testing.assert_close(batch.nbr_feats[hop], exp_batch.nbr_feats[hop])
+        torch.testing.assert_close(batch.nbr_feats[hop], exp_batch.nbr_feats[hop])
 
 
 data = DGData.from_tgb('tgbl-wiki')
+# data.edge_feats = data.edge_feats[:, 0:50]
 dg = DGraph(data)
 
 

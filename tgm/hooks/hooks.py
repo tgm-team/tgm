@@ -312,17 +312,16 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
-        # print_for_node(290)
-        # print(batch.src, batch.edge_feats.float())
+        # print_for_node(3)
         self._update(batch)
-        # print_for_node(290)
+        # print_for_node(3)
         # input()
         return batch
 
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
-        log = node_ids.tolist() == [233, 9, 8400, 8235]
+        log = node_ids.tolist()[:3] == [16, 47, 3]
         log = False
         B = self._max_nbrs  # buffer size
 
@@ -431,6 +430,9 @@ class RecencyNeighborHook(StatefulHook):
         return out_nbrs, out_times, out_feats
 
     def _update(self, batch: DGBatch) -> None:
+        log = batch.src.tolist()[:3] == [16, 47, 3]
+        log = False
+
         if batch.edge_feats is None:
             edge_feats = torch.zeros(
                 (len(batch.src), self._edge_feats_dim), device=self._device
@@ -457,6 +459,37 @@ class RecencyNeighborHook(StatefulHook):
         sorted_times = times[perm]
         sorted_feats = edge_feats[perm]
 
+        if log:
+            # print(f'node ids: {node_ids}, times: {times}, feats: {edge_feats}')
+            # print(f'perm: {perm}')
+            print(f'sorted nodes: {sorted_nodes}, sorted times: {sorted_times}')
+            # print(f'sorted features: {sorted_feats[27:51]}')
+
+        B = self._max_nbrs
+        _, inv, cnts = torch.unique_consecutive(
+            sorted_nodes, return_inverse=True, return_counts=True
+        )
+        cumcnts = torch.cat(
+            [torch.tensor([0], device=self._device), cnts.cumsum(0)[:-1]]
+        )
+        pos_in_group = (
+            torch.arange(len(sorted_nodes), device=self._device) - cumcnts[inv]
+        )
+        mask = pos_in_group >= (cnts[inv] - B)
+
+        sorted_nodes = sorted_nodes[mask]
+        sorted_nbr_ids = sorted_nbr_ids[mask]
+        sorted_times = sorted_times[mask]
+        sorted_feats = sorted_feats[mask]
+
+        if log:
+            # print(f'node ids: {node_ids}, times: {times}, feats: {edge_feats}')
+            # print(f'perm: {perm}')
+            print(
+                f'sorted masked nodes: {sorted_nodes}, sorted masked times: {sorted_times}'
+            )
+            # print(f'sorted features: {sorted_feats[27:51]}')
+
         # print(
         #    f'Circular buffer sorted node ids: {sorted_nodes}, sorted nbrs: {sorted_nbr_ids} and sorted node times : {sorted_times}'
         # )
@@ -470,11 +503,16 @@ class RecencyNeighborHook(StatefulHook):
         ).cumsum(dim=0)
         offsets = torch.arange(len(sorted_nodes), device=self._device) - cum_cnts[inv]
 
+        if log:
+            print(f'inv: {inv}, cnts: {cnts}, cumcnts: {cum_cnts}, offets: {offsets}')
         # print(f'Circular buffer cumsumcounts: {cum_cnts}')
         # print(f'Circular buffer offsets: {offsets}')
 
         # Compute write indices using current write position and offets
         write_idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs
+
+        if log:
+            print(f'write idx: {write_idx}')
         # print(f'Circular buffer idx: {idx}')
 
         # Scatter updates into buffers
@@ -491,11 +529,10 @@ class RecencyNeighborHook(StatefulHook):
         # 5. Scatter into buffers
         self._nbr_ids[sorted_nodes, write_idx] = sorted_nbr_ids
         self._nbr_times[sorted_nodes, write_idx] = sorted_times
-        self._nbr_feats[sorted_nodes, write_idx, :] = sorted_feats
 
-        # self._nbr_ids[sorted_nodes, write_idx] = sorted_nbr_ids
-        # self._nbr_times[sorted_nodes, write_idx] = sorted_times
-        # self._nbr_feats[sorted_nodes, write_idx, :] = sorted_feats
+        # Correct "last write wins" for features
+        # NAIVE SCATTER IS NOT DETERMINSTIC FOR MEMORY ORDERING ON TENSORS
+        self._nbr_feats[sorted_nodes, write_idx, :] = sorted_feats
 
         # print('---- Post scatter ----')
         # print_for_node(0)
