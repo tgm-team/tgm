@@ -283,6 +283,10 @@ class RecencyNeighborHook(StatefulHook):
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
         batch.nbr_feats = []  # type: ignore
 
+        # print(
+        #    f'Circular checking 3: nbrs = {self._nbr_ids[3]}, times = {self._nbr_times[3]}, feats = {self._nbr_feats[3]}'
+        # )
+
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
                 seed = [batch.src, batch.dst]
@@ -319,8 +323,9 @@ class RecencyNeighborHook(StatefulHook):
 
         # Mask out invalid (forward-looking) nbr_times and get the most recent (largest) k per node
         # Also, mask out invalid seed nodes (PADDED_NODE_ID) which could occur on higher hops
-        mask = nbr_times < query_times[:, None]
-        mask[nbr_nids.eq(PADDED_NODE_ID)] = False
+        mask = (nbr_times < query_times[:, None]) & (~nbr_nids.eq(PADDED_NODE_ID))
+        mask[node_ids.eq(PADDED_NODE_ID)] = False
+
         scores = torch.where(mask, nbr_times, torch.full_like(nbr_times, -1))
         _, idx = torch.topk(scores, k, dim=1, largest=True, sorted=True)
 
@@ -338,16 +343,20 @@ class RecencyNeighborHook(StatefulHook):
         nbr_feats[pad_mask] = 0
 
         # Reverse along neighbor dimension to match queue FIFO
-        nbr_nids = torch.flip(nbr_nids, dims=[1])
-        nbr_times = torch.flip(nbr_times, dims=[1])
-        nbr_feats = torch.flip(nbr_feats, dims=[1])
+        # nbr_nids = torch.flip(nbr_nids, dims=[1])
+        # nbr_times = torch.flip(nbr_times, dims=[1])
+        # nbr_feats = torch.flip(nbr_feats, dims=[1])
 
         return nbr_nids, nbr_times, nbr_feats
 
     def _update(self, batch: DGBatch) -> None:
-        if batch.edge_feats is None:
-            edge_feats = torch.zeros(
-                (len(batch.src), self._edge_feats_dim), device=self._device
+        # if batch.edge_feats is None:
+        if True:
+            edge_feats = (
+                torch.arange(len(batch.src) * self._edge_feats_dim)
+                .reshape((len(batch.src), self._edge_feats_dim))
+                .to(self._device)
+                .float()
             )
         else:
             edge_feats = batch.edge_feats.float()  # TODO: Keep all feats in fp32
@@ -360,14 +369,21 @@ class RecencyNeighborHook(StatefulHook):
             times = torch.cat([batch.time, batch.time])
             edge_feats = torch.cat([edge_feats, edge_feats])
 
+            # TODO:Interleave src/dst to match the order of the for-loop
+
         # Sort nodes so duplicates are consecutive
-        sorted_nodes, perm = torch.sort(node_ids)
+        # Ensure times are positive + scaled correctly
+        max_time = times.max() + 1
+        composite_key = node_ids * max_time + times
+        perm = torch.argsort(composite_key, stable=True)
+
+        sorted_nodes = node_ids[perm]
         sorted_nbr_ids = nbr_nids[perm]
         sorted_times = times[perm]
         sorted_feats = edge_feats[perm]
 
         # Count number of occurrences per node (cumulative offset)
-        _, inverse, counts = torch.unique_consecutive(
+        uniq, inverse, counts = torch.unique_consecutive(
             sorted_nodes, return_inverse=True, return_counts=True
         )
         cumsum_counts = torch.cumsum(
@@ -380,9 +396,15 @@ class RecencyNeighborHook(StatefulHook):
         idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs
 
         # Scatter updates into buffers
-        self._nbr_ids[sorted_nodes, idx] = sorted_nbr_ids
-        self._nbr_times[sorted_nodes, idx] = sorted_times
-        self._nbr_feats[sorted_nodes, idx] = sorted_feats
+        # self._nbr_ids[sorted_nodes, idx] = sorted_nbr_ids
+        # self._nbr_times[sorted_nodes, idx] = sorted_times
+        # self._nbr_feats[sorted_nodes, idx] = sorted_feats
+        for node in uniq:
+            mask = sorted_nodes == node
+            node_idx = idx[mask]
+            self._nbr_ids[node, node_idx] = sorted_nbr_ids[mask]
+            self._nbr_times[node, node_idx] = sorted_times[mask]
+            self._nbr_feats[node, node_idx, :] = sorted_feats[mask]
 
         # Increment write_pos per node by number of occurrences
         num_updates = torch.ones_like(sorted_nodes, device=self._device)
