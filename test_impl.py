@@ -68,14 +68,6 @@ class SlowRecencyNeighborHook(StatefulHook):
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
         batch.nbr_feats = []  # type: ignore
 
-        def print_for_node(y):
-            print(
-                f'Queue for node {y}: nbrs = {[x[0] for x in self._history[y]]}, times = {[x[1] for x in self._history[y]]}, feats: {[x[2] for x in self._history[y]]}'
-            )
-            # print(
-            #    f'Queue for node {y}: nbrs = {[x[0] for x in self._history[y]]}, times = {[x[1] for x in self._history[y]]}'
-            # )
-
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
                 seed = [batch.src, batch.dst]
@@ -100,9 +92,7 @@ class SlowRecencyNeighborHook(StatefulHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
-        # print_for_node(3)
         self._update(batch)
-        # print_for_node(3)
         return batch
 
     def _get_recency_neighbors(
@@ -144,8 +134,6 @@ class SlowRecencyNeighborHook(StatefulHook):
             edge_feats = batch.edge_feats
 
         for s, d, t, f in zip(src, dst, time, edge_feats):
-            # if s == 3:
-            #    print(f'Updating {s} at {t} with feat: {f}')
             self._history[s].append((d, t, f.clone()))  # may need to f.clone()
             if not self._directed:
                 self._history[d].append((s, t, f.clone()))  # may need to f.clone()
@@ -155,7 +143,7 @@ class SlowRecencyNeighborHook(StatefulHook):
             self._device = device
 
 
-def setup_loader(dg, nbr_class, directed):
+def setup_loader(dg, nbr_class, directed, batch_size=200):
     sampler = nbr_class(
         num_nbrs=[20, 20],
         num_nodes=dg.num_nodes,
@@ -165,27 +153,18 @@ def setup_loader(dg, nbr_class, directed):
     hm = HookManager(keys=['global'])
     hm.register_shared(sampler)
     hm.set_active_hooks('global')
-    return DGDataLoader(dg, batch_size=200, hook_manager=hm)
+    return DGDataLoader(dg, batch_size=batch_size, hook_manager=hm)
 
 
 def assert_batch_eq(batch, exp_batch):
-    # print('Batch: ', exp_batch.src, exp_batch.dst, exp_batch.time)
-    # torch.set_printoptions(threshold=10000, sci_mode=False)
     for hop in range(2):
-        # print(f'Hop: {hop}')
-        # print(f'Query nodes: {batch.nids[hop][2]}')
-        # print(f'Query times: {batch.times[hop][2]}')
-        # print(f'Expected nbr feat: {exp_batch.nbr_feats[hop][2]}')
-        # print(f'Actual nbr feat: {batch.nbr_feats[hop][2]}')
         assert torch.equal(batch.nbr_nids[hop], exp_batch.nbr_nids[hop])
         assert torch.equal(batch.nbr_times[hop], exp_batch.nbr_times[hop])
         torch.testing.assert_close(batch.nbr_feats[hop], exp_batch.nbr_feats[hop])
 
 
 data = DGData.from_tgb('tgbl-wiki')
-# data.edge_feats = data.edge_feats[:, 0:50]
 dg = DGraph(data)
-
 
 for directed in [True, False]:
     slow_loader = setup_loader(dg, SlowRecencyNeighborHook, directed)  # From master
