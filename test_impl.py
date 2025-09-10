@@ -69,11 +69,12 @@ class SlowRecencyNeighborHook(StatefulHook):
         batch.nbr_feats = []  # type: ignore
 
         def print_for_node(y):
+            # print(
+            #    f'Queue for node {y}: nbrs = {[x[0] for x in self._history[y]]}, times = {[x[1] for x in self._history[y]]}, feats: {[x[2] for x in self._history[y]]}'
+            # )
             print(
                 f'Queue for node {y}: nbrs = {[x[0] for x in self._history[y]]}, times = {[x[1] for x in self._history[y]]}'
             )
-
-        # print_for_node(233)
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -99,7 +100,9 @@ class SlowRecencyNeighborHook(StatefulHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
+        # print_for_node(1)
         self._update(batch)
+        # print_for_node(1)
         return batch
 
     def _get_recency_neighbors(
@@ -165,19 +168,21 @@ def setup_loader(dg, nbr_class, directed):
 
 def assert_batch_eq(batch, exp_batch):
     # print('Batch: ', exp_batch.src, exp_batch.dst, exp_batch.time)
+    # torch.set_printoptions(threshold=10000, sci_mode=False)
     for hop in range(2):
         # print(f'Hop: {hop}')
         # print(f'Query nodes: {batch.nids[hop]}')
         # print(f'Query times: {batch.times[hop]}')
-        # print(f'Expected nbr nids: {exp_batch.nbr_nids[hop]}')
-        # print(f'Actual nbr nids: {batch.nbr_nids[hop]}')
+        # print(f'Expected nbr ids: {exp_batch.nbr_nids[hop]}')
+        # print(f'Actual nbr ids: {batch.nbr_nids[hop]}')
         assert torch.equal(batch.nbr_nids[hop], exp_batch.nbr_nids[hop])
         assert torch.equal(batch.nbr_times[hop], exp_batch.nbr_times[hop])
-        # assert torch.allclose(batch.nbr_feats[hop], exp_batch.nbr_feats[hop], atol=1e-6)
+        # torch.testing.assert_close(batch.nbr_feats[hop], exp_batch.nbr_feats[hop])
 
 
 data = DGData.from_tgb('tgbl-wiki')
 dg = DGraph(data)
+
 
 for directed in [True, False]:
     slow_loader = setup_loader(dg, SlowRecencyNeighborHook, directed)  # From master

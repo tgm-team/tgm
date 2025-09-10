@@ -285,10 +285,8 @@ class RecencyNeighborHook(StatefulHook):
 
         def print_for_node(y):
             print(
-                f'Circular buffer checking for node {y}: nbrs = {self._nbr_ids[y]}, times = {self._nbr_times[y]}'
+                f'Circular buffer checking for node {y}: nbrs = {self._nbr_ids[y]}, times = {self._nbr_times[y]}, feats: {self._nbr_feats[y]}'
             )
-
-        # print_for_node(233)
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -314,7 +312,11 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
+        # print_for_node(290)
+        # print(batch.src, batch.edge_feats.float())
         self._update(batch)
+        # print_for_node(290)
+        # input()
         return batch
 
     def _get_recency_neighbors(
@@ -434,7 +436,7 @@ class RecencyNeighborHook(StatefulHook):
                 (len(batch.src), self._edge_feats_dim), device=self._device
             )
         else:
-            edge_feats = batch.edge_feats.float()  # TODO: Keep all feats in fp32
+            edge_feats = batch.edge_feats.float()
 
         if self._directed:
             node_ids, nbr_nids, times = batch.src, batch.dst, batch.time
@@ -486,9 +488,14 @@ class RecencyNeighborHook(StatefulHook):
         # print_for_node(1)
         # print_for_node(2)
 
+        # 5. Scatter into buffers
         self._nbr_ids[sorted_nodes, write_idx] = sorted_nbr_ids
         self._nbr_times[sorted_nodes, write_idx] = sorted_times
-        self._nbr_feats[sorted_nodes, write_idx] = sorted_feats
+        self._nbr_feats[sorted_nodes, write_idx, :] = sorted_feats
+
+        # self._nbr_ids[sorted_nodes, write_idx] = sorted_nbr_ids
+        # self._nbr_times[sorted_nodes, write_idx] = sorted_times
+        # self._nbr_feats[sorted_nodes, write_idx, :] = sorted_feats
 
         # print('---- Post scatter ----')
         # print_for_node(0)
