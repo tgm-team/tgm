@@ -31,41 +31,41 @@ parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset na
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument(
-    '--num_neighbors',
+    '--num-neighbors',
     type=int,
     default=32,
     help='number of recency temporal neighbors of each node',
 )
 parser.add_argument(
-    '--rp_num_layers',
+    '--rp-num-layers',
     type=int,
     default=2,
     help='the number of layer of random projection module',
 )
 parser.add_argument(
-    '--rp_time_decay_weight',
+    '--rp-time-decay-weight',
     type=float,
     default=0.000001,
     help='the first weight of the time decay',
 )
 parser.add_argument(
-    '--enforce_dim',
+    '--enforce-dim',
     type=int,
     default=None,
     help='enforced dimension of random projections',
 )
 parser.add_argument(
-    '--rp_dim_factor',
+    '--rp-dim-factor',
     type=int,
     default=10,
     help='the dim factor of random feature w.r.t. the node num',
 )
-parser.add_argument('--node_dim', type=int, default=128, help='embedding dimension')
-parser.add_argument('--time_dim', type=int, default=100, help='time encoding dimension')
+parser.add_argument('--node-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument(
-    '--embed_dim', type=int, default=172, help='node representation dimension'
+    '--embed-dim', type=int, default=172, help='node representation dimension'
 )
-parser.add_argument('--num_layers', type=int, default=2, help='number of model layers')
+parser.add_argument('--num-layers', type=int, default=2, help='number of model layers')
 parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
@@ -292,8 +292,8 @@ hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
 hm.register_shared(nbr_hook)
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
-val_loader = DGDataLoader(val_dg, 1, hook_manager=hm)
-test_loader = DGDataLoader(test_dg, 1, hook_manager=hm)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 random_projection_module = RandomProjectionModule(
     num_nodes=num_nodes,

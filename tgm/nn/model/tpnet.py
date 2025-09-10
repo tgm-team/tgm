@@ -4,12 +4,29 @@ from typing import Callable, List, Tuple
 import torch
 import torch.nn as nn
 
-from ..time_encoding import Time2Vec
+from tgm.constants import PADDED_NODE_ID
 
-PADDED_NODE_ID = -1  # @TODO: No need to use this. Already define
+from ..time_encoding import Time2Vec
 
 
 class RandomProjectionModule(nn.Module):
+    r"""This model maintains a series of temporal walk matrices $A_^(0)(t),A_^(1)(t),...,A^(k)(t)$ through
+    random feature propagation, and extract the pairwise features from the obtained random projections.
+
+    Args:
+        num_nodes(int): the number of nodes
+        num_layer(int): the max hop of the maintained temporal walk matrices
+        time_decay_weight(float): the time decay weight (lambda of the original paper)
+        beginning_time(float): the earliest time in the given temporal graph
+        use_matrix(bool): if True, explicitly maintain the temporal walk matrices
+        scale_random_projection(bool) if True, the inner product of nodes' random projections will be scaled
+        enforce_dim(int) if not None, explicitly set the dimension of random projections to enforce_dim
+        num_edges(int): the number of edges
+        dim_factor(int): the parameter to control the dimension of random projections. Specifically, the
+                           dimension of the random projections is set to be dim_factor * log(2*edge_num)
+        device(str): torch device
+    """
+
     def __init__(
         self,
         num_nodes: int,
@@ -203,7 +220,9 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        assert len(random_projections) == 2, (
+        assert (
+            len(random_projections) == 2
+        ), (
             'Expect a tuple of (now_time,random_projections)'
         )  # @TODO: Need to raise custom exception
         now_time, random_projections = random_projections
@@ -215,13 +234,25 @@ class RandomProjectionModule(nn.Module):
 
         self.now_time.data = now_time.clone()
         for i in range(1, self.num_layer + 1):
-            assert torch.is_tensor(random_projections[i - 1]), (
+            assert torch.is_tensor(
+                random_projections[i - 1]
+            ), (
                 'Not a valid state of random projection'
             )  # @TODO: Need to raise custom exception
             self.random_projections[i].data = random_projections[i - 1].clone()
 
 
 class FeedForwardNet(nn.Module):
+    r"""Two-layered MLP with GELU activation function.
+
+    Args:
+        input_dim(int): dimension of input
+        dim_expansion_factor(float): dimension expansion factor
+        dropout(float): dropout rate
+
+    Reference: https://arxiv.org/abs/2410.04013.
+    """
+
     def __init__(
         self, input_dim: int, dim_expansion_factor: float, dropout: float = 0.0
     ) -> None:
@@ -253,6 +284,18 @@ class FeedForwardNet(nn.Module):
 
 
 class MLPMixer(nn.Module):
+    r"""Implementation of MLPMixer.
+
+    Args:
+        num_tokens(int): number of tokens
+        num_channels(int): number of channels
+        token_dim_expansion_factor(float): dimension expansion factor for tokens
+        channel_dim_expansion_factor(float): dimension expansion factor for channels
+        dropout(float): dropout rate
+
+    Reference: https://openreview.net/forum?id=ayPPc0SyLv1
+    """
+
     def __init__(
         self,
         num_tokens: int,
@@ -298,6 +341,25 @@ class MLPMixer(nn.Module):
 
 
 class TPNet(nn.Module):
+    r"""An implementation of DyGFormer.
+
+    Args:
+        node_feat_dim (int): Dimension of static/dynamic node features (`d_N`).
+        edge_feat_dim (int): Dimension of edge features (`d_E`).
+        time_feat_dim (int): Dimension of time encodings (`d_T`).
+        channel_embedding_dim (int): Dimension of each channel embedding.
+        output_dim (int): Dimension of output embedding.
+        dropout (float): Drop out rate.
+        num_layers (int): Number of transformer layers.
+        num_neighbors (int): Number of recent temporal neighbors consider
+        random_projections (nn.Module): Random projection module that maintains a series temporal walk matrices
+        device (str) : cpu or cuda
+        time_encoder (PyTorch Module) : Time encoder module.
+
+
+    Reference: https://arxiv.org/abs/2410.04013.
+    """
+
     def __init__(
         self,
         node_feat_dim: int,
@@ -383,7 +445,7 @@ class TPNet(nn.Module):
 
         if self.random_projections is not None:
             concat_neighbor_random_features = self.random_projections(
-                src=neighbours.reshape(-1).repeat(2),  # repeat(2): to check
+                src=neighbours.reshape(-1).repeat(2),
                 dst=torch.cat(
                     [
                         src.repeat_interleave(self.num_neighbors),
