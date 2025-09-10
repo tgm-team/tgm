@@ -322,9 +322,8 @@ class RecencyNeighborHook(StatefulHook):
 
         # Unroll indices to all buffers, so that last write is at index -1
         # If we had no query_time constraint, we would just take the last k entries
-        # Shape (N, B) with oldest ... newest
         candidate_idx = write_pos[:, None] - torch.arange(B, 0, -1, device=self._device)
-        candidate_idx %= B
+        candidate_idx %= B  # (N, B) with oldest ... newest
 
         # Read the neighbor times in that unrolled order, and get query_times mask
         candidate_times = torch.gather(nbr_times, 1, candidate_idx)  # (N, B)
@@ -364,31 +363,22 @@ class RecencyNeighborHook(StatefulHook):
             torch.full_like(gather_pos, -1),
         )
 
-        # Prepare output tensors filled with PAD / zeros
-        out_nbrs = torch.full_like(out_idx, PADDED_NODE_ID)
-        out_times = torch.zeros_like(out_idx)
-        out_feats = torch.zeros(
-            (out_idx.size(0), out_idx.size(1), self._edge_feats_dim),
-            device=self._device,
-            dtype=nbr_feats.dtype,
-        )
-
         # Crate a mask of valid indices, and clamp out_idx for safe gather. We'll make sure to
         # only write the entries at positions where valid_mask is True
         valid_mask = out_idx >= 0
         safe_idx = out_idx.clamp(min=0)
 
-        # Gather all entries
-        gathered_nbrs = torch.gather(nbr_nids, 1, safe_idx)
-        gathered_times = torch.gather(nbr_times, 1, safe_idx)
-        gathered_feats = torch.gather(
+        # Gather out tensors
+        out_nbrs = torch.gather(nbr_nids, 1, safe_idx)
+        out_times = torch.gather(nbr_times, 1, safe_idx)
+        out_feats = torch.gather(
             nbr_feats, 1, safe_idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
         )
 
-        # Fill only valid positions
-        out_nbrs[valid_mask] = gathered_nbrs[valid_mask]
-        out_times[valid_mask] = gathered_times[valid_mask]
-        out_feats[valid_mask] = gathered_feats[valid_mask]
+        # Overwrite invalid positions in-place
+        out_nbrs[~valid_mask] = PADDED_NODE_ID
+        out_times[~valid_mask] = 0
+        out_feats[~valid_mask] = 0.0
 
         return out_nbrs, out_times, out_feats
 
@@ -403,6 +393,7 @@ class RecencyNeighborHook(StatefulHook):
         if self._directed:
             node_ids, nbr_nids, times = batch.src, batch.dst, batch.time
         else:
+            # It's fine that times is out-of-order here since we sort below
             node_ids = torch.cat([batch.src, batch.dst])
             nbr_nids = torch.cat([batch.dst, batch.src])
             times = torch.cat([batch.time, batch.time])
@@ -419,6 +410,13 @@ class RecencyNeighborHook(StatefulHook):
         sorted_times = times[perm]
         sorted_feats = edge_feats[perm]
 
+        # All the tensors we need to write are properly sorted and groupbed by node.
+        # However, in order for determinstic scatter on multi-dimensional arrays, we
+        # cannot afford to have multiple tensors written at same buffer position.
+        # E.g. This occurs if we have more node events than the buffer capacity.
+        # Therefore, we do another index select that retains only the last B entries
+        # for each node. This guarentees at most one write per buffer position, and
+        # will still be sorted chronologically, with grouping by nodes.
         B = self._max_nbrs
         _, inv, cnts = torch.unique_consecutive(
             sorted_nodes, return_inverse=True, return_counts=True
