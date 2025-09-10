@@ -411,11 +411,11 @@ class RecencyNeighborHook(StatefulHook):
         sorted_feats = edge_feats[perm]
 
         # All the tensors we need to write are properly sorted and groupbed by node.
-        # However, in order for determinstic scatter on multi-dimensional arrays, we
+        # However, in order for deterministic scatter on multi-dimensional arrays, we
         # cannot afford to have multiple tensors written at same buffer position.
         # E.g. This occurs if we have more node events than the buffer capacity.
         # Therefore, we do another index select that retains only the last B entries
-        # for each node. This guarentees at most one write per buffer position, and
+        # for each node. This guarantees at most one write per buffer position, and
         # will still be sorted chronologically, with grouping by nodes.
         B = self._max_nbrs
         _, inv, cnts = torch.unique_consecutive(
