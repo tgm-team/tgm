@@ -283,17 +283,12 @@ class RecencyNeighborHook(StatefulHook):
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
         batch.nbr_feats = []  # type: ignore
 
-        # print(
-        #    f'Circular checking 3: nbrs = {self._nbr_ids[3]}, times = {self._nbr_times[3]}, feats = {self._nbr_feats[3]}'
-        # )
-        # def print_for_node(y):
-        #    print(
-        #        f'Circular buffer checking for node {y}: nbrs = {self._nbr_ids[y]}, times = {self._nbr_times[y]}'
-        #    )
+        def print_for_node(y):
+            print(
+                f'Circular buffer checking for node {y}: nbrs = {self._nbr_ids[y]}, times = {self._nbr_times[y]}'
+            )
 
-        # print_for_node(0)
-        # print_for_node(1)
-        # print_for_node(8228)
+        # print_for_node(233)
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
@@ -325,12 +320,19 @@ class RecencyNeighborHook(StatefulHook):
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
+        log = node_ids.tolist() == [233, 9, 8400, 8235]
+        log = False
         B = self._max_nbrs  # buffer size
 
         nbr_nids = self._nbr_ids[node_ids]  # (N, B)
         nbr_times = self._nbr_times[node_ids]  # (N, B)
         nbr_feats = self._nbr_feats[node_ids]  # (N, B, edge_dim)
         write_pos = self._write_pos[node_ids]  # (N,)
+
+        if log:
+            print('Nbr nids: ', nbr_nids)
+            print('Nbr times: ', nbr_times)
+            print('Write pos: ', write_pos)
 
         # Unroll indices to all buffers, so that last write is at index -1
         # If we had no query_time constraint, we would just take the last k entries
@@ -342,12 +344,27 @@ class RecencyNeighborHook(StatefulHook):
         # Read the neighbor times in that unrolled order, and get query_times mask
         candidate_times = torch.gather(nbr_times, 1, candidate_idx)  # (N, B)
         time_mask = candidate_times < query_times[:, None]  # (N, B)
+        time_mask[torch.gather(nbr_nids, 1, candidate_idx) == PADDED_NODE_ID] = False
+
+        if log:
+            print('Candidate idx: ', candidate_idx)
+            print('Candidate times: ', candidate_times)
+            print('Time mask: ', time_mask)
 
         # For each node, find the rightmost valid entry, i.e the last index which
         # satisfies the time mask. We will read k slots backwards from there.
         # Since we write out buffers chronologically, we just search for rightmost valid entry
         pos = torch.arange(B, device=self._device)
         last_valid_pos = (time_mask * pos).amax(dim=1)  # (N,)
+        N = len(node_ids)
+        last_valid_pos = torch.where(
+            time_mask.any(dim=1),
+            (time_mask * torch.arange(B, device=self._device)).amax(dim=1),
+            torch.full((N,), -1, device=self._device),
+        )
+
+        if log:
+            print('Last valid pos: ', last_valid_pos)
 
         # We figured out the last time constraint valid position, now build the k-window
         # ending at last_valid_pos (with wraparound). Since last_valid_pos is relative to
@@ -356,6 +373,10 @@ class RecencyNeighborHook(StatefulHook):
         offset = torch.arange(k - 1, -1, -1, device=self._device)  # [k - 1, ..., 0]
         gather_pos = last_valid_pos[:, None] - offset[:, None].T  # (N, k)
         gather_pos = torch.clamp(gather_pos, min=-1)  # Map all invalid entries to -1
+
+        if log:
+            print('Offset: ', offset)
+            print('Gather pos: ', gather_pos)
 
         # For each node, we have something like [-1, -1, -1, 0, 1, 2, ..., x]
         # where the whole array is of size k, the x + 1 non-negative entries refer
@@ -370,19 +391,40 @@ class RecencyNeighborHook(StatefulHook):
             torch.full_like(gather_pos, -1),
         )
 
-        # Gather the nbr information using the out_idx
-        out_nbrs = torch.gather(nbr_nids, 1, out_idx.clamp(min=0))
-        out_times = torch.gather(nbr_times, 1, out_idx.clamp(min=0))
+        if log:
+            print('Out idx: ', out_idx)
 
-        out_idx_expanded = out_idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
-        out_feats = torch.gather(nbr_feats, 1, out_idx_expanded.clamp(min=0))
-
-        # Mask invalid slots (not enough history) using PADDED_NODE_ID
-        mask = out_nbrs != PADDED_NODE_ID
-        out_times = torch.where(mask, out_times, torch.zeros_like(out_times))
-        out_feats = torch.where(
-            mask.unsqueeze(-1), out_feats, torch.zeros_like(out_feats)
+        # Prepare output tensors filled with PAD / zeros
+        out_nbrs = torch.full_like(out_idx, PADDED_NODE_ID)
+        out_times = torch.zeros_like(out_idx)
+        out_feats = torch.zeros(
+            (out_idx.size(0), out_idx.size(1), self._edge_feats_dim),
+            device=self._device,
+            dtype=nbr_feats.dtype,
         )
+
+        # Mask of valid indices
+        valid_mask = out_idx >= 0
+
+        # Clamp to 0 to safely gather
+        safe_idx = out_idx.clamp(min=0)
+
+        # Gather all entries
+        gathered_nbrs = torch.gather(nbr_nids, 1, safe_idx)
+        gathered_times = torch.gather(nbr_times, 1, safe_idx)
+        gathered_feats = torch.gather(
+            nbr_feats, 1, safe_idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
+        )
+
+        # Fill only valid positions
+        out_nbrs[valid_mask] = gathered_nbrs[valid_mask]
+        out_times[valid_mask] = gathered_times[valid_mask]
+        out_feats[valid_mask] = gathered_feats[valid_mask]
+
+        if log:
+            print('out nbrs:', out_nbrs)
+            print('out times:', out_times)
+            input()
 
         return out_nbrs, out_times, out_feats
 
@@ -402,17 +444,7 @@ class RecencyNeighborHook(StatefulHook):
             times = torch.cat([batch.time, batch.time])
             edge_feats = torch.cat([edge_feats, edge_feats])
 
-            # TODO:Interleave src/dst to match the order of the for-loop
-
-        # node_ids = torch.tensor([0, 0, 0, 0])
-        # nbr_nids = torch.tensor([1, 2, 3, 4])
-        # times = torch.tensor([5, 10, 20, 1])
-        # edge_feats = torch.tensor([[1, 10], [2, 20], [3, 30], [4, 40]]).float()
-        # print(
-        #    f'Circular buffer is updating node ids: {node_ids}, nbrs: {nbr_nids} and node times : {times}'
-        # )
-
-        # Lexigraphical sort by node id and time. Duplicate nodes will be adjacent.
+        # Lexicographical sort by node id and time. Duplicate nodes will be adjacent.
         # Each nodes events will be sorted chronologically
         max_time = times.max() + 1
         composite_key = node_ids * max_time + times
