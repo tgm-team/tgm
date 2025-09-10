@@ -323,7 +323,6 @@ class RecencyNeighborHook(StatefulHook):
         # Unroll indices to all buffers, so that last write is at index -1
         # If we had no query_time constraint, we would just take the last k entries
         # Shape (N, B) with oldest ... newest
-        # candidate_idx = write_pos[:, None] - torch.arange(1, B + 1, device=self._device)
         candidate_idx = write_pos[:, None] - torch.arange(B, 0, -1, device=self._device)
         candidate_idx %= B
 
@@ -374,10 +373,9 @@ class RecencyNeighborHook(StatefulHook):
             dtype=nbr_feats.dtype,
         )
 
-        # Mask of valid indices
+        # Crate a mask of valid indices, and clamp out_idx for safe gather. We'll make sure to
+        # only write the entries at positions where valid_mask is True
         valid_mask = out_idx >= 0
-
-        # Clamp to 0 to safely gather
         safe_idx = out_idx.clamp(min=0)
 
         # Gather all entries
@@ -450,13 +448,9 @@ class RecencyNeighborHook(StatefulHook):
         # Compute write indices using current write position and offets
         write_idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs
 
-        # print_for_node(2)
-
-        # Scatter into buffers
+        # Scatter into buffers. Correct "last write wins" for features, since we have at most B writes
         self._nbr_ids[sorted_nodes, write_idx] = sorted_nbr_ids
         self._nbr_times[sorted_nodes, write_idx] = sorted_times
-
-        # Correct "last write wins" for features, since we have at most B writes
         self._nbr_feats[sorted_nodes, write_idx, :] = sorted_feats
 
         # Increment write_pos per node
