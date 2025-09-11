@@ -79,12 +79,6 @@ def test_init_gpu(data):
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     exp_dynamic_node_feats = exp_dynamic_node_feats.cuda()
     torch.testing.assert_close(dg.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    exp_edge_feats[20, 1, 8] = data.edge_feats[2]
-    exp_edge_feats = exp_edge_feats.cuda()
     torch.testing.assert_close(dg.edge_feats, data.edge_feats.to('cuda'))
 
 
