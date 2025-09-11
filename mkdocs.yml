@@ -11,7 +11,7 @@ nav:
       - Benchmarks: benchmarks.md
 
   - Tutorials:
-      - Graph Construction: tutorials/dgraph_tutorial.md
+      - Temporal Graph Construction: tutorials/dgraph_tutorial.md
       - Time Management: tutorials/time_delta_tutorial.md
 
   - API Reference:

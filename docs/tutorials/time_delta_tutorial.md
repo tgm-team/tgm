@@ -64,7 +64,7 @@ print(td_biweek.is_coarser_than(td_week)) # True
 print(td_month.is_coarser_than(td_biweek)) # True
 ```
 
-**Note**: Checking whether an event-ordered time delta is coarser or finer than an non-ordered is undefined and will raise a `EventOrderedConversionError`.
+> **Note**: Checking whether an event-ordered time delta is coarser or finer than an non-ordered is undefined and will raise a `EventOrderedConversionError`.
 
 ## 2. DGData Construction
 
@@ -108,7 +108,7 @@ There are two different modes of iteration in TGM, depending on whether the `bat
 | By Events (Event-Ordered) | Iterates over a fixed number of events at a time | Batch unit = `r` and batch size `N` yields N events per batch        | No                                    | No                        |
 | By Time (Time-Ordered)    | Iterates over a time window                      | Batch unit = `h` and batch size `3` yields 3 hours of data per batch | Yes                                   | Yes                       |
 
-**Note**: Time-based iteration can result in empty batches if no edge and no node events occur in the window. You can specify `on_empty='raise'` to error on empty batches, `on_empty='skip'` to ignore them, or `on_empty=None` to materialize the empty snapshots for your model. The default will materialize empty snapshots.
+> **Note**: Time-based iteration can result in empty batches if no edge and no node events occur in the window. You can specify `on_empty='raise'` to error on empty batches, `on_empty='skip'` to ignore them, or `on_empty=None` to materialize the empty snapshots for your model. The default will materialize empty snapshots.
 
 ```python
 from tgm.loader import DGDataLoader
@@ -155,7 +155,7 @@ print(dg_data.edge_index) # torch.tensor([[0, 1], [2, 3], [0, 1])
 print(dg_data.edge_feats) # torch.tensor([[[100, 200, 400]])
 ```
 
-**Note**: Discretization is only defined for time-ordered graphs. Attempting to discretize an even-ordered `DGData` is undefined and will raise `InvalidDiscretizationError`.
+> **Note**: Discretization is only defined for time-ordered graphs. Attempting to discretize an even-ordered `DGData` is undefined and will raise `InvalidDiscretizationError`.
 
 ## 5. Workflows
 
