@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections import defaultdict, deque
 from dataclasses import is_dataclass
-from typing import Any, Deque, Dict, List, Set, Tuple
+from typing import Any, List, Set, Tuple
 
 import torch
 
@@ -256,24 +255,27 @@ class RecencyNeighborHook(StatefulHook):
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
         self._directed = directed
-
-        # We need edge_feats_dim to pre-allocate the right shape for self._nbr_feats
         self._edge_feats_dim = edge_feats_dim
-        self._history: Dict[int, Deque[Any]] = defaultdict(
-            lambda: deque(maxlen=self._max_nbrs)
-        )
-
         self._device = torch.device('cpu')
+
+        self._nbr_ids = torch.full(
+            (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.long
+        )
+        self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
+        self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
+        self._write_pos = torch.zeros(num_nodes, dtype=torch.long)
 
     @property
     def num_nbrs(self) -> List[int]:
         return self._num_nbrs
 
     def reset_state(self) -> None:
-        self._history = defaultdict(lambda: deque(maxlen=self._max_nbrs))
+        self._nbr_ids.fill_(PADDED_NODE_ID)
+        self._nbr_times.zero_()
+        self._nbr_feats.zero_()
+        self._write_pos.zero_()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        # TODO: Consider the case where no edge features exist
         device = dg.device
         self._move_queues_to_device_if_needed(device)  # No-op after first batch
 
@@ -311,49 +313,155 @@ class RecencyNeighborHook(StatefulHook):
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
-        num_nodes = node_ids.size(0)
-        device = node_ids.device
-        nbr_nids = torch.full(
-            (num_nodes, k), PADDED_NODE_ID, dtype=torch.long, device=device
+        B = self._max_nbrs  # buffer size
+
+        nbr_nids = self._nbr_ids[node_ids]  # (N, B)
+        nbr_times = self._nbr_times[node_ids]  # (N, B)
+        nbr_feats = self._nbr_feats[node_ids]  # (N, B, edge_dim)
+        write_pos = self._write_pos[node_ids]  # (N,)
+
+        # Unroll indices to all buffers, so that last write is at index -1
+        # If we had no query_time constraint, we would just take the last k entries
+        candidate_idx = write_pos[:, None] - torch.arange(B, 0, -1, device=self._device)
+        candidate_idx %= B  # (N, B) with oldest ... newest
+
+        # Read the neighbor times in that unrolled order, and get query_times mask
+        candidate_times = torch.gather(nbr_times, 1, candidate_idx)  # (N, B)
+        time_mask = candidate_times < query_times[:, None]  # (N, B)
+        time_mask[torch.gather(nbr_nids, 1, candidate_idx) == PADDED_NODE_ID] = False
+
+        # For each node, find the rightmost valid entry, i.e the last index which
+        # satisfies the time mask. We will read k slots backwards from there.
+        # Since we write out buffers chronologically, we just search for rightmost valid entry
+        pos = torch.arange(B, device=self._device)
+        last_valid_pos = (time_mask * pos).amax(dim=1)  # (N,)
+        N = len(node_ids)
+        last_valid_pos = torch.where(
+            time_mask.any(dim=1),
+            (time_mask * torch.arange(B, device=self._device)).amax(dim=1),
+            torch.full((N,), -1, device=self._device),
         )
-        nbr_times = torch.zeros((num_nodes, k), dtype=torch.long, device=device)
-        nbr_feats = torch.zeros((num_nodes, k, self._edge_feats_dim), device=device)
 
-        for i in range(num_nodes):
-            nid, qtime = int(node_ids[i]), int(query_times[i])
-            history = self._history[nid]
-            valid = [(nbr, t, f) for (nbr, t, f) in history if t < qtime]
-            if not valid:
-                continue
-            valid = valid[-k:]  # most recent k
+        # We figured out the last time constraint valid position, now build the k-window
+        # ending at last_valid_pos (with wraparound). Since last_valid_pos is relative to
+        # the unrolled buffer ordering, we can read backwards k slots, and know that any
+        # negative entries imply that less than k entries satisfies time mask. We clamp those to -1.
+        offset = torch.arange(k - 1, -1, -1, device=self._device)  # [k - 1, ..., 0]
+        gather_pos = last_valid_pos[:, None] - offset[:, None].T  # (N, k)
+        gather_pos = torch.clamp(gather_pos, min=-1)  # Map all invalid entries to -1
 
-            nbr_nids[i, -len(valid) :] = torch.tensor(
-                [x[0] for x in valid], dtype=torch.long, device=device
-            )
-            nbr_times[i, -len(valid) :] = torch.tensor(
-                [x[1] for x in valid], dtype=torch.long, device=device
-            )
-            nbr_feats[i, -len(valid) :] = torch.stack([x[2] for x in valid])
+        # For each node, we have something like [-1, -1, -1, 0, 1, 2, ..., x]
+        # where the whole array is of size k, the x + 1 non-negative entries refer
+        # to indices in the unrolled buffer which satisfy the time constraint.
+        # We need to now map back to the original buffer indices (not unrolled)
+        # Here, we take the actual circular buffer indices corresponding to the columns
+        # we want. We temporarily clamp gather_pos negatives (invalid time entries) to 0
+        # but they get replace with -1 according to the torch.where mask gather_pos >= 0
+        out_idx = torch.where(
+            gather_pos >= 0,
+            torch.gather(candidate_idx, 1, gather_pos.clamp(min=0)),
+            torch.full_like(gather_pos, -1),
+        )
 
-        return nbr_nids, nbr_times, nbr_feats
+        # Crate a mask of valid indices, and clamp out_idx for safe gather. We'll make sure to
+        # only write the entries at positions where valid_mask is True
+        valid_mask = out_idx >= 0
+        safe_idx = out_idx.clamp(min=0)
+
+        # Gather out tensors
+        out_nbrs = torch.gather(nbr_nids, 1, safe_idx)
+        out_times = torch.gather(nbr_times, 1, safe_idx)
+        out_feats = torch.gather(
+            nbr_feats, 1, safe_idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
+        )
+
+        # Overwrite invalid positions in-place
+        out_nbrs[~valid_mask] = PADDED_NODE_ID
+        out_times[~valid_mask] = 0
+        out_feats[~valid_mask] = 0.0
+
+        return out_nbrs, out_times, out_feats
 
     def _update(self, batch: DGBatch) -> None:
-        src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
         if batch.edge_feats is None:
             edge_feats = torch.zeros(
-                (len(src), self._edge_feats_dim), device=self._device
+                (len(batch.src), self._edge_feats_dim), device=self._device
             )
         else:
-            edge_feats = batch.edge_feats
+            edge_feats = batch.edge_feats.float()
 
-        for s, d, t, f in zip(src, dst, time, edge_feats):
-            self._history[s].append((d, t, f.clone()))  # may need to f.clone()
-            if not self._directed:
-                self._history[d].append((s, t, f.clone()))  # may need to f.clone()
+        if self._directed:
+            node_ids, nbr_nids, times = batch.src, batch.dst, batch.time
+        else:
+            # It's fine that times is out-of-order here since we sort below
+            node_ids = torch.cat([batch.src, batch.dst])
+            nbr_nids = torch.cat([batch.dst, batch.src])
+            times = torch.cat([batch.time, batch.time])
+            edge_feats = torch.cat([edge_feats, edge_feats])
+
+        # Lexicographical sort by node id and time. Duplicate nodes will be adjacent.
+        # Each nodes events will be sorted chronologically
+        max_time = times.max() + 1
+        composite_key = node_ids * max_time + times
+        perm = torch.argsort(composite_key, stable=True)
+
+        sorted_nodes = node_ids[perm]
+        sorted_nbr_ids = nbr_nids[perm]
+        sorted_times = times[perm]
+        sorted_feats = edge_feats[perm]
+
+        # All the tensors we need to write are properly sorted and groupbed by node.
+        # However, in order for deterministic scatter on multi-dimensional arrays, we
+        # cannot afford to have multiple tensors written at same buffer position.
+        # E.g. This occurs if we have more node events than the buffer capacity.
+        # Therefore, we do another index select that retains only the last B entries
+        # for each node. This guarantees at most one write per buffer position, and
+        # will still be sorted chronologically, with grouping by nodes.
+        B = self._max_nbrs
+        _, inv, cnts = torch.unique_consecutive(
+            sorted_nodes, return_inverse=True, return_counts=True
+        )
+        cumcnts = torch.cat(
+            [torch.tensor([0], device=self._device), cnts.cumsum(0)[:-1]]
+        )
+        pos_in_group = (
+            torch.arange(len(sorted_nodes), device=self._device) - cumcnts[inv]
+        )
+        mask = pos_in_group >= (cnts[inv] - B)
+
+        sorted_nodes = sorted_nodes[mask]
+        sorted_nbr_ids = sorted_nbr_ids[mask]
+        sorted_times = sorted_times[mask]
+        sorted_feats = sorted_feats[mask]
+
+        # Count number of writes per node as a cumulative offset
+        _, inv, cnts = torch.unique_consecutive(
+            sorted_nodes, return_inverse=True, return_counts=True
+        )
+        cum_cnts = torch.cat(
+            [torch.tensor([0], device=self._device), cnts[:-1]]
+        ).cumsum(dim=0)
+        offsets = torch.arange(len(sorted_nodes), device=self._device) - cum_cnts[inv]
+
+        # Compute write indices using current write position and offsets
+        write_idx = (self._write_pos[sorted_nodes] + offsets) % self._max_nbrs
+
+        # Scatter into buffers. Correct "last write wins" for features, since we have at most B writes
+        self._nbr_ids[sorted_nodes, write_idx] = sorted_nbr_ids
+        self._nbr_times[sorted_nodes, write_idx] = sorted_times
+        self._nbr_feats[sorted_nodes, write_idx, :] = sorted_feats
+
+        # Increment write_pos per node
+        num_writes = torch.ones_like(sorted_nodes, device=self._device)
+        self._write_pos.scatter_add_(0, sorted_nodes, num_writes)
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
             self._device = device
+            self._nbr_ids = self._nbr_ids.to(device)
+            self._nbr_times = self._nbr_times.to(device)
+            self._nbr_feats = self._nbr_feats.to(device)
+            self._write_pos = self._write_pos.to(device)
 
 
 def _apply_to_tensors_inplace(obj: Any, fn: Any) -> Any:
