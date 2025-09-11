@@ -78,7 +78,7 @@ You can build datasets in multiple ways. Let's look at each.
 
 ### 3.1 From TGB
 
-This is most likely all you need. The [Temporal Graph Benchmark (TGB)](https://tgb.complexdatalab.com/) provides a suite of temporal graph datasets with diverse scales and properties. We natively support direct construction from all the `tgbl-` and `tgbn-`.
+This is most likely all you need. The [Temporal Graph Benchmark (TGB)](https://tgb.complexdatalab.com/) provides a suite of temporal graph datasets with diverse scales and properties. We natively support direct construction from all the `tgbl-` and `tgbn-` in TGM.
 
 > **Note**: Temporal knowledge graph (TKG) and temporal hypergraph (THG) are not yet supported in TGM.
 
@@ -219,7 +219,7 @@ data = DGData.from_raw(
 After loading your data, you'll probably want to split your dataset into *train*, *validation*, and *test* splits. TGM provides a **strategy pattern** interface for different split strategies:
 
 - `TemporalSplit`: Split by fixed timestamp boundaries
-- `TemporalRatioSplit`: Split by ratio of events
+- `TemporalRatioSplit`: Split by ratio of both edge and node events
 - `TGBSplit`: Pre-defined TGB data splits
 
 > **Important**: The TGB data splits uses pre-defined event masks, to match the splits as per the TGB leaderboard. If you try to change this, you'll get a `ValueError`.
@@ -265,7 +265,7 @@ _ data.split(strategy=split_strategy) # Raises ValueError
 
 ## 5. Discretizing `DGData`
 
-Dynamic graphs can operate in either continuous time (CTDG) or discrete time (DTDG). You can learn mode about this in [this paper](https://arxiv.org/abs/2407.12269).
+In TGM, we do not enforce strict definition of continuous time (resp. discrete time) dynamic graph CTDG (resp. DTDG). Instead, as you hvae seen, we define graphs based on their time granularity. Therefore, the user is able to convert between event-based and snapshot based views of the underlying data. You can learn mode about this in [the UTG paper](https://arxiv.org/abs/2407.12269).
 
 In TGM, we provide a method on `DGData` called `discretize` which allows you to coarsen your graph into different time granularities. The API looks like:
 
@@ -420,6 +420,7 @@ print(dg_batch.edge_feats is None) # False, we matrialized our slice of edge fea
 ```
 
 > **Note**: Materializing a full graph view with features could be expensive, especially on large graphs.
+> **Note**: The device of `DGraph` determines the device on which the `DGBatch` tensors are allocated.
 
 ### DGDataLoader
 
