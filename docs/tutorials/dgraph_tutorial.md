@@ -265,7 +265,7 @@ _ data.split(strategy=split_strategy) # Raises ValueError
 
 ## 5. Discretizing `DGData`
 
-In TGM, we do not enforce strict definition of continuous time (resp. discrete time) dynamic graph CTDG (resp. DTDG). Instead, as you hvae seen, we define graphs based on their time granularity. Therefore, the user is able to convert between event-based and snapshot based views of the underlying data. You can learn mode about this in [the UTG paper](https://arxiv.org/abs/2407.12269).
+In TGM, we do not enforce strict definition of continuous time (resp. discrete time) dynamic graph CTDG (resp. DTDG). Instead, as you have seen, we define graphs based on their time granularity. Therefore, the user is able to convert between event-based and snapshot based views of the underlying data. You can learn more about this in [the UTG paper](https://arxiv.org/abs/2407.12269).
 
 In TGM, we provide a method on `DGData` called `discretize` which allows you to coarsen your graph into different time granularities. The API looks like:
 
@@ -338,7 +338,9 @@ print(f'Device                    : {dg.device}') # torch.device(cuda:0)
 ```
 
 > **Note**: The number of nodes is computed as `max(node_ids) + 1`.
+
 > **Note**: If the `DGraph` is empty, `start_time` and `end_time` are `None`.
+
 > **Note**: `len()` returns the number of timestamps (not the number of events) in the graph.
 
 ### Slicing: Creating new views
