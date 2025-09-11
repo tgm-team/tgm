@@ -312,11 +312,12 @@ for epoch in range(1, args.epochs + 1):
         loss = train(train_loader, model, opt)
         end_time = time.perf_counter()
         latency = end_time - start_time
-    with hm.activate('val'):
-        val_mrr = eval(evaluator, val_loader, model, eval_metric)
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
-        )
+        # with hm.activate('val'):
+        #     val_mrr = eval(evaluator, val_loader, model, eval_metric)
+        #     print(
+        #         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
+        #     )
+        print(f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f}')
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
         hm.reset_state()
