@@ -82,7 +82,7 @@ This is most likely all you need. The [Temporal Graph Benchmark (TGB)](https://t
 
 > **Note**: Temporal knowledge graph (TKG) and temporal hypergraph (THG) are not yet supported in TGM.
 
-> **Node**: To load a TGB dataset, you must have the `py-tgb` package in your python env.
+> **Note**: To load a TGB dataset, you must have the `py-tgb` package in your python env.
 
 ```python
 from tgm import DGData
@@ -95,6 +95,8 @@ print(data.edge_index.shape) # torch.Size([157474, 2])
 print(data.dynamic_node_feats) # None, no dynamic node features in tgbl-wiki
 print(data.static_node_feats) # None, no static node features in tgbl-wiki
 ```
+
+> **TIP**: You can `print(data)` to see which features and events exist within the dataset.
 
 ### 3.2 Custom Datasets
 
