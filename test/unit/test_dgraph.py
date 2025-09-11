@@ -57,12 +57,7 @@ def test_init_from_data(data):
     exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     torch.testing.assert_close(dg.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg.end_time + 1, dg.num_nodes, dg.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    exp_edge_feats[20, 1, 8] = data.edge_feats[2]
-    torch.testing.assert_close(dg.edge_feats.to_dense(), exp_edge_feats)
+    torch.testing.assert_close(dg.edge_feats, data.edge_feats)
 
 
 @pytest.mark.gpu
@@ -90,7 +85,7 @@ def test_init_gpu(data):
     exp_edge_feats[5, 2, 4] = data.edge_feats[1]
     exp_edge_feats[20, 1, 8] = data.edge_feats[2]
     exp_edge_feats = exp_edge_feats.cuda()
-    torch.testing.assert_close(dg.edge_feats.to_dense(), exp_edge_feats)
+    torch.testing.assert_close(dg.edge_feats, data.edge_feats.to('cuda'))
 
 
 def test_init_from_storage(data):
@@ -121,7 +116,7 @@ def test_materialize(data):
         exp_dst,
         exp_t,
         dg.dynamic_node_feats._values(),
-        dg.edge_feats._values(),
+        dg.edge_feats,
         dg.dynamic_node_feats._indices()[0],
         dg.dynamic_node_feats._indices()[1],
     )
@@ -173,11 +168,7 @@ def test_slice_time_no_upper_bound(data):
     torch.testing.assert_close(
         dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats
     )
-
-    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    exp_edge_feats[20, 1, 8] = data.edge_feats[2]
-    torch.testing.assert_close(dg1.edge_feats.to_dense(), exp_edge_feats)
+    torch.testing.assert_close(dg1.edge_feats, data.edge_feats[1:3])
     torch.testing.assert_close(dg.static_node_feats, dg1.static_node_feats)
 
 
@@ -207,11 +198,7 @@ def test_slice_time_at_end_time(data):
     exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
+    assert torch.equal(dg1.edge_feats, data.edge_feats[0:2])
 
     # Check original graph cache is not updated
     assert len(dg) == 4
@@ -251,11 +238,7 @@ def test_slice_time_to_empty(data):
     exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
+    assert torch.equal(dg1.edge_feats, data.edge_feats[:2])
 
     # Slice Number 2
     dg2 = dg1.slice_time(5, 15)
@@ -280,10 +263,7 @@ def test_slice_time_to_empty(data):
     exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     assert torch.equal(dg2.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg2.end_time + 1, dg2.num_nodes, dg2.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(dg2.edge_feats.to_dense(), exp_edge_feats)
+    assert torch.equal(dg2.edge_feats, data.edge_feats[1].unsqueeze(0))
 
     # Slice number 3
     dg3 = dg2.slice_time(7, 11)
@@ -365,10 +345,7 @@ def test_slice_events(data):
     exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
+    assert torch.equal(dg1.edge_feats, data.edge_feats[1].unsqueeze(0))
 
     # Check original graph cache is not updated
     assert len(dg) == 4
@@ -411,7 +388,4 @@ def test_slice_events_slice_time_combination(data):
     exp_dynamic_node_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, 5)
     exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
     assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
-
-    exp_edge_feats = torch.zeros(dg1.end_time + 1, dg1.num_nodes, dg1.num_nodes, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    assert torch.equal(dg1.edge_feats.to_dense(), exp_edge_feats)
+    assert torch.equal(dg1.edge_feats, data.edge_feats[1].unsqueeze(0))
