@@ -16,10 +16,9 @@ Hooks declare the following information
 - `produces: Set[str]`: Names of attributes that the hook adds to the batch
 - `has_state: bool`: A flag to denote whether the hook stores state internally
 
-Note:
-
-- `StatelessHook`: only transforms the batch, no internal state (`has_state = False`)
-- `StatefulHook`: maintains internal state, (`has_state = True`)
+> Note:
+> \- `StatelessHook`: only transforms the batch, no internal state (`has_state = False`)
+> \- `StatefulHook`: maintains internal state, (`has_state = True`)
 
 ### Built-in Hooks
 
@@ -116,7 +115,7 @@ with hm.activate('test'):
         assert torch.equal(batch.my_neg_time, batch.time) # True
 ```
 
-**Note**: The context manager is just syntactical sugar for the following:
+> **Note**: The context manager is just syntactical sugar for the following:
 
 ```python
 with hm.activate(key):
@@ -163,7 +162,7 @@ hm = HookManager(keys=['train', 'test'])
 hm.register_shared(MyNegativeHook())
 ```
 
-*Note*: Using shared hooks is typically only useful if the hook has state, that needs to be shared across activation keys.
+> *Note*: Using shared hooks is typically only useful if the hook has state, that needs to be shared across activation keys.
 
 ## 5. Hook Resolution
 
@@ -200,7 +199,7 @@ with hm.activate('train'): # Raises tgm.UnresolvableHookDependenciesError
 
 You will see the error message tell you that the manager could not find a valid ordering of hooks, and that's because no hook *produces* `'foo'`. If you encounter this, chances are you just misspelled either your `requires` or `produces` specification.
 
-*Note*: You can also manually try to resolve hooks for a specific key without activating anything:
+> *Note*: You can also manually try to resolve hooks for a specific key without activating anything:
 
 ```python
 hm.resolve_hooks('train') # Raises tgm.UnresolvableHookDepenenciesError
