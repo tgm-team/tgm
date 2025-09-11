@@ -102,47 +102,21 @@ If you have our own dataset in TGM, you can create a `DGData` object either `fro
 
 #### From CSV
 
-The full constructor is as follows:
+Please consult our documentation for full description of our API. The table below summarizes the main pieces of data expected during construction. Note that analogous attributes are expected in the other IO constructors (e.g. `from_pandas`, `from_raw`)
 
-```python
-@classmethod
-def from_csv(
-    cls,
-    edge_file_path: str | pathlib.Path,
-    edge_src_col: str,
-    edge_dst_col: str,
-    edge_time_col: str,
-    edge_feats_col: List[str] | None = None,
-    node_file_path: str | pathlib.Path | None = None,
-    node_id_col: str | None = None,
-    node_time_col: str | None = None,
-    dynamic_node_feats_col: List[str] | None = None,
-    static_node_feats_file_path: str | pathlib.Path | None = None,
-    static_node_feats_col: List[str] | None = None,
-    time_delta: TimeDeltaDG | str = 'r',
-) -> DGData:
-    """Construct a DGData from CSV files containing edge and optional node events.
-
-    Args:
-        edge_file_path: Path to CSV file containing edges.
-        edge_src_col: Column name for src nodes.
-        edge_dst_col: Column name for dst nodes.
-        edge_time_col: Column name for edge times.
-        edge_feats_col: Optional edge feature columns.
-        node_file_path: Optional CSV file for dynamic node features.
-        node_id_col: Column name for dynamic node event ids. Required if node_file_path is specified.
-        node_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
-        dynamic_node_feats_col: Optional dynamic node feature columns.
-        static_node_feats_file_path: Optional CSV file for static node features.
-        static_node_feats_col: Required if static_node_feats_file_path is specified.
-        time_delta: Time granularity.
-
-    Raises:
-        InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
-        ValueError: If any data attributes have non-well defined tensor shapes.
-        EmptyGraphError: If attempting to initialize an empty graph.
-    """
-```
+| Attribute                     | Description                                                    | Type                  | Required                                              | Note                                                     |
+| ----------------------------- | -------------------------------------------------------------- | --------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
+| `edge_file_path`              | Path to CSV file containing edge data                          | `str \| pathlib.Path` | Yes                                                   | `edge_df` if using `from_pandas`                         |
+| `edge_src_col`                | Column name in edge file for src nodes                         | `str`                 | Yes                                                   | Cannot have ids matching `tgm.constants.PADDED_NODE_ID`  |
+| `edge_dst_col`                | Column name in edge file for dst nodes                         | `str`                 | Yes                                                   | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
+| `edge_time_col`               | Column name in edge file for edge times                        | `str`                 | Yes                                                   | Time must be non-negative                                |
+| `node_file_path`              | Path to CSV file containing dynamic node data                  | `str \| pathlib.Path` | No                                                    | `node_df` is using `from_pandas`                         |
+| `node_id_col`                 | Column name in node file for node event node ids               | `str`                 | No, unless `node_file_path` is specified              | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
+| `node_time_col`               | Column name in node file for node event node times             | `str`                 | No, unless `node_file_path` is specified              | Time must be non-negative                                |
+| `dynamic_node_feats_col`      | Column name in node file for dynamic node features             | `str`                 | No                                                    |                                                          |
+| `static_node_feats_file_path` | Path to CSV file containing static node features               | `str \| pathlib.Path` | No                                                    | `static_node_feats_df` if using `from_pandas`            |
+| `static_node_feats_col`       | Column name in static node feats file for static node features | `str`                 | No, unless `static_node_feats_file_path` is specified |                                                          |
+| `time_delta`                  | Time granularity of the graph data                             | `TimeDeltaDG \| str`  | Yes                                                   | Default to *event_ordered* granularity `'r'`             |
 
 A few key things to know:
 
