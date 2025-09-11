@@ -72,13 +72,13 @@ class DGData:
 
 See [`tgm.data.DGData`](../api/data.md) for full reference.
 
-## 3. Constucting DGData
+## 3. Constructing DGData
 
 You can build datasets in multiple ways. Let's look at each.
 
 ### 3.1 From TGB
 
-This is most likely all you need. The [Temporal Graph Benchmark (TGB)](https://tgb.complexdatalab.com/) provides a suite of temporal graph datasets with diverse scales and properties. We natively support direct constuction from all the `tgbl-` and `tgbn-`.
+This is most likely all you need. The [Temporal Graph Benchmark (TGB)](https://tgb.complexdatalab.com/) provides a suite of temporal graph datasets with diverse scales and properties. We natively support direct construction from all the `tgbl-` and `tgbn-`.
 
 > **Note**: Temporal knowledge graph (TKG) and temporal hypergraph (THG) are not yet supported in TGM.
 
@@ -136,7 +136,7 @@ Internally, we perform various checks on the tensors shapes, node ranges, and ti
 
 #### From Pandas
 
-The API largely the same as above, except that we expected `edge_df`, `node_df`, and `static_node_feats_df` dataframes for the edge, dyamic node, and static node data respectively, instead of csv files.
+The API largely the same as above, except that we expected `edge_df`, `node_df`, and `static_node_feats_df` dataframes for the edge, dynamic node, and static node data respectively, instead of csv files.
 
 ```python
 import pandas as pd
@@ -436,7 +436,7 @@ for batch in loader:
     ...
 ```
 
-the data loader computes offets into the storage, performs slicing operations, materializes the sliced views, and the applies hooks on the materialized data. See our [hook management tutorial](../tutorials/hook_tutorial.md) for more details.
+the data loader computes offsets into the storage, performs slicing operations, materializes the sliced views, and the applies hooks on the materialized data. See our [hook management tutorial](../tutorials/hook_tutorial.md) for more details.
 
 ______________________________________________________________________
 
