@@ -120,7 +120,7 @@ class RandomProjectionModule(nn.Module):
         """
         src_random_projections = self.get_random_projections(src)
         dst_random_projections = self.get_random_projections(dst)
-        random_projections = torch.cat(
+        random_projections = torch.cat(  # @TODO: This takes up a lot GPU memory, especially for TGB evaluation
             [src_random_projections, dst_random_projections], dim=1
         ).to(self.device)
         random_feature = torch.matmul(
@@ -220,7 +220,9 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        assert len(random_projections) == 2, (
+        assert (
+            len(random_projections) == 2
+        ), (
             'Expect a tuple of (now_time,random_projections)'
         )  # @TODO: Need to raise custom exception
         now_time, random_projections = random_projections
@@ -232,7 +234,9 @@ class RandomProjectionModule(nn.Module):
 
         self.now_time.data = now_time.clone()
         for i in range(1, self.num_layer + 1):
-            assert torch.is_tensor(random_projections[i - 1]), (
+            assert torch.is_tensor(
+                random_projections[i - 1]
+            ), (
                 'Not a valid state of random projection'
             )  # @TODO: Need to raise custom exception
             self.random_projections[i].data = random_projections[i - 1].clone()
@@ -337,7 +341,7 @@ class MLPMixer(nn.Module):
 
 
 class TPNet(nn.Module):
-    r"""An implementation of DyGFormer.
+    r"""An implementation of TPNet.
 
     Args:
         node_feat_dim (int): Dimension of static/dynamic node features (`d_N`).
@@ -478,7 +482,9 @@ class TPNet(nn.Module):
             )
 
         embeddings = self.projection_layer(neighbor_combine_features)
-        embeddings.masked_fill((neighbours == 0)[:, :, None].to(self.device), 0)
+        embeddings.masked_fill(
+            (neighbours == PADDED_NODE_ID)[:, :, None].to(self.device), 0
+        )
         for mlp_mixer in self.mlp_mixers:
             embeddings = mlp_mixer(embeddings)
         embeddings = torch.mean(embeddings, dim=1)

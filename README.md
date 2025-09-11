@@ -44,7 +44,7 @@ We aim to support the following temporal graph learning methods. If you want us 
 - :white_check_mark: [TGAT](https://arxiv.org/abs/2002.07962)
 - :white_check_mark: [TGN](https://arxiv.org/abs/2006.10637)
 - :white_check_mark: [DygFormer](https://arxiv.org/abs/2303.13047)
-- :white_large_square: [TPNet](https://arxiv.org/abs/2410.04013)
+- :white_check_mark: [TPNet](https://arxiv.org/abs/2410.04013)
 - :white_large_square: [TNCN](https://arxiv.org/abs/2406.07926)
 - :white_large_square: [DyGMamba](https://arxiv.org/abs/2408.04713)
 - :white_large_square: [NLB](https://arxiv.org/abs/2402.01964)
