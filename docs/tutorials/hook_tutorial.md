@@ -1,20 +1,20 @@
 # Hook Management in TGM
 
-Temporal graph learning pipelines often require dynamic transformations on graph batches—like sampling neighbors, generating negative edges, or moving data to GPU. TGM defines `DGHook`s to provide a flexible, composable way to perform these transformations automatically during batch iteration.
+Temporal graph learning pipelines often require dynamic transformations on graph batches—like sampling neighbors, generating negative edges, or moving data to GPU. TGM defines `DGHook`s to provide a flexible, composable way to perform these transformations automatically during batch iteration. Think of `DGHook`s as all the necessary data processing and operations before you feed the current batch into the TG ML model.
 
 ______________________________________________________________________
 
 ## 1. Hooks: The Basics
 
-A `DGHook` is a callable object that receives a `DGBatch` (a batch of graph events), and a `DGraph` (a temporal view over the entire graph) and returns a transformed `DGBatch`, with additional properties.
+A `DGHook` is a callable object that takes a `DGBatch` (a batch of graph events) and a `DGraph` (a temporal view over the entire graph) as inputs and returns a transformed `DGBatch`, with additional properties.
 
 See [`tgm.graph.DGBatch`](../api/batch.md) for a full reference of the base `DGBatch` yielded by our `DGDataLoader`.
 
 Hooks declare the following information
 
 - `requires: Set[str]`: Names of attributes that the hook needs to exist on the batch
-- `produces: Set[str]`: Names of attributes that the hook adds to the batch
-- `has_state: bool`: A flag to denote whether the hook stores state internally
+- `produces: Set[str]`: Names of attributes from the batch that the hook requires 
+- `has_state: bool`: A flag to denote whether the hook stores state internally (i.e. some memory or attribute that may change upon subsequent invocations of the hook). An example of a stateful hook is a `RecencyNeighborSampler` which keeps track of node interactions over subsequent `__call__`s.
 
 > Note:
 > \- `StatelessHook`: only transforms the batch, no internal state (`has_state = False`)
@@ -22,12 +22,12 @@ Hooks declare the following information
 
 ### Built-in Hooks
 
-TGM ships with several commonly used hooks. The table below summarizes them:
+TGM implements several commonly used hooks. The table below summarizes them:
 
 | Hook Name                    | Type      | `requires` | `produces`                           | Description                                                                                          |
 | ---------------------------- | --------- | ---------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | `NegativeEdgeSamplerHook`    | Stateless | None       | `neg`, `neg_time`                    | Generates random negatives for link prediction                                                       |
-| `TGBNegativeEdgeSamplerHook` | Stateless | None       | `neg`, `neg_time`, `neg_batch_list`  | Loads pre-computed negative edges for TGB datasets                                                   |
+| `TGBNegativeEdgeSamplerHook` | Stateless | None       | `neg`, `neg_time`, `neg_batch_list`  | Loads pre-computed negative edges for [TGB](https://tgb.complexdatalab.com/) datasets                                                   |
 | `NeighborSamplerHook`        | Stateless | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Uniform sampler neighbor for a given number of hops                                                  |
 | `RecencyNeighborSamplerHook` | Stateful  | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Recency neighbor sampler for a given number of hops                                                  |
 | `PinMemoryHook`              | Stateless | None       | None                                 | Pins all `torch.Tensor` in `DGBatch` for fast CPU-GPU transfer                                       |
@@ -35,7 +35,7 @@ TGM ships with several commonly used hooks. The table below summarizes them:
 
 ### Custom Hooks
 
-If you are developing a new model or new sampling strategy, chances are, you need to define your own hook. The first step is to think about whether you need internal state. If not, you can subclass `tgm.hooks.StatelessHook`.
+Along with the hooks provided by `TGM` team, users are welcome to write custom hooks to perform any operations on `DGBatch` as desired. For instance, if you are developing a new model or new sampling strategy, chances are, all you need to do is define a custom hook. The first step is to think about whether you need internal state. If not, you can subclass `tgm.hooks.StatelessHook`.
 
 For example, the following shows a simple implementation of a negative sampler hook, which add random negative nodes in the range `[10, 100)`, and a corresponding *negative time* which matches the ground truth batch time:
 
@@ -53,11 +53,11 @@ class MyNegativeHook(StatelessHook):
         return batch
 ```
 
-**Important**: Each hooks adds attributes to the batch. Hooks that run after it may dependent on these attributes (with `requires`). More on that later.
+> **Important**: Each hooks adds attributes to the batch. Hooks that run after it may depend on these attributes (defined in `requires`). More on that later.
 
 ## 2. HookManager: Orchestrator of Hooks
 
-`HookManager` manages which hooks are applied to a batch, and in what order. You can think of it like a key-value store where:
+Typically, a full training and evaluation pipeline will require multiple hooks, perhaps some of which execute conditionally on your workload (e.g. validation vs. test). The `HookManager` manages which hooks are applied to a batch, and in what order. You can think of it like a key-value store where:
 
 - *Keys*: e.g. `'train'`, `'val'`, `'test'`
 - *Values*: List of hooks associated with each key
@@ -84,7 +84,7 @@ train_loader = DGDataLoader(train_dg, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, hook_manager=hm)
 ```
 
-**Important**: When creating custom hooks, you need to make sure you follow the correct hook API. See [`tgm.hooks`](../api/hooks/hooks.md) for more information. A `BadHookProtocolError` will be thrown if you accidently tried registering a hook with the wrong API.
+**Important**: When creating custom hooks, you need to make sure you follow the correct hook API. See [`tgm.hooks`](../api/hooks/hooks.md) for more information. A `BadHookProtocolError` will be thrown if you accidentlly tried registering a hook with the wrong API. We suggest you write some unit tests to accompany your custom protocols. You can see [some of our hook tests](https://github.com/tgm-team/tgm/tree/main/test/unit/test_hooks) as a starting point. If your hook has general utility to the TG community, we can add it to TGM and enable code re-use for other practitioners.
 
 What now? Well, when we iterate our training graph, we have access to the attributes produced by `NegativeEdgeSamplerHook`, which are `neg` and `neg_time`. In order to see these transformations get applied, we need to *activate* the key we are interested in...
 
@@ -145,7 +145,7 @@ hm.reset_state('train')
 
 ## 4. Shared Hooks
 
-Sometimes it happens that you truly want the same hook instance (as in, the same python object) to be shared among different keys. A good example is the `tgm.hooks.RecencyNeighborSampler` which buffers internal state for events for each node in the graph. We want this hook to be shared between 'train' and 'validation' splits, because we want the neighbours accumulated during training to *warm-start* the recent neighbour in the validation split.
+In temporal graph learning, it is common that information you received in the past needed to be used for future prediction. For example, the stored neighbours in the `tgm.hooks.RecencyNeighborSampler` hook is state that must be carried to the validation phase to ensure that the models can access information from the training set. Therefore, this raises the need for sharing hook state of a hook across splits.
 
 For this purpose, we have the notion of `shared hooks`, which are automatically attributed to **all** keys in the `HookManager`:
 
