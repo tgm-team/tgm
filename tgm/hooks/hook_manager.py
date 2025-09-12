@@ -2,14 +2,23 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, Tuple
+
+from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 
 from tgm import DGBatch, DGraph
 from tgm.exceptions import (
     BadHookProtocolError,
     UnresolvableHookDependenciesError,
+    UnsupportRecipe,
 )
-from tgm.hooks import DGHook
+from tgm.hooks import (
+    DGHook,
+    NegativeEdgeSamplerHook,
+    TGBNegativeEdgeSamplerHook,
+)
+
+from ..constants import RECIPE_TGB_LINK_PRED, SUPPORT_RECIPES
 
 
 class HookManager:
@@ -201,6 +210,58 @@ class HookManager:
     def _ensure_valid_key(self, key: str) -> None:
         if key not in self._key_to_hooks:
             raise KeyError(f'{key} was not a declared key in the hook manager')
+
+    @classmethod
+    def build_recipe(
+        cls,
+        recipe: str,
+        dataset_name: str,
+        train_dg: DGraph,
+        val_dg: DGraph,
+        test_dg: DGraph,
+    ) -> Tuple[HookManager, List[str]]:
+        f"""Build Hook Manager with pre-define config.
+
+        Args:
+            recipe (str): Name of the desired recipe
+            dataset_name (str): Name of the dataset
+            train_dg (DGraph): Train DGraph
+            val_dg (DGraph): Validation DGraph
+            test_dg (DGraph): Test DGraph
+
+        Returns:
+            HookManager, Registered Keys (HookManager,List[str])
+        """
+        if recipe not in SUPPORT_RECIPES:
+            raise UnsupportRecipe(
+                f'Recipe {recipe} is not supported. Please choose recipe from {SUPPORT_RECIPES}'
+            )
+
+        # @TODO: well, we violated Open-close principle here. May be better design?
+        if recipe == RECIPE_TGB_LINK_PRED:
+            dataset = PyGLinkPropPredDataset(name=dataset_name, root='datasets')
+            dataset.load_val_ns()
+            dataset.load_test_ns()
+            _, dst, _ = train_dg.edges
+            neg_sampler = dataset.negative_sampler
+            register_keys = ['train', 'val', 'test']
+
+            hm = HookManager(keys=register_keys)
+            hm.register(
+                'train',
+                NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())),
+            )
+            hm.register(
+                'val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val')
+            )
+            hm.register(
+                'test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test')
+            )
+            return hm, register_keys
+        else:
+            raise UnsupportRecipe(
+                f'Recipe {recipe} is not supported. Please choose recipe from {SUPPORT_RECIPES}'
+            )
 
     @staticmethod
     def _topological_sort_hooks(hooks: List[DGHook]) -> List[DGHook]:

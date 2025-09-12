@@ -2,12 +2,20 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm.constants import RECIPE_TGB_LINK_PRED
 from tgm.data import DGData
 from tgm.exceptions import (
     BadHookProtocolError,
     UnresolvableHookDependenciesError,
+    UnsupportRecipe,
 )
-from tgm.hooks import HookManager, StatefulHook, StatelessHook
+from tgm.hooks import (
+    HookManager,
+    NegativeEdgeSamplerHook,
+    StatefulHook,
+    StatelessHook,
+    TGBNegativeEdgeSamplerHook,
+)
 
 
 class MockHook(StatelessHook):
@@ -365,3 +373,28 @@ def test_topo_sort_neg_before_nbr():
     # Ensure negatives precede nbrs in both cases
     assert foo_hooks.index(mock_neg_hook) < foo_hooks.index(mock_nbr_hook)
     assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)
+
+
+def test_bad_build_recipe(dg):
+    with pytest.raises(UnsupportRecipe):
+        hm, register_keys = HookManager.build_recipe('foo', 'tgbl-wiki', dg, dg, dg)
+
+
+def test_build_recipe_tgb_link_pred(dg):
+    hm, register_keys = HookManager.build_recipe(
+        RECIPE_TGB_LINK_PRED, 'tgbl-wiki', dg, dg, dg
+    )
+    train_hooks = hm._key_to_hooks['train']
+    val_hooks = hm._key_to_hooks['val']
+    test_hooks = hm._key_to_hooks['test']
+
+    assert len(register_keys) == 3
+    assert (
+        register_keys[0] == 'train'
+        and register_keys[1] == 'val'
+        and register_keys[2] == 'test'
+    )
+    assert len(train_hooks) == len(val_hooks) == len(test_hooks) == 1
+    assert isinstance(train_hooks[0], NegativeEdgeSamplerHook)
+    assert isinstance(val_hooks[0], TGBNegativeEdgeSamplerHook)
+    assert isinstance(test_hooks[0], TGBNegativeEdgeSamplerHook)

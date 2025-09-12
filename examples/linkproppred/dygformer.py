@@ -7,17 +7,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
+from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.graph import DGBatch, DGData, DGraph
-from tgm.hooks import (
-    HookManager,
-    NegativeEdgeSamplerHook,
-    RecencyNeighborHook,
-    TGBNegativeEdgeSamplerHook,
-)
+from tgm.hooks import HookManager, RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import DyGFormer, Time2Vec
 from tgm.util.seed import seed_everything
@@ -203,7 +198,6 @@ def eval(
     evaluator: Evaluator,
     loader: DGDataLoader,
     model: nn.Module,
-    eval_metric: str,
 ) -> float:
     model.eval()
     perf_list = []
@@ -237,9 +231,9 @@ def eval(
             input_dict = {
                 'y_pred_pos': pos_out,
                 'y_pred_neg': neg_out,
-                'eval_metric': [eval_metric],
+                'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
-            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+            perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
     return float(np.mean(perf_list))
 
@@ -247,13 +241,7 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-# loading negative sample from TGB
-dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
-eval_metric = dataset.eval_metric
-neg_sampler = dataset.negative_sampler
 evaluator = Evaluator(name=args.dataset)
-dataset.load_val_ns()
-dataset.load_test_ns()
 
 full_data = DGData.from_tgb(args.dataset)
 full_graph = DGraph(full_data)
@@ -279,11 +267,11 @@ nbr_hook = RecencyNeighborHook(
     edge_feats_dim=edge_feats_dim,
 )
 
-hm = HookManager(keys=['train', 'val', 'test'])
+hm, registered_keys = HookManager.build_recipe(
+    RECIPE_TGB_LINK_PRED, args.dataset, train_dg, val_dg, test_dg
+)
 hm.register_shared(nbr_hook)
-hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
-hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
-hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+train_key, val_key, test_key = registered_keys
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
@@ -307,20 +295,20 @@ model = DyGFormer_LinkPrediction(
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
-    with hm.activate('train'):
+    with hm.activate(train_key):
         start_time = time.perf_counter()
         loss = train(train_loader, model, opt)
         end_time = time.perf_counter()
         latency = end_time - start_time
-    with hm.activate('val'):
-        val_mrr = eval(evaluator, val_loader, model, eval_metric)
+    with hm.activate(val_key):
+        val_mrr = eval(evaluator, val_loader, model)
         print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
         )
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
         hm.reset_state()
 
-with hm.activate('test'):
-    test_mrr = eval(evaluator, test_loader, model, eval_metric)
-    print(f'Test MRR:{eval_metric}={test_mrr:.4f}')
+with hm.activate(test_key):
+    test_mrr = eval(evaluator, test_loader, model)
+    print(f'Test MRR:{METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
