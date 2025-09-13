@@ -5,6 +5,7 @@ from typing import Callable, Dict, Tuple
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
@@ -29,7 +30,7 @@ from tgm.loader import DGDataLoader
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='TGN TGB Example',
+    description='TGN LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1, help='random seed to use')
@@ -47,6 +48,7 @@ parser.add_argument(
 )
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
+parser.add_argument('--memory-dim', type=int, default=100, help='memory dimension')
 parser.add_argument(
     '--sampling',
     type=str,
@@ -281,13 +283,19 @@ class TimeEncoder(torch.nn.Module):
 # -------------------------------------------------------
 
 
-def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
-    model['memory'].train()
-    model['gnn'].train()
-    model['link_pred'].train()
-
+def train(
+    loader: DGDataLoader,
+    static_node_feats: torch.Tensor,
+    memory: nn.Module,
+    encoder: nn.Module,
+    decoder: nn.Module,
+    opt: torch.optim.Optimizer,
+) -> float:
+    memory.train()
+    encoder.train()
+    decoder.train()
     total_loss = 0
-    num_edges = 0
+
     for batch in tqdm(loader):
         opt.zero_grad()
 
@@ -301,8 +309,6 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
         batch.unique_nids = unique_nids  # type: ignore
         batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
 
-        src, pos_dst, t, msg = batch.src, batch.dst, batch.time, batch.edge_feats
-        neg_dst = batch.neg
         num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
         src_nodes = torch.cat(
             (
@@ -321,45 +327,45 @@ def train(loader: DGDataLoader, opt: torch.optim.Optimizer):
 
         nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
         nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
-        z, last_update = model['memory'](batch.unique_nids)
-        z = model['gnn'](
-            z,
-            last_update,
-            nbr_edge_index,
-            nbr_times,
-            nbr_feats,
+        z, last_update = memory(batch.unique_nids)
+        z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+        pos_out = decoder(
+            z[batch.global_to_local(batch.src)], z[batch.global_to_local(batch.dst)]
         )
-        pos_out = model['link_pred'](
-            z[batch.global_to_local(batch.src)], z[batch.global_to_local(pos_dst)]
-        )
-        neg_out = model['link_pred'](
-            z[batch.global_to_local(batch.src)], z[batch.global_to_local(neg_dst)]
+        neg_out = decoder(
+            z[batch.global_to_local(batch.src)], z[batch.global_to_local(batch.neg)]
         )
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
 
         # Update memory and neighbor loader with ground-truth state.
-        msg = msg.float()
-        model['memory'].update_state(src, pos_dst, t, msg)
+        memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
 
         loss.backward()
         opt.step()
+        total_loss += float(loss)
 
-        model['memory'].detach()
+        memory.detach()
 
-        total_loss += float(loss) * batch.src.size(0)
-        num_edges += batch.src.size(0)
-    return total_loss / num_edges
+    return total_loss
 
 
 @torch.no_grad()
-def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
-    model['memory'].eval()
-    model['gnn'].eval()
-    model['link_pred'].eval()
-
+def eval(
+    loader,
+    static_node_feats: torch.Tensor,
+    memory: nn.Module,
+    encoder: nn.Module,
+    decoder: nn.Module,
+    eval_metric: str,
+    evaluator: Evaluator,
+) -> float:
+    memory.eval()
+    encoder.eval()
+    decoder.eval()
     perf_list = []
+
     for batch in tqdm(loader):
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID  # mask out invalid nbrs
@@ -371,14 +377,7 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
         batch.unique_nids = unique_nids  # type: ignore
         batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
 
-        pos_src, pos_dst, pos_t, pos_msg = (
-            batch.src,
-            batch.dst,
-            batch.time,
-            batch.edge_feats,
-        )
         nbr_nodes = batch.nbr_nids[0].flatten()
-
         num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
         src_nodes = torch.cat(
             (
@@ -398,14 +397,13 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
         nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
         nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
 
-        z, last_update = model['memory'](batch.unique_nids)
-        z = model['gnn'](z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+        z, last_update = memory(batch.unique_nids)
+        z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
-        neg_batch_list = batch.neg_batch_list
-        for idx, neg_batch in enumerate(neg_batch_list):
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
             dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src = batch.src[idx].repeat(len(dst))
-            y_pred = model['link_pred'](
+            y_pred = decoder(
                 z[batch.global_to_local(src)], z[batch.global_to_local(dst)]
             )
             input_dict = {
@@ -416,18 +414,14 @@ def eval(loader, eval_metric: str, evaluator: Evaluator) -> dict:
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
         # Update memory with ground-truth state.
-        pos_msg = pos_msg.float()
-        model['memory'].update_state(pos_src, pos_dst, pos_t, pos_msg)
+        memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
 
-    metric_dict = {}
-    metric_dict[eval_metric] = float(torch.tensor(perf_list).mean())
-    return metric_dict
+    return float(np.mean(perf_list))
 
 
 args = parser.parse_args()
 seed_everything(args.seed)
 
-# loading negative sample from TGB
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
 eval_metric = dataset.eval_metric
 neg_sampler = dataset.negative_sampler
@@ -444,33 +438,6 @@ if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
 else:
     static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
-
-MEM_DIM = 100
-memory = TGNMemory(
-    test_dg.num_nodes,
-    test_dg.edge_feats_dim,
-    MEM_DIM,
-    args.time_dim,
-    message_module=IdentityMessage(test_dg.edge_feats_dim, MEM_DIM, args.time_dim),
-    aggregator_module=LastAggregator(),
-).to(args.device)
-
-gnn = GraphAttentionEmbedding(
-    in_channels=MEM_DIM,
-    out_channels=args.embed_dim,
-    msg_dim=test_dg.edge_feats_dim,
-    time_enc=memory.time_enc,
-).to(args.device)
-
-link_pred = LinkPredictor(in_channels=args.embed_dim).to(args.device)
-
-model = {'memory': memory, 'gnn': gnn, 'link_pred': link_pred}
-opt = torch.optim.Adam(
-    set(model['memory'].parameters())
-    | set(model['gnn'].parameters())
-    | set(model['link_pred'].parameters()),
-    lr=args.lr,
-)
 
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
@@ -495,24 +462,57 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 
+memory = TGNMemory(
+    test_dg.num_nodes,
+    test_dg.edge_feats_dim,
+    args.memory_dim,
+    args.time_dim,
+    message_module=IdentityMessage(
+        test_dg.edge_feats_dim, args.memory_dim, args.time_dim
+    ),
+    aggregator_module=LastAggregator(),
+).to(args.device)
+encoder = GraphAttentionEmbedding(
+    in_channels=args.memory_dim,
+    out_channels=args.embed_dim,
+    msg_dim=test_dg.edge_feats_dim,
+    time_enc=memory.time_enc,
+).to(args.device)
+decoder = LinkPredictor(in_channels=args.embed_dim).to(args.device)
+opt = torch.optim.Adam(
+    set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
+    lr=args.lr,
+)
+
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         start_time = time.perf_counter()
-        loss = train(train_loader, opt)
+        loss = train(train_loader, static_node_feats, memory, encoder, decoder, opt)
         end_time = time.perf_counter()
         latency = end_time - start_time
 
     with hm.activate('val'):
-        val_results = eval(val_loader, eval_metric, evaluator)
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-            + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
+        val_mrr = eval(
+            val_loader,
+            static_node_feats,
+            memory,
+            encoder,
+            decoder,
+            eval_metric,
+            evaluator,
         )
+    print(
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
+    )
+
+    # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
         hm.reset_state()
-        model['memory'].reset_state()
+        memory.reset_state()
 
 
 with hm.activate('test'):
-    test_results = eval(test_loader, eval_metric, evaluator)
-    print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+    test_mrr = eval(
+        test_loader, static_node_feats, memory, encoder, decoder, eval_metric, evaluator
+    )
+    print(f'Test {eval_metric}={test_mrr:.4f}')
