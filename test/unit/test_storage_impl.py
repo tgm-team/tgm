@@ -222,41 +222,26 @@ def test_get_edge_feats(DGStorageImpl, edge_only_data_with_features):
     data = edge_only_data_with_features
     storage = DGStorageImpl(data)
 
-    exp_edge_feats = torch.zeros(11, 8 + 1, 8 + 1, 5)
-    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    exp_edge_feats[10, 6, 8] = data.edge_feats[2]
     assert torch.equal(
-        storage.get_edge_feats(DGSliceTracker()).to_dense(), exp_edge_feats
+        storage.get_edge_feats(DGSliceTracker()),
+        edge_only_data_with_features.edge_feats,
     )
-
-    exp_edge_feats = torch.zeros(11, 8 + 1, 8 + 1, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
-    exp_edge_feats[10, 6, 8] = data.edge_feats[2]
     assert torch.equal(
-        storage.get_edge_feats(DGSliceTracker(start_time=5)).to_dense(), exp_edge_feats
+        storage.get_edge_feats(DGSliceTracker(start_time=5)),
+        edge_only_data_with_features.edge_feats[1:],
     )
-
-    exp_edge_feats = torch.zeros(5, 2 + 1, 2 + 1, 5)
-    exp_edge_feats[1, 2, 2] = data.edge_feats[0]
     assert torch.equal(
-        storage.get_edge_feats(DGSliceTracker(end_time=4)).to_dense(), exp_edge_feats
+        storage.get_edge_feats(DGSliceTracker(end_time=4)),
+        edge_only_data_with_features.edge_feats[:1],
     )
-
-    exp_edge_feats = torch.zeros(10, 4 + 1, 4 + 1, 5)
-    exp_edge_feats[5, 2, 4] = data.edge_feats[1]
     assert torch.equal(
-        storage.get_edge_feats(DGSliceTracker(start_time=5, end_time=9)).to_dense(),
-        exp_edge_feats,
+        storage.get_edge_feats(DGSliceTracker(start_time=5)),
+        edge_only_data_with_features.edge_feats[1:],
     )
-
-    exp_edge_feats = torch.zeros(11, 8 + 1, 8 + 1, 5)
-    exp_edge_feats[10, 6, 8] = data.edge_feats[2]
     assert torch.equal(
-        storage.get_edge_feats(DGSliceTracker(start_idx=2, end_idx=5)).to_dense(),
-        exp_edge_feats,
+        storage.get_edge_feats(DGSliceTracker(start_idx=2, end_idx=5)),
+        edge_only_data_with_features.edge_feats[2].unsqueeze(0),
     )
-
     assert (
         storage.get_edge_feats(DGSliceTracker(start_idx=2, end_idx=5, end_time=6))
         is None
