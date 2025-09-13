@@ -1,7 +1,5 @@
 from typing import Any, Callable, Dict
 
-from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
-
 from tgm import DGraph
 from tgm.constants import RECIPE_TGB_LINK_PRED
 from tgm.exceptions import UndefinedRecipe
@@ -47,15 +45,22 @@ class RecipeRegistry:
 @RecipeRegistry.register(RECIPE_TGB_LINK_PRED)
 def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
     """Build ready-to-use HookManager with default hooks for TGB linkproppred task.
-    
+
     Args:
         dataset_name (str): The name of the TGB dataset (e.g. 'tgbl-wiki')
         train_dg (DGraph): The training graph, used to setup the `NegativeEdgeSamplerHook` for training
 
-     Returns:
-        HookManager with registered keys: ['train', 'val', 'test']  
-     """
-    dataset = PyGLinkPropPredDataset(name=dataset_name, root='datasets')
+    Returns:
+        HookManager with registered keys: ['train', 'val', 'test']
+    """
+    try:
+        from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
+    except ImportError:
+        raise ImportError('TGB required to load TGB data, try `pip install py-tgb`')
+
+    dataset = PyGLinkPropPredDataset(
+        name=dataset_name, root='datasets'
+    )  # @TODO: Suppress TGB print statement
     dataset.load_val_ns()
     dataset.load_test_ns()
     _, dst, _ = train_dg.edges

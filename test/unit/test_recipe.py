@@ -32,7 +32,7 @@ def tgb_dataset_factory():
     return tgb_dataset
 
 
-@patch('tgm.recipe.PyGLinkPropPredDataset')
+@patch('tgb.linkproppred.dataset_pyg.PyGLinkPropPredDataset')
 def test_bad_build_recipe(mock_dataset_cls, tgb_dataset_factory, dg):
     mock_dataset = tgb_dataset_factory()
     mock_dataset_cls.return_value = mock_dataset
@@ -43,7 +43,7 @@ def test_bad_build_recipe(mock_dataset_cls, tgb_dataset_factory, dg):
         )
 
 
-@patch('tgm.recipe.PyGLinkPropPredDataset')
+@patch('tgb.linkproppred.dataset_pyg.PyGLinkPropPredDataset')
 def test_build_recipe_tgb_link_pred(mock_dataset_cls, tgb_dataset_factory, dg):
     mock_dataset = tgb_dataset_factory()
     mock_dataset_cls.return_value = mock_dataset
