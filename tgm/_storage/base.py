@@ -57,7 +57,7 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def get_dynamic_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        """Return dynamic node features a sparse COO tensor within the slice, if any."""
+        """Return dynamic node features as a sparse COO tensor within the slice, if any."""
         ...
 
     @abstractmethod
