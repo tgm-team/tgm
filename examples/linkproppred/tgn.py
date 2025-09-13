@@ -389,8 +389,8 @@ def eval(
                 z[batch.global_to_local(src)], z[batch.global_to_local(dst)]
             )
             input_dict = {
-                'y_pred_pos': y_pred[0],
-                'y_pred_neg': y_pred[1:],
+                'y_pred_pos': np.array([y_pred[0, :].squeeze(dim=-1).cpu()]),
+                'y_pred_neg': np.array(y_pred[1:, :].squeeze(dim=-1).cpu()),
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
