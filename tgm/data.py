@@ -13,9 +13,9 @@ from torch import Tensor
 from tgm.constants import PADDED_NODE_ID
 from tgm.exceptions import (
     EmptyGraphError,
+    EventOrderedConversionError,
     InvalidDiscretizationError,
     InvalidNodeIDError,
-    OrderedGranularityConversionError,
 )
 from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
@@ -260,7 +260,7 @@ class DGData:
             DGData: New dataset with discretized timestamps and features.
 
         Raises:
-            OrderedGranularityConversionError: If discretization is incompatible with ordered granularity
+            EventOrderedConversionError: If discretization is incompatible with event-ordered granularity
             InvalidDiscretizationError: If the target granularity is finer than the current granularity.
         """
         if isinstance(time_delta, str):
@@ -268,9 +268,9 @@ class DGData:
 
         if time_delta is None or self.time_delta == time_delta:
             return self.clone()  # Deepcopy
-        if self.time_delta.is_ordered or time_delta.is_ordered:  # type: ignore
-            raise OrderedGranularityConversionError(
-                'Cannot discretize a graph with ordered time granularity'
+        if self.time_delta.is_event_ordered or time_delta.is_event_ordered:  # type: ignore
+            raise EventOrderedConversionError(
+                'Cannot discretize a graph with event-ordered time granularity'
             )
         if self.time_delta.is_coarser_than(time_delta):  # type: ignore
             raise InvalidDiscretizationError(
@@ -660,12 +660,32 @@ class DGData:
             raise ImportError('TGB required to load TGB data, try `pip install py-tgb`')
 
         def suppress_output(func: Callable, *args: Any, **kwargs: Any) -> Any:
-            import os
-            from contextlib import redirect_stdout
+            # This is a hacky workaround that tries to lower the verbosity on TGB
+            # logs which are currently directed to stdout. This should be removed
+            # once https://github.com/shenyangHuang/TGB/issues/117 is addressed.
+            import builtins
 
-            with open(os.devnull, 'w') as f:
-                with redirect_stdout(f):
-                    return func(*args, **kwargs)
+            SILENCE_PREFIXES = [
+                'raw file found',
+                'Dataset directory is',
+                'loading processed file',
+            ]
+
+            original_print = builtins.print
+
+            def filtered_print(*p_args: Any, **p_kwargs: Any) -> None:
+                if not p_args:
+                    return
+                msg = str(p_args[0])
+                if any(msg.startswith(prefix) for prefix in SILENCE_PREFIXES):
+                    return
+                original_print(*p_args, **p_kwargs)
+
+            try:
+                builtins.print = filtered_print
+                return func(*args, **kwargs)
+            finally:
+                builtins.print = original_print
 
         if name.startswith('tgbl-'):
             dataset = suppress_output(LinkPropPredDataset, name=name, **kwargs)

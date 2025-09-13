@@ -395,7 +395,7 @@ def basic_sample_graph():
     return data
 
 
-def test_dg_storage_get_nbrs_one_hop(DGStorageImpl, basic_sample_graph):
+def test_dg_storage_get_nbrs(DGStorageImpl, basic_sample_graph):
     null_value = 0
 
     storage = DGStorageImpl(basic_sample_graph)
@@ -406,6 +406,7 @@ def test_dg_storage_get_nbrs_one_hop(DGStorageImpl, basic_sample_graph):
         torch.tensor([0, 1]),
         num_nbrs=n_nbrs,
         slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+        directed=False,
     )
     assert nbr_nids.shape == (2, 3)
     assert nbr_nids[0][0] == PADDED_NODE_ID
@@ -434,6 +435,7 @@ def test_dg_storage_get_nbrs_one_hop(DGStorageImpl, basic_sample_graph):
         torch.tensor([0, 2]),
         num_nbrs=n_nbrs,
         slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+        directed=False,
     )
     assert nbr_nids.shape == (2, 3)
     assert nbr_nids[0][0] == 1
@@ -462,6 +464,7 @@ def test_dg_storage_get_nbrs_one_hop(DGStorageImpl, basic_sample_graph):
         torch.tensor([2, 3]),
         num_nbrs=n_nbrs,
         slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+        directed=False,
     )
     assert nbr_nids.shape == (2, 3)
     assert nbr_nids[0][0] == 0
@@ -490,6 +493,7 @@ def test_dg_storage_get_nbrs_one_hop(DGStorageImpl, basic_sample_graph):
         torch.tensor([2, 0]),
         num_nbrs=n_nbrs,
         slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+        directed=False,
     )
     assert nbr_nids.shape == (2, 3)
     assert nbr_nids[0][0] == 0
@@ -508,6 +512,129 @@ def test_dg_storage_get_nbrs_one_hop(DGStorageImpl, basic_sample_graph):
     assert nbr_feats.shape == (2, 3, 1)  # 1 feature per edge
     assert nbr_feats[0][0][0] == 2.0
     assert nbr_feats[0][1][0] == 5.0
+    assert nbr_feats[0][2][0] == null_value
+    assert nbr_feats[1][0][0] == 1.0
+    assert nbr_feats[1][1][0] == 2.0
+    assert nbr_feats[1][2][0] == null_value
+
+
+def test_dg_storage_get_nbrs_directed(DGStorageImpl, basic_sample_graph):
+    null_value = 0
+
+    storage = DGStorageImpl(basic_sample_graph)
+    dg = DGraph(basic_sample_graph)
+    n_nbrs = 3  # 3 neighbor for each node
+    end_time = 1
+    nbr_nids, nbr_times, nbr_feats = storage.get_nbrs(
+        torch.tensor([0, 1]),
+        num_nbrs=n_nbrs,
+        slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+        directed=True,
+    )
+    assert nbr_nids.shape == (2, 3)
+    assert nbr_nids[0][0] == PADDED_NODE_ID
+    assert nbr_nids[0][1] == PADDED_NODE_ID
+    assert nbr_nids[0][2] == PADDED_NODE_ID
+    assert nbr_nids[1][0] == PADDED_NODE_ID
+    assert nbr_nids[1][1] == PADDED_NODE_ID
+    assert nbr_nids[1][2] == PADDED_NODE_ID
+    assert nbr_times.shape == (2, 3)
+    assert nbr_times[0][0] == null_value
+    assert nbr_times[0][1] == null_value
+    assert nbr_times[0][2] == null_value
+    assert nbr_times[1][0] == null_value
+    assert nbr_times[1][1] == null_value
+    assert nbr_times[1][2] == null_value
+    assert nbr_feats.shape == (2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0] == null_value
+    assert nbr_feats[0][1][0] == null_value
+    assert nbr_feats[0][2][0] == null_value
+    assert nbr_feats[1][0][0] == null_value
+    assert nbr_feats[1][1][0] == null_value
+    assert nbr_feats[1][2][0] == null_value
+
+    end_time = 2
+    nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
+        torch.tensor([0, 2]),
+        num_nbrs=n_nbrs,
+        slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+        directed=True,
+    )
+    assert nbr_nids.shape == (2, 3)
+    assert nbr_nids[0][0] == 1
+    assert nbr_nids[0][1] == PADDED_NODE_ID
+    assert nbr_nids[0][2] == PADDED_NODE_ID
+    assert nbr_nids[1][0] == PADDED_NODE_ID
+    assert nbr_nids[1][1] == PADDED_NODE_ID
+    assert nbr_nids[1][2] == PADDED_NODE_ID
+    assert nbr_times.shape == (2, 3)
+    assert nbr_times[0][0] == 1
+    assert nbr_times[0][1] == null_value
+    assert nbr_times[0][2] == null_value
+    assert nbr_times[1][0] == null_value
+    assert nbr_times[1][1] == null_value
+    assert nbr_times[1][2] == null_value
+    assert nbr_feats.shape == (2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0] == 1.0
+    assert nbr_feats[0][1][0] == null_value
+    assert nbr_feats[0][2][0] == null_value
+    assert nbr_feats[1][0][0] == null_value
+    assert nbr_feats[1][1][0] == null_value
+    assert nbr_feats[1][2][0] == null_value
+
+    end_time = 3
+    nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
+        torch.tensor([2, 3]),
+        num_nbrs=n_nbrs,
+        slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+        directed=True,
+    )
+    assert nbr_nids.shape == (2, 3)
+    assert nbr_nids[0][0] == PADDED_NODE_ID
+    assert nbr_nids[0][1] == PADDED_NODE_ID
+    assert nbr_nids[0][2] == PADDED_NODE_ID
+    assert nbr_nids[1][0] == PADDED_NODE_ID
+    assert nbr_nids[1][1] == PADDED_NODE_ID
+    assert nbr_nids[1][2] == PADDED_NODE_ID
+    assert nbr_times.shape == (2, 3)
+    assert nbr_times[0][0] == null_value
+    assert nbr_times[0][1] == null_value
+    assert nbr_times[0][2] == null_value
+    assert nbr_times[1][0] == null_value
+    assert nbr_times[1][1] == null_value
+    assert nbr_times[1][2] == null_value
+    assert nbr_feats.shape == (2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0] == null_value
+    assert nbr_feats[0][1][0] == null_value
+    assert nbr_feats[0][2][0] == null_value
+    assert nbr_feats[1][0][0] == null_value
+    assert nbr_feats[1][1][0] == null_value
+    assert nbr_feats[1][2][0] == null_value
+
+    end_time = 4
+    nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
+        torch.tensor([2, 0]),
+        num_nbrs=n_nbrs,
+        slice=DGSliceTracker(end_time=(end_time - 1)),  # type: ignore
+        directed=True,
+    )
+    assert nbr_nids.shape == (2, 3)
+    assert nbr_nids[0][0] == 3
+    assert nbr_nids[0][1] == PADDED_NODE_ID
+    assert nbr_nids[0][2] == PADDED_NODE_ID
+    assert nbr_nids[1][0] == 1
+    assert nbr_nids[1][1] == 2
+    assert nbr_nids[1][2] == PADDED_NODE_ID
+    assert nbr_times.shape == (2, 3)
+    assert nbr_times[0][0] == 3
+    assert nbr_times[0][1] == null_value
+    assert nbr_times[0][2] == null_value
+    assert nbr_times[1][0] == 1
+    assert nbr_times[1][1] == 2
+    assert nbr_times[1][2] == null_value
+    assert nbr_feats.shape == (2, 3, 1)  # 1 feature per edge
+    assert nbr_feats[0][0][0] == 5.0
+    assert nbr_feats[0][1][0] == null_value
     assert nbr_feats[0][2][0] == null_value
     assert nbr_feats[1][0][0] == 1.0
     assert nbr_feats[1][1][0] == 2.0

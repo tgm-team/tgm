@@ -30,7 +30,7 @@ def data():
 def test_init_from_data(data):
     dg = DGraph(data)
 
-    assert dg.time_delta.is_ordered
+    assert dg.time_delta.is_event_ordered
 
     assert len(dg) == 4
     assert dg.start_time == 1
