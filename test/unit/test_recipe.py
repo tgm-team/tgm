@@ -48,9 +48,10 @@ def test_build_recipe_tgb_link_pred(mock_dataset_cls, tgb_dataset_factory, dg):
     mock_dataset = tgb_dataset_factory()
     mock_dataset_cls.return_value = mock_dataset
 
-    hm, register_keys = RecipeRegistry.build(
+    hm = RecipeRegistry.build(
         RECIPE_TGB_LINK_PRED, dataset_name='tgbl-foo', train_dg=dg
     )
+    register_keys = hm.keys
     train_hooks = hm._key_to_hooks['train']
     val_hooks = hm._key_to_hooks['val']
     test_hooks = hm._key_to_hooks['test']

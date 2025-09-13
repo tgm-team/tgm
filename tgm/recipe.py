@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict
 
 from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 
@@ -45,9 +45,7 @@ class RecipeRegistry:
 
 
 @RecipeRegistry.register(RECIPE_TGB_LINK_PRED)
-def build_tgb_link_pred(
-    dataset_name: str, train_dg: DGraph
-) -> Tuple[HookManager, List[str]]:
+def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
     """Build ready-to-use HookManager with default hooks for TGB linkproppred task."""
     dataset = PyGLinkPropPredDataset(name=dataset_name, root='datasets')
     dataset.load_val_ns()
@@ -62,4 +60,4 @@ def build_tgb_link_pred(
     hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
     hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
 
-    return hm, ['train', 'val', 'test']
+    return hm

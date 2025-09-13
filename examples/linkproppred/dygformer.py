@@ -268,10 +268,11 @@ nbr_hook = RecencyNeighborHook(
     edge_feats_dim=edge_feats_dim,
 )
 
-hm, registered_keys = RecipeRegistry.build(
+hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
 hm.register_shared(nbr_hook)
+registered_keys = hm.keys
 train_key, val_key, test_key = registered_keys
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)

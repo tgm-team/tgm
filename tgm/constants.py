@@ -15,3 +15,7 @@ RECIPE_TGB_LINK_PRED: Final[str] = 'TGB_LINK_PROPERTY_PREDICTION'
 METRIC_TGB_LINKPROPPRED: Final[str] = 'mrr'
 """Official metric used in TGB link prediction task.
 """
+
+METRIC_TGB_NODEPROPPRED: Final[str] = 'ndcg'
+"""Official metric used in TGB node prediction task.
+"""
