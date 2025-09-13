@@ -14,7 +14,6 @@ from torch.nn import GRUCell, Linear, RNNCell
 from torch_geometric.nn import TransformerConv
 from torch_geometric.nn.inits import zeros
 from torch_geometric.utils import scatter
-from torch_scatter import scatter_max
 from tqdm import tqdm
 
 from tgm import DGData, DGraph
@@ -90,10 +89,19 @@ class GraphAttentionEmbedding(torch.nn.Module):
 
 class LastAggregator(torch.nn.Module):
     def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
-        _, argmax = scatter_max(t, index, dim=0, dim_size=dim_size)
         out = msg.new_zeros((dim_size, msg.size(-1)))
-        mask = argmax < msg.size(0)  # Filter items with at least one entry.
-        out[mask] = msg[argmax[mask]]
+
+        # _, argmax = scatter_max(t, index, dim=0, dim_size=dim_size)
+        # mask = argmax < msg.size(0)  # Filter items with at least one entry.
+        # out[mask] = msg[argmax[mask]]
+
+        for i in range(dim_size):
+            mask = index == i
+            if mask.any():
+                local_idx = torch.argmax(t[mask])
+                global_idx = mask.nonzero(as_tuple=True)[0][local_idx]
+                out[i] = msg[global_idx]
+
         return out
 
 
