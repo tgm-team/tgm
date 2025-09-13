@@ -32,7 +32,7 @@ parser = argparse.ArgumentParser(
     description='TGN LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument('--seed', type=int, default=1, help='random seed to use')
+parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
