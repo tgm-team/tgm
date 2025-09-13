@@ -215,7 +215,7 @@ class DGraph:
     def dynamic_node_feats(self) -> Optional[Tensor]:
         """The aggregated dynamic node features over the dynamic graph.
 
-        If dynamic node features exist, returns a tensor of shape (T x V x d_node_dynamic).
+        If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
         """
         feats = self._storage.get_dynamic_node_feats(self._slice)
         if feats is not None:
