@@ -236,7 +236,7 @@ ______________________________________________________________________
 
 ## 6. Recipes
 
-For commonly used pre-experiment setup step, `TGM` offer a convenient way to setup experiment and `HookManager` by using `RecipeRegistry.build()` on pre-defined recipe. For example, in TGB `linkproppred` setting, a `HookManager` needs to set up for every scripts as follows:
+`TGM` offer a convenient way to setup common `HookManager` configuration by using `RecipeRegistry.build()` with a pre-defined recipe. For example, in the TGB `linkproppred` setting, the `HookManager` must register train, validation, and test hooks as follows:
 
 ```python
 dataset = PyGLinkPropPredDataset(
@@ -256,7 +256,7 @@ hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
 hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
 ```
 
-To avoid repeated code appearing in every script, this procedure can be encapsulated in a function and registered through `RecipeRegistry` as follows:
+To minimize boilerplate and avoid accidental typos in this setup process, this procedure can be encapsulated in a function and registered through `RecipeRegistry` as follows:
 
 ```python
 @RecipeRegistry.register(RECIPE_TGB_LINK_PRED)
@@ -293,7 +293,7 @@ def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
 @RecipeRegistry.register(RECIPE_TGB_LINK_PRED)
 ```
 
-In the experiments script, all we need to do to set up `HookManager` for `TGB` linkproppred is as follows:
+Therefore, all we need to do to set up `HookManager` for `TGB` linkproppred is:
 
 ```python
 hm = RecipeRegistry.build(
@@ -303,7 +303,7 @@ registered_keys = hm.keys
 train_key, val_key, test_key = registered_keys
 ```
 
-`TGM` team provided the implementaion of recipe for `TGB` linkproppred, users are welcome to define their own `Recipe`, register it and build it with `RecipeRegistry.build()`.
+`TGM` team provided the implementation of recipe for `TGB` linkproppred, users are welcome to define their own `Recipe`, register it and build it with `RecipeRegistry.build()`.
 
 ## Summary
 
