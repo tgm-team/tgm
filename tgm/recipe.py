@@ -46,7 +46,15 @@ class RecipeRegistry:
 
 @RecipeRegistry.register(RECIPE_TGB_LINK_PRED)
 def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
-    """Build ready-to-use HookManager with default hooks for TGB linkproppred task."""
+    """Build ready-to-use HookManager with default hooks for TGB linkproppred task.
+    
+    Args:
+        dataset_name (str): The name of the TGB dataset (e.g. 'tgbl-wiki')
+        train_dg (DGraph): The training graph, used to setup the `NegativeEdgeSamplerHook` for training
+
+     Returns:
+        HookManager with registered keys: ['train', 'val', 'test']  
+     """
     dataset = PyGLinkPropPredDataset(name=dataset_name, root='datasets')
     dataset.load_val_ns()
     dataset.load_test_ns()
