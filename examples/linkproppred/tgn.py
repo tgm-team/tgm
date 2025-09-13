@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from torch import Tensor
-from torch.nn import GRUCell, Linear
+from torch.nn import GRUCell
 from torch_geometric.nn import TransformerConv
 from torch_geometric.nn.inits import zeros
 from torch_geometric.utils import scatter
@@ -25,6 +25,7 @@ from tgm.hooks import (
     TGBNegativeEdgeSamplerHook,
 )
 from tgm.loader import DGDataLoader
+from tgm.nn import Time2Vec
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -49,24 +50,23 @@ parser.add_argument(
 )
 
 
-class LinkPredictor(torch.nn.Module):
-    def __init__(self, in_channels):
+class LinkPredictor(nn.Module):
+    def __init__(self, dim: int) -> None:
         super().__init__()
-        self.lin_src = Linear(in_channels, in_channels)
-        self.lin_dst = Linear(in_channels, in_channels)
-        self.lin_final = Linear(in_channels, 1)
+        self.fc1 = nn.Linear(2 * dim, dim)
+        self.fc2 = nn.Linear(dim, 1)
 
-    def forward(self, z_src, z_dst):
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.lin_final(h).sigmoid()
+        return self.fc2(h).sigmoid().view(-1)
 
 
 class GraphAttentionEmbedding(torch.nn.Module):
     def __init__(self, in_channels, out_channels, msg_dim, time_enc):
         super().__init__()
         self.time_enc = time_enc
-        edge_dim = msg_dim + time_enc.out_channels
+        edge_dim = msg_dim + time_enc.time_dim
         self.conv = TransformerConv(
             in_channels, out_channels // 2, heads=2, dropout=0.1, edge_dim=edge_dim
         )
@@ -128,7 +128,7 @@ class TGNMemory(torch.nn.Module):
         self.msg_s_module = message_module
         self.msg_d_module = copy.deepcopy(message_module)
         self.aggr_module = aggregator_module
-        self.time_enc = TimeEncoder(time_dim)
+        self.time_enc = Time2Vec(time_dim=time_dim)
         self.memory_updater = GRUCell(message_module.out_channels, memory_dim)
 
         self.register_buffer('memory', torch.empty(num_nodes, memory_dim))
@@ -142,7 +142,7 @@ class TGNMemory(torch.nn.Module):
 
     @property
     def device(self) -> torch.device:
-        return self.time_enc.lin.weight.device
+        return self.time_enc.w.weight.device
 
     def reset_parameters(self):
         if hasattr(self.msg_s_module, 'reset_parameters'):
@@ -151,7 +151,6 @@ class TGNMemory(torch.nn.Module):
             self.msg_d_module.reset_parameters()
         if hasattr(self.aggr_module, 'reset_parameters'):
             self.aggr_module.reset_parameters()
-        self.time_enc.reset_parameters()
         self.memory_updater.reset_parameters()
         self.reset_state()
 
@@ -255,19 +254,6 @@ class TGNMemory(torch.nn.Module):
             self._update_memory(torch.arange(self.num_nodes, device=self.memory.device))
             self._reset_message_store()
         super().train(mode)
-
-
-class TimeEncoder(torch.nn.Module):
-    def __init__(self, out_channels: int):
-        super().__init__()
-        self.out_channels = out_channels
-        self.lin = Linear(1, out_channels)
-
-    def reset_parameters(self):
-        self.lin.reset_parameters()
-
-    def forward(self, t: Tensor) -> Tensor:
-        return self.lin(t.view(-1, 1)).cos()
 
 
 def train(
@@ -389,8 +375,8 @@ def eval(
                 z[batch.global_to_local(src)], z[batch.global_to_local(dst)]
             )
             input_dict = {
-                'y_pred_pos': np.array([y_pred[0, :].squeeze(dim=-1).cpu()]),
-                'y_pred_neg': np.array(y_pred[1:, :].squeeze(dim=-1).cpu()),
+                'y_pred_pos': y_pred[0],
+                'y_pred_neg': y_pred[1:],
                 'eval_metric': [eval_metric],
             }
             perf_list.append(evaluator.eval(input_dict)[eval_metric])

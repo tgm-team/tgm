@@ -11,6 +11,7 @@ class Time2Vec(nn.Module):
             time_dim (int): The dimension of time encodings.
         """
         super().__init__()
+        self.time_dim = time_dim
         self.w = torch.nn.Linear(1, time_dim)
 
         # Initialization from: https://github.com/yule-BUAA/DyGLib/blob/master/models/modules.py
