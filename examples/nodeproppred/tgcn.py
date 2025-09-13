@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
+from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.graph import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
@@ -108,7 +109,6 @@ def eval(
     h_0: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
-    eval_metric: str,
     evaluator: Evaluator,
 ) -> float:
     encoder.eval()
@@ -124,8 +124,12 @@ def eval(
         z_node = z[batch.node_ids]
         y_pred = decoder(z_node)
 
-        input_dict = {'y_true': y_true, 'y_pred': y_pred, 'eval_metric': [eval_metric]}
-        perf_list.append(evaluator.eval(input_dict)[eval_metric])
+        input_dict = {
+            'y_true': y_true,
+            'y_pred': y_pred,
+            'eval_metric': [METRIC_TGB_NODEPROPPRED],
+        }
+        perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
     return float(np.mean(perf_list))
 
@@ -149,7 +153,7 @@ else:
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-evaluator, eval_metric = Evaluator(name=args.dataset), 'ndcg'
+evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
 
 encoder = RecurrentGCN(
@@ -166,14 +170,10 @@ for epoch in range(1, args.epochs + 1):
     end_time = time.perf_counter()
     latency = end_time - start_time
 
-    val_ndcg = eval(
-        val_loader, static_node_feats, h_0, encoder, decoder, eval_metric, evaluator
-    )
+    val_ndcg = eval(val_loader, static_node_feats, h_0, encoder, decoder, evaluator)
     print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_ndcg:.4f}'
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}'
     )
 
-test_ndcg = eval(
-    test_loader, static_node_feats, h_0, encoder, decoder, eval_metric, evaluator
-)
-print(f'Test {eval_metric}={test_ndcg:.4f}')
+test_ndcg = eval(test_loader, static_node_feats, h_0, encoder, decoder, evaluator)
+print(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')

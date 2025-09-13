@@ -2,12 +2,8 @@
 
 from .graph import DGraph, DGBatch
 from .data import DGData
+from .recipe import RecipeRegistry
 
 __version__ = '0.1.0a0'
 
-__all__ = [
-    '__version__',
-    'DGraph',
-    'DGBatch',
-    'DGData',
-]
+__all__ = ['__version__', 'DGraph', 'DGBatch', 'DGData', 'RecipeRegistry']

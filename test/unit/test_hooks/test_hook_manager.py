@@ -67,6 +67,8 @@ def test_register():
     hm = HookManager(keys=['foo'])
     hook = MockHook()
     hm.register('foo', hook)
+
+    assert len(hm.keys) == 1
     assert hook in hm._key_to_hooks['foo']
     assert len(hm._key_to_hooks['foo']) == 1
 
@@ -78,6 +80,7 @@ def test_register_multiple():
     hm.register('train', MockHookWithState())
     hm.register('val', MockHook())
 
+    assert len(hm.keys) == 2
     assert len(hm._key_to_hooks['train']) == 2
     assert len(hm._key_to_hooks['val']) == 1
 

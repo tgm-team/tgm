@@ -7,6 +7,7 @@ from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGData, DGraph
+from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.loader import DGDataLoader
 from tgm.util.seed import seed_everything
 
@@ -39,7 +40,6 @@ class PersistantForecaster:
 def eval(
     loader: DGDataLoader,
     model: PersistantForecaster,
-    eval_metric: str,
     evaluator: Evaluator,
 ) -> float:
     perf_list = []
@@ -54,8 +54,12 @@ def eval(
             y_pred[i] = model(node_id)
             model.update(node_id, y_true[i])
 
-        input_dict = {'y_true': y_true, 'y_pred': y_pred, 'eval_metric': [eval_metric]}
-        perf_list.append(evaluator.eval(input_dict)[eval_metric])
+        input_dict = {
+            'y_true': y_true,
+            'y_pred': y_pred,
+            'eval_metric': [METRIC_TGB_NODEPROPPRED],
+        }
+        perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
     return float(np.mean(perf_list))
 
@@ -72,17 +76,17 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
 test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
-evaluator, eval_metric = Evaluator(name=args.dataset), 'ndcg'
+evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
 model = PersistantForecaster(num_classes=num_classes)
 
 start_time = time.perf_counter()
-eval(train_loader, model, eval_metric, evaluator)
+eval(train_loader, model, evaluator)
 end_time = time.perf_counter()
 latency = end_time - start_time
 
-val_ndcg = eval(val_loader, model, eval_metric, evaluator)
-print(f'Latency={latency:.4f} Validation {eval_metric}={val_ndcg:.4f}')
+val_ndcg = eval(val_loader, model, evaluator)
+print(f'Latency={latency:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}')
 
-test_ndcg = eval(test_loader, model, eval_metric, evaluator)
-print(f'Test {eval_metric}={test_ndcg:.4f}')
+test_ndcg = eval(test_loader, model, evaluator)
+print(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')

@@ -38,6 +38,11 @@ class HookManager:
         self._key_to_hooks: Dict[str, List[DGHook]] = {k: [] for k in keys}
         self._shared_hooks: List[DGHook] = []
         self._active_key: str | None = None
+        self._registered_key = keys
+
+    @property
+    def keys(self) -> List:
+        return self._registered_key
 
     def __str__(self) -> str:
         def _stringify_hook(h: DGHook) -> str:

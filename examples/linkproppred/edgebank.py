@@ -8,6 +8,7 @@ from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGData, DGraph
+from tgm.constants import METRIC_TGB_LINKPROPPRED
 from tgm.hooks import HookManager, TGBNegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
@@ -34,7 +35,6 @@ parser.add_argument(
 def eval(
     loader: DGDataLoader,
     model: EdgeBankPredictor,
-    eval_metric: str,
     evaluator: Evaluator,
 ) -> float:
     perf_list = []
@@ -47,9 +47,9 @@ def eval(
             input_dict = {
                 'y_pred_pos': y_pred[0],
                 'y_pred_neg': y_pred[1:],
-                'eval_metric': [eval_metric],
+                'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
-            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+            perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
         model.update(batch.src, batch.dst, batch.time)
 
     return float(np.mean(perf_list))
@@ -59,7 +59,6 @@ args = parser.parse_args()
 seed_everything(args.seed)
 
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
-eval_metric = dataset.eval_metric
 neg_sampler = dataset.negative_sampler
 evaluator = Evaluator(name=args.dataset)
 dataset.load_val_ns()
@@ -90,11 +89,11 @@ model = EdgeBankPredictor(
 
 with hm.activate('val'):
     start_time = time.perf_counter()
-    val_mrr = eval(val_loader, model, eval_metric, evaluator)
+    val_mrr = eval(val_loader, model, evaluator)
     end_time = time.perf_counter()
     latency = end_time - start_time
-    print(f'Latency={latency:.4f} Validation {eval_metric}={val_mrr:.4f}')
+    print(f'Latency={latency:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}')
 
 with hm.activate('test'):
-    test_mrr = eval(test_loader, model, eval_metric, evaluator)
-    print(f'Test {eval_metric}={test_mrr:.4f}')
+    test_mrr = eval(test_loader, model, evaluator)
+    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
