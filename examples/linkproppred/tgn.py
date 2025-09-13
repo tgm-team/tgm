@@ -311,20 +311,17 @@ def train(
         nbr_mask = nbr_nodes != PADDED_NODE_ID  # mask out invalid nbrs
 
         #! run my own deduplication
-        nids = [batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]]
-        all_nids = torch.cat(nids, dim=0)
-        unique_nids = torch.unique(all_nids, sorted=True)
-        batch.unique_nids = unique_nids  # type: ignore
-        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
+        all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
+        batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
 
         num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
         src_nodes = torch.cat(
-            (
+            [
                 batch.src.repeat_interleave(num_nbrs),
                 batch.dst.repeat_interleave(num_nbrs),
                 batch.neg.repeat_interleave(num_nbrs),
-            ),
-            0,
+            ]
         )
         nbr_edge_index = torch.stack(
             [
@@ -347,7 +344,7 @@ def train(
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
 
-        # Update memory and neighbor loader with ground-truth state.
+        # Update memory with ground-truth state.
         memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
 
         loss.backward()
@@ -379,21 +376,18 @@ def eval(
         nbr_mask = nbr_nodes != PADDED_NODE_ID  # mask out invalid nbrs
 
         #! run my own deduplication
-        nids = [batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]]
-        all_nids = torch.cat(nids, dim=0)
-        unique_nids = torch.unique(all_nids, sorted=True)
-        batch.unique_nids = unique_nids  # type: ignore
-        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
+        all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
+        batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
 
         nbr_nodes = batch.nbr_nids[0].flatten()
         num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
         src_nodes = torch.cat(
-            (
+            [
                 batch.src.repeat_interleave(num_nbrs),
                 batch.dst.repeat_interleave(num_nbrs),
                 batch.neg.repeat_interleave(num_nbrs),
-            ),
-            0,
+            ]
         )
         nbr_mask = nbr_nodes != -1
         nbr_edge_index = torch.stack(
