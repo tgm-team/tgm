@@ -358,7 +358,7 @@ def train(
 
 @torch.no_grad()
 def eval(
-    loader,
+    loader: DGDataLoader,
     static_node_feats: torch.Tensor,
     memory: nn.Module,
     encoder: nn.Module,
@@ -389,7 +389,7 @@ def eval(
                 batch.neg.repeat_interleave(num_nbrs),
             ]
         )
-        nbr_mask = nbr_nodes != -1
+        nbr_mask = nbr_nodes != PADDED_NODE_ID
         nbr_edge_index = torch.stack(
             [
                 batch.global_to_local(src_nodes[nbr_mask]),
