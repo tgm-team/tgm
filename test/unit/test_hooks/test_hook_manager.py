@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 import torch
 
@@ -7,7 +9,7 @@ from tgm.data import DGData
 from tgm.exceptions import (
     BadHookProtocolError,
     UnresolvableHookDependenciesError,
-    UnsupportRecipe,
+    UnsupportedRecipe,
 )
 from tgm.hooks import (
     HookManager,
@@ -53,6 +55,15 @@ def dg():
     edge_timestamps = torch.LongTensor([1, 1, 2, 2])
     data = DGData.from_raw(edge_timestamps, edge_index)
     return DGraph(data)
+
+
+@pytest.fixture
+def tgb_dataset_factory():
+    tgb_dataset = MagicMock()
+    neg_sampler = MagicMock()
+    neg_sampler.eval_set = {'val': [], 'test': []}
+    tgb_dataset.negative_sampler = neg_sampler
+    return tgb_dataset
 
 
 def test_str():
@@ -375,14 +386,22 @@ def test_topo_sort_neg_before_nbr():
     assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)
 
 
-def test_bad_build_recipe(dg):
-    with pytest.raises(UnsupportRecipe):
-        hm, register_keys = HookManager.build_recipe('foo', 'tgbl-wiki', dg, dg, dg)
+@patch('tgm.hooks.hook_manager.PyGLinkPropPredDataset')
+def test_bad_build_recipe(mock_dataset_cls, tgb_dataset_factory, dg):
+    mock_dataset = tgb_dataset_factory()
+    mock_dataset_cls.return_value = mock_dataset
+
+    with pytest.raises(UnsupportedRecipe):
+        hm, register_keys = HookManager.build_recipe('foo', 'tgbl-foo', dg, dg, dg)
 
 
-def test_build_recipe_tgb_link_pred(dg):
+@patch('tgm.hooks.hook_manager.PyGLinkPropPredDataset')
+def test_build_recipe_tgb_link_pred(mock_dataset_cls, tgb_dataset_factory, dg):
+    mock_dataset = tgb_dataset_factory()
+    mock_dataset_cls.return_value = mock_dataset
+
     hm, register_keys = HookManager.build_recipe(
-        RECIPE_TGB_LINK_PRED, 'tgbl-wiki', dg, dg, dg
+        RECIPE_TGB_LINK_PRED, 'tgbl-foo', dg, dg, dg
     )
     train_hooks = hm._key_to_hooks['train']
     val_hooks = hm._key_to_hooks['val']
@@ -398,3 +417,6 @@ def test_build_recipe_tgb_link_pred(dg):
     assert isinstance(train_hooks[0], NegativeEdgeSamplerHook)
     assert isinstance(val_hooks[0], TGBNegativeEdgeSamplerHook)
     assert isinstance(test_hooks[0], TGBNegativeEdgeSamplerHook)
+    mock_dataset_cls.assert_called_once_with(name='tgbl-foo', root='datasets')
+    mock_dataset.load_val_ns.assert_called_once()
+    mock_dataset.load_test_ns.assert_called_once()

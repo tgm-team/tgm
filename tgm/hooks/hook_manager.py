@@ -10,7 +10,7 @@ from tgm import DGBatch, DGraph
 from tgm.exceptions import (
     BadHookProtocolError,
     UnresolvableHookDependenciesError,
-    UnsupportRecipe,
+    UnsupportedRecipe,
 )
 from tgm.hooks import (
     DGHook,
@@ -18,7 +18,7 @@ from tgm.hooks import (
     TGBNegativeEdgeSamplerHook,
 )
 
-from ..constants import RECIPE_TGB_LINK_PRED, SUPPORT_RECIPES
+from ..constants import RECIPE_TGB_LINK_PRED, SUPPORTED_RECIPES
 
 
 class HookManager:
@@ -232,9 +232,9 @@ class HookManager:
         Returns:
             HookManager, Registered Keys (HookManager,List[str])
         """
-        if recipe not in SUPPORT_RECIPES:
-            raise UnsupportRecipe(
-                f'Recipe {recipe} is not supported. Please choose recipe from {SUPPORT_RECIPES}'
+        if recipe not in SUPPORTED_RECIPES:
+            raise UnsupportedRecipe(
+                f'Recipe {recipe} is not supported. Please choose recipe from {SUPPORTED_RECIPES}'
             )
 
         # @TODO: well, we violated Open-close principle here. May be better design?
@@ -259,8 +259,8 @@ class HookManager:
             )
             return hm, register_keys
         else:
-            raise UnsupportRecipe(
-                f'Recipe {recipe} is not supported. Please choose recipe from {SUPPORT_RECIPES}'
+            raise UnsupportedRecipe(
+                f'Recipe {recipe} is not supported. Please choose recipe from {SUPPORTED_RECIPES}'
             )
 
     @staticmethod

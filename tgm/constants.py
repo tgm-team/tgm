@@ -1,4 +1,4 @@
-from typing import Final
+from typing import Final, List
 
 PADDED_NODE_ID: Final[int] = -1
 """Sentinel node ID used to mark invalid or padded neighbors in a graph.
@@ -9,16 +9,11 @@ Notes:
 """
 
 RECIPE_TGB_LINK_PRED: Final[str] = 'TGB_LINKPROPPRED_SETTING'
-"""A name to indicate recipe used for TGBlink property prediction
-
-Notes:
-    - A tgm.exceptions.UnsupportRecipe will be thrown if user build recipe
-    from unsupported recipe
-
+"""Recipe identifier for TGB link property prediction task.
 """
 
-SUPPORT_RECIPES: Final[list] = [RECIPE_TGB_LINK_PRED]
-"""A list of supported recipes can be built from HookManager
+SUPPORTED_RECIPES: Final[List[str]] = [RECIPE_TGB_LINK_PRED]
+"""A list of supported recipes that can be built from HookManager.
 
 Notes:
     - A tgm.exceptions.UnsupportRecipe will be thrown if user build recipe
@@ -26,5 +21,5 @@ Notes:
 """
 
 METRIC_TGB_LINKPROPPRED: Final[str] = 'mrr'
-"""Official metric used in TGB link prediction task
+"""Official metric used in TGB link prediction task.
 """
