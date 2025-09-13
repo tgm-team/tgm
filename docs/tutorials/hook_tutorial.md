@@ -13,7 +13,7 @@ See [`tgm.graph.DGBatch`](../api/batch.md) for a full reference of the base `DGB
 Hooks declare the following information
 
 - `requires: Set[str]`: Names of attributes that the hook needs to exist on the batch
-- `produces: Set[str]`: Names of attributes from the batch that the hook requires 
+- `produces: Set[str]`: Names of attributes from the batch that the hook requires
 - `has_state: bool`: A flag to denote whether the hook stores state internally (i.e. some memory or attribute that may change upon subsequent invocations of the hook). An example of a stateful hook is a `RecencyNeighborSampler` which keeps track of node interactions over subsequent `__call__`s.
 
 > Note:
@@ -27,7 +27,7 @@ TGM implements several commonly used hooks. The table below summarizes them:
 | Hook Name                    | Type      | `requires` | `produces`                           | Description                                                                                          |
 | ---------------------------- | --------- | ---------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | `NegativeEdgeSamplerHook`    | Stateless | None       | `neg`, `neg_time`                    | Generates random negatives for link prediction                                                       |
-| `TGBNegativeEdgeSamplerHook` | Stateless | None       | `neg`, `neg_time`, `neg_batch_list`  | Loads pre-computed negative edges for [TGB](https://tgb.complexdatalab.com/) datasets                                                   |
+| `TGBNegativeEdgeSamplerHook` | Stateless | None       | `neg`, `neg_time`, `neg_batch_list`  | Loads pre-computed negative edges for [TGB](https://tgb.complexdatalab.com/) datasets                |
 | `NeighborSamplerHook`        | Stateless | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Uniform sampler neighbor for a given number of hops                                                  |
 | `RecencyNeighborSamplerHook` | Stateful  | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Recency neighbor sampler for a given number of hops                                                  |
 | `PinMemoryHook`              | Stateless | None       | None                                 | Pins all `torch.Tensor` in `DGBatch` for fast CPU-GPU transfer                                       |
@@ -236,7 +236,74 @@ ______________________________________________________________________
 
 ## 6. Recipes
 
-Under construction.
+For commonly used pre-experiment setup step, `TGM` offer a convenient way to setup experiment and `HookManager` by using `RecipeRegistry.build()` on pre-defined recipe. For example, in TGB `linkproppred` setting, a `HookManager` needs to set up for every scripts as follows:
+
+```python
+dataset = PyGLinkPropPredDataset(
+    name=dataset_name, root='datasets'
+)
+
+dataset.load_val_ns()
+dataset.load_test_ns()
+_, dst, _ = train_dg.edges
+neg_sampler = dataset.negative_sampler
+
+hm = HookManager(keys=['train', 'val', 'test'])
+hm.register(
+    'train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+)
+hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+```
+
+To avoid repeated code appearing in every script, this procedure can be encapsulated in a function and registered through `RecipeRegistry` as follows:
+
+```python
+@RecipeRegistry.register(RECIPE_TGB_LINK_PRED)
+def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
+   try:
+       from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
+   except ImportError:
+       raise ImportError('TGB required to load TGB data, try `pip install py-tgb`')
+
+
+   dataset = PyGLinkPropPredDataset(
+       name=dataset_name, root='datasets'
+   )
+   dataset.load_val_ns()
+   dataset.load_test_ns()
+   _, dst, _ = train_dg.edges
+   neg_sampler = dataset.negative_sampler
+
+
+   hm = HookManager(keys=['train', 'val', 'test'])
+   hm.register(
+       'train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+   )
+   hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+   hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+
+
+   return hm
+```
+
+`build_tgb_link_pred()` encapsulates procedure to set up `HookManager` for `TGB` linkpropred experiments and is registered to `RecipeRegistry` with the name defined by constant `RECIPE_TGB_LINK_PRED` as follows:
+
+```python
+@RecipeRegistry.register(RECIPE_TGB_LINK_PRED)
+```
+
+In the experiments script, all we need to do to set up `HookManager` for `TGB` linkproppred is as follows:
+
+```python
+hm = RecipeRegistry.build(
+   RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
+)
+registered_keys = hm.keys
+train_key, val_key, test_key = registered_keys
+```
+
+`TGM` team provided the implementaion of recipe for `TGB` linkproppred, users are welcome to define their own `Recipe`, register it and build it with `RecipeRegistry.build()`.
 
 ## Summary
 
