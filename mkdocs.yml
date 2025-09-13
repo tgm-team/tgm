@@ -13,6 +13,7 @@ nav:
   - Tutorials:
       - Temporal Graph Construction: tutorials/dgraph_tutorial.md
       - Time Management: tutorials/time_delta_tutorial.md
+      - Hooks: tutorials/hook_tutorial.md
 
   - API Reference:
       - Dynamic Graphs:
