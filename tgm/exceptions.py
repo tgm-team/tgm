@@ -35,5 +35,5 @@ class EmptyBatchError(TGMError):
     """Raised during time-based iteration when a batch interval contains no events."""
 
 
-class UnsupportedRecipe(TGMError):
-    """Raised when attempting to construct a recipe that is not supported."""
+class UndefinedRecipe(TGMError):
+    """Raised when attempting to construct a recipe that is not defined/registered."""

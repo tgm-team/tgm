@@ -10,9 +10,10 @@ import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
+from tgm import RecipeRegistry
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.graph import DGBatch, DGData, DGraph
-from tgm.hooks import HookManager, RecencyNeighborHook
+from tgm.hooks import RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import DyGFormer, Time2Vec
 from tgm.util.seed import seed_everything
@@ -267,8 +268,8 @@ nbr_hook = RecencyNeighborHook(
     edge_feats_dim=edge_feats_dim,
 )
 
-hm, registered_keys = HookManager.build_recipe(
-    RECIPE_TGB_LINK_PRED, args.dataset, train_dg, val_dg, test_dg
+hm, registered_keys = RecipeRegistry.build(
+    RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
 hm.register_shared(nbr_hook)
 train_key, val_key, test_key = registered_keys
