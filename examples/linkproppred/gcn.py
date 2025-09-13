@@ -6,17 +6,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from torch_geometric.nn import GCNConv
 from tqdm import tqdm
 
-from tgm import DGBatch, DGData, DGraph
-from tgm.hooks import (
-    HookManager,
-    NegativeEdgeSamplerHook,
-    TGBNegativeEdgeSamplerHook,
-)
+from tgm import DGBatch, DGData, DGraph, RecipeRegistry
+from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.loader import DGDataLoader
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
@@ -148,7 +143,6 @@ def eval(
     z: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
-    eval_metric: str,
     evaluator: Evaluator,
     conversion_rate: int,
 ) -> float:
@@ -169,9 +163,9 @@ def eval(
             input_dict = {
                 'y_pred_pos': y_pred[0],
                 'y_pred_neg': y_pred[1:],
-                'eval_metric': [eval_metric],
+                'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
-            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+            perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # update the model if the prediction batch has moved to next snapshot.
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
@@ -187,12 +181,7 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
-eval_metric = dataset.eval_metric
-neg_sampler = dataset.negative_sampler
 evaluator = Evaluator(name=args.dataset)
-dataset.load_val_ns()
-dataset.load_test_ns()
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data, device=args.device)
@@ -212,10 +201,11 @@ test_snapshots = DGraph(test_data_discretized, device=args.device)
 
 _, dst, _ = train_dg.edges
 
-hm = HookManager(keys=['train', 'val', 'test'])
-hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
-hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
-hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+hm = RecipeRegistry.build(
+    RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
+)
+registered_keys = hm.keys
+train_key, val_key, test_key = registered_keys
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
@@ -248,7 +238,7 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
-    with hm.activate('train'):
+    with hm.activate(train_key):
         start_time = time.perf_counter()
         loss, z = train(
             train_loader,
@@ -262,7 +252,7 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-    with hm.activate('val'):
+    with hm.activate(val_key):
         val_mrr = eval(
             val_loader,
             val_snapshots_loader,
@@ -270,16 +260,15 @@ for epoch in range(1, args.epochs + 1):
             z,
             encoder,
             decoder,
-            eval_metric,
             evaluator,
             conversion_rate,
         )
     print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
     )
 
 
-with hm.activate('test'):
+with hm.activate(test_key):
     test_mrr = eval(
         test_loader,
         test_snapshots_loader,
@@ -287,8 +276,7 @@ with hm.activate('test'):
         z,
         encoder,
         decoder,
-        eval_metric,
         evaluator,
         conversion_rate,
     )
-    print(f'Test {eval_metric}={test_mrr:.4f}')
+    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
