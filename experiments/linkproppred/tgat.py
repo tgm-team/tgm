@@ -273,7 +273,7 @@ if args.use_bsize:
     val_loader = DGDataLoader(val_dg, args.bsize_test, hook_manager=hm)
     test_loader = DGDataLoader(test_dg, args.bsize_test, hook_manager=hm)
 else:
-    train_loader = DGDataLoader(train_dg, batch_unit=args.bunit, hook_manager=hm)
+    train_loader = DGDataLoader(train_dg, batch_unit=args.bsize_train, hook_manager=hm)
     val_loader = DGDataLoader(val_dg, batch_unit=args.bunit, hook_manager=hm)
     test_loader = DGDataLoader(test_dg, batch_unit=args.bunit, hook_manager=hm)
 
@@ -344,7 +344,8 @@ save_results(
     f'{args.dataset}',
     {
         'dataset': args.dataset,
-        'snapshot_time_gran': args.snapshot_time_gran,
+        'batch_unit': None if args.use_bsize else args.snapshot_time_gran ,
+        'batch_size': args.bsize_test if args.use_bsize else None,
         'model': MODEL_NAME,
         'seed': args.seed,
         'test_mrr': test_mrr,
