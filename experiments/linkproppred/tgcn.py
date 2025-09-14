@@ -213,11 +213,10 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 train_snapshots_loader = DGDataLoader(
-    train_snapshots, batch_unit=args.snapshot_time_gran
+    train_snapshots, batch_unit=args.snapshot_time_gran,on_empty='raise'
 )
-val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time_gran)
-test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran)
-
+val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time_gran,on_empty='raise')
+test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran,on_empty='raise')
 
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
