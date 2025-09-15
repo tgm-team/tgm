@@ -8,6 +8,7 @@ from tgm.hooks import (
     NegativeEdgeSamplerHook,
     TGBNegativeEdgeSamplerHook,
 )
+from tgm.util._tgb import suppress_output
 
 
 class RecipeRegistry:
@@ -58,9 +59,9 @@ def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
     except ImportError:
         raise ImportError('TGB required to load TGB data, try `pip install py-tgb`')
 
-    dataset = PyGLinkPropPredDataset(
-        name=dataset_name, root='datasets'
-    )  # @TODO: Suppress TGB print statement
+    dataset = suppress_output(
+        PyGLinkPropPredDataset, name=dataset_name, root='datasets'
+    )
     dataset.load_val_ns()
     dataset.load_test_ns()
     _, dst, _ = train_dg.edges
