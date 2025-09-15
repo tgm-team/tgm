@@ -16,6 +16,12 @@ dependencies = [
 ]
 
 [dependency-groups]
+analytics = [
+    "networkx>=3.2.1",
+    "py-tgb>=2.1.0",
+    "scipy>=1.15.2",
+    "tqdm>=4.67.1",
+]
 dev = [
     "isort>=5.13.2",
     "mypy>=1.13.0",
