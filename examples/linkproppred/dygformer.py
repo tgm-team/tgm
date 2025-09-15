@@ -261,7 +261,6 @@ else:
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-_, dst, _ = train_dg.edges
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # 1 remaining for seed node itself
     num_nodes=num_nodes,
@@ -272,8 +271,7 @@ hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
 hm.register_shared(nbr_hook)
-registered_keys = hm.keys
-train_key, val_key, test_key = registered_keys
+train_key, val_key, test_key = hm.keys
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)

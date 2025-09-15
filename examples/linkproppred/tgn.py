@@ -16,14 +16,13 @@ from torch_geometric.nn.inits import zeros
 from torch_geometric.utils import scatter
 from tqdm import tqdm
 
-from tgm import DGData, DGraph
-from tgm.constants import PADDED_NODE_ID
-from tgm.hooks import (
-    HookManager,
-    NegativeEdgeSamplerHook,
-    RecencyNeighborHook,
-    TGBNegativeEdgeSamplerHook,
+from tgm import DGData, DGraph, RecipeRegistry
+from tgm.constants import (
+    METRIC_TGB_LINKPROPPRED,
+    PADDED_NODE_ID,
+    RECIPE_TGB_LINK_PRED,
 )
+from tgm.hooks import RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
 from tgm.util.seed import seed_everything
@@ -404,17 +403,15 @@ nbr_hook = RecencyNeighborHook(
     edge_feats_dim=test_dg.edge_feats_dim,
 )
 
-_, dst, _ = train_dg.edges
-hm = HookManager(keys=['train', 'val', 'test'])
-hm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
-hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
-hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+hm = RecipeRegistry.build(
+    RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
+)
+train_key, val_key, test_key = hm.keys
 hm.register_shared(nbr_hook)
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
-
 
 memory = TGNMemory(
     test_dg.num_nodes,
@@ -439,22 +436,22 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
-    with hm.activate('train'):
+    with hm.activate(train_key):
         start_time = time.perf_counter()
         loss = train(train_loader, memory, encoder, decoder, opt)
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-    with hm.activate('val'):
+    with hm.activate(val_key):
         val_mrr = eval(val_loader, memory, encoder, decoder, eval_metric, evaluator)
     print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_mrr:.4f}'
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
     )
 
-    if epoch < args.epochs:
+    if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 
-with hm.activate('test'):
+with hm.activate(test_key):
     test_mrr = eval(test_loader, memory, encoder, decoder, eval_metric, evaluator)
-    print(f'Test {eval_metric}={test_mrr:.4f}')
+    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
