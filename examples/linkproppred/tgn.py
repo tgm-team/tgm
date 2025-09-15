@@ -48,11 +48,6 @@ parser.add_argument(
     default=[10],
     help='num sampled nbrs at each hop',
 )
-parser.add_argument(
-    '--with-torch-scatter',
-    action='store_true',
-    help='Use sparse ops for LastAggregator module. Requires torch_scatter cuda install',
-)
 
 
 class LinkPredictor(nn.Module):
@@ -84,34 +79,15 @@ class GraphAttentionEmbedding(torch.nn.Module):
 
 
 class LastAggregator(torch.nn.Module):
-    def __init__(self, with_torch_scatter: bool = False) -> None:
-        super().__init__()
-        self._with_torch_scatter = with_torch_scatter
-
     def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
         out = msg.new_zeros((dim_size, msg.size(-1)))
 
-        if self._with_torch_scatter:
-            from torch_scatter import scatter_max
-
-            _, argmax = scatter_max(t, index, dim=0, dim_size=dim_size)
-            mask = argmax < msg.size(0)  # Filter items with at least one entry.
-            out[mask] = msg[argmax[mask]]
-        else:
-            # for i in range(dim_size):
-            #    mask = index == i
-            #    if mask.any():
-            #        local_idx = torch.argmax(t[mask])
-            #        global_idx = mask.nonzero(as_tuple=True)[0][local_idx]
-            #        out[i] = msg[global_idx]
-            if index.numel() > 0:
-                scores = torch.full(
-                    (dim_size, t.size(0)), float('-inf'), device=t.device
-                )
-                scores[index, torch.arange(t.size(0), device=t.device)] = t.float()
-                argmax = scores.argmax(dim=1)
-                valid = scores.max(dim=1).values > float('-inf')
-                out[valid] = msg[argmax[valid]]
+        if index.numel() > 0:
+            scores = torch.full((dim_size, t.size(0)), float('-inf'), device=t.device)
+            scores[index, torch.arange(t.size(0), device=t.device)] = t.float()
+            argmax = scores.argmax(dim=1)
+            valid = scores.max(dim=1).values > float('-inf')
+            out[valid] = msg[argmax[valid]]
 
         return out
 
@@ -294,7 +270,7 @@ def train(
         opt.zero_grad()
 
         nbr_nodes = batch.nbr_nids[0].flatten()
-        nbr_mask = nbr_nodes != PADDED_NODE_ID  # mask out invalid nbrs
+        nbr_mask = nbr_nodes != PADDED_NODE_ID
 
         #! run my own deduplication
         all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
@@ -359,14 +335,13 @@ def eval(
 
     for batch in tqdm(loader):
         nbr_nodes = batch.nbr_nids[0].flatten()
-        nbr_mask = nbr_nodes != PADDED_NODE_ID  # mask out invalid nbrs
+        nbr_mask = nbr_nodes != PADDED_NODE_ID
 
         #! run my own deduplication
         all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
         batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
         batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
 
-        nbr_nodes = batch.nbr_nids[0].flatten()
         num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
         src_nodes = torch.cat(
             [
@@ -375,7 +350,6 @@ def eval(
                 batch.neg.repeat_interleave(num_nbrs),
             ]
         )
-        nbr_mask = nbr_nodes != PADDED_NODE_ID
         nbr_edge_index = torch.stack(
             [
                 batch.global_to_local(src_nodes[nbr_mask]),
@@ -389,11 +363,13 @@ def eval(
         z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src = batch.src[idx].repeat(len(dst))
-            y_pred = decoder(
-                z[batch.global_to_local(src)], z[batch.global_to_local(dst)]
-            )
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.src[idx].repeat(len(dst_ids))
+
+            inv_src = batch.global_to_local(src_ids)
+            inv_dst = batch.global_to_local(dst_ids)
+            y_pred = decoder(z[inv_src], z[inv_dst])
+
             input_dict = {
                 'y_pred_pos': y_pred[0],
                 'y_pred_neg': y_pred[1:],
@@ -448,7 +424,7 @@ memory = TGNMemory(
     message_module=IdentityMessage(
         test_dg.edge_feats_dim, args.memory_dim, args.time_dim
     ),
-    aggregator_module=LastAggregator(args.with_torch_scatter),
+    aggregator_module=LastAggregator(),
 ).to(args.device)
 encoder = GraphAttentionEmbedding(
     in_channels=args.memory_dim,
