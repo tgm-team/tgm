@@ -213,9 +213,8 @@ def eval(
     model.eval()
     perf_list = []
     for batch in tqdm(loader):
+        copy_batch = copy.deepcopy(batch)
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            copy_batch = copy.deepcopy(batch)
-
             copy_batch.src = batch.src[idx].unsqueeze(0)
             copy_batch.dst = batch.dst[idx].unsqueeze(0)
             copy_batch.time = batch.time[idx].unsqueeze(0)
