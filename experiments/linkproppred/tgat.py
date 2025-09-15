@@ -32,7 +32,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
@@ -316,7 +316,7 @@ for epoch in range(1, args.epochs + 1):
 
     # ==
     save_results(
-        f'{args.dataset}_{args.snapshot_time_gran}_{MODEL_NAME}_{args.seed}',
+        f'{args.dataset}_{args.bsize_test if args.use_bsize else args.bunit}_{MODEL_NAME}_{args.seed}',
         {'epoch': epoch, 'val_mrr': val_mrr, 'loss': loss, 'latency': latency},
         f'epoch_log/{args.experiment_name}',
     )
@@ -340,11 +340,12 @@ with hm.activate(test_key):
     test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
     print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
 # ==
+
 save_results(
     f'{args.dataset}',
     {
         'dataset': args.dataset,
-        'batch_unit': None if args.use_bsize else args.snapshot_time_gran ,
+        'batch_unit': None if args.use_bsize else args.bunit ,
         'batch_size': args.bsize_test if args.use_bsize else None,
         'model': MODEL_NAME,
         'seed': args.seed,
