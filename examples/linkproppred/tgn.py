@@ -98,12 +98,20 @@ class LastAggregator(torch.nn.Module):
             mask = argmax < msg.size(0)  # Filter items with at least one entry.
             out[mask] = msg[argmax[mask]]
         else:
-            for i in range(dim_size):
-                mask = index == i
-                if mask.any():
-                    local_idx = torch.argmax(t[mask])
-                    global_idx = mask.nonzero(as_tuple=True)[0][local_idx]
-                    out[i] = msg[global_idx]
+            # for i in range(dim_size):
+            #    mask = index == i
+            #    if mask.any():
+            #        local_idx = torch.argmax(t[mask])
+            #        global_idx = mask.nonzero(as_tuple=True)[0][local_idx]
+            #        out[i] = msg[global_idx]
+            if index.numel() > 0:
+                scores = torch.full(
+                    (dim_size, t.size(0)), float('-inf'), device=t.device
+                )
+                scores[index, torch.arange(t.size(0), device=t.device)] = t.float()
+                argmax = scores.argmax(dim=1)
+                valid = scores.max(dim=1).values > float('-inf')
+                out[valid] = msg[argmax[valid]]
 
         return out
 
