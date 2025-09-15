@@ -48,6 +48,11 @@ parser.add_argument(
     default=[10],
     help='num sampled nbrs at each hop',
 )
+parser.add_argument(
+    '--with-torch-scatter',
+    action='store_true',
+    help='Use sparse ops for LastAggregator module. Requires torch_scatter cuda install',
+)
 
 
 class LinkPredictor(nn.Module):
@@ -79,19 +84,25 @@ class GraphAttentionEmbedding(torch.nn.Module):
 
 
 class LastAggregator(torch.nn.Module):
+    def __init__(self, with_torch_scatter: bool = False) -> None:
+        self._with_torch_scatter = with_torch_scatter
+
     def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
         out = msg.new_zeros((dim_size, msg.size(-1)))
 
-        # _, argmax = scatter_max(t, index, dim=0, dim_size=dim_size)
-        # mask = argmax < msg.size(0)  # Filter items with at least one entry.
-        # out[mask] = msg[argmax[mask]]
+        if self._with_torch_scatter:
+            from torch_scatter import scatter_max
 
-        for i in range(dim_size):
-            mask = index == i
-            if mask.any():
-                local_idx = torch.argmax(t[mask])
-                global_idx = mask.nonzero(as_tuple=True)[0][local_idx]
-                out[i] = msg[global_idx]
+            _, argmax = scatter_max(t, index, dim=0, dim_size=dim_size)
+            mask = argmax < msg.size(0)  # Filter items with at least one entry.
+            out[mask] = msg[argmax[mask]]
+        else:
+            for i in range(dim_size):
+                mask = index == i
+                if mask.any():
+                    local_idx = torch.argmax(t[mask])
+                    global_idx = mask.nonzero(as_tuple=True)[0][local_idx]
+                    out[i] = msg[global_idx]
 
         return out
 
@@ -428,7 +439,7 @@ memory = TGNMemory(
     message_module=IdentityMessage(
         test_dg.edge_feats_dim, args.memory_dim, args.time_dim
     ),
-    aggregator_module=LastAggregator(),
+    aggregator_module=LastAggregator(args.with_torch_scatter),
 ).to(args.device)
 encoder = GraphAttentionEmbedding(
     in_channels=args.memory_dim,
