@@ -76,7 +76,7 @@ class DGraph:
             batch.node_times, batch.node_ids = self.dynamic_node_feats._indices()
             batch.dynamic_node_feats = self.dynamic_node_feats._values()
         if materialize_features and self.edge_feats is not None:
-            batch.edge_feats = self.edge_feats._values()
+            batch.edge_feats = self.edge_feats
         return batch
 
     def slice_events(
@@ -226,7 +226,7 @@ class DGraph:
     def edge_feats(self) -> Optional[Tensor]:
         """The aggregated edge features over the dynamic graph.
 
-        If edge features exist, returns a Tensor.sparse_coo_tensor(T x V x V x d_edge).
+        If edge features exist, returns a tensor of shape (T x V x V x d_edge).
         """
         feats = self._storage.get_edge_feats(self._slice)
         if feats is not None:
@@ -289,10 +289,9 @@ class DGBatch:
         dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
         time (Tensor): Timestamps of each edge event. Shape `(E,)`.
         dynamic_node_feats (Tensor | None, optional): Dynamic node features for nodes
-            in the batch. Typically sparse tensor of shape `(T x V x d_node_dynamic)`.
-        edge_feats (Tensor | None, optional): Edge features for the batch. Typically
-            sparse tensor of shape `(E x d_edge)` or `(T x V x V x d_edge)` depending
-            on storage.
+            in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
+        edge_feats (Tensor | None, optional): Edge features for the batch. Tensor
+            of shape `(T x V x V x d_edge)`.
         node_times (Tensor | None, optional): Timestamps corresponding to dynamic node features.
         node_ids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
     """

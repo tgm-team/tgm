@@ -179,23 +179,7 @@ class DGStorageArrayBackend(DGStorageBase):
         if edge_mask.sum() == 0:
             return None
 
-        time = self._data.timestamps[self._data.edge_event_idx[edge_mask]]
-        edges = self._data.edge_index[edge_mask]
-        indices = torch.stack([time, edges[:, 0], edges[:, 1]], dim=0)
-        values = self._data.edge_feats[edge_mask]
-
-        max_node_id = edges.max()
-        if self._data.node_event_idx is not None:
-            node_mask = (self._data.node_event_idx >= lb_idx) & (
-                self._data.node_event_idx < ub_idx
-            )
-            if len(self._data.node_ids[node_mask]):  # type: ignore
-                max_node_id = max(max_node_id, self._data.node_ids[node_mask].max())  # type: ignore
-
-        max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
-        edge_feats_dim = self.get_edge_feats_dim()
-        shape = (max_time + 1, max_node_id + 1, max_node_id + 1, edge_feats_dim)
-        return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
+        return self._data.edge_feats[edge_mask]
 
     def get_static_node_feats_dim(self) -> Optional[int]:
         if self._data.static_node_feats is None:

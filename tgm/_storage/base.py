@@ -62,12 +62,12 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        """Return edge features as a sparse COO tensor within the slice, if any."""
+        """Return edge features within the slice, if any."""
         ...
 
     @abstractmethod
     def get_static_node_feats(self) -> Optional[Tensor]:
-        """Return static node features as a sparse COO tensor within the slice, if any."""
+        """Return static node features of the entire graph."""
         ...
 
     @abstractmethod
