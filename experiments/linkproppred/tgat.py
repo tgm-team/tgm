@@ -327,7 +327,6 @@ for epoch in range(1, args.epochs + 1):
         break
 
     if best_epoch_flag:
-        print(epoch)
         best_model_state['encoder'] = copy.deepcopy(encoder.state_dict())
         best_model_state['decoder'] = copy.deepcopy(decoder.state_dict())
     # ==
