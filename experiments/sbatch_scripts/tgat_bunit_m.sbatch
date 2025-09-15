@@ -2,7 +2,7 @@
 #SBATCH --job-name=
 #SBATCH --output=logs/output/**-%A.%a.out
 #SBATCH --error=logs/error/**-%A.%a.err
-#SBATCH --time=0-48:00:00
+#SBATCH --time=0-120:00:00
 #SBATCH --nodes=1
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=6
