@@ -85,6 +85,7 @@ class GraphAttentionEmbedding(torch.nn.Module):
 
 class LastAggregator(torch.nn.Module):
     def __init__(self, with_torch_scatter: bool = False) -> None:
+        super().__init__()
         self._with_torch_scatter = with_torch_scatter
 
     def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
@@ -447,7 +448,7 @@ encoder = GraphAttentionEmbedding(
     msg_dim=test_dg.edge_feats_dim,
     time_enc=memory.time_enc,
 ).to(args.device)
-decoder = LinkPredictor(in_channels=args.embed_dim).to(args.device)
+decoder = LinkPredictor(args.embed_dim).to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,
