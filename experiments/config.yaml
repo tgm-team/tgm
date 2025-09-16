@@ -8,6 +8,8 @@ global_configs:
 datasets:
   linkproppred:
     - tgbl-wiki
+    - tgbl-subreddit
+    - tgbl-lastfm
   nodeproppred:
     - tgbn-trade
 
