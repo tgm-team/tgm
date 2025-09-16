@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -21,7 +22,10 @@ examples_root = Path(__file__).resolve().parents[1] / 'examples'
 
 
 def run_experiment(script, script_args):
-    print('Running ', script, script_args)
+    cmd = f'python {script} {" ".join(script_args)}'
+    print('Running ', cmd)
+    subprocess.run(cmd, shell=True)
+    print('Done.')
 
 
 for task in ['linkproppred', 'nodeproppred']:

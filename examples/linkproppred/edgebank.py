@@ -65,10 +65,7 @@ seed_everything(args.seed)
 
 from pathlib import Path
 
-from experiments.setup import (
-    save_experiment_results_and_exit,
-    setup_experiment,
-)
+from experiments import save_experiment_results_and_exit, setup_experiment
 from tgm.util.perf import Usage
 
 results = setup_experiment(args, Path(__file__))
