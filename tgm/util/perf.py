@@ -12,8 +12,8 @@ class Usage(contextlib.ContextDecorator):
         self.prefix = '' if prefix is None else prefix.ljust(20)
         self.gpu = gpu
 
-        self.gpu_gb = 0.0
-        self.latency_ms = 0.0
+        self.gpu_gb: float | None = 0.0
+        self.latency_ms: float = 0.0
 
     def __enter__(self) -> 'Usage':
         if self.gpu:
