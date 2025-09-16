@@ -36,6 +36,9 @@ parser.add_argument(
     default='h',
     help='time granularity to operate on for snapshots',
 )
+parser.add_argument(
+    '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
 
 
 class RecurrentGCN(torch.nn.Module):

@@ -4,7 +4,7 @@ import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
 import psutil
 import yaml
@@ -43,33 +43,32 @@ def setup_basic_logging(
     )
 
 
-def read_experiment_configs():
+def read_experiment_configs() -> Dict[str, Any]:
     config_path = Path(__file__).parent / 'config.yaml'
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 
 
-def save_experiment_results_and_exit(results):
-    exp_dir = Path(__file__).resolve().parents[1] / 'experiments' / 'results'
-    exp_dir.mkdir(parents=True, exist_ok=True)
-    save_path = (
-        exp_dir
-        / f'{results["task"]}_{results["method"]}_{results["seed"]}_{results["dataset"].replace("-", "_")}.json'
+def save_experiment_results_and_exit(results: Dict[str, Any]) -> None:
+    save_path = _get_experiment_save_path(
+        task=results['task'],
+        dataset=results['dataset'],
+        method=results['method'],
+        seed=results['seed'],
     )
     with open(save_path, 'w') as f:
         json.dump(results, f)
     exit()
 
 
-def run_experiment_as_subprocess(script, script_args):
+def run_experiment_as_subprocess(script: str, script_args: List[str]) -> None:
     cmd = f'python {script} {" ".join(script_args)}'
     logging.info(f'Running {cmd}')
     subprocess.run(cmd, shell=True)
 
 
-def is_experiment_already_done(task, dataset, method, seed):
-    exp_dir = Path(__file__).resolve().parents[1] / 'experiments' / 'results'
-    save_path = exp_dir / f'{task}_{method}_{seed}_{dataset.replace("-", "_")}.json'
+def is_experiment_already_done(task: str, dataset: str, method: str, seed: int) -> bool:
+    save_path = _get_experiment_save_path(task, dataset, method, seed)
     return save_path.exists()
 
 
@@ -84,6 +83,12 @@ def setup_experiment(args: argparse.Namespace, path: Path) -> dict:
     results['cpu_info'] = _get_cpu_info()
     results['gpu_info'] = _get_gpu_info()
     return results
+
+
+def _get_experiment_save_path(task: str, dataset: str, method: str, seed: int) -> Path:
+    exp_dir = Path(__file__).resolve().parents[1] / 'experiments' / 'results'
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    return exp_dir / f'{task}_{method}_{seed}_{dataset.replace("-", "_")}.json'
 
 
 def _get_git_hash() -> str:

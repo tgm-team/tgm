@@ -47,6 +47,9 @@ parser.add_argument(
     choices=['uniform', 'recency'],
     help='sampling strategy',
 )
+parser.add_argument(
+    '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
 
 
 class MergeLayer(nn.Module):

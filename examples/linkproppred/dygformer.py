@@ -55,6 +55,9 @@ parser.add_argument(
     help='number of channels used in attention layer',
 )
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
+parser.add_argument(
+    '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
 
 
 class LinkPredictor(nn.Module):

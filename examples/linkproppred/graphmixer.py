@@ -53,6 +53,9 @@ parser.add_argument(
     default=4.0,
     help='channel dimension expansion factor in MLP sub-blocks',
 )
+parser.add_argument(
+    '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
 
 
 class GraphMixerEncoder(nn.Module):

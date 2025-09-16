@@ -65,6 +65,9 @@ parser.add_argument('--num-layers', type=int, default=2, help='number of model l
 parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument(
+    '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
 
 
 class LinkPredictor(nn.Module):
