@@ -305,11 +305,16 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-    with hm.activate(val_key):
-        val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
+    if epoch % 10 == 0:
+        with hm.activate(val_key):
+            val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
+        )
+    else:
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f}'
+        )
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
