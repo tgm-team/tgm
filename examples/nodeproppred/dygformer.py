@@ -20,9 +20,9 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
+parser.add_argument('--dataset', type=str, default='tgbn-trade', help='Dataset name')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--max_sequence_length',
@@ -51,14 +51,12 @@ parser.add_argument(
     default=4,
     help='number of channels used in attention layer',
 )
-
 parser.add_argument(
     '--time-gran',
     type=str,
-    default='s',
+    default='Y',
     help='raw time granularity for dataset',
 )
-
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 
 
@@ -136,7 +134,9 @@ class DyGFormer_NodePrediction(nn.Module):
 
         self.z[unique_nodes] = latest_embeddings.detach()
 
-    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, batch: DGBatch, static_node_feat: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         src = batch.src
         dst = batch.dst
         nbr_nids = batch.nbr_nids[0]
@@ -146,7 +146,7 @@ class DyGFormer_NodePrediction(nn.Module):
         batch_size = src.shape[0]
 
         z_src, z_dst = self.encoder(
-            STATIC_NODE_FEAT,
+            static_node_feat,
             edge_idx,
             batch.time,
             nbr_nids[: batch_size * 2],
@@ -158,7 +158,13 @@ class DyGFormer_NodePrediction(nn.Module):
         return self.z
 
 
-def train(loader, encoder, decoder, opt):
+def train(
+    loader: DGDataLoader,
+    encoder: nn.Module,
+    decoder: nn.Module,
+    opt: torch.optim.Optimizer,
+    static_node_feat: torch.Tensor,
+):
     encoder.train()
     decoder.train()
     total_loss = 0
@@ -169,7 +175,7 @@ def train(loader, encoder, decoder, opt):
 
         y_true = batch.dynamic_node_feats
         if len(batch.src) > 0:
-            z = encoder(batch)  # [num_nodes, embed_dim]
+            z = encoder(batch, static_node_feat)  # [num_nodes, embed_dim]
 
         if y_true is not None:
             # Determine which nodes to compute loss for
@@ -203,6 +209,7 @@ def eval(
     decoder: nn.Module,
     eval_metric: str,
     evaluator: Evaluator,
+    static_node_feat: torch.Tensor,
 ) -> float:
     encoder.eval()
     decoder.eval()
@@ -210,17 +217,17 @@ def eval(
     for batch in tqdm(loader):
         y_true = batch.dynamic_node_feats
 
-        if len(batch.src) != 0:
-            z = encoder(batch)
-        if y_true is not None:
-            z_node = z[batch.node_ids]
-            y_pred = decoder(z_node)
-            input_dict = {
-                'y_true': y_true,
-                'y_pred': y_pred,
-                'eval_metric': [eval_metric],
-            }
-            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+        if batch.src.shape[0] > 0:
+            z = encoder(batch, static_node_feat)
+            if y_true is not None:
+                z_node = z[batch.node_ids]
+                y_pred = decoder(z_node)
+                input_dict = {
+                    'y_true': y_true,
+                    'y_pred': y_pred,
+                    'eval_metric': [eval_metric],
+                }
+                perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
     return float(np.mean(perf_list))
 
@@ -243,7 +250,6 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
     num_nodes=num_nodes,
@@ -259,9 +265,9 @@ val_loader = DGDataLoader(val_dg, batch_size=args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
 
 if train_dg.static_node_feats is not None:
-    STATIC_NODE_FEAT = train_dg.static_node_feats
+    static_node_feat = train_dg.static_node_feats
 else:
-    STATIC_NODE_FEAT = torch.randn(
+    static_node_feat = torch.randn(
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
@@ -270,7 +276,7 @@ num_classes = train_dg.dynamic_node_feats_dim
 
 encoder = DyGFormer_NodePrediction(
     num_nodes=num_nodes,
-    node_feat_dim=STATIC_NODE_FEAT.shape[1],
+    node_feat_dim=static_node_feat.shape[1],
     edge_feat_dim=edge_feats_dim,
     time_feat_dim=args.time_dim,
     channel_embedding_dim=args.channel_embedding_dim,
@@ -289,15 +295,16 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
-
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         start_time = time.perf_counter()
-        loss = train(train_loader, encoder, decoder, opt)
+        loss = train(train_loader, encoder, decoder, opt, static_node_feat)
         end_time = time.perf_counter()
         latency = end_time - start_time
     with hm.activate('val'):
-        val_ndcg = eval(val_loader, encoder, decoder, eval_metric, evaluator)
+        val_ndcg = eval(
+            val_loader, encoder, decoder, eval_metric, evaluator, static_node_feat
+        )
 
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_ndcg:.4f}'
@@ -306,5 +313,7 @@ for epoch in range(1, args.epochs + 1):
         hm.reset_state()
 
 with hm.activate('test'):
-    test_ndcg = eval(test_loader, encoder, decoder, eval_metric, evaluator)
+    test_ndcg = eval(
+        test_loader, encoder, decoder, eval_metric, evaluator, static_node_feat
+    )
     print(f'Test {eval_metric}={test_ndcg:.4f}')
