@@ -69,49 +69,50 @@ from experiments import save_experiment_results_and_exit, setup_experiment
 from tgm.util.perf import Usage
 
 results = setup_experiment(args, Path(__file__))
-with Usage(gpu=args.capture_gpu) as u:
-    dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
-    neg_sampler = dataset.negative_sampler
-    evaluator = Evaluator(name=args.dataset)
-    dataset.load_val_ns()
-    dataset.load_test_ns()
+u = Usage(gpu=args.capture_gpu).__enter__()
 
-    train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
-    train_dg = DGraph(train_data)
-    val_dg = DGraph(val_data)
-    test_dg = DGraph(test_data)
+dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
+neg_sampler = dataset.negative_sampler
+evaluator = Evaluator(name=args.dataset)
+dataset.load_val_ns()
+dataset.load_test_ns()
 
-    train_data = train_dg.materialize(materialize_features=False)
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+train_dg = DGraph(train_data)
+val_dg = DGraph(val_data)
+test_dg = DGraph(test_data)
 
-    hm = HookManager(keys=['val', 'test'])
-    hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
-    hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
+train_data = train_dg.materialize(materialize_features=False)
 
-    val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
-    test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
+hm = HookManager(keys=['val', 'test'])
+hm.register('val', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(neg_sampler, split_mode='test'))
 
-    model = EdgeBankPredictor(
-        train_data.src,
-        train_data.dst,
-        train_data.time,
-        memory_mode=args.memory_mode,
-        window_ratio=args.window_ratio,
-        pos_prob=args.pos_prob,
-    )
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
-    with hm.activate('val'):
-        start_time = time.perf_counter()
-        val_mrr = eval(val_loader, model, evaluator)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
-        print(
-            f'Latency={latency:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-        )
+model = EdgeBankPredictor(
+    train_data.src,
+    train_data.dst,
+    train_data.time,
+    memory_mode=args.memory_mode,
+    window_ratio=args.window_ratio,
+    pos_prob=args.pos_prob,
+)
 
-    results[f'train_{METRIC_TGB_LINKPROPPRED}'] = None
-    results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
-    results['train_latency_s'] = 0
-    results['val_latency_s'] = latency
+with hm.activate('val'):
+    start_time = time.perf_counter()
+    val_mrr = eval(val_loader, model, evaluator)
+    end_time = time.perf_counter()
+    latency = end_time - start_time
+    print(f'Latency={latency:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}')
+
+results[f'train_{METRIC_TGB_LINKPROPPRED}'] = None
+results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
+results['train_latency_s'] = 0
+results['val_latency_s'] = latency
+
+u.__exit__()
 results['peak_gpu_gb'] = u.gpu_gb
 save_experiment_results_and_exit(results)
 
