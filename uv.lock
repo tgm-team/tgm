@@ -1650,6 +1650,12 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+analytics = [
+    { name = "networkx" },
+    { name = "py-tgb" },
+    { name = "scipy" },
+    { name = "tqdm" },
+]
 dev = [
     { name = "isort" },
     { name = "mypy" },
@@ -1682,6 +1688,12 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+analytics = [
+    { name = "networkx", specifier = ">=3.2.1" },
+    { name = "py-tgb", specifier = ">=2.1.0" },
+    { name = "scipy", specifier = ">=1.15.2" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+]
 dev = [
     { name = "isort", specifier = ">=5.13.2" },
     { name = "mypy", specifier = ">=1.13.0" },
