@@ -67,6 +67,14 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
+from pathlib import Path
+
+from experiments import save_experiment_results_and_exit, setup_experiment
+from tgm.util.perf import Usage
+
+results = setup_experiment(args, Path(__file__))
+u = Usage(gpu=args.capture_gpu).__enter__()
+
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
@@ -85,8 +93,17 @@ eval(train_loader, model, evaluator)
 end_time = time.perf_counter()
 latency = end_time - start_time
 
+start_time = time.perf_counter()
 val_ndcg = eval(val_loader, model, evaluator)
 print(f'Latency={latency:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}')
+end_time = time.perf_counter()
+
+results[f'val_{METRIC_TGB_NODEPROPPRED}'] = val_ndcg
+results['train_latency_s'] = latency
+results['val_latency_s'] = end_time - start_time
+u.__exit__()
+results['peak_gpu_gb'] = u.gpu_gb
+save_experiment_results_and_exit(results)
 
 test_ndcg = eval(test_loader, model, evaluator)
 print(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')

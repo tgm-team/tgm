@@ -1,6 +1,5 @@
 import argparse
 import time
-from pathlib import Path
 
 import numpy as np
 import torch
@@ -107,11 +106,9 @@ with hm.activate('val'):
     latency = end_time - start_time
     print(f'Latency={latency:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}')
 
-results[f'train_{METRIC_TGB_LINKPROPPRED}'] = None
 results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
 results['train_latency_s'] = 0
 results['val_latency_s'] = latency
-
 u.__exit__()
 results['peak_gpu_gb'] = u.gpu_gb
 save_experiment_results_and_exit(results)

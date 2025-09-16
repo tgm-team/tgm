@@ -403,6 +403,15 @@ def eval(
 
 args = parser.parse_args()
 seed_everything(args.seed)
+
+from pathlib import Path
+
+from experiments import save_experiment_results_and_exit, setup_experiment
+from tgm.util.perf import Usage
+
+results = setup_experiment(args, Path(__file__))
+u = Usage(gpu=args.capture_gpu).__enter__()
+
 evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -464,10 +473,18 @@ for epoch in range(1, args.epochs + 1):
         latency = end_time - start_time
 
     with hm.activate(val_key):
+        start_time = time.perf_counter()
         val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
+        end_time = time.perf_counter()
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
     )
+    results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
+    results['train_latency_s'] = latency
+    results['val_latency_s'] = end_time - start_time
+    u.__exit__()
+    results['peak_gpu_gb'] = u.gpu_gb
+    save_experiment_results_and_exit(results)
 
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
