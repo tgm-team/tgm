@@ -312,6 +312,7 @@ for epoch in range(1, args.epochs + 1):
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
         )
     else:
+        val_mrr = None
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f}'
         )
