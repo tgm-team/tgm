@@ -39,9 +39,10 @@ class Profiling(contextlib.ContextDecorator):
         self.filename = filename
         self.frac = frac
 
-    def __enter__(self) -> None:
+    def __enter__(self) -> 'Profiling':
         self.pr = cProfile.Profile()
         self.pr.enable()
+        return self
 
     def __exit__(self, *_: None) -> None:
         self.pr.disable()

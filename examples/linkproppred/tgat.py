@@ -50,6 +50,9 @@ parser.add_argument(
 parser.add_argument(
     '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
 )
+parser.add_argument(
+    '--capture-cprofile', action=argparse.BooleanOptionalAction, help='record cprofiler'
+)
 
 
 class MergeLayer(nn.Module):
@@ -211,10 +214,8 @@ seed_everything(args.seed)
 from pathlib import Path
 
 from experiments import save_experiment_results_and_exit, setup_experiment
-from tgm.util.perf import Usage
 
 results = setup_experiment(args, Path(__file__))
-u = Usage(gpu=args.capture_gpu).__enter__()
 
 evaluator = Evaluator(name=args.dataset)
 
@@ -281,8 +282,6 @@ for epoch in range(1, args.epochs + 1):
     results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
     results['train_latency_s'] = latency
     results['val_latency_s'] = end_time - start_time
-    u.__exit__()
-    results['peak_gpu_gb'] = u.gpu_gb
     save_experiment_results_and_exit(results)
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'

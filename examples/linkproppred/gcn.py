@@ -41,6 +41,9 @@ parser.add_argument(
 parser.add_argument(
     '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
 )
+parser.add_argument(
+    '--capture-cprofile', action=argparse.BooleanOptionalAction, help='record cprofiler'
+)
 
 
 class GCNEncoder(torch.nn.Module):
@@ -282,8 +285,6 @@ for epoch in range(1, args.epochs + 1):
     results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
     results['train_latency_s'] = latency
     results['val_latency_s'] = end_time - start_time
-    u.__exit__()
-    results['peak_gpu_gb'] = u.gpu_gb
     save_experiment_results_and_exit(results)
 
 

@@ -11,6 +11,8 @@ import yaml
 
 EXAMPLES_ROOT = Path(__file__).resolve().parents[1] / 'examples'
 
+from tgm.util.perf import Profiling, Usage
+
 
 def setup_basic_logging(
     log_file_path: str | Path | None = None,
@@ -56,8 +58,18 @@ def save_experiment_results_and_exit(results: Dict[str, Any]) -> None:
         method=results['method'],
         seed=results['seed'],
     )
-    with open(save_path, 'w') as f:
-        json.dump(results, f)
+
+    # Finish profiling
+    results['u'].__exit__()
+    results['peak_gpu_gb'] = results['u'].gpu_gb
+    results.pop('u')
+    if 'p' in results:
+        results['p'].__exit__()
+        results.pop('p')
+    else:
+        # Only save json info if cprofile was not in use
+        with open(save_path, 'w') as f:
+            json.dump(results, f)
     exit()
 
 
@@ -82,6 +94,14 @@ def setup_experiment(args: argparse.Namespace, path: Path) -> dict:
     results['ram_available_gb'] = _get_ram_available_gb()
     results['cpu_info'] = _get_cpu_info()
     results['gpu_info'] = _get_gpu_info()
+
+    # Start profiling
+    if args.capture_cprofile:
+        profile_path = _get_experiment_save_path(
+            results['task'], results['dataset'], results['method'], results['seed']
+        ).with_suffix('.profile')
+        results['p'] = Profiling(str(profile_path)).__enter__()
+    results['u'] = Usage(gpu=args.capture_gpu).__enter__()
     return results
 
 

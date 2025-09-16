@@ -2,6 +2,7 @@ global_configs:
   num_runs_per_experiment: 3
   base_seed: 0
   do_extra_run_with_gpu_profiler: true
+  do_extra_run_with_cprofiler: true
   log_file: 'experiments/tgm_experiments.log'
 
 datasets:

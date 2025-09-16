@@ -12,7 +12,6 @@ from tgm.constants import METRIC_TGB_LINKPROPPRED
 from tgm.hooks import HookManager, TGBNegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
-from tgm.util.perf import Usage
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -33,6 +32,9 @@ parser.add_argument(
 )
 parser.add_argument(
     '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
+parser.add_argument(
+    '--capture-cprofile', action=argparse.BooleanOptionalAction, help='record cprofiler'
 )
 
 
@@ -65,10 +67,8 @@ seed_everything(args.seed)
 from pathlib import Path
 
 from experiments import save_experiment_results_and_exit, setup_experiment
-from tgm.util.perf import Usage
 
 results = setup_experiment(args, Path(__file__))
-u = Usage(gpu=args.capture_gpu).__enter__()
 
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
 neg_sampler = dataset.negative_sampler
@@ -109,8 +109,6 @@ with hm.activate('val'):
 results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
 results['train_latency_s'] = 0
 results['val_latency_s'] = latency
-u.__exit__()
-results['peak_gpu_gb'] = u.gpu_gb
 save_experiment_results_and_exit(results)
 
 with hm.activate('test'):
