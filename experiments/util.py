@@ -4,17 +4,38 @@ from datetime import datetime
 from pathlib import Path
 
 import psutil
+import yaml
+
+
+def read_experiment_configs():
+    config_path = Path(__file__).parent / 'config.yaml'
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
 
 
 def save_experiment_results_and_exit(results):
     exp_dir = Path(__file__).resolve().parents[1] / 'experiments' / 'results'
     exp_dir.mkdir(parents=True, exist_ok=True)
     save_path = (
-        exp_dir / f'{results["task"]}_{results["method"]}_{results["seed"]}.json'
+        exp_dir
+        / f'{results["task"]}_{results["method"]}_{results["seed"]}_{results["dataset"].replace("-", "_")}.json'
     )
     with open(save_path, 'w') as f:
         json.dump(results, f)
     exit()
+
+
+def run_experiment_as_subprocess(script, script_args):
+    cmd = f'python {script} {" ".join(script_args)}'
+    print('Running ', cmd)
+    subprocess.run(cmd, shell=True)
+    print('Done.')
+
+
+def is_experiment_already_done(task, dataset, method, seed):
+    exp_dir = Path(__file__).resolve().parents[1] / 'experiments' / 'results'
+    save_path = exp_dir / f'{task}_{method}_{seed}_{dataset.replace("-", "_")}.json'
+    return save_path.exists()
 
 
 def setup_experiment(args, path):
