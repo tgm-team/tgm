@@ -44,18 +44,15 @@ def main() -> None:
                         dataset
                     ].split('\n')
 
-                for run in range(global_configs['num_runs_per_experiment']):
+                num_runs = global_configs['num_runs_per_experiment']
+                for run in range(num_runs):
                     seed = global_configs['base_seed'] + run
                     run_experiment(script, script_args, task, dataset, method, seed)
 
                 if global_configs['do_extra_run_with_cprofiler']:
                     script_args.append(f'--capture-cprofile')
-                    seed = (
-                        global_configs['base_seed']
-                        + global_configs['num_runs_per_experiment']
-                    )
+                    seed = global_configs['base_seed'] + num_runs
                     run_experiment(script, script_args, task, dataset, method, seed)
-                    script_args.pop()
 
 
 if __name__ == '__main__':
