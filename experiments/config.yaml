@@ -1,7 +1,7 @@
 global_configs:
   num_runs_per_experiment: 3
   base_seed: 0
-  do_extra_run_with_gpu_profiler: true
+  run_with_gpu_profiler: true
   do_extra_run_with_cprofiler: true
   log_file: 'experiments/tgm_experiments.log'
 
@@ -46,12 +46,12 @@ experiments:
         --device cuda
       additional_data_specific_script_flags: {}
 
-    - method: tgn
-      script_flags: |
-        --epochs 1
-        --n-nbrs 10
-        --device cuda
-      additional_data_specific_script_flags: {}
+    #- method: tgn
+    #  script_flags: |
+    #    --epochs 1
+    #    --n-nbrs 10
+    #    --device cuda
+    #  additional_data_specific_script_flags: {}
 
     - method: tpnet
       script_flags: |

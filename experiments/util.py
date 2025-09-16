@@ -80,8 +80,9 @@ def run_experiment_as_subprocess(script: str, script_args: List[str]) -> None:
 
 
 def is_experiment_already_done(task: str, dataset: str, method: str, seed: int) -> bool:
-    save_path = _get_experiment_save_path(task, dataset, method, seed)
-    return save_path.exists()
+    json_path = _get_experiment_save_path(task, dataset, method, seed)
+    cprofile_path = json_path.with_suffix('.profile')
+    return json_path.exists() or cprofile_path.exists()
 
 
 def setup_experiment(args: argparse.Namespace, path: Path) -> dict:

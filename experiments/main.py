@@ -36,6 +36,9 @@ def main() -> None:
                 script = EXAMPLES_ROOT / task / f'{method}.py'
                 script_args = experiment['script_flags'].split('\n')
 
+                if global_configs['run_with_gpu_profiler']:
+                    script_args.append(f'--capture-gpu')
+
                 if dataset in experiment['additional_data_specific_script_flags']:
                     script_args += experiment['additional_data_specific_script_flags'][
                         dataset
@@ -45,21 +48,11 @@ def main() -> None:
                     seed = global_configs['base_seed'] + run
                     run_experiment(script, script_args, task, dataset, method, seed)
 
-                if global_configs['do_extra_run_with_gpu_profiler']:
-                    script_args.append(f'--capture-gpu')
-                    seed = (
-                        global_configs['base_seed']
-                        + global_configs['num_runs_per_experiment']
-                    )
-                    run_experiment(script, script_args, task, dataset, method, seed)
-                    script_args.pop()
-
                 if global_configs['do_extra_run_with_cprofiler']:
                     script_args.append(f'--capture-cprofile')
                     seed = (
                         global_configs['base_seed']
                         + global_configs['num_runs_per_experiment']
-                        + 1
                     )
                     run_experiment(script, script_args, task, dataset, method, seed)
                     script_args.pop()
