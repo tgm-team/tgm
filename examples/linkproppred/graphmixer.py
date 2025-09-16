@@ -328,13 +328,10 @@ class GraphMixerHook(StatefulHook):
             self._device = device
 
 
-_, dst, _ = train_dg.edges
-
 hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
-registered_keys = hm.keys
-train_key, val_key, test_key = registered_keys
+train_key, val_key, test_key = hm.keys
 hm.register_shared(GraphMixerHook(args.time_gap))
 hm.register_shared(
     RecencyNeighborHook(
