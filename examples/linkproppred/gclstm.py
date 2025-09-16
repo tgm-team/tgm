@@ -192,13 +192,10 @@ train_snapshots = DGraph(train_data_discretized, device=args.device)
 val_snapshots = DGraph(val_data_discretized, device=args.device)
 test_snapshots = DGraph(test_data_discretized, device=args.device)
 
-_, dst, _ = train_dg.edges
-
 hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
-registered_keys = hm.keys
-train_key, val_key, test_key = registered_keys
+train_key, val_key, test_key = hm.keys
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)

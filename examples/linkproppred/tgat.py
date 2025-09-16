@@ -241,13 +241,10 @@ else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
 
 
-_, dst, _ = train_dg.edges
-
 hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
-registered_keys = hm.keys
-train_key, val_key, test_key = registered_keys
+train_key, val_key, test_key = hm.keys
 hm.register_shared(nbr_hook)
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
