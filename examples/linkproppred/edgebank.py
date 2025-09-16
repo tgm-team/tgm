@@ -33,9 +33,6 @@ parser.add_argument(
     help='Memory mode',
 )
 parser.add_argument(
-    '--capture_usage', type=int, default=1337, help='random seed to use'
-)
-parser.add_argument(
     '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
 )
 
