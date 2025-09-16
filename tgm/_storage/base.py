@@ -62,12 +62,12 @@ class DGStorageBase(ABC):
 
     @abstractmethod
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        """Return edge features as a sparse COO tensor within the slice, if any."""
+        """Return edge features within the slice, if any."""
         ...
 
     @abstractmethod
     def get_static_node_feats(self) -> Optional[Tensor]:
-        """Return static node features as a sparse COO tensor within the slice, if any."""
+        """Return static node features of the entire graph."""
         ...
 
     @abstractmethod
@@ -91,6 +91,7 @@ class DGStorageBase(ABC):
         seed_nodes: Tensor,
         num_nbrs: int,
         slice: DGSliceTracker,
+        directed: bool,
     ) -> Tuple[Tensor, ...]:
         """Return neighbors for the given seed nodes within the slice.
 
@@ -98,6 +99,7 @@ class DGStorageBase(ABC):
             seed_nodes: Tensor of node ids to query neighbors for.
             num_nbrs: Number of neighbors to sample per node.
             slice: The temporal/event slice to consider.
+            directed (bool): If true, aggregates interactions in src->dst direction only.
 
         Returns:
             (nbr_nids, nbr_times, nbr_feats) tensors containing the relevant neighborhood

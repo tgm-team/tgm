@@ -16,3 +16,5 @@
 ## Models
 
 ::: tgm.nn.memory.edgebank
+::: tgm.nn.model.dygformer
+::: tgm.nn.model.tpnet

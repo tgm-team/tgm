@@ -18,12 +18,12 @@ class EmptyGraphError(TGMError):
     """Raised when attempting to instantiate an empty graph. Empty graphs are unsupported since updates are not allowed."""
 
 
-class OrderedGranularityConversionError(TGMError):
-    """Raised when an operation requiring time-based granularity is attempted on a graph that only has ordered (relative) granularity.
+class EventOrderedConversionError(TGMError):
+    """Raised when an operation requiring time-ordered granularity is attempted on a graph that only has event-ordered granularity.
 
     Examples:
-        - Discretizing or coarsening an ordered graph by absolute time units.
-        - Iterating an ordered graph with non-ordered batch units (e.g. daily snapshots).
+        - Discretizing or coarsening an event-ordered graph by absolute time units.
+        - Iterating an even-ordered graph with time-ordered batch units (e.g. daily snapshots).
     """
 
 
@@ -33,3 +33,7 @@ class InvalidDiscretizationError(TGMError):
 
 class EmptyBatchError(TGMError):
     """Raised during time-based iteration when a batch interval contains no events."""
+
+
+class UndefinedRecipe(TGMError):
+    """Raised when attempting to construct a recipe that is not defined/registered."""
