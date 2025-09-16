@@ -164,3 +164,7 @@ submitit*
 
 # Benchmarks
 .benchmarks
+
+*.sh
+experiments/artifact
+
