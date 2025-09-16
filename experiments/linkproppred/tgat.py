@@ -326,11 +326,13 @@ for epoch in range(1, args.epochs + 1):
         {'epoch': epoch, 'val_mrr': val_mrr, 'loss': loss, 'latency': latency},
         f'epoch_log/{args.experiment_name}',
     )
-
-    best_epoch_flag, early_stop_flag = early_stopping(epoch, val_mrr)
-    if early_stop_flag:
-        print(f'Early stopping at epoch :{epoch}')
-        break
+    
+    best_epoch_flag = False
+    if val_mrr is not None:
+        best_epoch_flag, early_stop_flag = early_stopping(epoch, val_mrr)
+        if early_stop_flag:
+            print(f'Early stopping at epoch :{epoch}')
+            break
 
     if best_epoch_flag:
         best_model_state['encoder'] = copy.deepcopy(encoder.state_dict())
