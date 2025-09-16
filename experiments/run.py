@@ -11,10 +11,6 @@ global_configs = configs['global_configs']
 dataset_configs = configs['datasets']
 experiment_configs = configs['experiments']
 
-num_runs = global_configs['num_runs_per_experiment']
-base_seed = global_configs['base_seed']
-do_extra_run_with_gpu_profiler = global_configs['do_extra_run_with_gpu_profiler']
-
 examples_root = Path(__file__).resolve().parents[1] / 'examples'
 
 
@@ -39,11 +35,14 @@ for task in ['linkproppred', 'nodeproppred']:
                     dataset
                 ].split('\n')
 
-            for run in range(num_runs):
-                seed = base_seed + run
+            for run in range(global_configs['num_runs_per_experiment']):
+                seed = global_configs['base_seed'] + run
                 run_experiment(script, script_args, task, dataset, method, seed)
 
-            if do_extra_run_with_gpu_profiler:
+            if global_configs['do_extra_run_with_gpu_profiler']:
                 script_args.append(f'--capture-gpu')
-                seed = base_seed + num_runs
+                seed = (
+                    global_configs['base_seed']
+                    + global_configs['num_runs_per_experiment']
+                )
                 run_experiment(script, script_args, task, dataset, method, seed)

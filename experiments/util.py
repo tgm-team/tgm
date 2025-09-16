@@ -74,12 +74,11 @@ def setup_experiment(args, path):
                 ],
                 encoding='utf-8',
             )
-            results['gpu_info'] = ':'.join(nvidia_smi.split(', '))
+            return ':'.join(nvidia_smi.split(', '))
         except Exception:
-            results['gpu_info'] = None
+            return None
 
     results['ram_available_gb'] = psutil.virtual_memory().total / 1024**3
     results['cpu_info'] = _get_cpu_info()
-    results['cpu_info'] = _get_gpu_info()
-
+    results['gpu_info'] = _get_gpu_info()
     return results
