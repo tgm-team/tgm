@@ -458,6 +458,9 @@ for epoch in range(1, args.epochs + 1):
         start_time = time.perf_counter()
         val_mrr = eval(val_loader, memory, encoder, decoder, eval_metric, evaluator)
         end_time = time.perf_counter()
+    results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
+    results['train_latency_s'] = latency
+    results['val_latency_s'] = end_time - start_time
     save_experiment_results_and_exit(results)
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
