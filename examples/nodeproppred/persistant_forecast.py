@@ -103,9 +103,9 @@ print(f'Latency={latency:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f
 end_time = time.perf_counter()
 
 results[f'val_{METRIC_TGB_NODEPROPPRED}'] = val_ndcg
-results['train_latency_s'] = latency
-results['val_latency_s'] = end_time - start_time
-save_experiment_results_and_exit(results)
 
 test_ndcg = eval(test_loader, model, evaluator)
 print(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')
+
+results[f'test_{METRIC_TGB_NODEPROPPRED}'] = test_ndcg
+save_experiment_results_and_exit(results)

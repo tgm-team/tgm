@@ -4,15 +4,14 @@ global_configs:
   run_with_gpu_profiler: true
   do_extra_run_with_cprofiler: false
   log_file: 'experiments/tgm_experiments.log'
+  eval_every: 10
 
 datasets:
   linkproppred:
     - tgbl-wiki
-    - tgbl-subreddit
-    - tgbl-lastfm
-  nodeproppred:
-    - tgbn-trade
-    - tgbn-genre
+  nodeproppred: []
+    #- tgbn-trade
+    #- tgbn-genre
 
 experiments:
   linkproppred:
@@ -22,20 +21,19 @@ experiments:
 
     - method: tgat
       script_flags: |
-        --epochs 1
-        --n-nbrs 10 10
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags: {}
 
     - method: graphmixer
       script_flags: |
-        --epochs 1
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags: {}
 
     - method: gclstm
       script_flags: |
-        --epochs 1
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags:
         tgbl-wiki: |
@@ -43,7 +41,7 @@ experiments:
 
     - method: gcn
       script_flags: |
-        --epochs 1
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags:
         tgbl-wiki: |
@@ -51,20 +49,19 @@ experiments:
 
     - method: dygformer
       script_flags: |
-        --epochs 1
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags: {}
 
     - method: tgn
       script_flags: |
-        --epochs 1
-        --n-nbrs 10 10
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags: {}
 
     - method: tpnet
       script_flags: |
-        --epochs 1
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags: {}
 
@@ -80,7 +77,7 @@ experiments:
 
     - method: gclstm
       script_flags: |
-        --epochs 1
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags:
         tgbn-trade: |
@@ -90,7 +87,7 @@ experiments:
 
     - method: gcn
       script_flags: |
-        --epochs 1
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags:
         tgbn-trade: |
@@ -100,7 +97,7 @@ experiments:
 
     - method: tgcn
       script_flags: |
-        --epochs 1
+        --epochs 30
         --device cuda
       additional_data_specific_script_flags:
         tgbn-trade: |

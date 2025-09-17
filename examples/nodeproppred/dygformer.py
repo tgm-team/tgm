@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
+from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import DeduplicationHook, HookManager, RecencyNeighborHook
 from tgm.loader import DGDataLoader
@@ -58,6 +59,12 @@ parser.add_argument(
     help='raw time granularity for dataset',
 )
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
+parser.add_argument(
+    '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
+parser.add_argument(
+    '--capture-cprofile', action=argparse.BooleanOptionalAction, help='record cprofiler'
+)
 
 
 class NodePredictor(torch.nn.Module):
@@ -235,6 +242,12 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
+from pathlib import Path
+
+from experiments import save_experiment_results_and_exit, setup_experiment
+
+results = setup_experiment(args, Path(__file__))
+
 full_data = DGData.from_tgb(args.dataset)
 full_graph = DGraph(full_data)
 num_nodes = full_graph.num_nodes
@@ -301,14 +314,19 @@ for epoch in range(1, args.epochs + 1):
         loss = train(train_loader, encoder, decoder, opt, static_node_feat)
         end_time = time.perf_counter()
         latency = end_time - start_time
-    with hm.activate('val'):
-        val_ndcg = eval(
-            val_loader, encoder, decoder, eval_metric, evaluator, static_node_feat
-        )
+    if epoch % results['eval_every'] == 0:
+        with hm.activate('val'):
+            val_ndcg = eval(
+                val_loader, encoder, decoder, eval_metric, evaluator, static_node_feat
+            )
 
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_ndcg:.4f}'
-    )
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_ndcg:.4f}'
+        )
+        results[f'val_{METRIC_TGB_NODEPROPPRED}_{epoch}'] = val_ndcg
+    else:
+        results[f'val_{METRIC_TGB_NODEPROPPRED}_{epoch}'] = None
+
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
@@ -317,3 +335,6 @@ with hm.activate('test'):
         test_loader, encoder, decoder, eval_metric, evaluator, static_node_feat
     )
     print(f'Test {eval_metric}={test_ndcg:.4f}')
+
+results[f'test_{METRIC_TGB_NODEPROPPRED}'] = test_ndcg
+save_experiment_results_and_exit(results)

@@ -312,17 +312,17 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-    with hm.activate(val_key):
-        start_time = time.perf_counter()
-        val_mrr = eval(evaluator, val_loader, model)
-        end_time = time.perf_counter()
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-        )
-    results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
-    results['train_latency_s'] = latency
-    results['val_latency_s'] = end_time - start_time
-    save_experiment_results_and_exit(results)
+    if epoch % results['eval_every'] == 0:
+        with hm.activate(val_key):
+            start_time = time.perf_counter()
+            val_mrr = eval(evaluator, val_loader, model)
+            end_time = time.perf_counter()
+            print(
+                f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
+            )
+        results[f'val_{METRIC_TGB_LINKPROPPRED}_{epoch}'] = val_mrr
+    else:
+        results[f'val_{METRIC_TGB_LINKPROPPRED}_{epoch}'] = None
 
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
@@ -331,3 +331,6 @@ for epoch in range(1, args.epochs + 1):
 with hm.activate(test_key):
     test_mrr = eval(evaluator, test_loader, model)
     print(f'Test MRR:{METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+
+results[f'test_{METRIC_TGB_LINKPROPPRED}'] = test_mrr
+save_experiment_results_and_exit(results)

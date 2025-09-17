@@ -272,17 +272,17 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-    with hm.activate(val_key):
-        start_time = time.perf_counter()
-        val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
-        end_time = time.perf_counter()
-    results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
-    results['train_latency_s'] = latency
-    results['val_latency_s'] = end_time - start_time
-    save_experiment_results_and_exit(results)
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
+    if epoch % results['eval_every'] == 0:
+        with hm.activate(val_key):
+            start_time = time.perf_counter()
+            val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
+            end_time = time.perf_counter()
+        results[f'val_{METRIC_TGB_LINKPROPPRED}_{epoch}'] = val_mrr
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
+        )
+    else:
+        results[f'val_{METRIC_TGB_LINKPROPPRED}_{epoch}'] = None
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
@@ -290,3 +290,6 @@ for epoch in range(1, args.epochs + 1):
 with hm.activate(test_key):
     test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
     print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+
+results[f'test_{METRIC_TGB_LINKPROPPRED}'] = test_mrr
+save_experiment_results_and_exit(results)

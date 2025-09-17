@@ -263,26 +263,26 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
 
-    with hm.activate(val_key):
-        start_time = time.perf_counter()
-        val_mrr = eval(
-            val_loader,
-            val_snapshots_loader,
-            static_node_feats,
-            z,
-            encoder,
-            decoder,
-            evaluator,
-            conversion_rate,
+    if epoch % results['eval_every'] == 0:
+        with hm.activate(val_key):
+            start_time = time.perf_counter()
+            val_mrr = eval(
+                val_loader,
+                val_snapshots_loader,
+                static_node_feats,
+                z,
+                encoder,
+                decoder,
+                evaluator,
+                conversion_rate,
+            )
+            end_time = time.perf_counter()
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
         )
-        end_time = time.perf_counter()
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
-    results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
-    results['train_latency_s'] = latency
-    results['val_latency_s'] = end_time - start_time
-    save_experiment_results_and_exit(results)
+        results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
+    else:
+        results[f'val_{METRIC_TGB_LINKPROPPRED}'] = None
 
 
 with hm.activate(test_key):
@@ -297,3 +297,6 @@ with hm.activate(test_key):
         conversion_rate,
     )
     print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+
+results[f'test_{METRIC_TGB_LINKPROPPRED}'] = test_mrr
+save_experiment_results_and_exit(results)

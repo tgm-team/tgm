@@ -107,7 +107,9 @@ def setup_experiment(args: argparse.Namespace, path: Path) -> dict:
 
 
 def _get_experiment_save_path(task: str, dataset: str, method: str, seed: int) -> Path:
-    exp_dir = Path(__file__).resolve().parents[1] / 'experiments' / 'results'
+    exp_dir = (
+        Path(__file__).resolve().parents[1] / 'experiments' / 'correctness_results'
+    )
     exp_dir.mkdir(parents=True, exist_ok=True)
     return exp_dir / f'{task}_{method}_{seed}_{dataset.replace("-", "_")}.json'
 

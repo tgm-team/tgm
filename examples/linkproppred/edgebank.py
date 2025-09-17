@@ -107,10 +107,10 @@ with hm.activate('val'):
     print(f'Latency={latency:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}')
 
 results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
-results['train_latency_s'] = 0
-results['val_latency_s'] = latency
-save_experiment_results_and_exit(results)
 
 with hm.activate('test'):
     test_mrr = eval(test_loader, model, evaluator)
     print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+
+results[f'test_{METRIC_TGB_LINKPROPPRED}'] = test_mrr
+save_experiment_results_and_exit(results)
