@@ -29,7 +29,7 @@ def main() -> None:
 
     setup_basic_logging(global_configs['log_file'])
 
-    for task in ['linkproppred', 'nodeproppred']:
+    for task in ['nodeproppred']:
         for dataset in dataset_configs[task]:
             for experiment in experiment_configs[task]:
                 method = experiment['method']
