@@ -36,6 +36,12 @@ parser.add_argument(
     default='h',
     help='time granularity to operate on for snapshots',
 )
+parser.add_argument(
+    '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
+parser.add_argument(
+    '--capture-cprofile', action=argparse.BooleanOptionalAction, help='record cprofiler'
+)
 
 
 class RecurrentGCN(torch.nn.Module):
@@ -162,6 +168,12 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
+from pathlib import Path
+
+from experiments import save_experiment_results_and_exit, setup_experiment
+
+results = setup_experiment(args, Path(__file__))
+
 evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -227,6 +239,7 @@ for epoch in range(1, args.epochs + 1):
         latency = end_time - start_time
 
     with hm.activate(val_key):
+        start_time = time.perf_counter()
         val_mrr = eval(
             val_loader,
             val_snapshots_loader,
@@ -239,9 +252,14 @@ for epoch in range(1, args.epochs + 1):
             evaluator,
             conversion_rate,
         )
+        end_time = time.perf_counter()
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
     )
+    results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
+    results['train_latency_s'] = latency
+    results['val_latency_s'] = end_time - start_time
+    save_experiment_results_and_exit(results)
 
 
 with hm.activate(test_key):

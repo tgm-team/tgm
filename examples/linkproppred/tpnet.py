@@ -65,6 +65,12 @@ parser.add_argument('--num-layers', type=int, default=2, help='number of model l
 parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument(
+    '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
+parser.add_argument(
+    '--capture-cprofile', action=argparse.BooleanOptionalAction, help='record cprofiler'
+)
 
 
 class LinkPredictor(nn.Module):
@@ -251,6 +257,12 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
+from pathlib import Path
+
+from experiments import save_experiment_results_and_exit, setup_experiment
+
+results = setup_experiment(args, Path(__file__))
+
 evaluator = Evaluator(name=args.dataset)
 
 data = DGData.from_tgb(args.dataset)
@@ -319,10 +331,17 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
     with hm.activate(val_key):
+        start_time = time.perf_counter()
         val_mrr = eval(evaluator, val_loader, model, static_node_feat)
+        end_time = time.perf_counter()
         print(
             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
         )
+    results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
+    results['train_latency_s'] = latency
+    results['val_latency_s'] = end_time - start_time
+    save_experiment_results_and_exit(results)
+
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
         hm.reset_state()

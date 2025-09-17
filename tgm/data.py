@@ -729,7 +729,7 @@ class DGData:
             split_bounds[split_name] = (int(times.min()), int(times.max()))
 
         data = cls.from_raw(
-            time_delta=TGB_TIME_DELTAS[name],
+            time_delta=TGB_TIME_DELTAS.get(name, 's'),
             edge_timestamps=timestamps,
             edge_index=edge_index,
             edge_feats=edge_feats,
