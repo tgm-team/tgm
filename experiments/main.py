@@ -35,6 +35,7 @@ def main() -> None:
                 method = experiment['method']
                 script = EXAMPLES_ROOT / task / f'{method}.py'
                 script_args = experiment['script_flags'].split('\n')
+                script_args.append(f'--dataset {dataset}')
 
                 if global_configs['run_with_gpu_profiler']:
                     script_args.append(f'--capture-gpu')
