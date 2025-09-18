@@ -1,6 +1,5 @@
 import argparse
 import copy
-import time
 from typing import Callable, Tuple
 
 import numpy as np
@@ -165,7 +164,7 @@ class DyGFormer_LinkPrediction(nn.Module):
 
         # negative edge
         z_src_neg, z_dst_neg = self.encoder(
-            STATIC_NODE_FEAT,
+            static_node_feat,
             edge_idx_neg,
             time,
             torch.cat([src_nbr_nids, neg_nbr_nids], dim=0),
@@ -297,20 +296,20 @@ model = DyGFormer_LinkPrediction(
 
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
-for epoch in range(1, args.epochs + 1):
-    with hm.activate(train_key):
-        start_time = time.perf_counter()
-        loss = train(train_loader, model, opt, static_node_feat)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
-    with hm.activate(val_key):
-        val_mrr = eval(evaluator, val_loader, model, static_node_feat)
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-        )
-    # Clear memory state between epochs, except last epoch
-    if epoch < args.epochs:
-        hm.reset_state()
+# for epoch in range(1, args.epochs + 1):
+#     with hm.activate(train_key):
+#         start_time = time.perf_counter()
+#         loss = train(train_loader, model, opt, static_node_feat)
+#         end_time = time.perf_counter()
+#         latency = end_time - start_time
+#     with hm.activate(val_key):
+#         val_mrr = eval(evaluator, val_loader, model, static_node_feat)
+#         print(
+#             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
+#         )
+#     # Clear memory state between epochs, except last epoch
+#     if epoch < args.epochs:
+#         hm.reset_state()
 
 with hm.activate(test_key):
     test_mrr = eval(evaluator, test_loader, model, static_node_feat)
