@@ -318,7 +318,8 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
-        self._update(batch)
+        if batch.src.numel():
+            self._update(batch)
         return batch
 
     def _get_recency_neighbors(

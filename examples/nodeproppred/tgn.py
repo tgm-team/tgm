@@ -311,11 +311,13 @@ def train(
                 'eval_metric': [eval_metric],
             }
             perf = evaluator.eval(input_dict)[eval_metric]
-            print(perf)
             perf_list.append(perf)
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
+        if len(batch.src) > 0:
+            memory.update_state(
+                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+            )
         memory.detach()
 
     return total_loss, float(np.mean(perf_list))
@@ -376,7 +378,10 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[eval_metric])
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
+        if len(batch.src) > 0:
+            memory.update_state(
+                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+            )
 
     return float(np.mean(perf_list))
 
