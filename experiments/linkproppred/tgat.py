@@ -272,7 +272,7 @@ if args.use_bsize:
 else:
     print(f"{args.bunit},{args.use_bsize}")
     # exit()
-    train_loader = DGDataLoader(train_dg, batch_sized=args.bsize_train, hook_manager=hm)
+    train_loader = DGDataLoader(train_dg, batch_size=args.bsize_train, hook_manager=hm)
     val_loader = DGDataLoader(val_dg, batch_unit=args.bunit, hook_manager=hm)
     test_loader = DGDataLoader(test_dg, batch_unit=args.bunit, hook_manager=hm)
 
