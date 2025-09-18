@@ -95,6 +95,7 @@ def setup_experiment(args: argparse.Namespace, path: Path) -> dict:
     results['ram_available_gb'] = _get_ram_available_gb()
     results['cpu_info'] = _get_cpu_info()
     results['gpu_info'] = _get_gpu_info()
+    results['eval_every'] = 10
 
     # Start profiling
     if args.capture_cprofile:
