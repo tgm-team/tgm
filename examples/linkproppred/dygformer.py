@@ -1,6 +1,5 @@
 import argparse
 import copy
-import time
 from typing import Callable, Tuple
 
 import numpy as np
@@ -106,7 +105,9 @@ class DyGFormer_LinkPrediction(nn.Module):
             output_dim
         )  # @TODO: Make encoder/decoder to be explicit
 
-    def forward(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, batch: DGBatch, static_node_feat: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         src = batch.src
         dst = batch.dst
         neg = batch.neg
@@ -120,7 +121,7 @@ class DyGFormer_LinkPrediction(nn.Module):
         # positive edge
         edge_idx_pos = torch.stack((src, dst), dim=0)
         z_src_pos, z_dst_pos = self.encoder(
-            STATIC_NODE_FEAT,
+            static_node_feat,
             edge_idx_pos,
             time,
             nbr_nids[: pos_batch_size * 2],
@@ -163,7 +164,7 @@ class DyGFormer_LinkPrediction(nn.Module):
 
         # negative edge
         z_src_neg, z_dst_neg = self.encoder(
-            STATIC_NODE_FEAT,
+            static_node_feat,
             edge_idx_neg,
             time,
             torch.cat([src_nbr_nids, neg_nbr_nids], dim=0),
@@ -179,12 +180,13 @@ def train(
     loader: DGDataLoader,
     model: nn.Module,
     opt: torch.optim.Optimizer,
+    static_node_feat: torch.Tensor,
 ) -> float:
     model.train()
     total_loss = 0
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out = model(batch)
+        pos_out, neg_out = model(batch, static_node_feat)
 
         loss = F.binary_cross_entropy(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy(neg_out, torch.zeros_like(neg_out))
@@ -199,6 +201,7 @@ def eval(
     evaluator: Evaluator,
     loader: DGDataLoader,
     model: nn.Module,
+    static_node_feat: torch.Tensor,
 ) -> float:
     model.eval()
     perf_list = []
@@ -226,7 +229,7 @@ def eval(
             copy_batch.nbr_times = [batch.nbr_times[0][all_idx]]
             copy_batch.nbr_feats = [batch.nbr_feats[0][all_idx]]
 
-            pos_out, neg_out = model(copy_batch)
+            pos_out, neg_out = model(copy_batch, static_node_feat)
 
             input_dict = {
                 'y_pred_pos': pos_out,
@@ -254,9 +257,9 @@ val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
 if train_dg.static_node_feats is not None:
-    STATIC_NODE_FEAT = train_dg.static_node_feats
+    static_node_feat = train_dg.static_node_feats
 else:
-    STATIC_NODE_FEAT = torch.randn(
+    static_node_feat = torch.randn(
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
@@ -277,7 +280,7 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = DyGFormer_LinkPrediction(
-    node_feat_dim=STATIC_NODE_FEAT.shape[1],
+    node_feat_dim=static_node_feat.shape[1],
     edge_feat_dim=edge_feats_dim,
     time_feat_dim=args.time_dim,
     channel_embedding_dim=args.channel_embedding_dim,
@@ -293,21 +296,21 @@ model = DyGFormer_LinkPrediction(
 
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
-for epoch in range(1, args.epochs + 1):
-    with hm.activate(train_key):
-        start_time = time.perf_counter()
-        loss = train(train_loader, model, opt)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
-    with hm.activate(val_key):
-        val_mrr = eval(evaluator, val_loader, model)
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-        )
-    # Clear memory state between epochs, except last epoch
-    if epoch < args.epochs:
-        hm.reset_state()
+# for epoch in range(1, args.epochs + 1):
+#     with hm.activate(train_key):
+#         start_time = time.perf_counter()
+#         loss = train(train_loader, model, opt, static_node_feat)
+#         end_time = time.perf_counter()
+#         latency = end_time - start_time
+#     with hm.activate(val_key):
+#         val_mrr = eval(evaluator, val_loader, model, static_node_feat)
+#         print(
+#             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
+#         )
+#     # Clear memory state between epochs, except last epoch
+#     if epoch < args.epochs:
+#         hm.reset_state()
 
 with hm.activate(test_key):
-    test_mrr = eval(evaluator, test_loader, model)
+    test_mrr = eval(evaluator, test_loader, model, static_node_feat)
     print(f'Test MRR:{METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
