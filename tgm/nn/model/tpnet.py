@@ -41,18 +41,18 @@ class RandomProjectionModule(nn.Module):
         device: str = 'cpu',
     ) -> None:
         super(RandomProjectionModule, self).__init__()
-        assert (not num_edges and not dim_factor) or not enforce_dim or use_matrix
-
-        if enforce_dim is not None:
-            self.dim = enforce_dim
-        elif use_matrix:
-            self.dim = num_nodes
-        elif num_edges is not None and dim_factor is not None:
-            self.dim = min(int(math.log(num_edges * 2)) * dim_factor, num_nodes)
+        if not use_matrix:
+            if enforce_dim is not None:
+                self.dim = enforce_dim
+            elif num_edges is not None and dim_factor is not None:
+                self.dim = min(int(math.log(num_edges * 2)) * dim_factor, num_nodes)
+            else:
+                raise ValueError(
+                    'When `use_matrix` is False, either providing enforce_dim or both num_edges and dim_factor'
+                )
         else:
-            raise ValueError(
-                'Must provide enforce_dim or (num_edges and dim_factor) or set use_matrix to true'
-            )
+            self.dim = num_nodes
+
         self.num_layer = num_layer
         self.time_decay_weight = time_decay_weight
         self.use_matrix = use_matrix
@@ -118,8 +118,11 @@ class RandomProjectionModule(nn.Module):
         Returns:
             H_pairwise : Pairwise feature
         """
-        nodes = torch.cat([src, dst]).to(self.device)
-        random_projections = self.get_random_projections(nodes).to(self.device)
+        src_random_projections = self.get_random_projections(src)
+        dst_random_projections = self.get_random_projections(dst)
+        random_projections = torch.cat(  # @TODO: This takes up a lot GPU memory, especially for TGB evaluation
+            [src_random_projections, dst_random_projections], dim=1
+        ).to(self.device)
         random_feature = torch.matmul(
             random_projections, random_projections.transpose(1, 2)
         ).reshape(src.shape[0], -1)
