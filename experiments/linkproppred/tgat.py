@@ -56,12 +56,7 @@ parser.add_argument(
 parser.add_argument('--bsize_train', type=int, default=200, help='train batch size')
 parser.add_argument('--bsize_test', type=int, default=1, help='test batch size')
 parser.add_argument('--bunit', type=str, default='r', help='batch unit')
-parser.add_argument(
-    '--use_bsize',
-    type=bool,
-    default=True,
-    help='If True, use bsize; otherwise, use bunit',
-)
+parser.add_argument("--use_bsize", action="store_true", help="Enable bsize")
 parser.add_argument(
     '--patience',
     type=int,
@@ -272,8 +267,12 @@ if args.use_bsize:
     train_loader = DGDataLoader(train_dg, args.bsize_train, hook_manager=hm)
     val_loader = DGDataLoader(val_dg, args.bsize_test, hook_manager=hm)
     test_loader = DGDataLoader(test_dg, args.bsize_test, hook_manager=hm)
+    print(f"{args.bunit},{args.use_bsize}")
+    exit()
 else:
-    train_loader = DGDataLoader(train_dg, batch_unit=args.bsize_train, hook_manager=hm)
+    print(f"{args.bunit},{args.use_bsize}")
+    # exit()
+    train_loader = DGDataLoader(train_dg, batch_sized=args.bsize_train, hook_manager=hm)
     val_loader = DGDataLoader(val_dg, batch_unit=args.bunit, hook_manager=hm)
     test_loader = DGDataLoader(test_dg, batch_unit=args.bunit, hook_manager=hm)
 

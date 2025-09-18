@@ -23,11 +23,9 @@ git pull
 git checkout bao/ICLR-experimennts
 uv sync
 
-USE_BSIZE=False
 BUNIT="m"
 for seed in 720 721 722; do
   uv run python experiments/linkproppred/tgat.py \
-    --use_bsize="$USE_BSIZE" \
     --experiment_name=type_dataload_effect_bunit \
     --dataset=tgbl-wiki \
     --seed="$seed" \
