@@ -42,12 +42,6 @@ parser.add_argument(
     default=[10],
     help='num sampled nbrs at each hop',
 )
-parser.add_argument(
-    '--time-gran',
-    type=str,
-    default='Y',
-    help='raw time granularity for dataset',
-)
 
 
 class NodePredictor(torch.nn.Module):
