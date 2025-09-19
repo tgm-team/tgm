@@ -43,6 +43,12 @@ parser.add_argument(
     default=[10],
     help='num sampled nbrs at each hop',
 )
+parser.add_argument(
+    '--time-gran',
+    type=str,
+    default=None,
+    help='raw time granularity for dataset',
+)
 
 
 class NodePredictor(torch.nn.Module):
@@ -384,10 +390,21 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
-train_dg = DGraph(train_data, device=args.device)
-val_dg = DGraph(val_data, device=args.device)
-test_dg = DGraph(test_data, device=args.device)
+if args.time_gran is not None:
+    full_data = DGData.from_tgb(args.dataset)
+    full_graph = DGraph(full_data)
+    train_data, val_data, test_data = full_data.split()
+    train_data = train_data.discretize(args.time_gran)
+    val_data = val_data.discretize(args.time_gran)
+    test_data = test_data.discretize(args.time_gran)
+    train_dg = DGraph(train_data, device=args.device)
+    val_dg = DGraph(val_data, device=args.device)
+    test_dg = DGraph(test_data, device=args.device)
+else:
+    train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+    train_dg = DGraph(train_data, device=args.device)
+    val_dg = DGraph(val_data, device=args.device)
+    test_dg = DGraph(test_data, device=args.device)
 
 num_nodes = test_dg.num_nodes
 edge_feats_dim = train_dg.edge_feats_dim
