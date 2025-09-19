@@ -303,7 +303,7 @@ class RecencyNeighborHook(StatefulHook):
                         return batch
                     else:
                         seed_nodes = seed_nodes.to(device)
-                        seed_times = batch.node_ids.to(device)  # type: ignore #! to adjust later, it should point to node event time
+                        seed_times = batch.node_times.to(device)  # type: ignore #! to adjust later, it should point to node event time
             else:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
