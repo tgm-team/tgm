@@ -441,13 +441,19 @@ with Usage(gpu=True):
             )
             end_time = time.perf_counter()
             latency = end_time - start_time
+        print(
+            f'Epoch={epoch:02d} Train Latency={latency:.4f} Loss={loss:.4f} Train {METRIC_TGB_NODEPROPPRED}={train_metric:.4f}'
+        )
 
         with hm.activate('val'):
+            start_time = time.perf_counter()
             val_metric = eval(
                 val_loader, memory, encoder, decoder, METRIC_TGB_NODEPROPPRED, evaluator
             )
+            end_time = time.perf_counter()
+            latency = end_time - start_time
         print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Train {METRIC_TGB_NODEPROPPRED}={train_metric:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_metric:.4f}'
+            f'Val Latency={latency:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_metric:.4f}'
         )
 
         if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
