@@ -20,6 +20,7 @@ from tgm.constants import METRIC_TGB_NODEPROPPRED, PADDED_NODE_ID
 from tgm.hooks import HookManager, RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
+from tgm.util.perf import Usage
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -431,29 +432,29 @@ opt = torch.optim.Adam(
     lr=args.lr,
 )
 
-for epoch in range(1, args.epochs + 1):
-    with hm.activate('train'):
-        start_time = time.perf_counter()
-        loss, train_metric = train(
-            train_loader, memory, encoder, decoder, opt, METRIC_TGB_NODEPROPPRED
+with Usage(gpu=True):
+    for epoch in range(1, args.epochs + 1):
+        with hm.activate('train'):
+            start_time = time.perf_counter()
+            loss, train_metric = train(
+                train_loader, memory, encoder, decoder, opt, METRIC_TGB_NODEPROPPRED
+            )
+            end_time = time.perf_counter()
+            latency = end_time - start_time
+
+        with hm.activate('val'):
+            val_metric = eval(
+                val_loader, memory, encoder, decoder, METRIC_TGB_NODEPROPPRED, evaluator
+            )
+        print(
+            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Train {METRIC_TGB_NODEPROPPRED}={train_metric:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_metric:.4f}'
         )
-        end_time = time.perf_counter()
-        latency = end_time - start_time
 
-    with hm.activate('val'):
-        val_metric = eval(
-            val_loader, memory, encoder, decoder, METRIC_TGB_NODEPROPPRED, evaluator
+        if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
+            hm.reset_state()
+
+    with hm.activate('test'):
+        test_metric = eval(
+            test_loader, memory, encoder, decoder, METRIC_TGB_NODEPROPPRED, evaluator
         )
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Train {METRIC_TGB_NODEPROPPRED}={train_metric:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_metric:.4f}'
-    )
-
-    if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
-        hm.reset_state()
-
-
-with hm.activate('test'):
-    test_metric = eval(
-        test_loader, memory, encoder, decoder, METRIC_TGB_NODEPROPPRED, evaluator
-    )
-    print(f'Test {METRIC_TGB_NODEPROPPRED}={test_metric:.4f}')
+        print(f'Test {METRIC_TGB_NODEPROPPRED}={test_metric:.4f}')
