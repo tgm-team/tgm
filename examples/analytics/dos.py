@@ -15,12 +15,18 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
-parser.add_argument('--bsize', type=int, default=200, help='batch size')
+parser.add_argument('--dataset', type=str, default='tgbn-genre', help='Dataset name')
 parser.add_argument('--n-pts', type=int, default=1001, help='# points for cdf estimate')
 parser.add_argument('--moments', type=int, default=20, help='# of Chebyshev moments')
 parser.add_argument(
     '--probing-vectors', type=int, default=100, help='# of probing vectors'
+)
+parser.add_argument('--plot', action='store_true', help='store dos plot as dos.pdf')
+parser.add_argument(
+    '--snapshot-time-gran',
+    type=str,
+    default='W',
+    help='time granularity to operate on for snapshots',
 )
 
 
@@ -102,9 +108,21 @@ hm = HookManager(keys=['dos'])
 hm.register('dos', dos_hook)
 hm.set_active_hooks('dos')
 
-loader = DGDataLoader(dg, args.bsize, hook_manager=hm)
+loader = DGDataLoader(dg, batch_unit=args.snapshot_time_gran, hook_manager=hm)
 dos_list = []
 for batch in tqdm(loader):
     dos_list.append(batch.dos)
+
+#! optionally plotting dos
+if args.plot:
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        raise ImportError('Please install matplotlib to plot dos')
+    diag_vecs = np.transpose(np.asarray(dos_list))  # let time be x-axis
+    diag_vecs = np.flip(diag_vecs, 0)
+    im = plt.imshow(diag_vecs, aspect='auto')
+    plt.savefig('dos.pdf')
+    plt.close()
 
 print(f'Computed {len(dos_list)} density state estimates')
