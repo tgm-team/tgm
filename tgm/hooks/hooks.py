@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import is_dataclass
+from pathlib import Path
 from typing import Any, List, Set, Tuple
 
 import torch
@@ -114,22 +115,38 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
     requires: Set[str] = set()
     produces = {'neg', 'neg_batch_list', 'neg_time'}
 
-    def __init__(self, neg_sampler: object, split_mode: str) -> None:
-        if neg_sampler is None:
-            raise ValueError('neg_sampler must be provided')
+    def __init__(self, dataset_name: str, split_mode: str) -> None:
+        try:
+            from tgb.linkproppred.negative_sampler import NegativeEdgeSampler
+            from tgb.utils.info import DATA_VERSION_DICT, PROJ_DIR
+        except ImportError:
+            raise ImportError(
+                f'TGB required for {self.__class__.__name__}, try `pip install py-tgb`'
+            )
+
+        neg_sampler = NegativeEdgeSampler(dataset_name=dataset_name)
+
+        # Load evaluation sets
+        root = Path(PROJ_DIR + 'datasets') / dataset_name.replace('-', '_')
+        if dataset_name in DATA_VERSION_DICT:
+            version_suffix = f'_v{DATA_VERSION_DICT[dataset_name]}'
+        else:
+            version_suffix = ''
+
+        val_ns_fname = root / f'{dataset_name}_val_ns{version_suffix}.pkl'
+        test_ns_fname = root / f'{dataset_name}_test_ns{version_suffix}.pkl'
+        neg_sampler.load_eval_set(fname=str(val_ns_fname), split_mode='val')
+        neg_sampler.load_eval_set(fname=str(test_ns_fname), split_mode='test')
+
         if split_mode not in ['val', 'test']:
             raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
-        if neg_sampler.eval_set[split_mode] is None:  # type: ignore
-            raise ValueError(
-                f'please run load_{split_mode}_ns() before using this hook'
-            )
 
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # this might complain if the edge is not found in the negative sampler, which could happen if the user is not using the correct version of dataset
-        neg_batch_list = self.neg_sampler.query_batch(  # type: ignore
+        neg_batch_list = self.neg_sampler.query_batch(
             batch.src, batch.dst, batch.time, split_mode=self.split_mode
         )
         batch.neg_batch_list = [  # type: ignore
