@@ -62,11 +62,11 @@ experiments:
         --device cuda
       additional_data_specific_script_flags: {}
 
-    #- method: tpnet
-    #  script_flags: |
-    #    --epochs 1
-    #    --device cuda
-    #  additional_data_specific_script_flags: {}
+    - method: tpnet
+      script_flags: |
+        --epochs 1
+        --device cuda
+      additional_data_specific_script_flags: {}
 
   nodeproppred:
     - method: persistant_forecast
