@@ -1,0 +1,109 @@
+global_configs:
+  num_runs_per_experiment: 3
+  base_seed: 0
+  run_with_gpu_profiler: true
+  do_extra_run_with_cprofiler: false
+  log_file: 'experiments/tgm_experiments.log'
+
+datasets:
+  linkproppred:
+    - tgbl-wiki
+    - tgbl-subreddit
+    - tgbl-lastfm
+  nodeproppred:
+    - tgbn-trade
+    - tgbn-genre
+
+experiments:
+  linkproppred:
+    - method: edgebank
+      script_flags: |
+      additional_data_specific_script_flags: {}
+
+    - method: tgat
+      script_flags: |
+        --epochs 1
+        --n-nbrs 10 10
+        --device cuda
+      additional_data_specific_script_flags: {}
+
+    #- method: graphmixer
+    #  script_flags: |
+    #    --epochs 1
+    #    --device cuda
+    #  additional_data_specific_script_flags: {}
+
+    - method: gclstm
+      script_flags: |
+        --epochs 1
+        --device cuda
+      additional_data_specific_script_flags:
+        tgbl-wiki: |
+          --snapshot-time-gran h
+
+    - method: gcn
+      script_flags: |
+        --epochs 1
+        --device cuda
+      additional_data_specific_script_flags:
+        tgbl-wiki: |
+          --snapshot-time-gran h
+
+    - method: dygformer
+      script_flags: |
+        --epochs 1
+        --device cuda
+      additional_data_specific_script_flags: {}
+
+    - method: tgn
+      script_flags: |
+        --epochs 1
+        --n-nbrs 10 10
+        --device cuda
+      additional_data_specific_script_flags: {}
+
+    - method: tpnet
+      script_flags: |
+        --epochs 1
+        --device cuda
+      additional_data_specific_script_flags: {}
+
+  nodeproppred:
+    - method: persistant_forecast
+      script_flags: |
+      additional_data_specific_script_flags:
+        tgbn-trade: |
+          --snapshot-time-gran Y
+        tgbn-genre: |
+          --snapshot-time-gran W
+
+
+    - method: gclstm
+      script_flags: |
+        --epochs 1
+        --device cuda
+      additional_data_specific_script_flags:
+        tgbn-trade: |
+          --snapshot-time-gran Y
+        tgbn-genre: |
+          --snapshot-time-gran W
+
+    - method: gcn
+      script_flags: |
+        --epochs 1
+        --device cuda
+      additional_data_specific_script_flags:
+        tgbn-trade: |
+          --snapshot-time-gran Y
+        tgbn-genre: |
+          --snapshot-time-gran W
+
+    - method: tgcn
+      script_flags: |
+        --epochs 1
+        --device cuda
+      additional_data_specific_script_flags:
+        tgbn-trade: |
+          --snapshot-time-gran Y
+        tgbn-genre: |
+          --snapshot-time-gran W

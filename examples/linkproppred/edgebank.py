@@ -30,6 +30,12 @@ parser.add_argument(
     choices=['unlimited', 'fixed'],
     help='Memory mode',
 )
+parser.add_argument(
+    '--capture-gpu', action=argparse.BooleanOptionalAction, help='record peak gpu usage'
+)
+parser.add_argument(
+    '--capture-cprofile', action=argparse.BooleanOptionalAction, help='record cprofiler'
+)
 
 
 def eval(
@@ -57,6 +63,12 @@ def eval(
 
 args = parser.parse_args()
 seed_everything(args.seed)
+
+from pathlib import Path
+
+from experiments import save_experiment_results_and_exit, setup_experiment
+
+results = setup_experiment(args, Path(__file__))
 
 dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
 neg_sampler = dataset.negative_sampler
@@ -93,6 +105,11 @@ with hm.activate('val'):
     end_time = time.perf_counter()
     latency = end_time - start_time
     print(f'Latency={latency:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}')
+
+results[f'val_{METRIC_TGB_LINKPROPPRED}'] = val_mrr
+results['train_latency_s'] = 0
+results['val_latency_s'] = latency
+save_experiment_results_and_exit(results)
 
 with hm.activate('test'):
     test_mrr = eval(test_loader, model, evaluator)
