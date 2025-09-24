@@ -116,6 +116,9 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
     produces = {'neg', 'neg_batch_list', 'neg_time'}
 
     def __init__(self, dataset_name: str, split_mode: str) -> None:
+        if split_mode not in ['val', 'test']:
+            raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
+
         try:
             from tgb.linkproppred.negative_sampler import NegativeEdgeSampler
             from tgb.utils.info import DATA_VERSION_DICT, PROJ_DIR
@@ -137,9 +140,6 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         test_ns_fname = root / f'{dataset_name}_test_ns{version_suffix}.pkl'
         neg_sampler.load_eval_set(fname=str(val_ns_fname), split_mode='val')
         neg_sampler.load_eval_set(fname=str(test_ns_fname), split_mode='test')
-
-        if split_mode not in ['val', 'test']:
-            raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
 
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode

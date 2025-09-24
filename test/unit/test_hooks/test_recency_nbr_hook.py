@@ -1,5 +1,5 @@
 from typing import List
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -586,19 +586,20 @@ def test_2_hop_directed_graph(two_hop_basic_graph):
     assert nbr_nids[1][1][0] == PADDED_NODE_ID
 
 
-class FakeNegSampler:
-    def query_batch(self, src, dst, time, split_mode='val'):
-        return []
-
-
-def test_tgb_non_time_respecting_negative_neighbor_sampling_test(two_hop_basic_graph):
+@patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
+def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
+    MockNegSampler, two_hop_basic_graph
+):
     dg = DGraph(two_hop_basic_graph)
-    mock_sampler = Mock(spec=FakeNegSampler)
-    mock_sampler.eval_set = {}
-    mock_sampler.eval_set['val'] = {}
     neg_batch_list = [[2, 3, 4, 5]]
+
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {}}
     mock_sampler.query_batch.return_value = neg_batch_list
-    tgb_hook = TGBNegativeEdgeSamplerHook(neg_sampler=mock_sampler, split_mode='val')
+    MockNegSampler.return_value = mock_sampler
+
+    tgb_hook = TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
+
     n_nbrs = [1, 1]  # 1 neighbor for each node
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,

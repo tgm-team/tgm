@@ -38,16 +38,11 @@ def test_bad_build_recipe(mock_dataset_cls, tgb_dataset_factory, dg):
     mock_dataset_cls.return_value = mock_dataset
 
     with pytest.raises(UndefinedRecipe):
-        hm, register_keys = RecipeRegistry.build(
-            'foo', dataset_name='tgbl-foo', train_dg=dg
-        )
+        RecipeRegistry.build('foo', dataset_name='tgbl-foo', train_dg=dg)
 
 
-@patch('tgb.linkproppred.dataset_pyg.PyGLinkPropPredDataset')
+@patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
 def test_build_recipe_tgb_link_pred(mock_dataset_cls, tgb_dataset_factory, dg):
-    mock_dataset = tgb_dataset_factory()
-    mock_dataset_cls.return_value = mock_dataset
-
     hm = RecipeRegistry.build(
         RECIPE_TGB_LINK_PRED, dataset_name='tgbl-foo', train_dg=dg
     )
@@ -66,9 +61,6 @@ def test_build_recipe_tgb_link_pred(mock_dataset_cls, tgb_dataset_factory, dg):
     assert isinstance(train_hooks[0], NegativeEdgeSamplerHook)
     assert isinstance(val_hooks[0], TGBNegativeEdgeSamplerHook)
     assert isinstance(test_hooks[0], TGBNegativeEdgeSamplerHook)
-    mock_dataset_cls.assert_called_once_with(name='tgbl-foo', root='datasets')
-    mock_dataset.load_val_ns.assert_called_once()
-    mock_dataset.load_test_ns.assert_called_once()
 
 
 def test_register_new_recipe():

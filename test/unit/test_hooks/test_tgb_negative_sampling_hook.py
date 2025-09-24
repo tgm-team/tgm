@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 import torch
@@ -34,25 +34,18 @@ def test_bad_tgb_negative_edge_sampler_init():
     mock_sampler.eval_set = {}
     mock_sampler.eval_set['val'] = None
     with pytest.raises(ValueError):
-        TGBNegativeEdgeSamplerHook(neg_sampler=None, split_mode='val')
-    with pytest.raises(ValueError):
-        TGBNegativeEdgeSamplerHook(neg_sampler=mock_sampler, split_mode='invalid_mode')
-    with pytest.raises(ValueError):
-        TGBNegativeEdgeSamplerHook(neg_sampler=mock_sampler, split_mode='val')
+        TGBNegativeEdgeSamplerHook(dataset_name='tgbl-wiki', split_mode='invalid_mode')
 
 
-def test_negative_edge_sampler(data):
+@patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
+def test_negative_edge_sampler(MockNegSampler, data):
     dg = DGraph(data)
-    mock_sampler = Mock(spec=FakeNegSampler)
-    mock_sampler.eval_set = {}
-    mock_sampler.eval_set['val'] = 'cool'
-    mock_sampler.eval_set['test'] = 'cool'
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
 
-    neg_batch_list = []
-    for i in range(3):
-        neg_batch_list.append([0])
-    mock_sampler.query_batch.return_value = neg_batch_list
-    hook = TGBNegativeEdgeSamplerHook(neg_sampler=mock_sampler, split_mode='val')
+    hook = TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
     batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
     assert torch.is_tensor(batch.neg)
