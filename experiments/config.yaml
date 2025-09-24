@@ -26,13 +26,7 @@ experiments:
         --n-nbrs 10 10
         --device cuda
       additional_data_specific_script_flags: {}
-
-    #- method: graphmixer
-    #  script_flags: |
-    #    --epochs 1
-    #    --device cuda
-    #  additional_data_specific_script_flags: {}
-
+      
     - method: gclstm
       script_flags: |
         --epochs 1

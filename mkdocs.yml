@@ -1,7 +1,5 @@
 ---
 site_name: TGM Docs
-site_url: https://tgm.readthedocs.io/en/latest/
-repo_url: https://github.com/tgm-team/tgm
 
 nav:
   - Home:

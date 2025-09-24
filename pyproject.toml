@@ -5,10 +5,6 @@ description = "Efficient and Modular ML on Temporal Graphs"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
-authors = [
-    {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
-    {name="Shenyang Huang", email="shenyang.huang@mail.mcgill.ca"},
-]
 dependencies = [
     "numpy>=2.2.6",
     "torch>=2.5.1",
