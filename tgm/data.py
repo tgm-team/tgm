@@ -664,6 +664,12 @@ class DGData:
             dataset = suppress_output(LinkPropPredDataset, name=name, **kwargs)
         elif name.startswith('tgbn-'):
             dataset = suppress_output(NodePropPredDataset, name=name, **kwargs)
+        elif name.startswith('tkgl-'):
+            raise NotImplementedError('TGB Temporal Knowledge Graphs not yet supported')
+        elif name.startswith('thgl-'):
+            raise NotImplementedError(
+                'TGB Temporal Heterogeneous Graphs not yet supported'
+            )
         else:
             raise ValueError(f'Unknown dataset: {name}')
 
