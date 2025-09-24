@@ -12,12 +12,6 @@ from tgm.loader import DGDataLoader
 from tgm.split import TemporalRatioSplit
 from tgm.util.seed import seed_everything
 
-"""
-Adapted graph property prediction as proposed in https://openreview.net/forum?id=DZqic2sPTY
-
-Note: `lag` is excluded from this example's setting.
-"""
-
 parser = argparse.ArgumentParser(
     description='Persistant Forecast Graph Property Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,

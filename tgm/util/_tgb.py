@@ -2,9 +2,6 @@ from typing import Any, Callable
 
 
 def suppress_output(func: Callable, *args: Any, **kwargs: Any) -> Any:
-    # This is a hacky workaround that tries to lower the verbosity on TGB
-    # logs which are currently directed to stdout. This should be removed
-    # once https://github.com/shenyangHuang/TGB/issues/117 is addressed.
     import builtins
 
     SILENCE_PREFIXES = [

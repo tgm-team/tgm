@@ -19,7 +19,3 @@ python examples/linkproppred/tgat.py \
   --n-nbrs 20 20 \
   --sampling recency
 ```
-
-### Creating a new model
-
-Work in progress.

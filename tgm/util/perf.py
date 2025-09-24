@@ -33,7 +33,6 @@ class Usage(contextlib.ContextDecorator):
         print(s)
 
 
-# Adapted from: https://github.com/tinygrad/tinygrad/blob/master/tinygrad/helpers.py
 class Profiling(contextlib.ContextDecorator):
     def __init__(self, filename: Optional[str] = None, frac: float = 0.3) -> None:
         self.filename = filename
@@ -92,6 +91,5 @@ def compare_usage(
 
 
 def _color(s: str, color: str, background: bool = False) -> str:
-    # Adapted from: https://github.com/tinygrad/tinygrad/blob/master/tinygrad/helpers.py
     colors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
     return f'\u001b[{10 * background + 60 * (color.upper() == color) + 30 + colors.index(color.lower())}m{s}\u001b[0m'

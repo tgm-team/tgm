@@ -14,7 +14,6 @@ COPY . .
 RUN pip install --upgrade pip \
  && pip install . --no-cache-dir
 
-#https://github.com/AbdBarho/stable-diffusion-webui-docker/issues/719
 RUN --mount=type=cache,target=/root/.cache/pip \
    pip uninstall -y typing_extensions && \
    pip install typing_extensions==4.11.0
