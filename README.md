@@ -50,7 +50,7 @@ We aim to support the following temporal graph learning methods.
 uv venv my_venv --python 3.10 && source my_venv/bin/activate
 
 # Install the wheels into the venv
-uv add tgm-lib
+uv pip install -e .
 
 # Test the install
 uv run python -c 'import tgm; print(tgm.__version__)'
