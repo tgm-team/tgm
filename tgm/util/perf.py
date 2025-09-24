@@ -15,6 +15,18 @@ class Usage(contextlib.ContextDecorator):
         self.gpu_gb: float | None = 0.0
         self.latency_ms: float = 0.0
 
+        if self.gpu:
+            if not torch.cuda.is_available():
+                raise RuntimeError(
+                    'GPU monitoring requested (gpu=True) but CUDA not available. Try gpu=False to run CPU-only.'
+                )
+            try:
+                torch.cuda.reset_peak_memory_stats()
+            except RuntimeError as e:
+                raise RuntimeError(
+                    'GPU monitoring requested (gpu=True) but CUDA not initialized. Try gpu=False to run CPU-only.'
+                ) from e
+
     def __enter__(self) -> 'Usage':
         if self.gpu:
             self.base = torch.cuda.memory_allocated()
