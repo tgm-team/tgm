@@ -173,6 +173,8 @@ def test_time_delta_is_coarser_try_compare_event_ordered():
 
 def test_tgb_native_time_deltas():
     exp_dict = {
+        'tgbl-enron': TimeDeltaDG('s'),
+        'tgbl-uci': TimeDeltaDG('s'),
         'tgbl-wiki': TimeDeltaDG('s'),
         'tgbl-subreddit': TimeDeltaDG('s'),
         'tgbl-lastfm': TimeDeltaDG('s'),

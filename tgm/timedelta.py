@@ -113,6 +113,8 @@ class TimeDeltaDG:
 
 
 TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
+    'tgbl-enron': TimeDeltaDG('s'),
+    'tgbl-uci': TimeDeltaDG('s'),
     'tgbl-wiki': TimeDeltaDG('s'),
     'tgbl-subreddit': TimeDeltaDG('s'),
     'tgbl-lastfm': TimeDeltaDG('s'),
