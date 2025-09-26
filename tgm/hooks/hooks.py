@@ -235,6 +235,7 @@ class RecencyNeighborHook(StatefulHook):
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
         edge_feats_dim (int): Edge feature dimension on the dynamic graph.
         directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
+        seed_nodes_key (str, optional): the str to identify the initial seed nodes to sample for.
 
     Raises:
         ValueError: If the num_nbrs list is empty.
@@ -246,6 +247,7 @@ class RecencyNeighborHook(StatefulHook):
         num_nbrs: List[int],
         edge_feats_dim: int,
         directed: bool = False,
+        seed_nodes_key: str = None,  # type: ignore
     ) -> None:
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
@@ -257,6 +259,7 @@ class RecencyNeighborHook(StatefulHook):
         self._directed = directed
         self._edge_feats_dim = edge_feats_dim
         self._device = torch.device('cpu')
+        self._seed_nodes_key = seed_nodes_key
 
         self._nbr_ids = torch.full(
             (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.long
@@ -285,14 +288,22 @@ class RecencyNeighborHook(StatefulHook):
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
-                seed = [batch.src, batch.dst]
-                times = [batch.time.repeat(2)]  # Real link times
-                if hasattr(batch, 'neg'):
-                    batch.neg = batch.neg.to(device)
-                    seed.append(batch.neg)
-                    times.append(batch.neg_time)  # type: ignore
-                seed_nodes = torch.cat(seed)
-                seed_times = torch.cat(times)
+                if self._seed_nodes_key is None:
+                    seed = [batch.src, batch.dst]
+                    times = [batch.time.repeat(2)]  # Real link times
+                    if hasattr(batch, 'neg'):
+                        batch.neg = batch.neg.to(device)
+                        seed.append(batch.neg)
+                        times.append(batch.neg_time)
+                    seed_nodes = torch.cat(seed)
+                    seed_times = torch.cat(times)
+                else:
+                    seed_nodes = getattr(batch, self._seed_nodes_key)
+                    if seed_nodes is None:
+                        return batch
+                    else:
+                        seed_nodes = seed_nodes.to(device)
+                        seed_times = batch.node_times.to(device)  # type: ignore #! to adjust later, it should point to node event time
             else:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
@@ -307,7 +318,8 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
-        self._update(batch)
+        if batch.src.numel():
+            self._update(batch)
         return batch
 
     def _get_recency_neighbors(
