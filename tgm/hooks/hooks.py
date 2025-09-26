@@ -151,7 +151,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
             )
         except ValueError as e:
             raise ValueError(
-                f'Negative sampling failed for split_mode={self.split_mode}. Try updating your TGB package: `pip install --upgrade TGB`'
+                f'Negative sampling failed for split_mode={self.split_mode}. Try updating your TGB package: `pip install --upgrade py-tgb`'
             ) from e
 
         batch.neg_batch_list = [  # type: ignore
