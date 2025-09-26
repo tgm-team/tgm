@@ -12,30 +12,44 @@ class Usage(contextlib.ContextDecorator):
         self.prefix = '' if prefix is None else prefix.ljust(20)
         self.gpu = gpu
 
-    def __enter__(self) -> None:
+        self.gpu_gb: float | None = 0.0
+        self.latency_ms: float = 0.0
+
+        if self.gpu:
+            try:
+                torch.cuda.reset_peak_memory_stats()
+            except RuntimeError as e:
+                raise RuntimeError(
+                    'GPU monitoring requested (gpu=True) but CUDA not available. Try gpu=False to run CPU-only.'
+                ) from e
+
+    def __enter__(self) -> 'Usage':
         if self.gpu:
             self.base = torch.cuda.memory_allocated()
             torch.cuda.reset_peak_memory_stats()
         self.st = time.perf_counter_ns()
+        return self
 
     def __exit__(self, *_: None) -> None:
         duration = time.perf_counter_ns() - self.st
-        s = f'{self.prefix}{duration * 1e-6:6.2f} ms'
+        self.duration_ms = duration * 1e-6
+        s = f'{self.prefix}{self.duration_ms:6.2f} ms'
         if self.gpu:
             gpu = torch.cuda.max_memory_allocated() - self.base
-            s += f' ms ({gpu * 1e-9:2.2f} GB GPU)'
+            self.gpu_gb = gpu * 1e-9
+            s += f' ({self.gpu_gb:2.2f} GB GPU)'
         print(s)
 
 
-# Adapted from: https://github.com/tinygrad/tinygrad/blob/master/tinygrad/helpers.py
 class Profiling(contextlib.ContextDecorator):
     def __init__(self, filename: Optional[str] = None, frac: float = 0.3) -> None:
         self.filename = filename
         self.frac = frac
 
-    def __enter__(self) -> None:
+    def __enter__(self) -> 'Profiling':
         self.pr = cProfile.Profile()
         self.pr.enable()
+        return self
 
     def __exit__(self, *_: None) -> None:
         self.pr.disable()
