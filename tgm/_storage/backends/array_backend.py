@@ -105,9 +105,9 @@ class DGStorageArrayBackend(DGStorageBase):
 
         B = len(seed_nodes)
         nbr_nids = torch.full(
-            (B, num_nbrs), PADDED_NODE_ID, dtype=torch.long, device=device
+            (B, num_nbrs), PADDED_NODE_ID, dtype=torch.int32, device=device
         )
-        nbr_times = torch.zeros(B, num_nbrs, dtype=torch.long, device=device)
+        nbr_times = torch.zeros(B, num_nbrs, dtype=torch.int32, device=device)
         nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
 
         for i, node in enumerate(unique_nodes.tolist()):
@@ -128,10 +128,12 @@ class DGStorageArrayBackend(DGStorageBase):
 
             nn = len(nbr_ids)
             mask = inverse_indices == i
-            nbr_nids[mask, :nn] = torch.tensor(nbr_ids, dtype=torch.long, device=device)
-            nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.long, device=device)
+            nbr_nids[mask, :nn] = torch.tensor(
+                nbr_ids, dtype=torch.int32, device=device
+            )
+            nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.int32, device=device)
             if self._data.edge_feats is not None:
-                nbr_feats[mask, :nn] = torch.stack(feats).to(device).float()
+                nbr_feats[mask, :nn] = torch.stack(feats).to(device)
 
         return nbr_nids, nbr_times, nbr_feats
 
