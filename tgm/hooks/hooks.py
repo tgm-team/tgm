@@ -145,10 +145,15 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        # this might complain if the edge is not found in the negative sampler, which could happen if the user is not using the correct version of dataset
-        neg_batch_list = self.neg_sampler.query_batch(
-            batch.src, batch.dst, batch.time, split_mode=self.split_mode
-        )
+        try:
+            neg_batch_list = self.neg_sampler.query_batch(
+                batch.src, batch.dst, batch.time, split_mode=self.split_mode
+            )
+        except ValueError as e:
+            raise ValueError(
+                f'Negative sampling failed for split_mode={self.split_mode}. Try updating your TGB package: `pip install --upgrade TGB`'
+            ) from e
+
         batch.neg_batch_list = [  # type: ignore
             torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
             for neg_batch in neg_batch_list
