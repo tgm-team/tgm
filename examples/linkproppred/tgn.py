@@ -7,7 +7,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 from tgb.linkproppred.evaluate import Evaluator
 from torch import Tensor
 from torch.nn import GRUCell
@@ -385,12 +384,7 @@ def eval(
 args = parser.parse_args()
 seed_everything(args.seed)
 
-dataset = PyGLinkPropPredDataset(name=args.dataset, root='datasets')
-eval_metric = dataset.eval_metric
-neg_sampler = dataset.negative_sampler
 evaluator = Evaluator(name=args.dataset)
-dataset.load_val_ns()
-dataset.load_test_ns()
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data, device=args.device)
