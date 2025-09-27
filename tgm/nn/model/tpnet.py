@@ -165,14 +165,18 @@ class RandomProjectionModule(nn.Module):
             src_update_messages = self.random_projections[i - 1][dst] * time_weight
             dst_update_messages = self.random_projections[i - 1][src] * time_weight
             self.random_projections[i].scatter_add_(
-                dim=0, index=src[:, None].expand(-1, self.dim), src=src_update_messages
+                dim=0,
+                index=src[:, None].expand(-1, self.dim).long(),
+                src=src_update_messages,
             )
             self.random_projections[i].scatter_add_(
-                dim=0, index=dst[:, None].expand(-1, self.dim), src=dst_update_messages
+                dim=0,
+                index=dst[:, None].expand(-1, self.dim).long(),
+                src=dst_update_messages,
             )
 
         # set current timestamp to the biggest timestamp in this batch
-        self.now_time.data = torch.tensor(next_time, device=self.device)
+        self.now_time.data = next_time.clone().detach()
 
     def get_random_projections(self, node_ids: torch.Tensor) -> torch.Tensor:
         f"""Get the random projections of the give node ids

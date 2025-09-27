@@ -750,7 +750,7 @@ class DGData:
             ],
             dim=1,
         )
-        timestamps = torch.from_numpy(data['timestamps'])
+        timestamps = torch.from_numpy(data['timestamps']).to(torch.int64)
         if data['edge_feat'] is None:
             edge_feats = None
         else:
