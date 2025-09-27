@@ -86,9 +86,7 @@ class DGData:
                     UserWarning,
                 )
                 return x.to(torch.float32)
-            elif x.dtype != torch.float32:  # Upcast
-                return x.to(torch.float32)
-            return x
+            return x.to(torch.float32) if x.dtype != torch.float32 else x
 
         def _maybe_cast_integral_tensor(x: Tensor, name: str) -> Tensor:
             if x.dtype == torch.int64:
@@ -96,9 +94,7 @@ class DGData:
                     f'Downcasting {name} from torch.int64 to torch.int32', UserWarning
                 )
                 return x.to(torch.int32)
-            elif x.dtype != torch.int32:  # Upcast
-                return x.to(torch.int32)
-            return x
+            return x.to(torch.int32) if x.dtype != torch.int32 else x
 
         max_int32_capacity = torch.iinfo(torch.int32).max
 
