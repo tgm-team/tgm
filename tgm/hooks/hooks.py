@@ -63,7 +63,7 @@ class DeduplicationHook(StatelessHook):
         unique_nids = torch.unique(all_nids, sorted=True)
 
         batch.unique_nids = unique_nids  # type: ignore
-        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x).int()  # type: ignore
 
         return batch
 

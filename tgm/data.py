@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import csv
 import pathlib
+import warnings
 from dataclasses import dataclass, fields, replace
 from typing import Any, List, Tuple
 
@@ -69,10 +70,6 @@ class DGData:
         if isinstance(self.time_delta, str):
             self.time_delta = TimeDeltaDG(self.time_delta)
 
-        # TODO: Cast all ids to int32, and all features to float32
-        # Raise warning in case of downcast
-
-        # TODO: Raise error if node ids, timestamps or number of events may overflow int32
         def _assert_is_tensor(x: Any, name: str) -> None:
             if not isinstance(x, Tensor):
                 raise TypeError(f'{name} must be a Tensor, got: {type(x)}')
@@ -81,6 +78,42 @@ class DGData:
             int_types = [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8]
             if x.dtype not in int_types:
                 raise TypeError(f'{name} must have integer dtype but got: {x.dtype}')
+
+        def _maybe_downcast_tensor(x: Tensor, name: str) -> Tensor:
+            if x.dtype == torch.int64:
+                warnings.warn(
+                    f'Downcasting {name} from torch.int64 to torch.int32', UserWarning
+                )
+                return x.to(torch.int32)
+            elif x.dtype == torch.float64:
+                warnings.warn(
+                    f'Downcasting {name} from torch.float64 to torch.float32',
+                    UserWarning,
+                )
+                return x.to(torch.float32)
+            else:
+                return x
+
+        max_int32_capacity = torch.iinfo(torch.int32).max
+
+        # Validate timestamps
+        _assert_is_tensor(self.timestamps, 'timestamps')
+        _assert_tensor_is_integral(self.timestamps, 'timestamps')
+        if not torch.all(self.timestamps >= 0):
+            raise ValueError('timestamps must all be non-negative')
+        if not torch.all(self.timestamps < max_int32_capacity):
+            raise ValueError(
+                f'timestamps exceed the int32 limit ({max_int32_capacity}). '
+                'TGM does not yet support graphs this large.'
+            )
+        self.timestamps = _maybe_downcast_tensor(self.timestamps, 'timestamps')
+
+        # Ensure our data does not overlow int32 capacity
+        if len(self.timestamps) > max_int32_capacity:
+            raise ValueError(
+                f'Number of events ({len(self.timestamps)}) exceeds the int32 limit '
+                f'({max_int32_capacity}). TGM does not yet support graphs this large.'
+            )
 
         # Validate edge index
         _assert_is_tensor(self.edge_index, 'edge_index')
@@ -93,6 +126,12 @@ class DGData:
             raise InvalidNodeIDError(
                 f'Edge events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
             )
+        if not torch.all(self.edge_index < max_int32_capacity):
+            raise InvalidNodeIDError(
+                f'Edge events contains node ids that exceed the int32 limit ({max_int32_capacity}). '
+                'TGM does not yet support graphs this large.'
+            )
+        self.edge_index = _maybe_downcast_tensor(self.edge_index, 'edge_index')
 
         num_edges = self.edge_index.shape[0]
         if num_edges == 0:
@@ -106,6 +145,8 @@ class DGData:
                 'edge_event_idx must have shape [num_edges], '
                 f'got {num_edges} edges and shape {self.edge_event_idx.shape}'
             )
+        # Safe downcast since we ensured len(timestamps) fits in int32
+        self.edge_event_idx = self.edge_event_idx.int()
 
         # Validate edge features
         if self.edge_feats is not None:
@@ -115,6 +156,7 @@ class DGData:
                     'edge_feats must have shape [num_edges, D_edge], '
                     f'got {num_edges} edges and shape {self.edge_feats.shape}'
                 )
+            self.edge_feats = _maybe_downcast_tensor(self.edge_feats, 'edge_feats')
 
         # Validate node event idx
         num_node_events = 0
@@ -125,6 +167,9 @@ class DGData:
                 raise ValueError(
                     f'node_event_idx must have shape [num_node_events], got: {self.node_event_idx.shape}'
                 )
+
+            # Safe downcast since we ensured len(timestamps) fits in int32
+            self.node_event_idx = self.node_event_idx.int()
 
             num_node_events = self.node_event_idx.shape[0]
             if num_node_events == 0:
@@ -144,6 +189,12 @@ class DGData:
                 raise InvalidNodeIDError(
                     f'Node events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
                 )
+            if not torch.all(self.node_ids < max_int32_capacity):  # type: ignore
+                raise InvalidNodeIDError(
+                    f'Node events contains node ids that exceed the int32 limit ({max_int32_capacity}). '
+                    'TGM does not yet support graphs this large.'
+                )
+            self.node_ids = _maybe_downcast_tensor(self.node_ids, 'node_ids')  # type: ignore
 
             # Validate dynamic node features (could be None)
             if self.dynamic_node_feats is not None:
@@ -156,6 +207,9 @@ class DGData:
                         'dynamic_node_feats must have shape [num_node_events, D_node_dynamic], '
                         f'got {num_node_events} node events and shape {self.dynamic_node_feats.shape}'
                     )
+                self.dynamic_node_feats = _maybe_downcast_tensor(
+                    self.dynamic_node_feats, 'dynamic_node_feats'
+                )
         else:
             if self.node_ids is not None:
                 raise ValueError('must specify node_event_idx if using node_ids')
@@ -183,12 +237,11 @@ class DGData:
                     f'but the data requires features for at least {num_nodes} nodes. '
                     f'The first dimension ({self.static_node_feats.shape[0]}) must be >= num_nodes ({num_nodes}).'
                 )
+            self.static_node_feats = _maybe_downcast_tensor(
+                self.static_node_feats, 'static_node_feats'
+            )
 
-        # Validate timestamps
-        _assert_is_tensor(self.timestamps, 'timestamps')
-        _assert_tensor_is_integral(self.timestamps, 'timestamps')
-        if not torch.all(self.timestamps >= 0):
-            raise ValueError('timestamps must all be non-negative')
+        # Ensure timestamps match number of global events
         if (
             self.timestamps.ndim != 1
             or self.timestamps.shape[0] != num_edges + num_node_events
@@ -401,9 +454,9 @@ class DGData:
             event_types = torch.cat([event_types, torch.ones_like(node_timestamps)])
 
         # Compute event masks
-        edge_event_idx = (event_types == 0).nonzero(as_tuple=True)[0].int()
+        edge_event_idx = (event_types == 0).nonzero(as_tuple=True)[0]
         node_event_idx = (
-            (event_types == 1).nonzero(as_tuple=True)[0].int()
+            (event_types == 1).nonzero(as_tuple=True)[0]
             if node_timestamps is not None
             else None
         )
@@ -596,13 +649,13 @@ class DGData:
         _check_pandas_import()
 
         # Read in edge data
-        edge_index = torch.from_numpy(
-            edge_df[[edge_src_col, edge_dst_col]].to_numpy()
-        ).int()
-        edge_timestamps = torch.from_numpy(edge_df[edge_time_col].to_numpy()).int()
+        edge_index = torch.from_numpy(edge_df[[edge_src_col, edge_dst_col]].to_numpy())
+        edge_timestamps = torch.from_numpy(edge_df[edge_time_col].to_numpy())
         edge_feats = None
         if edge_feats_col is not None:
-            edge_feats = torch.Tensor(edge_df[edge_feats_col].tolist())
+            edge_feats = torch.stack(
+                [torch.tensor(row) for row in edge_df[edge_feats_col]]
+            )
 
         # Read in dynamic node data
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
@@ -611,11 +664,11 @@ class DGData:
                 raise ValueError(
                     'specified node_df without specifying node_id_col and node_time_col'
                 )
-            node_timestamps = torch.from_numpy(node_df[node_time_col].to_numpy()).int()
-            node_ids = torch.from_numpy(node_df[node_id_col].to_numpy()).int()
+            node_timestamps = torch.as_tensor(node_df[node_time_col].values)
+            node_ids = torch.as_tensor(node_df[node_id_col].values)
             if dynamic_node_feats_col is not None:
-                dynamic_node_feats = torch.Tensor(
-                    node_df[dynamic_node_feats_col].tolist()
+                dynamic_node_feats = torch.stack(
+                    [torch.tensor(row) for row in node_df[dynamic_node_feats_col]]
                 )
 
         # Read in static node data
@@ -625,8 +678,11 @@ class DGData:
                 raise ValueError(
                     'specified static_node_feats_df without specifying static_node_feats_col'
                 )
-            static_node_feats = torch.Tensor(
-                static_node_feats_df[static_node_feats_col].tolist()
+            static_node_feats = torch.stack(
+                [
+                    torch.tensor(row)
+                    for row in static_node_feats_df[static_node_feats_col]
+                ]
             )
 
         return cls.from_raw(
@@ -678,13 +734,21 @@ class DGData:
             raise ValueError(f'Unknown dataset: {name}')
 
         data = dataset.full_data
-        src, dst = data['sources'], data['destinations']
-        edge_index = torch.from_numpy(np.stack([src, dst], axis=1)).long()
-        timestamps = torch.from_numpy(data['timestamps']).long()
+
+        # IDs and timestamps are downcast to int32, and features to float32,
+        # preventing any runtime warnings. This is safe for all TGB datasets.
+        edge_index = torch.stack(
+            [
+                torch.from_numpy(data['sources']).to(torch.int32),
+                torch.from_numpy(data['destinations']).to(torch.int32),
+            ],
+            dim=1,
+        )
+        timestamps = torch.from_numpy(data['timestamps']).to(torch.int32)
         if data['edge_feat'] is None:
             edge_feats = None
         else:
-            edge_feats = torch.from_numpy(data['edge_feat'])
+            edge_feats = torch.from_numpy(data['edge_feat']).to(torch.float32)
 
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if name.startswith('tgbn-'):
@@ -698,7 +762,9 @@ class DGData:
                     if (timestamps[0] - 1) <= t < timestamps[-1]
                 }
             else:
-                raise ValueError('please update your tgb package or install by source')
+                raise ValueError(
+                    f'Failed to construct TGB dataset. Try updating your TGB package: `pip isntall --upgrade py-tgb`'
+                )
 
             if len(node_label_dict):
                 # Node events could be missing from the current data split (e.g. validation)
@@ -726,7 +792,7 @@ class DGData:
         # Read static node features if they exist
         static_node_feats = None
         if dataset.node_feat is not None:
-            static_node_feats = torch.from_numpy(dataset.node_feat)
+            static_node_feats = torch.from_numpy(dataset.node_feat).to(torch.float32)
 
         raw_times = torch.from_numpy(data['timestamps'])
         split_bounds = {}

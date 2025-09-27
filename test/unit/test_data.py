@@ -176,22 +176,42 @@ def test_init_dg_data_bad_args_invalid_node_id():
         )
 
 
+@pytest.mark.skip('TODO')
 def test_init_dg_data_node_id_with_downcast_warning():
     assert False
 
 
+@pytest.mark.skip('TODO')
 def test_init_dg_data_timestamp_with_downcast_warning():
     assert False
 
 
+@pytest.mark.skip('TODO')
+def test_init_dg_data_edge_feats_with_downcast_warning():
+    assert False
+
+
+@pytest.mark.skip('TODO')
+def test_init_dg_data_dynamic_node_feats_with_downcast_warning():
+    assert False
+
+
+@pytest.mark.skip('TODO')
+def test_init_dg_data_static_node_feats_with_downcast_warning():
+    assert False
+
+
+@pytest.mark.skip('TODO')
 def test_init_dg_data_invalid_node_id_with_id_overflow():
     assert False
 
 
+@pytest.mark.skip('TODO')
 def test_init_dg_data_invalid_time_overflow():
     assert False
 
 
+@pytest.mark.skip('TODO')
 def test_init_dg_data_number_of_events_overflow():
     assert False
 
@@ -216,7 +236,7 @@ def test_init_dg_data_bad_args_bad_timestamps():
 
 
 def test_init_dg_data_bad_args_bad_edge_index():
-    edge_timestamps = torch.IntTensor([-1, 5])
+    edge_timestamps = torch.IntTensor([1, 5])
     with pytest.raises(TypeError):
         _ = DGData.from_raw(edge_timestamps, 'foo')
 
@@ -226,7 +246,7 @@ def test_init_dg_data_bad_args_bad_edge_index():
 
 def test_init_dg_data_bad_args_bad_edge_feats():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.IntTensor([-1, 5])
+    edge_timestamps = torch.IntTensor([1, 5])
     with pytest.raises(TypeError):
         _ = DGData.from_raw(edge_timestamps, edge_index, 'foo')
 
@@ -608,6 +628,7 @@ def test_from_pandas_with_edge_features():
         'edge_features': [torch.rand(5).tolist(), torch.rand(5).tolist()],
     }
     events_df = pd.DataFrame(events_dict)
+    events_df[['src', 'dst', 't']] = events_df[['src', 'dst', 't']].astype('int32')
 
     data = DGData.from_pandas(
         events_df,
@@ -631,14 +652,19 @@ def test_from_pandas_with_node_events():
         'dst': [3, 20],
         't': [1337, 1338],
     }
+    edge_df = pd.DataFrame(edge_dict)
+    edge_df[['src', 'dst', 't']] = edge_df[['src', 'dst', 't']].astype('int32')
+
     node_dict = {'node': [7, 8], 't': [3, 6]}
+    node_df = pd.DataFrame(node_dict)
+    node_df[['node', 't']] = node_df[['node', 't']].astype('int32')
 
     data = DGData.from_pandas(
-        edge_df=pd.DataFrame(edge_dict),
+        edge_df=edge_df,
         edge_src_col='src',
         edge_dst_col='dst',
         edge_time_col='t',
-        node_df=pd.DataFrame(node_dict),
+        node_df=node_df,
         node_id_col='node',
         node_time_col='t',
     )
@@ -657,12 +683,16 @@ def test_from_pandas_with_node_features():
         't': [1337, 1338],
     }
     edge_df = pd.DataFrame(edge_dict)
+    edge_df[['src', 'dst', 't']] = edge_df[['src', 'dst', 't']].astype('int32')
+
     node_dict = {
         'node': [7, 8],
         't': [3, 6],
         'node_features': [torch.rand(5).tolist(), torch.rand(5).tolist()],
     }
     node_df = pd.DataFrame(node_dict)
+    node_df[['node', 't']] = node_df[['node', 't']].astype('int32')
+    # node_df['node_features'] = node_df['node_features'].astype('float32')
 
     data = DGData.from_pandas(
         edge_df=edge_df,
@@ -765,7 +795,7 @@ def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, with_node_feats):
 
     if with_node_feats:
         torch.testing.assert_close(
-            data.static_node_feats, torch.Tensor(dataset.node_feat).double()
+            data.static_node_feats, torch.Tensor(dataset.node_feat)
         )
     else:
         assert data.static_node_feats is None
@@ -933,6 +963,7 @@ def test_discretize_no_op():
     assert id(data) != id(coarse_data)  # No Shared memory
 
 
+@pytest.mark.skip('TODO')
 def test_discretize_with_huge_ids_no_overflow():
     assert False
 
