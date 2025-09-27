@@ -107,7 +107,7 @@ class DGStorageArrayBackend(DGStorageBase):
         nbr_nids = torch.full(
             (B, num_nbrs), PADDED_NODE_ID, dtype=torch.int32, device=device
         )
-        nbr_times = torch.zeros(B, num_nbrs, dtype=torch.int32, device=device)
+        nbr_times = torch.zeros(B, num_nbrs, dtype=torch.int64, device=device)
         nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
 
         for i, node in enumerate(unique_nodes.tolist()):
@@ -131,7 +131,7 @@ class DGStorageArrayBackend(DGStorageBase):
             nbr_nids[mask, :nn] = torch.tensor(
                 nbr_ids, dtype=torch.int32, device=device
             )
-            nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.int32, device=device)
+            nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.int64, device=device)
             if self._data.edge_feats is not None:
                 nbr_feats[mask, :nn] = torch.stack(feats).to(device)
 

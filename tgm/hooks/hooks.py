@@ -286,7 +286,7 @@ class RecencyNeighborHook(StatefulHook):
         self._nbr_ids = torch.full(
             (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.int32
         )
-        self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.int32)
+        self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.int64)
         self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
         self._write_pos = torch.zeros(num_nodes, dtype=torch.int32)
 

@@ -14,7 +14,7 @@ from tgm.loader import DGDataLoader
 @pytest.fixture
 def data():
     edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.IntTensor([1, 5, 20])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
     edge_feats = torch.rand(3, 5)
     return DGData.from_raw(edge_timestamps, edge_index, edge_feats)
 
@@ -106,7 +106,7 @@ def basic_sample_graph():
     #############
     """
     edge_index = torch.IntTensor([[0, 1], [0, 2], [2, 3], [2, 0]])
-    edge_timestamps = torch.IntTensor([1, 2, 3, 4])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 4])
     edge_feats = torch.Tensor(
         [[1], [2], [5], [2]]
     )  # edge feat is simply summing the node IDs at two end points

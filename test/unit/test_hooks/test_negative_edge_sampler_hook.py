@@ -9,7 +9,7 @@ from tgm.hooks import NegativeEdgeSamplerHook
 @pytest.fixture
 def data():
     edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.IntTensor([1, 5, 20])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
     return DGData.from_raw(edge_timestamps, edge_index)
 
 

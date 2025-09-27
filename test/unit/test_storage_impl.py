@@ -28,14 +28,14 @@ def DGStorageImpl(request):
 @pytest.fixture
 def edge_only_data():
     edge_index = torch.IntTensor([[2, 2], [2, 4], [6, 8]])
-    edge_timestamps = torch.IntTensor([1, 5, 10])
+    edge_timestamps = torch.LongTensor([1, 5, 10])
     return DGData.from_raw(edge_timestamps, edge_index)
 
 
 @pytest.fixture
 def edge_only_data_with_features():
     edge_index = torch.IntTensor([[2, 2], [2, 4], [6, 8]])
-    edge_timestamps = torch.IntTensor([1, 5, 10])
+    edge_timestamps = torch.LongTensor([1, 5, 10])
     edge_feats = torch.rand(3, 5)
     return DGData.from_raw(edge_timestamps, edge_index, edge_feats)
 
@@ -43,9 +43,9 @@ def edge_only_data_with_features():
 @pytest.fixture
 def data_with_features():
     edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.IntTensor([1, 5, 20])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
     edge_feats = torch.rand(3, 5)
-    node_timestamps = torch.IntTensor([1, 5, 10])
+    node_timestamps = torch.LongTensor([1, 5, 10])
     node_ids = torch.IntTensor([2, 4, 6])
     dynamic_node_feats = torch.rand(3, 5)
     static_node_feats = torch.rand(9, 11)
@@ -129,14 +129,14 @@ def test_get_edges(DGStorageImpl, data, request):
     expected = (
         torch.tensor([2, 2, 6], dtype=torch.int32),
         torch.tensor([2, 4, 8], dtype=torch.int32),
-        torch.tensor([1, 5, 10], dtype=torch.int32),
+        torch.tensor([1, 5, 10], dtype=torch.int64),
     )
     torch.testing.assert_close(storage.get_edges(DGSliceTracker()), expected)
 
     expected = (
         torch.tensor([2, 6], dtype=torch.int32),
         torch.tensor([4, 8], dtype=torch.int32),
-        torch.tensor([5, 10], dtype=torch.int32),
+        torch.tensor([5, 10], dtype=torch.int64),
     )
     torch.testing.assert_close(
         storage.get_edges(DGSliceTracker(start_time=5)), expected
@@ -145,14 +145,14 @@ def test_get_edges(DGStorageImpl, data, request):
     expected = (
         torch.tensor([2], dtype=torch.int32),
         torch.tensor([2], dtype=torch.int32),
-        torch.tensor([1], dtype=torch.int32),
+        torch.tensor([1], dtype=torch.int64),
     )
     torch.testing.assert_close(storage.get_edges(DGSliceTracker(end_time=4)), expected)
 
     expected = (
         torch.tensor([2], dtype=torch.int32),
         torch.tensor([4], dtype=torch.int32),
-        torch.tensor([5], dtype=torch.int32),
+        torch.tensor([5], dtype=torch.int64),
     )
     torch.testing.assert_close(
         storage.get_edges(DGSliceTracker(start_time=5, end_time=9)), expected
@@ -161,7 +161,7 @@ def test_get_edges(DGStorageImpl, data, request):
     expected = (
         torch.tensor([6], dtype=torch.int32),
         torch.tensor([8], dtype=torch.int32),
-        torch.tensor([10], dtype=torch.int32),
+        torch.tensor([10], dtype=torch.int64),
     )
 
     torch.testing.assert_close(
@@ -171,7 +171,7 @@ def test_get_edges(DGStorageImpl, data, request):
     expected = (
         torch.tensor([], dtype=torch.int32),
         torch.tensor([], dtype=torch.int32),
-        torch.tensor([], dtype=torch.int32),
+        torch.tensor([], dtype=torch.int64),
     )
     torch.testing.assert_close(
         storage.get_edges(DGSliceTracker(start_idx=2, end_idx=5, end_time=6)), expected
@@ -372,7 +372,7 @@ def basic_sample_graph():
     #############
     """
     edge_index = torch.IntTensor([[0, 1], [0, 2], [2, 3], [2, 0]])
-    edge_timestamps = torch.IntTensor([1, 2, 3, 4])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 4])
     edge_feats = torch.Tensor(
         [[1], [2], [5], [2]]
     )  # edge feat is simply summing the node IDs at two end points

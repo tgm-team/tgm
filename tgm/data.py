@@ -79,20 +79,26 @@ class DGData:
             if x.dtype not in int_types:
                 raise TypeError(f'{name} must have integer dtype but got: {x.dtype}')
 
-        def _maybe_downcast_tensor(x: Tensor, name: str) -> Tensor:
-            if x.dtype == torch.int64:
-                warnings.warn(
-                    f'Downcasting {name} from torch.int64 to torch.int32', UserWarning
-                )
-                return x.to(torch.int32)
-            elif x.dtype == torch.float64:
+        def _maybe_cast_float_tensor(x: Tensor, name: str) -> Tensor:
+            if x.dtype == torch.float64:
                 warnings.warn(
                     f'Downcasting {name} from torch.float64 to torch.float32',
                     UserWarning,
                 )
                 return x.to(torch.float32)
-            else:
-                return x
+            elif x.dtype != torch.float32:  # Upcast
+                return x.to(torch.float32)
+            return x
+
+        def _maybe_cast_integral_tensor(x: Tensor, name: str) -> Tensor:
+            if x.dtype == torch.int64:
+                warnings.warn(
+                    f'Downcasting {name} from torch.int64 to torch.int32', UserWarning
+                )
+                return x.to(torch.int32)
+            elif x.dtype != torch.int32:  # Upcast
+                return x.to(torch.int32)
+            return x
 
         max_int32_capacity = torch.iinfo(torch.int32).max
 
@@ -106,7 +112,8 @@ class DGData:
                 f'timestamps exceed the int32 limit ({max_int32_capacity}). '
                 'TGM does not yet support graphs this large.'
             )
-        self.timestamps = _maybe_downcast_tensor(self.timestamps, 'timestamps')
+        if self.timestamps.dtype != torch.int64:  # This can only be an upcast
+            self.timestamps = self.timestamps.to(torch.int64)
 
         # Ensure our data does not overflow int32 capacity
         if len(self.timestamps) > max_int32_capacity:
@@ -131,7 +138,7 @@ class DGData:
                 f'Edge events contains node ids that exceed the int32 limit ({max_int32_capacity}). '
                 'TGM does not yet support graphs this large.'
             )
-        self.edge_index = _maybe_downcast_tensor(self.edge_index, 'edge_index')
+        self.edge_index = _maybe_cast_integral_tensor(self.edge_index, 'edge_index')
 
         num_edges = self.edge_index.shape[0]
         if num_edges == 0:
@@ -156,7 +163,7 @@ class DGData:
                     'edge_feats must have shape [num_edges, D_edge], '
                     f'got {num_edges} edges and shape {self.edge_feats.shape}'
                 )
-            self.edge_feats = _maybe_downcast_tensor(self.edge_feats, 'edge_feats')
+            self.edge_feats = _maybe_cast_float_tensor(self.edge_feats, 'edge_feats')
 
         # Validate node event idx
         num_node_events = 0
@@ -194,7 +201,7 @@ class DGData:
                     f'Node events contains node ids that exceed the int32 limit ({max_int32_capacity}). '
                     'TGM does not yet support graphs this large.'
                 )
-            self.node_ids = _maybe_downcast_tensor(self.node_ids, 'node_ids')  # type: ignore
+            self.node_ids = _maybe_cast_integral_tensor(self.node_ids, 'node_ids')  # type: ignore
 
             # Validate dynamic node features (could be None)
             if self.dynamic_node_feats is not None:
@@ -207,7 +214,7 @@ class DGData:
                         'dynamic_node_feats must have shape [num_node_events, D_node_dynamic], '
                         f'got {num_node_events} node events and shape {self.dynamic_node_feats.shape}'
                     )
-                self.dynamic_node_feats = _maybe_downcast_tensor(
+                self.dynamic_node_feats = _maybe_cast_float_tensor(
                     self.dynamic_node_feats, 'dynamic_node_feats'
                 )
         else:
@@ -237,7 +244,7 @@ class DGData:
                     f'but the data requires features for at least {num_nodes} nodes. '
                     f'The first dimension ({self.static_node_feats.shape[0]}) must be >= num_nodes ({num_nodes}).'
                 )
-            self.static_node_feats = _maybe_downcast_tensor(
+            self.static_node_feats = _maybe_cast_float_tensor(
                 self.static_node_feats, 'static_node_feats'
             )
 
@@ -523,7 +530,7 @@ class DGData:
         num_edges = len(edge_reader)
 
         edge_index = torch.empty((num_edges, 2), dtype=torch.int32)
-        timestamps = torch.empty(num_edges, dtype=torch.int32)
+        timestamps = torch.empty(num_edges, dtype=torch.int64)
         edge_feats = None
         if edge_feats_col is not None:
             edge_feats = torch.empty((num_edges, len(edge_feats_col)))
@@ -546,7 +553,7 @@ class DGData:
             node_reader = _read_csv(node_file_path)
             num_node_events = len(node_reader)
 
-            node_timestamps = torch.empty(num_node_events, dtype=torch.int32)
+            node_timestamps = torch.empty(num_node_events, dtype=torch.int64)
             node_ids = torch.empty(num_node_events, dtype=torch.int32)
             if dynamic_node_feats_col is not None:
                 dynamic_node_feats = torch.empty(
@@ -736,8 +743,8 @@ class DGData:
 
         data = dataset.full_data
 
-        # IDs and timestamps are downcast to int32, and features to float32,
-        # preventing any runtime warnings. This is safe for all TGB datasets.
+        # IDs are downcast to int32, and features to float32 preventing any runtime warnings.
+        # This is safe for all TGB datasets.
         edge_index = torch.stack(
             [
                 torch.from_numpy(data['sources']).to(torch.int32),
@@ -745,7 +752,7 @@ class DGData:
             ],
             dim=1,
         )
-        timestamps = torch.from_numpy(data['timestamps']).to(torch.int32)
+        timestamps = torch.from_numpy(data['timestamps'])
         if data['edge_feat'] is None:
             edge_feats = None
         else:
@@ -774,7 +781,7 @@ class DGData:
                     for node_id, label in node_label_dict[t].items():
                         num_node_events += 1
                         node_label_dim = label.shape[0]
-                temp_node_timestamps = np.zeros(num_node_events, dtype=np.int32)
+                temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
                 temp_node_ids = np.zeros(num_node_events, dtype=np.int32)
                 temp_dynamic_node_feats = np.zeros(
                     (num_node_events, node_label_dim), dtype=np.float32

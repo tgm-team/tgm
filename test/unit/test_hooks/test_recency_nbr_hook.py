@@ -41,7 +41,7 @@ def basic_sample_graph():
     #############
     """
     edge_index = torch.IntTensor([[0, 1], [0, 2], [2, 3], [2, 0]])
-    edge_timestamps = torch.IntTensor([1, 2, 3, 4])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 4])
     edge_feats = torch.Tensor(
         [[1], [2], [5], [2]]
     )  # edge feat is simply summing the node IDs at two end points
@@ -333,7 +333,7 @@ def recency_buffer_graph():
     edge_index = [src, dst]
     edge_index = torch.IntTensor(edge_index)
     edge_index = edge_index.transpose(0, 1)
-    edge_timestamps = torch.IntTensor(list(range(0, 100)))
+    edge_timestamps = torch.LongTensor(list(range(0, 100)))
     edge_feats = torch.Tensor(
         list(range(1, 101))
     )  # edge feat is simply summing the node IDs at two end points
@@ -405,7 +405,7 @@ def two_hop_basic_graph():
     5 -> t=6 -> 2
     """
     edge_index = torch.IntTensor([[0, 1], [1, 2], [3, 2], [4, 2], [5, 0], [5, 2]])
-    edge_timestamps = torch.IntTensor([1, 2, 3, 4, 5, 6])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 4, 5, 6])
     edge_feats = torch.Tensor(
         [[1], [3], [5], [6], [5], [7]]
     )  # edge feat is simply summing the node IDs at two end points
