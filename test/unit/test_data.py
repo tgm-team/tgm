@@ -176,6 +176,46 @@ def test_init_dg_data_bad_args_invalid_node_id():
         )
 
 
+def test_init_dg_data_with_nan_feats():
+    edge_index = torch.IntTensor([[0, 0]])
+    edge_timestamps = torch.LongTensor([1])
+    node_ids = torch.IntTensor([0])
+    node_timestamps = torch.LongTensor([2])
+
+    edge_feats = torch.rand((1, 1)).float()
+    edge_feats[0][0] = torch.nan
+
+    with pytest.raises(ValueError):
+        DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_ids=node_ids,
+            node_timestamps=node_timestamps,
+            edge_feats=edge_feats,
+        )
+
+    node_feats = torch.rand((1, 1)).float()
+    node_feats[0][0] = torch.nan
+
+    with pytest.raises(ValueError):
+        DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_ids=node_ids,
+            node_timestamps=node_timestamps,
+            dynamic_node_feats=node_feats,
+        )
+
+    with pytest.raises(ValueError):
+        DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_ids=node_ids,
+            node_timestamps=node_timestamps,
+            static_node_feats=node_feats,
+        )
+
+
 def test_init_dg_data_with_downcast_warning():
     edge_index = torch.IntTensor([[0, 1]])
     edge_timestamps = torch.LongTensor([1])

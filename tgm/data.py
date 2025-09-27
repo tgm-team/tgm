@@ -73,6 +73,8 @@ class DGData:
         def _assert_is_tensor(x: Any, name: str) -> None:
             if not isinstance(x, Tensor):
                 raise TypeError(f'{name} must be a Tensor, got: {type(x)}')
+            if torch.isnan(x).any():
+                raise ValueError(f'{name} contains NaN values')
 
         def _assert_tensor_is_integral(x: Tensor, name: str) -> None:
             int_types = [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8]
