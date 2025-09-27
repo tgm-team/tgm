@@ -13,8 +13,8 @@ from tgm.loader import DGDataLoader
 
 @pytest.fixture
 def data():
-    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.LongTensor([1, 5, 20])
+    edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
+    edge_timestamps = torch.IntTensor([1, 5, 20])
     edge_feats = torch.rand(3, 5)
     return DGData.from_raw(edge_timestamps, edge_index, edge_feats)
 
@@ -46,8 +46,8 @@ def test_neighbor_sampler_hook_link_pred(data):
     batch = dg.materialize()
 
     # Link Prediction will add negative edges to seed nodes for sampling
-    batch.neg = torch.LongTensor([0] * len(batch.dst))
-    batch.neg_time = torch.LongTensor([0] * len(batch.dst))
+    batch.neg = torch.IntTensor([0] * len(batch.dst))
+    batch.neg_time = torch.IntTensor([0] * len(batch.dst))
     batch = hook(dg, batch)
     assert isinstance(batch, DGBatch)
     assert hasattr(batch, 'nids')
@@ -105,9 +105,9 @@ def basic_sample_graph():
     # Alice (0) #
     #############
     """
-    edge_index = torch.LongTensor([[0, 1], [0, 2], [2, 3], [2, 0]])
-    edge_timestamps = torch.LongTensor([1, 2, 3, 4])
-    edge_feats = torch.LongTensor(
+    edge_index = torch.IntTensor([[0, 1], [0, 2], [2, 3], [2, 0]])
+    edge_timestamps = torch.IntTensor([1, 2, 3, 4])
+    edge_feats = torch.Tensor(
         [[1], [2], [5], [2]]
     )  # edge feat is simply summing the node IDs at two end points
     data = DGData.from_raw(edge_timestamps, edge_index, edge_feats)

@@ -487,7 +487,7 @@ class RecencyNeighborHook(StatefulHook):
 
         # Increment write_pos per node
         num_writes = torch.ones_like(sorted_nodes, device=self._device)
-        self._write_pos.scatter_add_(0, sorted_nodes, num_writes)
+        self._write_pos.scatter_add_(0, sorted_nodes.long(), num_writes)
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:

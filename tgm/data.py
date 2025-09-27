@@ -71,6 +71,8 @@ class DGData:
 
         # TODO: Cast all ids to int32, and all features to float32
         # Raise warning in case of downcast
+
+        # TODO: Raise error if node ids, timestamps or number of events may overflow int32
         def _assert_is_tensor(x: Any, name: str) -> None:
             if not isinstance(x, Tensor):
                 raise TypeError(f'{name} must be a Tensor, got: {type(x)}')
@@ -201,9 +203,9 @@ class DGData:
         # Sort if necessary
         if not torch.all(torch.diff(self.timestamps) >= 0):
             # Sort timestamps
-            sort_idx = torch.argsort(self.timestamps)
+            sort_idx = torch.argsort(self.timestamps).int()
             inverse_sort_idx = torch.empty_like(sort_idx)
-            inverse_sort_idx[sort_idx] = torch.arange(len(sort_idx))
+            inverse_sort_idx[sort_idx] = torch.arange(len(sort_idx), dtype=torch.int32)
             self.timestamps = self.timestamps[sort_idx]
 
             # Update global event indices
@@ -399,9 +401,9 @@ class DGData:
             event_types = torch.cat([event_types, torch.ones_like(node_timestamps)])
 
         # Compute event masks
-        edge_event_idx = (event_types == 0).nonzero(as_tuple=True)[0]
+        edge_event_idx = (event_types == 0).nonzero(as_tuple=True)[0].int()
         node_event_idx = (
-            (event_types == 1).nonzero(as_tuple=True)[0]
+            (event_types == 1).nonzero(as_tuple=True)[0].int()
             if node_timestamps is not None
             else None
         )
