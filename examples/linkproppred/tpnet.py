@@ -255,20 +255,18 @@ evaluator = Evaluator(name=args.dataset)
 
 data = DGData.from_tgb(args.dataset)
 dgraph = DGraph(data)
-
 num_nodes = dgraph.num_nodes
 edge_feats_dim = dgraph.edge_feats_dim
 
-if dgraph.static_node_feats is not None:
-    static_node_feat = dgraph.static_node_feats
-else:
-    static_node_feat = torch.randn((num_nodes, args.node_dim), device=args.device)
-
 train_data, val_data, test_data = data.split()
-
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
+
+if dgraph.static_node_feats is not None:
+    static_node_feat = train_dg.static_node_feats
+else:
+    static_node_feat = torch.randn((num_nodes, args.node_dim), device=args.device)
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.num_neighbors],
