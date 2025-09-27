@@ -58,6 +58,7 @@ class TGCN(torch.nn.Module):
 
         Note: If edge weights are not present the forward pass defaults to an unweighted graph.
         """
+        edge_index = edge_index.to(torch.int64)
         H = self._set_hidden_state(X, H)
 
         # Eq.3 (Section 3.3.3)

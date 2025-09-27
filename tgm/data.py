@@ -345,7 +345,8 @@ class DGData:
         # Note: If we simply return a new storage this will 2x our peak memory since the GC
         # won't be able to clean up the current graph storage while `self` is alive.
         time_factor = self.time_delta.convert(time_delta)  # type: ignore
-        buckets = (self.timestamps.float() * time_factor).floor().int()
+        # Doing time conversion in 64-bit to avoid numerical issues with float cast
+        buckets = (self.timestamps.to(torch.float64) * time_factor).floor().int()
 
         def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
             event_buckets = buckets[event_idx]

@@ -94,6 +94,7 @@ class GCLSTM(torch.nn.Module):
 
         Note: If edge weights are not present the forward pass defaults to an unweighted graph.
         """
+        edge_index = edge_index.to(torch.int64)
         H = self._set_hidden_state(X, H)
         C = self._set_cell_state(X, C)
         I = self._compute_input_gate(X, edge_index, edge_weight, H, lambda_max)
