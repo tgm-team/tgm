@@ -176,6 +176,26 @@ def test_init_dg_data_bad_args_invalid_node_id():
         )
 
 
+def test_init_dg_data_node_id_with_downcast_warning():
+    assert False
+
+
+def test_init_dg_data_timestamp_with_downcast_warning():
+    assert False
+
+
+def test_init_dg_data_invalid_node_id_with_id_overflow():
+    assert False
+
+
+def test_init_dg_data_invalid_time_overflow():
+    assert False
+
+
+def test_init_dg_data_number_of_events_overflow():
+    assert False
+
+
 def test_init_dg_data_bad_args_empty_graph():
     # Empty graph not supported
     with pytest.raises(EmptyGraphError):
@@ -911,6 +931,10 @@ def test_discretize_no_op():
     data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
     coarse_data = data.discretize('s')
     assert id(data) != id(coarse_data)  # No Shared memory
+
+
+def test_discretize_with_huge_ids_no_overflow():
+    assert False
 
 
 def test_discretize_bad_args():

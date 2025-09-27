@@ -703,3 +703,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
     assert nbr_nids[0][4][0] == 2
     assert nbr_nids[1][4][0] == PADDED_NODE_ID
     assert nbr_nids[0][5][0] == 2
+
+
+def test_sampler_with_huge_ids_no_overflow():
+    assert False
