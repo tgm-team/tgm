@@ -145,36 +145,40 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        try:
-            neg_batch_list = self.neg_sampler.query_batch(
-                batch.src, batch.dst, batch.time, split_mode=self.split_mode
+        if batch.src.size(0) == 0:
+            batch.neg = torch.empty((0,), dtype=torch.int, device=dg.device)  # type: ignore
+            batch.neg_time = torch.empty((0,), dtype=torch.long, device=dg.device)  # type: ignore
+        else:
+            try:
+                neg_batch_list = self.neg_sampler.query_batch(
+                    batch.src, batch.dst, batch.time, split_mode=self.split_mode
+                )
+            except ValueError as e:
+                raise ValueError(
+                    f'Negative sampling failed for split_mode={self.split_mode}. Try updating your TGB package: `pip install --upgrade py-tgb`'
+                ) from e
+
+            batch.neg_batch_list = [  # type: ignore
+                torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+                for neg_batch in neg_batch_list
+            ]
+            batch.neg = torch.unique(torch.cat(batch.neg_batch_list))  # type: ignore
+
+            # This is a heuristic. For our fake (negative) link times,
+            # we pick random time stamps within [batch.start_time, batch.end_time].
+            # Using random times on the whole graph will likely produce information
+            # leakage, making the prediction easier than it should be.
+
+            # Use generator to local constrain rng for reproducibility
+            gen = torch.Generator(device=dg.device)
+            gen.manual_seed(0)
+            batch.neg_time = torch.randint(  # type: ignore
+                int(batch.time.min().item()),
+                int(batch.time.max().item()) + 1,
+                (batch.neg.size(0),),  # type: ignore
+                device=dg.device,
+                generator=gen,
             )
-        except ValueError as e:
-            raise ValueError(
-                f'Negative sampling failed for split_mode={self.split_mode}. Try updating your TGB package: `pip install --upgrade py-tgb`'
-            ) from e
-
-        batch.neg_batch_list = [  # type: ignore
-            torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
-            for neg_batch in neg_batch_list
-        ]
-        batch.neg = torch.unique(torch.cat(batch.neg_batch_list))  # type: ignore
-
-        # This is a heuristic. For our fake (negative) link times,
-        # we pick random time stamps within [batch.start_time, batch.end_time].
-        # Using random times on the whole graph will likely produce information
-        # leakage, making the prediction easier than it should be.
-
-        # Use generator to local constrain rng for reproducibility
-        gen = torch.Generator(device=dg.device)
-        gen.manual_seed(0)
-        batch.neg_time = torch.randint(  # type: ignore
-            int(batch.time.min().item()),
-            int(batch.time.max().item()) + 1,
-            (batch.neg.size(0),),  # type: ignore
-            device=dg.device,
-            generator=gen,
-        )
         return batch
 
 

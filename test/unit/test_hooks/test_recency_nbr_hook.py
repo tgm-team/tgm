@@ -703,3 +703,55 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
     assert nbr_nids[0][4][0] == 2
     assert nbr_nids[1][4][0] == PADDED_NODE_ID
     assert nbr_nids[0][5][0] == 2
+
+
+@pytest.fixture
+def node_only_data():
+    edge_index = torch.LongTensor([[1, 2], [2, 3], [3, 4]])
+    edge_timestamps = torch.LongTensor([1, 2, 3])
+    edge_feats = torch.LongTensor(
+        [[1], [2], [3]]
+    )  # edge feat is simply summing the node IDs at two end points
+    dynamic_node_feats = torch.rand(2, 5)
+    node_timestamps = torch.LongTensor([4, 5])
+    node_ids = torch.LongTensor([5, 6])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats=edge_feats,
+        dynamic_node_feats=dynamic_node_feats,
+        node_timestamps=node_timestamps,
+        node_ids=node_ids,
+    )
+
+
+def test_node_only_batch_recency_nbr_sampler(node_only_data):
+    dg = DGraph(node_only_data)
+    hm = HookManager(keys=['unit'])
+    n_nbrs = [1]  # 1 neighbor for each node
+    recency_hook = RecencyNeighborHook(
+        num_nbrs=n_nbrs,
+        num_nodes=dg.num_nodes,
+        edge_feats_dim=dg.edge_feats_dim,
+        directed=True,
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register('unit', recency_hook)
+    loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
+    with hm.activate('unit'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        assert isinstance(batch_1, DGBatch)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+        assert nids.shape == (1, 6)
+        assert nbr_nids.shape == (1, 6, 1)
+        assert nbr_times.shape == (1, 6, 1)
+        assert nbr_feats.shape == (1, 6, 1, 1)
+
+        batch_2 = next(batch_iter)
+        assert isinstance(batch_2, DGBatch)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
+        # assert len(nids) == 0
+        # assert len(nbr_nids) == 0
+        # assert len(nbr_times) == 0
+        # assert len(nbr_feats) == 0
