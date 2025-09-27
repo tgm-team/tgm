@@ -733,7 +733,6 @@ def test_from_pandas_with_node_features():
     }
     node_df = pd.DataFrame(node_dict)
     node_df[['node', 't']] = node_df[['node', 't']].astype('int32')
-    # node_df['node_features'] = node_df['node_features'].astype('float32')
 
     data = DGData.from_pandas(
         edge_df=edge_df,
