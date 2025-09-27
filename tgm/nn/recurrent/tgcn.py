@@ -6,7 +6,7 @@ from torch_geometric.nn import GCNConv
 
 
 class TGCN(torch.nn.Module):
-    r"""An implementation of Temporal Graph Convolutional Gated Reccurent Cell.
+    r"""An implementation of Temporal Graph Convolutional Gated Recurrent Cell.
 
     Args:
         in_channels (int): Number of input features.

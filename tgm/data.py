@@ -108,7 +108,7 @@ class DGData:
             )
         self.timestamps = _maybe_downcast_tensor(self.timestamps, 'timestamps')
 
-        # Ensure our data does not overlow int32 capacity
+        # Ensure our data does not overflow int32 capacity
         if len(self.timestamps) > max_int32_capacity:
             raise ValueError(
                 f'Number of events ({len(self.timestamps)}) exceeds the int32 limit '
@@ -764,7 +764,7 @@ class DGData:
                 }
             else:
                 raise ValueError(
-                    f'Failed to construct TGB dataset. Try updating your TGB package: `pip isntall --upgrade py-tgb`'
+                    f'Failed to construct TGB dataset. Try updating your TGB package: `pip install --upgrade py-tgb`'
                 )
 
             if len(node_label_dict):
