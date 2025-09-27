@@ -63,7 +63,7 @@ class DeduplicationHook(StatelessHook):
         unique_nids = torch.unique(all_nids, sorted=True)
 
         batch.unique_nids = unique_nids  # type: ignore
-        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x)  # type: ignore
+        batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x).int()  # type: ignore
 
         return batch
 
@@ -94,7 +94,7 @@ class NegativeEdgeSamplerHook(StatelessHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.dst.size(0)),)
         batch.neg = torch.randint(  # type: ignore
-            self.low, self.high, size, dtype=torch.long, device=dg.device
+            self.low, self.high, size, dtype=torch.int32, device=dg.device
         )
         batch.neg_time = batch.time.clone()  # type: ignore
         return batch
@@ -155,7 +155,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
             ) from e
 
         batch.neg_batch_list = [  # type: ignore
-            torch.tensor(neg_batch, dtype=torch.long, device=dg.device)
+            torch.tensor(neg_batch, dtype=torch.int32, device=dg.device)
             for neg_batch in neg_batch_list
         ]
         batch.neg = torch.unique(torch.cat(batch.neg_batch_list))  # type: ignore
@@ -284,11 +284,11 @@ class RecencyNeighborHook(StatefulHook):
         self._seed_nodes_key = seed_nodes_key
 
         self._nbr_ids = torch.full(
-            (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.long
+            (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.int32
         )
-        self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.long)
+        self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.int64)
         self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
-        self._write_pos = torch.zeros(num_nodes, dtype=torch.long)
+        self._write_pos = torch.zeros(num_nodes, dtype=torch.int32)
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -422,7 +422,7 @@ class RecencyNeighborHook(StatefulHook):
                 (len(batch.src), self._edge_feats_dim), device=self._device
             )
         else:
-            edge_feats = batch.edge_feats.float()
+            edge_feats = batch.edge_feats
 
         if self._directed:
             node_ids, nbr_nids, times = batch.src, batch.dst, batch.time
@@ -487,7 +487,7 @@ class RecencyNeighborHook(StatefulHook):
 
         # Increment write_pos per node
         num_writes = torch.ones_like(sorted_nodes, device=self._device)
-        self._write_pos.scatter_add_(0, sorted_nodes, num_writes)
+        self._write_pos.scatter_add_(0, sorted_nodes.long(), num_writes)
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
