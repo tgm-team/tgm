@@ -165,14 +165,18 @@ class RandomProjectionModule(nn.Module):
             src_update_messages = self.random_projections[i - 1][dst] * time_weight
             dst_update_messages = self.random_projections[i - 1][src] * time_weight
             self.random_projections[i].scatter_add_(
-                dim=0, index=src[:, None].expand(-1, self.dim), src=src_update_messages
+                dim=0,
+                index=src[:, None].expand(-1, self.dim).long(),
+                src=src_update_messages,
             )
             self.random_projections[i].scatter_add_(
-                dim=0, index=dst[:, None].expand(-1, self.dim), src=dst_update_messages
+                dim=0,
+                index=dst[:, None].expand(-1, self.dim).long(),
+                src=dst_update_messages,
             )
 
         # set current timestamp to the biggest timestamp in this batch
-        self.now_time.data = torch.tensor(next_time, device=self.device)
+        self.now_time.data = next_time.clone().detach()
 
     def get_random_projections(self, node_ids: torch.Tensor) -> torch.Tensor:
         f"""Get the random projections of the give node ids
@@ -220,7 +224,9 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        assert len(random_projections) == 2, (
+        assert (
+            len(random_projections) == 2
+        ), (
             'Expect a tuple of (now_time,random_projections)'
         )  # @TODO: Need to raise custom exception
         now_time, random_projections = random_projections
@@ -232,7 +238,9 @@ class RandomProjectionModule(nn.Module):
 
         self.now_time.data = now_time.clone()
         for i in range(1, self.num_layer + 1):
-            assert torch.is_tensor(random_projections[i - 1]), (
+            assert torch.is_tensor(
+                random_projections[i - 1]
+            ), (
                 'Not a valid state of random projection'
             )  # @TODO: Need to raise custom exception
             self.random_projections[i].data = random_projections[i - 1].clone()

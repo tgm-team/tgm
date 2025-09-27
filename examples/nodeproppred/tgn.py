@@ -214,7 +214,7 @@ class TGNMemory(torch.nn.Module):
 
         # Get local copy of updated `last_update`.
         dim_size = self.last_update.size(0)
-        last_update = scatter(t, idx, 0, dim_size, reduce='max')[n_id]
+        last_update = scatter(t, idx.long(), 0, dim_size, reduce='max')[n_id]
         return memory, last_update
 
     def _update_msg_store(

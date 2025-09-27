@@ -253,25 +253,22 @@ seed_everything(args.seed)
 
 evaluator = Evaluator(name=args.dataset)
 
-data = DGData.from_tgb(args.dataset)
-dgraph = DGraph(data)
-num_nodes = dgraph.num_nodes
-edge_feats_dim = dgraph.edge_feats_dim
-
-train_data, val_data, test_data = data.split()
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-if dgraph.static_node_feats is not None:
+if train_dg.static_node_feats is not None:
     static_node_feat = train_dg.static_node_feats
 else:
-    static_node_feat = torch.randn((num_nodes, args.node_dim), device=args.device)
+    static_node_feat = torch.randn(
+        (test_dg.num_nodes, args.node_dim), device=args.device
+    )
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.num_neighbors],
-    num_nodes=num_nodes,
-    edge_feats_dim=edge_feats_dim,
+    num_nodes=test_dg.num_nodes,
+    edge_feats_dim=test_dg.edge_feats_dim,
 )
 
 hm = RecipeRegistry.build(
@@ -285,10 +282,10 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 random_projection_module = RandomProjectionModule(
-    num_nodes=num_nodes,
+    num_nodes=test_dg.num_nodes,
     num_layer=args.rp_num_layers,
     time_decay_weight=args.rp_time_decay_weight,
-    beginning_time=dgraph.start_time,
+    beginning_time=train_dg.start_time,
     enforce_dim=args.enforce_dim,
     num_edges=train_dg.num_edges,
     dim_factor=args.rp_dim_factor,
@@ -297,7 +294,7 @@ random_projection_module = RandomProjectionModule(
 
 model = TPNet_LinkPrediction(
     node_feat_dim=static_node_feat.shape[1],
-    edge_feat_dim=edge_feats_dim,
+    edge_feat_dim=train_dg.edge_feats_dim,
     time_feat_dim=args.time_dim,
     output_dim=args.embed_dim,
     dropout=args.dropout,
