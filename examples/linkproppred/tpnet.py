@@ -195,7 +195,7 @@ def train(
         opt.zero_grad()
         pos_out, neg_out = model(batch, static_node_feat)
 
-        loss = F.binary_cross_entopy_with_logits(pos_out, torch.ones_like(pos_out))
+        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
