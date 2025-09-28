@@ -57,7 +57,7 @@ class LinkPredictor(nn.Module):
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.fc2(h).sigmoid().view(-1)
+        return self.fc2(h).view(-1)
 
 
 class GraphAttentionEmbedding(torch.nn.Module):
