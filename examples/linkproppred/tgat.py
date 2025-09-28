@@ -136,7 +136,7 @@ class LinkPredictor(nn.Module):
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.fc2(h).sigmoid().view(-1)
+        return self.fc2(h).view(-1)
 
 
 def train(
@@ -159,8 +159,8 @@ def train(
         pos_out = decoder(z_src, z_dst)
         neg_out = decoder(z_src, z_neg)
 
-        loss = F.binary_cross_entropy(pos_out, torch.ones_like(pos_out))
-        loss += F.binary_cross_entropy(neg_out, torch.zeros_like(neg_out))
+        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
+        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -190,7 +190,7 @@ def eval(
             dst_idx = torch.tensor([id_map[n.item()] for n in dst_ids], device=z.device)
             z_src = z[src_idx]
             z_dst = z[dst_idx]
-            y_pred = decoder(z_src, z_dst)
+            y_pred = decoder(z_src, z_dst).sigmoid()
 
             input_dict = {
                 'y_pred_pos': y_pred[0],
