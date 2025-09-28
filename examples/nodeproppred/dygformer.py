@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
+from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import DeduplicationHook, HookManager, RecencyNeighborHook
 from tgm.loader import DGDataLoader
@@ -207,7 +208,6 @@ def eval(
     loader: DGDataLoader,
     encoder: nn.Module,
     decoder: nn.Module,
-    eval_metric: str,
     evaluator: Evaluator,
     static_node_feat: torch.Tensor,
 ) -> float:
@@ -225,9 +225,9 @@ def eval(
                 input_dict = {
                     'y_true': y_true,
                     'y_pred': y_pred,
-                    'eval_metric': [eval_metric],
+                    'eval_metric': [METRIC_TGB_NODEPROPPRED],
                 }
-                perf_list.append(evaluator.eval(input_dict)[eval_metric])
+                perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
     return float(np.mean(perf_list))
 
@@ -271,7 +271,7 @@ else:
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-evaluator, eval_metric = Evaluator(name=args.dataset), 'ndcg'
+evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
 
 encoder = DyGFormer_NodePrediction(
@@ -302,18 +302,14 @@ for epoch in range(1, args.epochs + 1):
         end_time = time.perf_counter()
         latency = end_time - start_time
     with hm.activate('val'):
-        val_ndcg = eval(
-            val_loader, encoder, decoder, eval_metric, evaluator, static_node_feat
-        )
+        val_ndcg = eval(val_loader, encoder, decoder, evaluator, static_node_feat)
 
     print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {eval_metric}={val_ndcg:.4f}'
+        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}'
     )
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 with hm.activate('test'):
-    test_ndcg = eval(
-        test_loader, encoder, decoder, eval_metric, evaluator, static_node_feat
-    )
-    print(f'Test {eval_metric}={test_ndcg:.4f}')
+    test_ndcg = eval(test_loader, encoder, decoder, evaluator, static_node_feat)
+    print(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')

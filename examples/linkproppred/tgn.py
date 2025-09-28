@@ -323,7 +323,6 @@ def eval(
     memory: nn.Module,
     encoder: nn.Module,
     decoder: nn.Module,
-    eval_metric: str,
     evaluator: Evaluator,
 ) -> float:
     memory.eval()
@@ -371,9 +370,9 @@ def eval(
             input_dict = {
                 'y_pred_pos': y_pred[0],
                 'y_pred_neg': y_pred[1:],
-                'eval_metric': [eval_metric],
+                'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
-            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+            perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # Update memory with ground-truth state.
         memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
@@ -437,7 +436,7 @@ for epoch in range(1, args.epochs + 1):
         latency = end_time - start_time
 
     with hm.activate(val_key):
-        val_mrr = eval(val_loader, memory, encoder, decoder, eval_metric, evaluator)
+        val_mrr = eval(val_loader, memory, encoder, decoder, evaluator)
     print(
         f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
     )
@@ -447,5 +446,5 @@ for epoch in range(1, args.epochs + 1):
 
 
 with hm.activate(test_key):
-    test_mrr = eval(test_loader, memory, encoder, decoder, eval_metric, evaluator)
+    test_mrr = eval(test_loader, memory, encoder, decoder, evaluator)
     print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
