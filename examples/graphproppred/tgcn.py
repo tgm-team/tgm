@@ -203,7 +203,7 @@ def eval(
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             z, h_0 = encoder(batch, static_node_feats, h_0)
             z_node = z[torch.cat([batch.src, batch.dst])]
-            y_pred[i] = decoder(z_node)
+            y_pred[i] = decoder(z_node).sigmoid()
 
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, y_true, indexes=indexes)

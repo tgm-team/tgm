@@ -159,7 +159,7 @@ def eval(
             query_src = batch.src[idx].repeat(len(neg_batch) + 1)
             query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
 
-            y_pred = decoder(z[query_src], z[query_dst])
+            y_pred = decoder(z[query_src], z[query_dst]).sigmoid()
             input_dict = {
                 'y_pred_pos': y_pred[0],
                 'y_pred_neg': y_pred[1:],

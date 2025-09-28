@@ -237,6 +237,7 @@ def eval(
             copy_batch.nbr_feats = [batch.nbr_feats[0][all_idx]]
 
             pos_out, neg_out = model(copy_batch, static_node_feat)
+            pos_out, neg_out = pos_out.sigmoid(), neg_out.sigmoid()
 
             input_dict = {
                 'y_pred_pos': pos_out,

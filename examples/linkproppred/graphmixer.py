@@ -236,7 +236,7 @@ def eval(
             dst_idx = torch.tensor([id_map[n.item()] for n in dst_ids], device=z.device)
             z_src = z[src_idx]
             z_dst = z[dst_idx]
-            y_pred = decoder(z_src, z_dst)
+            y_pred = decoder(z_src, z_dst).sigmoid()
 
             input_dict = {
                 'y_pred_pos': y_pred[0],
