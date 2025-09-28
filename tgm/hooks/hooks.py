@@ -93,10 +93,14 @@ class NegativeEdgeSamplerHook(StatelessHook):
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(  # type: ignore
-            self.low, self.high, size, dtype=torch.long, device=dg.device
-        )
-        batch.neg_time = batch.time.clone()  # type: ignore
+        if size[0] == 0:
+            batch.neg = None  # type: ignore
+            batch.neg_time = None  # type: ignore
+        else:
+            batch.neg = torch.randint(  # type: ignore
+                self.low, self.high, size, dtype=torch.long, device=dg.device
+            )
+            batch.neg_time = batch.time.clone()  # type: ignore
         return batch
 
 
@@ -146,8 +150,8 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         if batch.src.size(0) == 0:
-            batch.neg = torch.empty((0,), dtype=torch.int, device=dg.device)  # type: ignore
-            batch.neg_time = torch.empty((0,), dtype=torch.long, device=dg.device)  # type: ignore
+            batch.neg = None  # type: ignore
+            batch.neg_time = None  # type: ignore
         else:
             try:
                 neg_batch_list = self.neg_sampler.query_batch(
@@ -259,7 +263,7 @@ class RecencyNeighborHook(StatefulHook):
     Args:
         num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
-        edge_feats_dim (int): Edge feature dimension on the dynamic graph.
+        edge_feats_dim (int, optional): Edge feature dimension on the dynamic graph.
         directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
         seed_nodes_key (str, optional): the str to identify the initial seed nodes to sample for.
 
@@ -271,7 +275,7 @@ class RecencyNeighborHook(StatefulHook):
         self,
         num_nodes: int,
         num_nbrs: List[int],
-        edge_feats_dim: int,
+        edge_feats_dim: int = 0,
         directed: bool = False,
         seed_nodes_key: str = None,  # type: ignore
     ) -> None:

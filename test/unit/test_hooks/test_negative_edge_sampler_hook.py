@@ -75,7 +75,5 @@ def test_node_only_batch_negative_edge_sampler(node_only_data):
 
         batch_2 = next(batch_iter)
         assert isinstance(batch_2, DGBatch)
-        assert torch.is_tensor(batch_2.neg)
-        assert len(batch_2.neg) == 0
-        assert torch.is_tensor(batch_2.neg_time)
-        assert len(batch_2.neg_time) == 0
+        assert batch_2.neg is None
+        assert batch_2.neg_time is None
