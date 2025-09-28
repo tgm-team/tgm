@@ -41,18 +41,17 @@ class RandomProjectionModule(nn.Module):
         device: str = 'cpu',
     ) -> None:
         super(RandomProjectionModule, self).__init__()
-        assert (not num_edges and not dim_factor) or not enforce_dim or use_matrix
-
-        if enforce_dim is not None:
-            self.dim = enforce_dim
-        elif use_matrix:
-            self.dim = num_nodes
-        elif num_edges is not None and dim_factor is not None:
-            self.dim = min(int(math.log(num_edges * 2)) * dim_factor, num_nodes)
+        if not use_matrix:
+            if enforce_dim is not None:
+                self.dim = enforce_dim
+            elif num_edges is not None and dim_factor is not None:
+                self.dim = min(int(math.log(num_edges * 2)) * dim_factor, num_nodes)
+            else:
+                raise ValueError(
+                    'When `use_matrix` is False, either providing enforce_dim or both num_edges and dim_factor'
+                )
         else:
-            raise ValueError(
-                'Must provide enforce_dim or (num_edges and dim_factor) or set use_matrix to true'
-            )
+            self.dim = num_nodes
         self.num_layer = num_layer
         self.time_decay_weight = time_decay_weight
         self.use_matrix = use_matrix
@@ -224,7 +223,9 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        assert len(random_projections) == 2, (
+        assert (
+            len(random_projections) == 2
+        ), (
             'Expect a tuple of (now_time,random_projections)'
         )  # @TODO: Need to raise custom exception
         now_time, random_projections = random_projections
@@ -236,7 +237,9 @@ class RandomProjectionModule(nn.Module):
 
         self.now_time.data = now_time.clone()
         for i in range(1, self.num_layer + 1):
-            assert torch.is_tensor(random_projections[i - 1]), (
+            assert torch.is_tensor(
+                random_projections[i - 1]
+            ), (
                 'Not a valid state of random projection'
             )  # @TODO: Need to raise custom exception
             self.random_projections[i].data = random_projections[i - 1].clone()
