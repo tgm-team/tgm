@@ -255,7 +255,6 @@ class RecencyNeighborHook(StatefulHook):
     Args:
         num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
-        edge_feats_dim (int): Edge feature dimension on the dynamic graph.
         directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
         seed_nodes_key (str, optional): the str to identify the initial seed nodes to sample for.
 
@@ -267,7 +266,6 @@ class RecencyNeighborHook(StatefulHook):
         self,
         num_nodes: int,
         num_nbrs: List[int],
-        edge_feats_dim: int,
         directed: bool = False,
         seed_nodes_key: str = None,  # type: ignore
     ) -> None:
@@ -276,10 +274,10 @@ class RecencyNeighborHook(StatefulHook):
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
 
+        self._num_nodes = num_nodes
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
         self._directed = directed
-        self._edge_feats_dim = edge_feats_dim
         self._device = torch.device('cpu')
         self._seed_nodes_key = seed_nodes_key
 
@@ -287,8 +285,11 @@ class RecencyNeighborHook(StatefulHook):
             (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.int32
         )
         self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.int64)
-        self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
         self._write_pos = torch.zeros(num_nodes, dtype=torch.int32)
+
+        # Wait until first __call__ to infer the edge_feats_dim on the underlying grap
+        self._edge_feats_dim = None
+        self._nbr_feats = None
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -297,10 +298,13 @@ class RecencyNeighborHook(StatefulHook):
     def reset_state(self) -> None:
         self._nbr_ids.fill_(PADDED_NODE_ID)
         self._nbr_times.zero_()
-        self._nbr_feats.zero_()
         self._write_pos.zero_()
 
+        if self._nbr_feats is not None:
+            self._nbr_feats.zero_()
+
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        self._initialize_nbr_feats_if_needed(dg)
         device = dg.device
         self._move_queues_to_device_if_needed(device)  # No-op after first batch
 
@@ -347,6 +351,7 @@ class RecencyNeighborHook(StatefulHook):
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
+        assert self._nbr_feats is not None  # For mypy
         B = self._max_nbrs  # buffer size
 
         nbr_nids = self._nbr_ids[node_ids]  # (N, B)
@@ -417,6 +422,7 @@ class RecencyNeighborHook(StatefulHook):
         return out_nbrs, out_times, out_feats
 
     def _update(self, batch: DGBatch) -> None:
+        assert self._nbr_feats is not None  # For mypy
         if batch.edge_feats is None:
             edge_feats = torch.zeros(
                 (len(batch.src), self._edge_feats_dim), device=self._device
@@ -490,12 +496,20 @@ class RecencyNeighborHook(StatefulHook):
         self._write_pos.scatter_add_(0, sorted_nodes.long(), num_writes)
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
+        assert self._nbr_feats is not None  # For mypy
         if device != self._device:
             self._device = device
             self._nbr_ids = self._nbr_ids.to(device)
             self._nbr_times = self._nbr_times.to(device)
             self._nbr_feats = self._nbr_feats.to(device)
             self._write_pos = self._write_pos.to(device)
+
+    def _initialize_nbr_feats_if_needed(self, dg: DGraph) -> None:
+        if self._edge_feats_dim is None and dg.edge_feats_dim is not None:
+            self._edge_feats_dim = dg.edge_feats_dim  # type: ignore
+            self._nbr_feats = torch.zeros(
+                (self._num_nodes, self._max_nbrs, self._edge_feats_dim)  # type: ignore
+            )
 
 
 def _apply_to_tensors_inplace(obj: Any, fn: Any) -> Any:
