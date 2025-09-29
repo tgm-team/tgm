@@ -288,6 +288,7 @@ class RecencyNeighborHook(StatefulHook):
         self._write_pos = torch.zeros(num_nodes, dtype=torch.int32)
 
         # Wait until first __call__ to infer the edge_feats_dim on the underlying graph
+        self._need_to_initialize_nbr_feats = True
         self._edge_feats_dim = None
         self._nbr_feats = None
 
@@ -505,11 +506,12 @@ class RecencyNeighborHook(StatefulHook):
             self._write_pos = self._write_pos.to(device)
 
     def _initialize_nbr_feats_if_needed(self, dg: DGraph) -> None:
-        if self._edge_feats_dim is None and dg.edge_feats_dim is not None:
-            self._edge_feats_dim = dg.edge_feats_dim  # type: ignore
+        if self._need_to_initialize_nbr_feats:
+            self._edge_feats_dim = dg.edge_feats_dim or 0  # type: ignore
             self._nbr_feats = torch.zeros(
                 (self._num_nodes, self._max_nbrs, self._edge_feats_dim)  # type: ignore
             )
+            self._need_to_initialize_nbr_feats = False
 
 
 def _apply_to_tensors_inplace(obj: Any, fn: Any) -> Any:
