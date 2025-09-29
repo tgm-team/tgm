@@ -9,11 +9,11 @@ from tgm.data import DGData
 
 @pytest.fixture
 def data():
-    edge_index = torch.LongTensor([[2, 2], [2, 4], [1, 8]])
+    edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
     edge_timestamps = torch.LongTensor([1, 5, 20])
     edge_feats = torch.rand(3, 5)
     node_timestamps = torch.LongTensor([1, 5, 10])
-    node_ids = torch.LongTensor([2, 4, 6])
+    node_ids = torch.IntTensor([2, 4, 6])
     dynamic_node_feats = torch.rand([3, 5])
     static_node_feats = torch.rand(9, 11)
     return DGData.from_raw(
@@ -46,8 +46,8 @@ def test_init_from_data(data):
     assert dg.device == torch.device('cpu')
 
     expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64),
-        torch.tensor([2, 4, 8], dtype=torch.int64),
+        torch.tensor([2, 2, 1], dtype=torch.int32),
+        torch.tensor([2, 4, 8], dtype=torch.int32),
         torch.tensor([1, 5, 20], dtype=torch.int64),
     )
     torch.testing.assert_close(dg.edges, expected_edges)
@@ -67,8 +67,8 @@ def test_init_gpu(data):
     assert dg.device == torch.device('cuda')
 
     expected_edges = (
-        torch.tensor([2, 2, 1], dtype=torch.int64, device='cuda'),
-        torch.tensor([2, 4, 8], dtype=torch.int64, device='cuda'),
+        torch.tensor([2, 2, 1], dtype=torch.int32, device='cuda'),
+        torch.tensor([2, 4, 8], dtype=torch.int32, device='cuda'),
         torch.tensor([1, 5, 20], dtype=torch.int64, device='cuda'),
     )
     torch.testing.assert_close(dg.edges, expected_edges)
@@ -102,8 +102,8 @@ def test_init_bad_data():
 
 def test_materialize(data):
     dg = DGraph(data)
-    exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
-    exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
+    exp_src = torch.tensor([2, 2, 1], dtype=torch.int32)
+    exp_dst = torch.tensor([2, 4, 8], dtype=torch.int32)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
     exp = DGBatch(
         exp_src,
@@ -119,8 +119,8 @@ def test_materialize(data):
 
 def test_materialize_skip_feature_materialization(data):
     dg = DGraph(data)
-    exp_src = torch.tensor([2, 2, 1], dtype=torch.int64)
-    exp_dst = torch.tensor([2, 4, 8], dtype=torch.int64)
+    exp_src = torch.tensor([2, 2, 1], dtype=torch.int32)
+    exp_dst = torch.tensor([2, 4, 8], dtype=torch.int32)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
     exp = DGBatch(exp_src, exp_dst, exp_t, None, None)
     torch.testing.assert_close(
@@ -150,8 +150,8 @@ def test_slice_time_no_upper_bound(data):
     assert dg.nodes == {1, 2, 4, 6, 8}
 
     exp_edges = (
-        torch.LongTensor([2, 1]),
-        torch.LongTensor([4, 8]),
+        torch.IntTensor([2, 1]),
+        torch.IntTensor([4, 8]),
         torch.LongTensor([5, 20]),
     )
     torch.testing.assert_close(dg1.edges, exp_edges)
@@ -181,8 +181,8 @@ def test_slice_time_at_end_time(data):
     assert dg1.nodes == {2, 4, 6}
 
     exp_edges = (
-        torch.LongTensor([2, 2]),
-        torch.LongTensor([2, 4]),
+        torch.IntTensor([2, 2]),
+        torch.IntTensor([2, 4]),
         torch.LongTensor([1, 5]),
     )
     torch.testing.assert_close(dg1.edges, exp_edges)
@@ -221,8 +221,8 @@ def test_slice_time_to_empty(data):
     assert dg1.nodes == {2, 4, 6}
 
     exp_edges = (
-        torch.LongTensor([2, 2]),
-        torch.LongTensor([2, 4]),
+        torch.IntTensor([2, 2]),
+        torch.IntTensor([2, 4]),
         torch.LongTensor([1, 5]),
     )
     torch.testing.assert_close(dg1.edges, exp_edges)
@@ -247,8 +247,8 @@ def test_slice_time_to_empty(data):
     assert dg2.nodes == {2, 4, 6}
 
     exp_edges = (
-        torch.LongTensor([2]),
-        torch.LongTensor([4]),
+        torch.IntTensor([2]),
+        torch.IntTensor([4]),
         torch.LongTensor([5]),
     )
     torch.testing.assert_close(dg2.edges, exp_edges)
@@ -271,7 +271,7 @@ def test_slice_time_to_empty(data):
     assert dg3.num_timestamps == 1
     assert dg3.nodes == {6}
 
-    exp_edges = (torch.LongTensor([]), torch.LongTensor([]), torch.LongTensor([]))
+    exp_edges = (torch.IntTensor([]), torch.IntTensor([]), torch.LongTensor([]))
     torch.testing.assert_close(dg3.edges, exp_edges)
 
     exp_dynamic_node_feats = torch.zeros(dg3.end_time + 1, dg3.num_nodes, 5)
@@ -294,7 +294,7 @@ def test_slice_time_to_empty(data):
     assert dg4.dynamic_node_feats is None
     assert dg4.edge_feats is None
 
-    exp_edges = (torch.LongTensor([]), torch.LongTensor([]), torch.LongTensor([]))
+    exp_edges = (torch.IntTensor([]), torch.IntTensor([]), torch.LongTensor([]))
     torch.testing.assert_close(dg4.edges, exp_edges)
 
     # Check original graph cache is not updated
@@ -329,8 +329,8 @@ def test_slice_events(data):
     assert dg1.nodes == {2, 4, 6}
 
     exp_edges = (
-        torch.LongTensor([2]),
-        torch.LongTensor([4]),
+        torch.IntTensor([2]),
+        torch.IntTensor([4]),
         torch.LongTensor([5]),
     )
     torch.testing.assert_close(dg1.edges, exp_edges)
@@ -373,8 +373,8 @@ def test_slice_events_slice_time_combination(data):
     assert dg1.nodes == {2, 4}
 
     exp_edges = (
-        torch.LongTensor([2]),
-        torch.LongTensor([4]),
+        torch.IntTensor([2]),
+        torch.IntTensor([4]),
         torch.LongTensor([5]),
     )
     torch.testing.assert_close(dg1.edges, exp_edges)

@@ -20,7 +20,7 @@ def run_seed_before_tests():
 
 
 def test_init_ordered_dg_ordered_batch():
-    edge_index = torch.LongTensor([[2, 3]])
+    edge_index = torch.IntTensor([[2, 3]])
     edge_timestamps = torch.LongTensor([1])
     data = DGData.from_raw(edge_timestamps, edge_index)
     dg = DGraph(data)
@@ -30,7 +30,7 @@ def test_init_ordered_dg_ordered_batch():
 
 @pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
 def test_init_ordered_dg_non_ordered_batch(batch_unit):
-    edge_index = torch.LongTensor([[2, 3]])
+    edge_index = torch.IntTensor([[2, 3]])
     edge_timestamps = torch.LongTensor([1])
     data = DGData.from_raw(edge_timestamps, edge_index)
     dg = DGraph(data)
@@ -39,7 +39,7 @@ def test_init_ordered_dg_non_ordered_batch(batch_unit):
 
 
 def test_init_bad_batch_size():
-    edge_index = torch.LongTensor([[2, 3]])
+    edge_index = torch.IntTensor([[2, 3]])
     edge_timestamps = torch.LongTensor([1])
     data = DGData.from_raw(edge_timestamps, edge_index)
     dg = DGraph(data)
@@ -50,7 +50,7 @@ def test_init_bad_batch_size():
 @pytest.mark.parametrize('drop_last', [True, False])
 @pytest.mark.parametrize('time_delta', ['r', 's'])
 def test_iteration_ordered(drop_last, time_delta):
-    edge_index = torch.LongTensor(
+    edge_index = torch.IntTensor(
         [
             [1, 2],
             [2, 3],
@@ -86,7 +86,7 @@ def test_iteration_ordered(drop_last, time_delta):
 
 @pytest.mark.parametrize('drop_last', [True, False])
 def test_iteration_by_time_equal_unit(drop_last):
-    edge_index = torch.LongTensor(
+    edge_index = torch.IntTensor(
         [
             [1, 2],
             [2, 3],
@@ -127,7 +127,7 @@ def test_iteration_by_time_equal_unit(drop_last):
 
 @pytest.mark.parametrize('drop_last', [True, False])
 def test_iteration_by_time_with_conversion_time_delta_value(drop_last):
-    edge_index = torch.LongTensor(
+    edge_index = torch.IntTensor(
         [
             [1, 2],
             [2, 3],
@@ -167,7 +167,7 @@ def test_iteration_by_time_with_conversion_time_delta_value(drop_last):
 
 
 def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
-    edge_index = torch.LongTensor([[2, 3]])
+    edge_index = torch.IntTensor([[2, 3]])
     edge_timestamps = torch.LongTensor([1])
     data = DGData.from_raw(edge_timestamps, edge_index, time_delta='m')
     dg = DGraph(data)
@@ -185,10 +185,10 @@ def test_iteration_non_ordered_dg_non_ordered_batch_unit_too_granular():
 
 
 def test_iteration_with_only_node_events_is_non_empty():
-    edge_index = torch.LongTensor([[2, 3], [2, 3]])
+    edge_index = torch.IntTensor([[2, 3], [2, 3]])
     edge_timestamps = torch.LongTensor([1, 5])
     node_timestamps = torch.LongTensor([2, 3, 4])
-    node_ids = torch.LongTensor([2, 2, 2])
+    node_ids = torch.IntTensor([2, 2, 2])
 
     # Can't actually get node events without dynamic node feats
     dynamic_node_feats = torch.rand(3, 3)
@@ -213,7 +213,7 @@ def test_iteration_with_only_node_events_is_non_empty():
 
 
 def test_iteration_with_empty_batch():
-    edge_index = torch.LongTensor([[2, 3], [2, 3]])
+    edge_index = torch.IntTensor([[2, 3], [2, 3]])
     edge_timestamps = torch.LongTensor([1, 5])
     data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
     dg = DGraph(data)
@@ -229,7 +229,7 @@ def test_iteration_with_empty_batch():
 
 
 def test_iteration_with_empty_batch_process_empty():
-    edge_index = torch.LongTensor([[2, 3], [2, 3]])
+    edge_index = torch.IntTensor([[2, 3], [2, 3]])
     edge_timestamps = torch.LongTensor([1, 5])
     data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
     dg = DGraph(data)
@@ -245,7 +245,7 @@ def test_iteration_with_empty_batch_process_empty():
 
 
 def test_iteration_with_empty_batch_raise():
-    edge_index = torch.LongTensor([[2, 3], [2, 3]])
+    edge_index = torch.IntTensor([[2, 3], [2, 3]])
     edge_timestamps = torch.LongTensor([1, 5])
     data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
     dg = DGraph(data)

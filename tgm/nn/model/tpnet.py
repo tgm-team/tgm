@@ -25,6 +25,8 @@ class RandomProjectionModule(nn.Module):
         dim_factor(int): the parameter to control the dimension of random projections. Specifically, the
                            dimension of the random projections is set to be dim_factor * log(2*edge_num)
         device(str): torch device
+
+    *Note: For large-scale dataset, the authors suggested to set `use_matrix=False` and use number of edge and `dim_factor=10` to make it scalable.*
     """
 
     def __init__(
@@ -41,18 +43,17 @@ class RandomProjectionModule(nn.Module):
         device: str = 'cpu',
     ) -> None:
         super(RandomProjectionModule, self).__init__()
-        assert (not num_edges and not dim_factor) or not enforce_dim or use_matrix
-
-        if enforce_dim is not None:
-            self.dim = enforce_dim
-        elif use_matrix:
-            self.dim = num_nodes
-        elif num_edges is not None and dim_factor is not None:
-            self.dim = min(int(math.log(num_edges * 2)) * dim_factor, num_nodes)
+        if not use_matrix:
+            if enforce_dim is not None:
+                self.dim = enforce_dim
+            elif num_edges is not None and dim_factor is not None:
+                self.dim = min(int(math.log(num_edges * 2)) * dim_factor, num_nodes)
+            else:
+                raise ValueError(
+                    'When `use_matrix` is False, either providing enforce_dim or both num_edges and dim_factor'
+                )
         else:
-            raise ValueError(
-                'Must provide enforce_dim or (num_edges and dim_factor) or set use_matrix to true'
-            )
+            self.dim = num_nodes
         self.num_layer = num_layer
         self.time_decay_weight = time_decay_weight
         self.use_matrix = use_matrix
@@ -165,14 +166,18 @@ class RandomProjectionModule(nn.Module):
             src_update_messages = self.random_projections[i - 1][dst] * time_weight
             dst_update_messages = self.random_projections[i - 1][src] * time_weight
             self.random_projections[i].scatter_add_(
-                dim=0, index=src[:, None].expand(-1, self.dim), src=src_update_messages
+                dim=0,
+                index=src[:, None].expand(-1, self.dim).long(),
+                src=src_update_messages,
             )
             self.random_projections[i].scatter_add_(
-                dim=0, index=dst[:, None].expand(-1, self.dim), src=dst_update_messages
+                dim=0,
+                index=dst[:, None].expand(-1, self.dim).long(),
+                src=dst_update_messages,
             )
 
         # set current timestamp to the biggest timestamp in this batch
-        self.now_time.data = torch.tensor(next_time, device=self.device)
+        self.now_time.data = next_time.clone().detach()
 
     def get_random_projections(self, node_ids: torch.Tensor) -> torch.Tensor:
         f"""Get the random projections of the give node ids

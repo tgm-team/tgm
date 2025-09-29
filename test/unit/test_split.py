@@ -17,8 +17,8 @@ def test_time_split_bad_args():
 
 
 def test_temporal_split():
-    edge_times = torch.tensor([1, 2, 3, 4])
-    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+    edge_times = torch.LongTensor([1, 2, 3, 4])
+    edge_index = torch.IntTensor([[1, 2], [3, 4], [5, 6], [7, 8]])
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)
 
@@ -52,11 +52,11 @@ def test_temporal_split():
 
 
 def test_temporal_split_with_node_feats():
-    edge_times = torch.tensor([1, 2, 3, 4])
-    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+    edge_times = torch.LongTensor([1, 2, 3, 4])
+    edge_index = torch.IntTensor([[1, 2], [3, 4], [5, 6], [7, 8]])
 
-    node_times = torch.tensor([1, 2, 4])
-    node_ids = torch.tensor([1, 2, 3])
+    node_times = torch.LongTensor([1, 2, 4])
+    node_ids = torch.IntTensor([1, 2, 3])
     dynamic_node_feats = torch.rand(3, 7)
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)
@@ -95,11 +95,11 @@ def test_temporal_split_with_node_feats():
 
 
 def test_temporal_split_only_train_split():
-    edge_times = torch.tensor([1, 2, 3, 4])
-    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+    edge_times = torch.LongTensor([1, 2, 3, 4])
+    edge_index = torch.IntTensor([[1, 2], [3, 4], [5, 6], [7, 8]])
 
-    node_times = torch.tensor([0, 2, 4])
-    node_ids = torch.tensor([1, 2, 3])
+    node_times = torch.LongTensor([0, 2, 4])
+    node_ids = torch.IntTensor([1, 2, 3])
     dynamic_node_feats = torch.rand(3, 7)
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)
@@ -129,8 +129,8 @@ def test_temporal_ratio_split_bad_args():
 
 
 def test_temporal_ratio_split():
-    edge_times = torch.tensor([1, 2, 3, 4])
-    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+    edge_times = torch.LongTensor([1, 2, 3, 4])
+    edge_index = torch.IntTensor([[1, 2], [3, 4], [5, 6], [7, 8]])
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)
 
@@ -164,11 +164,11 @@ def test_temporal_ratio_split():
 
 
 def test_temporal_ratio_split_with_node_feats():
-    edge_times = torch.tensor([1, 2, 3, 4])
-    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+    edge_times = torch.LongTensor([1, 2, 3, 4])
+    edge_index = torch.IntTensor([[1, 2], [3, 4], [5, 6], [7, 8]])
 
-    node_times = torch.tensor([1, 2, 4])
-    node_ids = torch.tensor([1, 2, 3])
+    node_times = torch.LongTensor([1, 2, 4])
+    node_ids = torch.IntTensor([1, 2, 3])
     dynamic_node_feats = torch.rand(3, 7)
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)
@@ -210,11 +210,11 @@ def test_temporal_ratio_split_with_node_feats():
 
 
 def test_temporal_ratio_split_only_train_split():
-    edge_times = torch.tensor([1, 2, 3, 4])
-    edge_index = torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+    edge_times = torch.LongTensor([1, 2, 3, 4])
+    edge_index = torch.IntTensor([[1, 2], [3, 4], [5, 6], [7, 8]])
 
-    node_times = torch.tensor([0, 2, 4])
-    node_ids = torch.tensor([1, 2, 3])
+    node_times = torch.LongTensor([0, 2, 4])
+    node_ids = torch.IntTensor([1, 2, 3])
     dynamic_node_feats = torch.rand(3, 7)
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)

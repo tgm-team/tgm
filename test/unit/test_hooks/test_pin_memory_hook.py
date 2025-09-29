@@ -8,7 +8,7 @@ from tgm.hooks import PinMemoryHook
 
 @pytest.fixture
 def dg():
-    edge_index = torch.LongTensor([[1, 10], [1, 11], [1, 12], [1, 13]])
+    edge_index = torch.IntTensor([[1, 10], [1, 11], [1, 12], [1, 13]])
     edge_timestamps = torch.LongTensor([1, 1, 2, 2])
     data = DGData.from_raw(edge_timestamps, edge_index)
     return DGraph(data)
