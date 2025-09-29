@@ -6,8 +6,11 @@ from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData
+from tgm.util.logging import _get_logger
 
 from ..base import DGSliceTracker, DGStorageBase
+
+logger = _get_logger(__name__)
 
 
 class DGStorageArrayBackend(DGStorageBase):
@@ -23,12 +26,14 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
         if lb_idx >= ub_idx:
+            logger.debug('No events in slice: %s', slice)
             return None
         return int(self._data.timestamps[lb_idx].item())
 
     def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
         if lb_idx >= ub_idx:
+            logger.debug('No events in slice: %s', slice)
             return None
         return int(self._data.timestamps[ub_idx - 1].item())
 
@@ -48,6 +53,8 @@ class DGStorageArrayBackend(DGStorageBase):
             )
             node_event_nodes = self._data.node_ids[node_mask].unique().tolist()  # type: ignore
             all_nodes.update(node_event_nodes)
+        if not all_nodes:
+            logger.debug('No events in slice: %s', slice)
         return all_nodes
 
     def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
@@ -60,6 +67,9 @@ class DGStorageArrayBackend(DGStorageBase):
         time = self._data.timestamps[self._data.edge_event_idx[edge_mask]]
 
         src, dst, time = src.contiguous(), dst.contiguous(), time.contiguous()
+
+        if edges.numel():
+            logger.debug('No events in slice: %s', slice)
         return src, dst, time
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
@@ -151,6 +161,7 @@ class DGStorageArrayBackend(DGStorageBase):
             self._data.node_event_idx < ub_idx
         )
         if node_mask.sum() == 0:
+            logger.debug(f'No dynamic node features in slice {slice}')
             return None
 
         time = self._data.timestamps[self._data.node_event_idx[node_mask]]
@@ -203,11 +214,14 @@ class DGStorageArrayBackend(DGStorageBase):
         if slice.start_time not in self._lb_cache:
             t = ts[0] if slice.start_time is None else slice.start_time
             self._lb_cache[slice.start_time] = int(torch.searchsorted(ts, t))
+            logger.debug(f'Cache miss: start_time={slice.start_time}')
         if slice.end_time not in self._ub_cache:
             t = ts[-1] if slice.end_time is None else slice.end_time
             self._ub_cache[slice.end_time] = int(
                 torch.searchsorted(ts, t, side='right')
             )
+            logger.debug(f'Cache miss: end_time={slice.start_time}')
+
         lb = self._lb_cache[slice.start_time]
         ub = self._ub_cache[slice.end_time]
 

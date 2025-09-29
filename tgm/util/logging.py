@@ -18,8 +18,11 @@ def enable_logging(
         file_log_level (int): Logging level for file handler if configured (default = logging.DEBUG).
         log_file_path (Optional[str | Path]): Optional path to a log file.
     """
+    logger = logging.getLogger('tgm')
+    logger.handlers.clear()  # Clear existing handlers, making this idempotent
+
     console_formatter = logging.Formatter(
-        '[%(asctime)s] %(name)s | %(levelname)s | %(message)s',
+        '[%(asctime)s] %(name)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
     )
     console_handler = logging.StreamHandler()
@@ -39,10 +42,10 @@ def enable_logging(
         file_handler.setFormatter(file_formatter)
         handlers.append(file_handler)
 
-    logger = logging.getLogger('tgm')
-    logger.setLevel(min(console_log_level, file_log_level))
     for handler in handlers:
         logger.addHandler(handler)
+
+    logger.setLevel(min(console_log_level, file_log_level))
     logger.propagate = False  # Don't spam user's root logger
 
 
@@ -65,3 +68,22 @@ def _log_latency(func: Callable) -> Any:
         return result
 
     return wrapper
+
+
+logger = _get_logger(__name__)
+
+
+class _cached_property_log_cache_activity(functools.cached_property):
+    def __set_name__(self, owner: type, name: str) -> None:
+        self.attrname = name
+
+    def __get__(self, instance: Any, owner: Any | None = None) -> Any:
+        if instance is None:
+            return self
+        if self.attrname in instance.__dict__:
+            logger.debug('%s Cache hit: %s', instance.__class__.__name__, self.attrname)
+        else:
+            logger.debug(
+                '%s Cache miss: %s', instance.__class__.__name__, self.attrname
+            )
+        return super().__get__(instance, owner)

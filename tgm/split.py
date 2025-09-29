@@ -7,6 +7,10 @@ from typing import Dict, Tuple
 import torch
 from torch import Tensor
 
+from tgm.util.logging import _get_logger
+
+logger = _get_logger(__name__)
+
 
 class SplitStrategy(ABC):
     """Abstract base class for splitting temporal graph datasets.
@@ -57,6 +61,9 @@ class SplitStrategy(ABC):
 
         # In case we masked out to the point of empty node events, change to None
         if node_ids is not None and node_ids.numel() == 0:
+            logger.warning(
+                'All nodes masked out, resetting node_ids/node_timestamps/dynamic_node_feats to None'
+            )
             node_ids = node_timestamps = dynamic_node_feats = None
 
         return DGData.from_raw(
@@ -112,16 +119,27 @@ class TemporalSplit(SplitStrategy):
         }
 
         splits = []
-        for start, end in ranges.values():
+        for split_name, (start, end) in ranges.items():
             edge_mask = (edge_times >= start) & (edge_times < end)
             if not edge_mask.any():
+                logger.warning(
+                    'No edges found in %s split [%s, %s)', split_name, start, end
+                )
                 continue
 
             node_mask = None
             if node_times is not None:
                 node_mask = (node_times >= start) & (node_times < end)
-
-            splits.append(self._masked_copy(data, edge_mask, node_mask))
+            split_data = self._masked_copy(data, edge_mask, node_mask)
+            splits.append(split_data)
+            logger.info(
+                '%s split [%s, %s): %d edges, %d nodes',
+                split_name,
+                start,
+                end,
+                split_data.edge_index.size(0),
+                0 if split_data.node_ids is None else split_data.node_ids.size(0),
+            )
 
         return tuple(splits)
 
@@ -166,6 +184,20 @@ class TemporalRatioSplit(SplitStrategy):
         val_time = min_time + int(total_span * self.train_ratio)
         test_time = val_time + int(total_span * self.val_ratio)
 
+        logger.info(
+            'TemporalRatioSplit (train=%.2f, val=%.2f, test=%.2f): '
+            'train=[%s, %s), val=[%s, %s), test=[%s, %s]',
+            self.train_ratio,
+            self.val_ratio,
+            self.test_ratio,
+            min_time,
+            val_time,
+            val_time,
+            test_time,
+            test_time,
+            max_time,
+        )
+
         time_split = TemporalSplit(val_time=val_time, test_time=test_time)
         return time_split.apply(data)
 
@@ -201,6 +233,15 @@ class TGBSplit(SplitStrategy):
                         node_times < edge_end_time
                     )
 
-            splits.append(self._masked_copy(data, edge_mask, node_mask))
+            split_data = self._masked_copy(data, edge_mask, node_mask)
+            splits.append(split_data)
+            logger.info(
+                'TGB %s split [%s, %s], edges=%d, nodes=%d',
+                split_name,
+                edge_start_time,
+                edge_end_time,
+                split_data.edge_index.size(0),
+                0 if split_data.node_ids is None else split_data.node_ids.size(0),
+            )
 
         return tuple(splits)

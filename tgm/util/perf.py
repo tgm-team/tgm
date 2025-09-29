@@ -6,6 +6,10 @@ from typing import Any, Dict, Optional, Tuple
 
 import torch
 
+from tgm.util.logging import _get_logger
+
+logger = _get_logger(__name__)
+
 
 class Usage(contextlib.ContextDecorator):
     def __init__(self, gpu: bool = True, prefix: Optional[str] = None) -> None:
@@ -38,7 +42,7 @@ class Usage(contextlib.ContextDecorator):
             gpu = torch.cuda.max_memory_allocated() - self.base
             self.gpu_gb = gpu * 1e-9
             s += f' ({self.gpu_gb:2.2f} GB GPU)'
-        print(s)
+        logger.info(s)
 
 
 class Profiling(contextlib.ContextDecorator):
@@ -67,6 +71,7 @@ class Profiling(contextlib.ContextDecorator):
                 caller = f'{self._format_fcn(scallers[0][0])}'
                 s += _color(f'<- {perc:3.0f}% {caller}', 'BLACK')
             print(s)
+            logger.info(s)
 
     @staticmethod
     def _format_fcn(fcn: Tuple[str, ...]) -> str:

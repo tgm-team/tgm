@@ -21,6 +21,9 @@ from tgm.exceptions import (
 from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.util._tgb import suppress_output
+from tgm.util.logging import _get_logger
+
+logger = _get_logger(__name__)
 
 
 @dataclass

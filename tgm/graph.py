@@ -11,6 +11,9 @@ from torch import Tensor
 from tgm._storage import DGSliceTracker, DGStorage
 from tgm.data import DGData
 from tgm.timedelta import TimeDeltaDG
+from tgm.util.logging import _cached_property_log_cache_activity, _get_logger
+
+logger = _get_logger(__name__)
 
 
 class DGraph:
@@ -60,6 +63,10 @@ class DGraph:
         self._device = torch.device(device)
         self._slice = DGSliceTracker()
 
+        logger.debug(
+            'Created DGraph with device=%s, time_delta=%s, device, data.time_delta'
+        )
+
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         """Materialize the current DGraph slice into a dense `DGBatch`.
 
@@ -77,6 +84,12 @@ class DGraph:
             batch.dynamic_node_feats = self.dynamic_node_feats._values()
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats
+
+        logger.debug(
+            'Materialized DGraph slice: %d edges, %d nodes',
+            batch.src.numel(),
+            0 if batch.node_ids is None else batch.node_ids.numel(),
+        )
         return batch
 
     def slice_events(
@@ -147,6 +160,7 @@ class DGraph:
         Returns:
             DGraph: A new view on the specified device.
         """
+        logger.debug('Moving DGraph to device %s', device)
         device = torch.device(device)
         slice = replace(self._slice)
         return DGraph._from_storage(self._storage, self.time_delta, device, slice)
@@ -165,34 +179,34 @@ class DGraph:
             self._slice.end_time = self._storage.get_end_time(self._slice)
         return self._slice.end_time
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def num_nodes(self) -> int:
         """The total number of unique nodes encountered over the dynamic graph."""
         nodes = self._storage.get_nodes(self._slice)
         return max(nodes) + 1 if len(nodes) else 0
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def num_edges(self) -> int:
         """The total number of unique edges encountered over the dynamic graph."""
         src, *_ = self.edges
         return len(src)
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def num_timestamps(self) -> int:
         """The total number of unique timestamps encountered over the dynamic graph."""
         return self._storage.get_num_timestamps(self._slice)
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def num_events(self) -> int:
         """The total number of events encountered over the dynamic graph."""
         return self._storage.get_num_events(self._slice)
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def nodes(self) -> Set[int]:
         """The set of node ids over the dynamic graph."""
         return self._storage.get_nodes(self._slice)
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def _edges_cpu(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self._storage.get_edges(self._slice)
 
@@ -218,7 +232,7 @@ class DGraph:
             feats = feats.to(self.device)
         return feats
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def _dynamic_node_feats_cpu(self) -> Optional[Tensor]:
         return self._storage.get_dynamic_node_feats(self._slice)
 
@@ -233,7 +247,7 @@ class DGraph:
             feats = feats.to(self.device)
         return feats
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def _edge_feats_cpu(self) -> Optional[Tensor]:
         return self._storage.get_edge_feats(self._slice)
 
@@ -248,17 +262,17 @@ class DGraph:
             feats = feats.to(self.device)
         return feats
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def static_node_feats_dim(self) -> Optional[int]:
         """Static Node feature dimension or None if not Node features on the Graph."""
         return self._storage.get_static_node_feats_dim()
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def dynamic_node_feats_dim(self) -> Optional[int]:
         """Dynamic Node feature dimension or None if not Node features on the Graph."""
         return self._storage.get_dynamic_node_feats_dim()
 
-    @cached_property
+    @_cached_property_log_cache_activity
     def edge_feats_dim(self) -> Optional[int]:
         """Edge feature dimension or None if not Node features on the Graph."""
         return self._storage.get_edge_feats_dim()
@@ -283,6 +297,7 @@ class DGraph:
         device: torch.device,
         slice: DGSliceTracker,
     ) -> DGraph:
+        logger.debug('Creating a DGraph view with slice: %s', slice)
         obj = cls.__new__(cls)
         obj._storage = storage
         obj._time_delta = time_delta

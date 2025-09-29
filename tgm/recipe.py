@@ -7,7 +7,11 @@ from tgm.hooks import (
     HookManager,
     NegativeEdgeSamplerHook,
     TGBNegativeEdgeSamplerHook,
+    hook_manager,
 )
+from tgm.util.logging import _get_logger
+
+logger = _get_logger(__name__)
 
 
 class RecipeRegistry:
@@ -39,6 +43,7 @@ class RecipeRegistry:
             raise UndefinedRecipe(
                 f'Undefined or not yet registered recipe: {name}. Please select from {cls._recipes}'
             )
+        logger.info("Building recipe '%s' with kwargs=%s", name, kwargs)
         return cls._recipes[name](**kwargs)
 
 
@@ -61,5 +66,13 @@ def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
     )
     hm.register('val', TGBNegativeEdgeSamplerHook(dataset_name, split_mode='val'))
     hm.register('test', TGBNegativeEdgeSamplerHook(dataset_name, split_mode='test'))
+
+    logger.info(
+        "Built %s HookManager recipe for dataset '%s'. Hooks registered: %s",
+        RECIPE_TGB_LINK_PRED,
+        dataset_name,
+        list(hm.keys),
+    )
+    logger.debug('HookManager: %s', hook_manager)
 
     return hm
