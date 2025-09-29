@@ -1,5 +1,6 @@
 import argparse
-import time
+import logging
+from pathlib import Path
 from typing import Callable, Tuple
 
 import pandas as pd
@@ -14,6 +15,7 @@ from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
+from tgm.util.logging import enable_logging, log_latency
 from tgm.util.seed import seed_everything
 
 """
@@ -58,6 +60,13 @@ parser.add_argument(
     default='W',
     help='time granularity to operate on for snapshots',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
+logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
@@ -148,6 +157,7 @@ class GraphPredictor(torch.nn.Module):
         return self.fc2(h)
 
 
+@log_latency
 def train(
     loader: DGDataLoader,
     labels: torch.Tensor,
@@ -185,6 +195,7 @@ def train(
     return total_loss, h_0, metrics.compute()
 
 
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -210,7 +221,6 @@ def eval(
     return metrics.compute(), h_0
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 
 df = pd.read_csv(args.path_dataset)
@@ -272,7 +282,6 @@ test_labels = generate_binary_trend_labels(
 ).to(args.device)
 
 for epoch in range(1, args.epochs + 1):
-    start_time = time.perf_counter()
     loss, h_0, train_results = train(
         train_loader,
         train_labels,
@@ -282,14 +291,12 @@ for epoch in range(1, args.epochs + 1):
         opt,
         train_metrics,
     )
-    end_time = time.perf_counter()
-    latency = end_time - start_time
 
     val_results, h_0 = eval(
         val_loader, val_labels, static_node_feats, encoder, decoder, h_0, val_metrics
     )
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
+    logger.info(
+        f'Epoch={epoch:02d} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
         + ' '
         + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
@@ -298,4 +305,4 @@ for epoch in range(1, args.epochs + 1):
 test_results, h_0 = eval(
     test_loader, test_labels, static_node_feats, encoder, decoder, h_0, test_metrics
 )
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+logger.info(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))

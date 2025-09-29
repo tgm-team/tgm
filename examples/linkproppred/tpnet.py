@@ -1,6 +1,7 @@
 import argparse
 import copy
-import time
+import logging
+from pathlib import Path
 from typing import Callable, Tuple
 
 import numpy as np
@@ -16,6 +17,7 @@ from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import RandomProjectionModule, Time2Vec, TPNet
+from tgm.util.logging import enable_logging, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -65,6 +67,13 @@ parser.add_argument('--num-layers', type=int, default=2, help='number of model l
 parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
+logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class LinkPredictor(nn.Module):
@@ -183,6 +192,7 @@ class TPNet_LinkPrediction(nn.Module):
         return pos_out, neg_out
 
 
+@log_latency
 def train(
     loader: DGDataLoader,
     model: nn.Module,
@@ -203,6 +213,7 @@ def train(
     return total_loss
 
 
+@log_latency
 @torch.no_grad()
 def eval(
     evaluator: Evaluator,
@@ -249,9 +260,7 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
 evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -310,14 +319,11 @@ opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss = train(train_loader, model, opt, static_node_feat)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
     with hm.activate(val_key):
         val_mrr = eval(evaluator, val_loader, model, static_node_feat)
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
+        logger.info(
+            f'Epoch={epoch:02d} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
         )
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
@@ -326,4 +332,4 @@ for epoch in range(1, args.epochs + 1):
 
 with hm.activate(test_key):
     test_mrr = eval(evaluator, test_loader, model, static_node_feat)
-    print(f'Test MRR:{METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+    logger.info(f'Test MRR:{METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
