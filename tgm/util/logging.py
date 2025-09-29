@@ -22,7 +22,7 @@ def enable_logging(
     logger.handlers.clear()  # Clear existing handlers, making this idempotent
 
     console_formatter = logging.Formatter(
-        '[%(asctime)s] %(name)s - %(levelname)s - %(message)s',
+        '[%(asctime)s.%(msecs)03d] %(name)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
     )
     console_handler = logging.StreamHandler()
@@ -32,7 +32,7 @@ def enable_logging(
     handlers: List[logging.Handler] = [console_handler]
     if log_file_path is not None:
         file_formatter = logging.Formatter(
-            '[%(asctime)s] %(name)s - %(levelname)s '
+            '[%(asctime)s.%(msecs)03d] %(name)s - %(levelname)s '
             '[%(processName)s %(threadName)s %(name)s.%(funcName)s:%(lineno)d] '
             '%(message)s',
             datefmt='%Y-%m-%d %H:%M:%S',
@@ -64,7 +64,7 @@ def _log_latency(func: Callable) -> Any:
         start_time = time.perf_counter()
         result = func(*args, **kwargs)
         latency = time.perf_counter() - start_time
-        logger.info('Function %s executed in %.4fs', func.__name__, latency)
+        logger.debug('Function %s executed in %.4fs', func.__name__, latency)
         return result
 
     return wrapper

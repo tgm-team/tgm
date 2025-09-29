@@ -91,7 +91,7 @@ class DGraph:
             batch.edge_feats = self.edge_feats
 
         logger.debug(
-            'Materialized DGraph slice: %d edges, %d nodes',
+            'Materialized DGraph slice: %d edge events, %d node events',
             batch.src.numel(),
             0 if batch.node_ids is None else batch.node_ids.numel(),
         )
