@@ -299,7 +299,7 @@ def test_no_edge_feat_data_neighbor_sampler(no_edge_feat_data):
         assert nids.shape == (1, 6)
         assert nbr_nids.shape == (1, 6, 1)
         assert nbr_times.shape == (1, 6, 1)
-        assert nbr_feats.shape == (1, 6, 1, 1)
+        assert nbr_feats.shape == (1, 6, 1, 0)
 
 
 @pytest.fixture

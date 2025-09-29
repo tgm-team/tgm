@@ -108,7 +108,9 @@ class DGStorageArrayBackend(DGStorageBase):
             (B, num_nbrs), PADDED_NODE_ID, dtype=torch.int32, device=device
         )
         nbr_times = torch.zeros(B, num_nbrs, dtype=torch.int64, device=device)
-        nbr_feats = torch.zeros(B, num_nbrs, self.get_edge_feats_dim(), device=device)  # type: ignore
+        nbr_feats = torch.zeros(
+            B, num_nbrs, self.get_edge_feats_dim() or 0, device=device
+        )
 
         for i, node in enumerate(unique_nodes.tolist()):
             node_nbrs = nbrs[node]
