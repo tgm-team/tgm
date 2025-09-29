@@ -258,7 +258,6 @@ def train(
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
-    eval_metric: str,
 ) -> float:
     memory.train()
     encoder.train()
@@ -308,9 +307,9 @@ def train(
             input_dict = {
                 'y_true': y_labels,
                 'y_pred': y_pred,
-                'eval_metric': [eval_metric],
+                'eval_metric': [METRIC_TGB_NODEPROPPRED],
             }
-            perf = evaluator.eval(input_dict)[eval_metric]
+            perf = evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED]
             perf_list.append(perf)
 
         # Update memory with ground-truth state.
@@ -329,7 +328,6 @@ def eval(
     memory: nn.Module,
     encoder: nn.Module,
     decoder: nn.Module,
-    eval_metric: str,
     evaluator: Evaluator,
 ) -> float:
     memory.eval()
@@ -373,9 +371,9 @@ def eval(
             input_dict = {
                 'y_true': y_labels,
                 'y_pred': y_pred,
-                'eval_metric': [eval_metric],
+                'eval_metric': [METRIC_TGB_NODEPROPPRED],
             }
-            perf_list.append(evaluator.eval(input_dict)[eval_metric])
+            perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
         # Update memory with ground-truth state.
         if len(batch.src) > 0:
@@ -405,17 +403,12 @@ else:
     val_dg = DGraph(val_data, device=args.device)
     test_dg = DGraph(test_data, device=args.device)
 
-num_nodes = test_dg.num_nodes
-edge_feats_dim = train_dg.edge_feats_dim
-
-
 evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-    edge_feats_dim=test_dg.edge_feats_dim,
     seed_nodes_key='node_ids',
 )
 
@@ -451,9 +444,7 @@ opt = torch.optim.Adam(
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         start_time = time.perf_counter()
-        loss, train_metric = train(
-            train_loader, memory, encoder, decoder, opt, METRIC_TGB_NODEPROPPRED
-        )
+        loss, train_metric = train(train_loader, memory, encoder, decoder, opt)
         end_time = time.perf_counter()
         latency = end_time - start_time
     print(
@@ -462,9 +453,7 @@ for epoch in range(1, args.epochs + 1):
 
     with hm.activate('val'):
         start_time = time.perf_counter()
-        val_metric = eval(
-            val_loader, memory, encoder, decoder, METRIC_TGB_NODEPROPPRED, evaluator
-        )
+        val_metric = eval(val_loader, memory, encoder, decoder, evaluator)
         end_time = time.perf_counter()
         latency = end_time - start_time
     print(
@@ -475,7 +464,5 @@ for epoch in range(1, args.epochs + 1):
         hm.reset_state()
 
 with hm.activate('test'):
-    test_metric = eval(
-        test_loader, memory, encoder, decoder, METRIC_TGB_NODEPROPPRED, evaluator
-    )
+    test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
     print(f'Test {METRIC_TGB_NODEPROPPRED}={test_metric:.4f}')

@@ -194,42 +194,57 @@ class DGraph:
         return self._storage.get_nodes(self._slice)
 
     @cached_property
+    def _edges_cpu(self) -> Tuple[Tensor, Tensor, Tensor]:
+        return self._storage.get_edges(self._slice)
+
+    @property
     def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
         """The src, dst, time tensors over the dynamic graph."""
-        src, dst, time = self._storage.get_edges(self._slice)
-        src, dst, time = src.to(self.device), dst.to(self.device), time.to(self.device)
-        return src, dst, time
+        src, dst, time = self._edges_cpu
+        return src.to(self.device), dst.to(self.device), time.to(self.device)
 
     @cached_property
+    def _static_node_feats_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_static_node_feats()
+
+    @property
     def static_node_feats(self) -> Optional[Tensor]:
         """If static node features exist, returns a dense Tensor(num_nodes_global x d_node_static).
 
         Note:
             - num_nodes_global is the global number of nodes from the underlying DGData and it will be independent of the slice.
         """
-        feats = self._storage.get_static_node_feats()
+        feats = self._static_node_feats_cpu
         if feats is not None:
             feats = feats.to(self.device)
         return feats
 
     @cached_property
+    def _dynamic_node_feats_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_dynamic_node_feats(self._slice)
+
+    @property
     def dynamic_node_feats(self) -> Optional[Tensor]:
         """The aggregated dynamic node features over the dynamic graph.
 
         If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
         """
-        feats = self._storage.get_dynamic_node_feats(self._slice)
+        feats = self._dynamic_node_feats_cpu
         if feats is not None:
             feats = feats.to(self.device)
         return feats
 
     @cached_property
+    def _edge_feats_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_edge_feats(self._slice)
+
+    @property
     def edge_feats(self) -> Optional[Tensor]:
         """The aggregated edge features over the dynamic graph.
 
         If edge features exist, returns a tensor of shape (T x V x V x d_edge).
         """
-        feats = self._storage.get_edge_feats(self._slice)
+        feats = self._edge_feats_cpu
         if feats is not None:
             feats = feats.to(self.device)
         return feats

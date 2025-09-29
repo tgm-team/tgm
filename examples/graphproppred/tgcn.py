@@ -145,7 +145,7 @@ class GraphPredictor(torch.nn.Module):
         z_graph = self.graph_pooling(z_node)
         h = self.fc1(z_graph)
         h = h.relu()
-        return self.fc2(h).sigmoid()
+        return self.fc2(h)
 
 
 def train(
@@ -170,7 +170,9 @@ def train(
             z_node = z[torch.cat([batch.src, batch.dst])]
             pred = decoder(z_node)
 
-            loss = F.binary_cross_entropy(pred, labels[i].unsqueeze(0).float())
+            loss = F.binary_cross_entropy_with_logits(
+                pred, labels[i].unsqueeze(0).float()
+            )
             loss.backward()
             opt.step()
 
@@ -201,7 +203,7 @@ def eval(
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             z, h_0 = encoder(batch, static_node_feats, h_0)
             z_node = z[torch.cat([batch.src, batch.dst])]
-            y_pred[i] = decoder(z_node)
+            y_pred[i] = decoder(z_node).sigmoid()
 
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, y_true, indexes=indexes)

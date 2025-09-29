@@ -65,7 +65,7 @@ class LinkPredictor(nn.Module):
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         h = self.fc1(torch.cat([z_src, z_dst], dim=1))
         h = h.relu()
-        return self.fc2(h).sigmoid().view(-1)
+        return self.fc2(h).view(-1)
 
 
 class DyGFormer_LinkPrediction(nn.Module):
@@ -188,8 +188,8 @@ def train(
         opt.zero_grad()
         pos_out, neg_out = model(batch, static_node_feat)
 
-        loss = F.binary_cross_entropy(pos_out, torch.ones_like(pos_out))
-        loss += F.binary_cross_entropy(neg_out, torch.zeros_like(neg_out))
+        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
+        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -230,6 +230,7 @@ def eval(
             copy_batch.nbr_feats = [batch.nbr_feats[0][all_idx]]
 
             pos_out, neg_out = model(copy_batch, static_node_feat)
+            pos_out, neg_out = pos_out.sigmoid(), neg_out.sigmoid()
 
             input_dict = {
                 'y_pred_pos': pos_out,
@@ -266,7 +267,6 @@ else:
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # 1 remaining for seed node itself
     num_nodes=num_nodes,
-    edge_feats_dim=edge_feats_dim,
 )
 
 hm = RecipeRegistry.build(
