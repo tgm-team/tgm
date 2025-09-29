@@ -287,7 +287,7 @@ class RecencyNeighborHook(StatefulHook):
         self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.int64)
         self._write_pos = torch.zeros(num_nodes, dtype=torch.int32)
 
-        # Wait until first __call__ to infer the edge_feats_dim on the underlying grap
+        # Wait until first __call__ to infer the edge_feats_dim on the underlying graph
         self._edge_feats_dim = None
         self._nbr_feats = None
 
