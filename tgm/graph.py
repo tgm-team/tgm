@@ -11,7 +11,11 @@ from torch import Tensor
 from tgm._storage import DGSliceTracker, DGStorage
 from tgm.data import DGData
 from tgm.timedelta import TimeDeltaDG
-from tgm.util.logging import _cached_property_log_cache_activity, _get_logger
+from tgm.util.logging import (
+    _cached_property_log_cache_activity,
+    _get_logger,
+    _log_latency,
+)
 
 logger = _get_logger(__name__)
 
@@ -67,6 +71,7 @@ class DGraph:
             'Created DGraph with device=%s, time_delta=%s, device, data.time_delta'
         )
 
+    @_log_latency
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         """Materialize the current DGraph slice into a dense `DGBatch`.
 
@@ -262,17 +267,17 @@ class DGraph:
             feats = feats.to(self.device)
         return feats
 
-    @_cached_property_log_cache_activity
+    @cached_property
     def static_node_feats_dim(self) -> Optional[int]:
         """Static Node feature dimension or None if not Node features on the Graph."""
         return self._storage.get_static_node_feats_dim()
 
-    @_cached_property_log_cache_activity
+    @cached_property
     def dynamic_node_feats_dim(self) -> Optional[int]:
         """Dynamic Node feature dimension or None if not Node features on the Graph."""
         return self._storage.get_dynamic_node_feats_dim()
 
-    @_cached_property_log_cache_activity
+    @cached_property
     def edge_feats_dim(self) -> Optional[int]:
         """Edge feature dimension or None if not Node features on the Graph."""
         return self._storage.get_edge_feats_dim()

@@ -64,7 +64,7 @@ def _log_latency(func: Callable) -> Any:
         start_time = time.perf_counter()
         result = func(*args, **kwargs)
         latency = time.perf_counter() - start_time
-        logger.info(f"Function '{func.__name__}' executed in {latency:.4f} seconds")
+        logger.info('Function %s executed in %.4fs', func.__name__, latency)
         return result
 
     return wrapper
