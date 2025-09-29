@@ -1,0 +1,67 @@
+import functools
+import logging
+import time
+from pathlib import Path
+from typing import Any, Callable, List
+
+
+def enable_logging(
+    *,
+    console_log_level: int = logging.INFO,
+    file_log_level: int = logging.DEBUG,
+    log_file_path: str | Path | None = None,
+) -> None:
+    """Enable library-wide logging to stdout and optionally to a file.
+
+    Args:
+        console_log_level (int): Logging level for console stream handler (default = logging.INFO).
+        file_log_level (int): Logging level for file handler if configured (default = logging.DEBUG).
+        log_file_path (Optional[str | Path]): Optional path to a log file.
+    """
+    console_formatter = logging.Formatter(
+        '[%(asctime)s] %(name)s | %(levelname)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(console_log_level)
+    console_handler.setFormatter(console_formatter)
+
+    handlers: List[logging.Handler] = [console_handler]
+    if log_file_path is not None:
+        file_formatter = logging.Formatter(
+            '[%(asctime)s] %(name)s - %(levelname)s '
+            '[%(processName)s %(threadName)s %(name)s.%(funcName)s:%(lineno)d] '
+            '%(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S',
+        )
+        file_handler = logging.FileHandler(filename=log_file_path, mode='a')
+        file_handler.setLevel(file_log_level)
+        file_handler.setFormatter(file_formatter)
+        handlers.append(file_handler)
+
+    logger = logging.getLogger('tgm')
+    logger.setLevel(min(console_log_level, file_log_level))
+    for handler in handlers:
+        logger.addHandler(handler)
+    logger.propagate = False  # Don't spam user's root logger
+
+
+def _get_logger(name: str) -> logging.Logger:
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        logger.addHandler(logging.NullHandler())
+    return logger
+
+
+def _log_latency(func: Callable) -> Any:
+    logger = _get_logger(func.__module__)
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        latency = time.perf_counter() - start_time
+        logger.info(f"Function '{func.__name__}' executed in {latency:.4f} seconds")
+        return result
+
+    return wrapper
