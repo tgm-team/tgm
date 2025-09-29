@@ -317,13 +317,10 @@ class GraphMixerHook(StatefulHook):
         return nbr_nids
 
     def _update(self, batch: DGBatch) -> None:
-        events = list(zip(batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()))
-        if hasattr(batch, 'neg'):
-            events += list(
-                zip(batch.src.tolist(), batch.neg.tolist(), batch.neg_time.tolist())
-            )
-        events += [(v, u, t) for (u, v, t) in events]  # undirected
-        self._history.extend(events)
+        src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
+        for s, d, t in zip(src, dst, time):
+            self._history.append((s, d, t))
+            self._history.append((d, s, t))  # undirected
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
