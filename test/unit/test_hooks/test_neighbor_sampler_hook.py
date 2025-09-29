@@ -340,8 +340,13 @@ def test_node_only_batch_recency_nbr_sampler(node_only_data):
 
         batch_2 = next(batch_iter)
         assert isinstance(batch_2, DGBatch)
-        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
-        assert len(nids) == 0  # empty list
-        assert len(nbr_nids) == 0  # empty list
-        assert len(nbr_times) == 0  # empty list
-        assert len(nbr_feats) == 0  # empty list
+        torch.testing.assert_close(batch_2.nids[0], torch.empty(0, dtype=torch.int32))
+        torch.testing.assert_close(
+            batch_2.nbr_nids[0], torch.empty(0, dtype=torch.int32)
+        )
+        torch.testing.assert_close(
+            batch_2.nbr_times[0], torch.empty(0, dtype=torch.int64)
+        )
+        torch.testing.assert_close(
+            batch_2.nbr_feats[0], torch.empty((0, 1), dtype=torch.float32)
+        )

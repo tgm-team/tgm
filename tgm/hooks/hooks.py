@@ -239,6 +239,14 @@ class NeighborSamplerHook(StatelessHook):
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
                 if seed_nodes.numel() == 0:
+                    for hop in range(len(self.num_nbrs)):
+                        batch.nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+                        batch.times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+                        batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+                        batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+                        batch.nbr_feats.append(  # type: ignore
+                            torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
+                        )
                     return batch
             else:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
@@ -338,6 +346,14 @@ class RecencyNeighborHook(StatefulHook):
                     seed_nodes = torch.cat(seed)
                     seed_times = torch.cat(times)
                     if seed_nodes.numel() == 0:
+                        for hop in range(len(self.num_nbrs)):
+                            batch.nids.append(torch.empty(0, dtype=torch.int32))
+                            batch.times.append(torch.empty(0, dtype=torch.int64))
+                            batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))
+                            batch.nbr_times.append(torch.empty(0, dtype=torch.int64))
+                            batch.nbr_feats.append(
+                                torch.empty(0, self._edge_feats_dim).float()
+                            )
                         return batch
                 else:
                     seed_nodes = getattr(batch, self._seed_nodes_key)

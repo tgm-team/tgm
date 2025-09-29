@@ -89,12 +89,12 @@ def test_dedup_with_nbrs(dg):
 
 @pytest.fixture
 def node_only_graph():
-    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
-    edge_timestamps = torch.IntTensor([1, 2, 3])
-    edge_feats = torch.IntTensor([[1], [2], [3]])
-    dynamic_node_feats = torch.rand(2, 5)
-    node_timestamps = torch.IntTensor([4, 5])
-    node_ids = torch.IntTensor([5, 6])
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4], [4, 5], [5, 6]])
+    edge_timestamps = torch.IntTensor([1, 2, 3, 7, 8])
+    edge_feats = torch.IntTensor([[1], [2], [3], [0], [0]])
+    dynamic_node_feats = torch.rand(5, 5)
+    node_timestamps = torch.IntTensor([4, 5, 6, 7, 8])
+    node_ids = torch.IntTensor([4, 5, 6, 5, 6])
     data = DGData.from_raw(
         edge_timestamps,
         edge_index,
@@ -122,7 +122,19 @@ def test_dedup_node_only_batch(node_only_graph):
         )
 
         batch_2 = next(batch_iter)
-        torch.testing.assert_close(batch_2.unique_nids, torch.IntTensor([5, 6]))
+        torch.testing.assert_close(batch_2.unique_nids, torch.IntTensor([4, 5, 6]))
         torch.testing.assert_close(
-            batch_2.global_to_local(batch_2.node_ids), torch.IntTensor([0, 1])
+            batch_2.global_to_local(batch_2.node_ids), torch.IntTensor([0, 1, 2])
+        )
+
+        batch_3 = next(batch_iter)
+        torch.testing.assert_close(batch_3.unique_nids, torch.IntTensor([4, 5, 6]))
+        torch.testing.assert_close(
+            batch_3.global_to_local(batch_3.src), torch.IntTensor([0, 1])
+        )
+        torch.testing.assert_close(
+            batch_3.global_to_local(batch_3.dst), torch.IntTensor([1, 2])
+        )
+        torch.testing.assert_close(
+            batch_3.global_to_local(batch_3.node_ids), torch.IntTensor([1])
         )
