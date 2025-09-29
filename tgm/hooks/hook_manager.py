@@ -249,7 +249,7 @@ class HookManager:
                     # If h2 requires something h1 produces, add edge
                     adj_list[h1].append(h2)
 
-                # TODO: This is a hacky short term fix for implcit hook ordering constraints.
+                # TODO: This is a hacky short term fix for implicit hook ordering constraints.
                 # If both a negative hook and a neighbor hook are present, it is crucial
                 # that the negatives come first (so that we sample neighbors for the negatives).
                 # But since neighbor sampler does not explicitly require negatives, the topological
