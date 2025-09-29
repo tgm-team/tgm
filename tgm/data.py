@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import logging
 import pathlib
 import warnings
 from dataclasses import dataclass, fields, replace
@@ -21,7 +22,7 @@ from tgm.exceptions import (
 from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.util._tgb import suppress_output
-from tgm.util.logging import _get_logger, _log_latency
+from tgm.util.logging import _get_logger, log_latency
 
 logger = _get_logger(__name__)
 
@@ -323,7 +324,7 @@ class DGData:
 
         return strategy.apply(self)
 
-    @_log_latency
+    @log_latency(level=logging.DEBUG)
     def discretize(
         self, time_delta: TimeDeltaDG | str | None, reduce_op: str = 'first'
     ) -> DGData:

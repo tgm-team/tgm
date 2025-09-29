@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from collections import defaultdict, deque
 from contextlib import contextmanager
@@ -11,7 +12,7 @@ from tgm.exceptions import (
     UnresolvableHookDependenciesError,
 )
 from tgm.hooks import DGHook
-from tgm.util.logging import _get_logger, _log_latency
+from tgm.util.logging import _get_logger, log_latency
 
 logger = _get_logger(__name__)
 
@@ -118,7 +119,7 @@ class HookManager:
         self._active_key = key
         logger.debug('Set active hooks to key: %s', key)
 
-    @_log_latency
+    @log_latency(level=logging.DEBUG)
     def execute_active_hooks(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         """Executes all hooks (shared + key-specific) for the active key on a batch.
 

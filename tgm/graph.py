@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable, Sized
 from dataclasses import dataclass, replace
 from functools import cached_property
@@ -14,7 +15,7 @@ from tgm.timedelta import TimeDeltaDG
 from tgm.util.logging import (
     _cached_property_log_cache_activity,
     _get_logger,
-    _log_latency,
+    log_latency,
 )
 
 logger = _get_logger(__name__)
@@ -71,7 +72,7 @@ class DGraph:
             'Created DGraph with device=%s, time_delta=%s, device, data.time_delta'
         )
 
-    @_log_latency
+    @log_latency(level=logging.DEBUG)
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         """Materialize the current DGraph slice into a dense `DGBatch`.
 

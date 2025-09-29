@@ -49,25 +49,44 @@ def enable_logging(
     logger.propagate = False  # Don't spam user's root logger
 
 
+def log_latency(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
+    """Function decorator to log latency at configurable log level.
+
+    Usage:
+        - @log_latency # Logs at logging.INFO
+        - @log_latency() # Logs at logging.INFO
+        - @log_latency=level=logging.DEBUG) # Logs at logging.DEBUG
+
+    Returns:
+        The output of calling func.
+    """
+
+    def decorator(func: Callable) -> Callable:
+        logger = logging.getLogger('tgm')
+
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            start_time = time.perf_counter()
+            result = func(*args, **kwargs)
+            latency = time.perf_counter() - start_time
+            logger.log(level, 'Function %s executed in %.4fs', func.__name__, latency)
+            return result
+
+        return wrapper
+
+    # If _func is None, decorator was called with parens
+    if _func is None:
+        return decorator
+    else:
+        # Decorator used without parens
+        return decorator(_func)
+
+
 def _get_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
     if not logger.handlers:
         logger.addHandler(logging.NullHandler())
     return logger
-
-
-def _log_latency(func: Callable) -> Any:
-    logger = _get_logger(func.__module__)
-
-    @functools.wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        start_time = time.perf_counter()
-        result = func(*args, **kwargs)
-        latency = time.perf_counter() - start_time
-        logger.debug('Function %s executed in %.4fs', func.__name__, latency)
-        return result
-
-    return wrapper
 
 
 logger = _get_logger(__name__)
