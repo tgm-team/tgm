@@ -58,6 +58,9 @@ class DeduplicationHook(StatelessHook):
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
                 nids.append(batch.nbr_nids[hop].to(batch.src.device))
+        nids.append(
+            batch.node_ids.to(batch.src.device)
+        ) if batch.node_ids is not None else None
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)
@@ -93,10 +96,14 @@ class NegativeEdgeSamplerHook(StatelessHook):
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(  # type: ignore
-            self.low, self.high, size, dtype=torch.int32, device=dg.device
-        )
-        batch.neg_time = batch.time.clone()  # type: ignore
+        if size[0] == 0:
+            batch.neg = torch.empty(size, dtype=torch.int32, device=dg.device)  # type: ignore
+            batch.neg_time = torch.empty(size, dtype=torch.int64, device=dg.device)  # type: ignore
+        else:
+            batch.neg = torch.randint(  # type: ignore
+                self.low, self.high, size, dtype=torch.int32, device=dg.device
+            )
+            batch.neg_time = batch.time.clone()  # type: ignore
         return batch
 
 
@@ -145,6 +152,15 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        if batch.src.size(0) == 0:
+            batch.neg = torch.empty(  # type: ignore
+                batch.src.size(0), dtype=torch.int32, device=dg.device
+            )
+            batch.neg_time = torch.empty(  # type: ignore
+                batch.src.size(0), dtype=torch.int64, device=dg.device
+            )
+            batch.neg_batch_list = []  # type: ignore
+            return batch  # empty batch
         try:
             neg_batch_list = self.neg_sampler.query_batch(
                 batch.src, batch.dst, batch.time, split_mode=self.split_mode
@@ -222,6 +238,16 @@ class NeighborSamplerHook(StatelessHook):
 
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
+                if seed_nodes.numel() == 0:
+                    for hop in range(len(self.num_nbrs)):
+                        batch.nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+                        batch.times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+                        batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+                        batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+                        batch.nbr_feats.append(  # type: ignore
+                            torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
+                        )
+                    return batch
             else:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
@@ -324,13 +350,23 @@ class RecencyNeighborHook(StatefulHook):
                         times.append(batch.neg_time)
                     seed_nodes = torch.cat(seed)
                     seed_times = torch.cat(times)
+                    if seed_nodes.numel() == 0:
+                        for hop in range(len(self.num_nbrs)):
+                            batch.nids.append(torch.empty(0, dtype=torch.int32))
+                            batch.times.append(torch.empty(0, dtype=torch.int64))
+                            batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))
+                            batch.nbr_times.append(torch.empty(0, dtype=torch.int64))
+                            batch.nbr_feats.append(
+                                torch.empty(0, self._edge_feats_dim).float()
+                            )
+                        return batch
                 else:
                     seed_nodes = getattr(batch, self._seed_nodes_key)
                     if seed_nodes is None:
                         return batch
                     else:
                         seed_nodes = seed_nodes.to(device)
-                        seed_times = batch.node_times.to(device)  # type: ignore #! to adjust later, it should point to node event time
+                        seed_times = batch.node_times.to(device)  # type: ignore
             else:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore

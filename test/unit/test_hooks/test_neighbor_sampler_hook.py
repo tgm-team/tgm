@@ -272,3 +272,81 @@ def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
         assert nbr_feats[0][0][1][0] == 0.0
         assert nbr_feats[0][1][0][0] == 1.0
         assert nbr_feats[0][1][1][0] == 2.0
+
+
+@pytest.fixture
+def no_edge_feat_data():
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
+    edge_timestamps = torch.IntTensor([1, 2, 3])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+    )
+
+
+def test_no_edge_feat_data_neighbor_sampler(no_edge_feat_data):
+    dg = DGraph(no_edge_feat_data)
+    n_nbrs = [1]
+    uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs)
+    hm = HookManager(keys=['unit'])
+    hm.register_shared(uniform_hook)
+    loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
+    assert loader._batch_size == 3
+    with hm.activate('unit'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+        assert nids.shape == (1, 6)
+        assert nbr_nids.shape == (1, 6, 1)
+        assert nbr_times.shape == (1, 6, 1)
+        assert nbr_feats.shape == (1, 6, 1, 0)
+
+
+@pytest.fixture
+def node_only_data():
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
+    edge_timestamps = torch.IntTensor([1, 2, 3])
+    edge_feats = torch.IntTensor([[1], [2], [3]])
+    dynamic_node_feats = torch.rand(2, 5)
+    node_timestamps = torch.IntTensor([4, 5])
+    node_ids = torch.IntTensor([5, 6])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats=edge_feats,
+        dynamic_node_feats=dynamic_node_feats,
+        node_timestamps=node_timestamps,
+        node_ids=node_ids,
+    )
+
+
+def test_node_only_batch_recency_nbr_sampler(node_only_data):
+    dg = DGraph(node_only_data)
+    hm = HookManager(keys=['unit'])
+    n_nbrs = [1]  # 1 neighbor for each node
+    uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs)
+    hm = HookManager(keys=['unit'])
+    hm.register_shared(uniform_hook)
+    loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
+    with hm.activate('unit'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        assert isinstance(batch_1, DGBatch)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+        assert nids.shape == (1, 6)
+        assert nbr_nids.shape == (1, 6, 1)
+        assert nbr_times.shape == (1, 6, 1)
+        assert nbr_feats.shape == (1, 6, 1, 1)
+
+        batch_2 = next(batch_iter)
+        assert isinstance(batch_2, DGBatch)
+        torch.testing.assert_close(batch_2.nids[0], torch.empty(0, dtype=torch.int32))
+        torch.testing.assert_close(
+            batch_2.nbr_nids[0], torch.empty(0, dtype=torch.int32)
+        )
+        torch.testing.assert_close(
+            batch_2.nbr_times[0], torch.empty(0, dtype=torch.int64)
+        )
+        torch.testing.assert_close(
+            batch_2.nbr_feats[0], torch.empty((0, 1), dtype=torch.float32)
+        )
