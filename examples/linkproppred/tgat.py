@@ -223,7 +223,6 @@ elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-        edge_feats_dim=test_dg.edge_feats_dim,
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
