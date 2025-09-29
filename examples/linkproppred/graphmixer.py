@@ -1,7 +1,6 @@
 import argparse
 import time
-from collections import defaultdict, deque
-from typing import Any, Deque, Dict
+from collections import deque
 
 import numpy as np
 import torch
@@ -270,13 +269,11 @@ class GraphMixerHook(StatefulHook):
 
     def __init__(self, time_gap: int) -> None:
         self._num_nbrs = time_gap
-        self._history: Dict[int, Deque[Any]] = defaultdict(
-            lambda: deque(maxlen=self._num_nbrs)
-        )
+        self._history = deque(maxlen=self._num_nbrs)
         self._device = torch.device('cpu')
 
     def reset_state(self) -> None:
-        self._history = defaultdict(lambda: deque(maxlen=self._num_nbrs))
+        self._history.clear()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         device = dg.device
@@ -305,23 +302,28 @@ class GraphMixerHook(StatefulHook):
 
         for i in range(num_nodes):
             nid, qtime = int(node_ids[i]), int(query_times[i])
-            history = self._history[nid]
-            valid = [(nbr, t) for (nbr, t) in history if t < qtime]
-            if not valid:
-                continue
-            valid = valid[-k:]  # most recent k
+            nbrs = []
+            for u, v, t in reversed(self._history):  # most recent first
+                if t < qtime:
+                    if u == nid:
+                        nbrs.append(v)
+                    elif v == nid:
+                        nbrs.append(u)
+                    if len(nbrs) == k:
+                        break
 
-            nbr_nids[i, -len(valid) :] = torch.tensor(
-                [x[0] for x in valid], dtype=torch.long, device=device
-            )
-
+            if nbrs:
+                nbr_nids[i, -len(nbrs) :] = torch.tensor(nbrs, device=device)
         return nbr_nids
 
     def _update(self, batch: DGBatch) -> None:
-        src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
-        for s, d, t in zip(src, dst, time):
-            self._history[s].append((d, t))
-            self._history[d].append((s, t))  # undirected
+        events = list(zip(batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()))
+        if hasattr(batch, 'neg'):
+            events += list(
+                zip(batch.src.tolist(), batch.neg.tolist(), batch.neg_time.tolist())
+            )
+        events += [(v, u, t) for (u, v, t) in events]  # undirected
+        self._history.extend(events)
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
         if device != self._device:
