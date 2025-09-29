@@ -498,6 +498,40 @@ class RecencyNeighborHook(StatefulHook):
             self._write_pos = self._write_pos.to(device)
 
 
+class SeenNodesTrackHook(StatefulHook):
+    requires = {'unique_nids'}
+    produces = {'seen_nodes', 'batch_nodes_mask'}
+
+    def __init__(
+        self,
+        num_nodes: int,
+    ) -> None:
+        if num_nodes < 0:
+            raise ValueError('num_nodes must be non-negative')
+        self._seen_mask = torch.zeros(num_nodes, dtype=torch.bool)
+
+    def reset_state(self) -> None:
+        self._seen_mask.fill_(False)
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        if batch.node_ids is not None:
+            batch_nodes = batch.node_ids
+        else:
+            batch_nodes = torch.empty(
+                0,
+                device=batch.unique_nids.device,  # type: ignore[attr-defined]
+                dtype=torch.int,
+            )
+
+        edge_event_nodes = batch.unique_nids  # type: ignore[attr-defined]
+
+        self._seen_mask[edge_event_nodes] = True
+        previous_seen = self._seen_mask[batch_nodes]
+        batch.batch_nodes_mask = torch.nonzero(previous_seen, as_tuple=True)[0]  # type: ignore[attr-defined]
+        batch.seen_nodes = batch_nodes[previous_seen]  # type: ignore[attr-defined]
+        return batch
+
+
 def _apply_to_tensors_inplace(obj: Any, fn: Any) -> Any:
     if torch.is_tensor(obj):
         return fn(obj)

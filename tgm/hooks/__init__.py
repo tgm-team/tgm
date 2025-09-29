@@ -7,5 +7,6 @@ from .hooks import (
     TGBNegativeEdgeSamplerHook,
     NeighborSamplerHook,
     RecencyNeighborHook,
+    SeenNodesTrackHook,
 )
 from .hook_manager import HookManager
