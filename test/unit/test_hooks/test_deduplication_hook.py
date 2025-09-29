@@ -122,7 +122,7 @@ def test_dedup_node_only_batch(node_only_graph):
         )
 
         batch_2 = next(batch_iter)
-        torch.testing.assert_close(batch_2.unique_nids, torch.IntTensor([]))
+        torch.testing.assert_close(batch_2.unique_nids, torch.IntTensor([5, 6]))
         torch.testing.assert_close(
-            batch_2.global_to_local(batch_1.node_ids), torch.IntTensor([5, 6])
+            batch_2.global_to_local(batch_2.node_ids), torch.IntTensor([0, 1])
         )

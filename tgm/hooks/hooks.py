@@ -58,6 +58,10 @@ class DeduplicationHook(StatelessHook):
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
                 nids.append(batch.nbr_nids[hop].to(batch.src.device))
+        if hasattr(batch, 'node_ids'):
+            nids.append(
+                batch.node_ids.to(batch.src.device)
+            ) if batch.node_ids is not None else None
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)

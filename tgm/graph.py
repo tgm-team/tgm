@@ -74,6 +74,7 @@ class DGraph:
         batch = DGBatch(*self.edges)
         if materialize_features and self.dynamic_node_feats is not None:
             batch.node_times, batch.node_ids = self.dynamic_node_feats._indices()
+            batch.node_ids = batch.node_ids.to(torch.int32)  # type: ignore
             batch.dynamic_node_feats = self.dynamic_node_feats._values()
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats
