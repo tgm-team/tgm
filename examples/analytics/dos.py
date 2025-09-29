@@ -1,4 +1,6 @@
 import argparse
+import logging
+from pathlib import Path
 
 import networkx as nx
 import numpy as np
@@ -8,6 +10,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.hooks import HookManager, StatelessHook
 from tgm.loader import DGDataLoader
+from tgm.util.logging import enable_logging
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -22,6 +25,13 @@ parser.add_argument('--moments', type=int, default=20, help='# of Chebyshev mome
 parser.add_argument(
     '--probing-vectors', type=int, default=100, help='# of probing vectors'
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
+logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class DensityOfStateEstimatorHook(StatelessHook):
@@ -91,7 +101,6 @@ class DensityOfStateEstimatorHook(StatelessHook):
         return batch
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 
 dg = DGraph(DGData.from_tgb(args.dataset))
@@ -107,4 +116,4 @@ dos_list = []
 for batch in tqdm(loader):
     dos_list.append(batch.dos)
 
-print(f'Computed {len(dos_list)} density state estimates')
+logger.info(f'Computed {len(dos_list)} density state estimates')
