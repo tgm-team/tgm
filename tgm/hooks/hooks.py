@@ -208,6 +208,12 @@ class NeighborSamplerHook(StatelessHook):
         seed_times_keys (Optional[List[str]]): List of batch attribute keys to identify the initial seed times to sample for.
                                                If not specified, defaults to batch times: ['time', 'time', 'neg_time']
 
+    Note:
+        The order of the ouput tensors respect the order of seed_nodes_keys.
+        For instance, the default keys ['src', 'dst', 'neg'] will have the first output index (hop 0) contain the concatenation
+        of batch.src, batch.dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.src
+        followed by first-hop neighbors of batch.dst, and then those of batch.neg. This pattern repeats for deeper hops.
+
     Raises:
         ValueError: If the num_nbrs list is empty or has non-positive entries.
         ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
@@ -371,6 +377,12 @@ class RecencyNeighborHook(StatefulHook):
                                                If not specified, defaults to batch edges: ['src', 'dst', 'neg']
         seed_times_keys (Optional[List[str]]): List of batch attribute keys to identify the initial seed times to sample for.
                                                If not specified, defaults to batch times: ['time', 'time', 'neg_time']
+
+    Note:
+        The order of the ouput tensors respect the order of seed_nodes_keys.
+        For instance, the default keys ['src', 'dst', 'neg'] will have the first output index (hop 0) contain the concatenation
+        of batch.src, batch.dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.src
+        followed by first-hop neighbors of batch.dst, and then those of batch.neg. This pattern repeats for deeper hops.
 
     Raises:
         ValueError: If the num_nbrs list is empty or has non-positive entries.
