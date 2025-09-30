@@ -409,7 +409,8 @@ num_classes = train_dg.dynamic_node_feats_dim
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-    seed_nodes_key='node_ids',
+    seed_nodes_keys=['node_ids'],
+    seed_times_keys=['node_times'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
