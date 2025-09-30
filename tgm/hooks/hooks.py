@@ -205,23 +205,13 @@ class NeighborSamplerHook(StatelessHook):
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        device = dg.device
-
         batch.nids, batch.times = [], []  # type: ignore
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
         batch.nbr_feats = []  # type: ignore
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
-                seed = [batch.src, batch.dst]
-                times = [batch.time.repeat(2)]  # Real link times
-                if hasattr(batch, 'neg'):
-                    batch.neg = batch.neg.to(device)
-                    seed.append(batch.neg)
-                    times.append(batch.neg_time)  # type: ignore
-
-                seed_nodes = torch.cat(seed)
-                seed_times = torch.cat(times)
+                seed_nodes, seed_times = self._get_seed_tensors(batch)
             else:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
@@ -244,6 +234,19 @@ class NeighborSamplerHook(StatelessHook):
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
         return batch
+
+    def _get_seed_tensors(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+        device = batch.src.device
+        seed = [batch.src, batch.dst]
+        times = [batch.time.repeat(2)]  # Real link times
+        if hasattr(batch, 'neg'):
+            batch.neg = batch.neg.to(device)
+            seed.append(batch.neg)
+            times.append(batch.neg_time)  # type: ignore
+
+        seed_nodes = torch.cat(seed)
+        seed_times = torch.cat(times)
+        return seed_nodes, seed_times
 
 
 class RecencyNeighborHook(StatefulHook):
@@ -301,8 +304,7 @@ class RecencyNeighborHook(StatefulHook):
         self._write_pos.zero_()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        device = dg.device
-        self._move_queues_to_device_if_needed(device)  # No-op after first batch
+        self._move_queues_to_device_if_needed(dg.device)  # No-op after first batch
 
         batch.nids, batch.times = [], []  # type: ignore
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
@@ -310,22 +312,7 @@ class RecencyNeighborHook(StatefulHook):
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop == 0:
-                if self._seed_nodes_key is None:
-                    seed = [batch.src, batch.dst]
-                    times = [batch.time.repeat(2)]  # Real link times
-                    if hasattr(batch, 'neg'):
-                        batch.neg = batch.neg.to(device)
-                        seed.append(batch.neg)
-                        times.append(batch.neg_time)
-                    seed_nodes = torch.cat(seed)
-                    seed_times = torch.cat(times)
-                else:
-                    seed_nodes = getattr(batch, self._seed_nodes_key)
-                    if seed_nodes is None:
-                        return batch
-                    else:
-                        seed_nodes = seed_nodes.to(device)
-                        seed_times = batch.node_times.to(device)  # type: ignore #! to adjust later, it should point to node event time
+                seed_nodes, seed_times = self._get_seed_tensors(batch)
             else:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
@@ -343,6 +330,27 @@ class RecencyNeighborHook(StatefulHook):
         if batch.src.numel():
             self._update(batch)
         return batch
+
+    def _get_seed_tensors(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+        device = batch.src.device
+        if self._seed_nodes_key is None:
+            seed = [batch.src, batch.dst]
+            times = [batch.time.repeat(2)]  # Real link times
+            if hasattr(batch, 'neg'):
+                batch.neg = batch.neg.to(device)
+                seed.append(batch.neg)
+                times.append(batch.neg_time)
+            seed_nodes = torch.cat(seed)
+            seed_times = torch.cat(times)
+        else:
+            seed_nodes = getattr(batch, self._seed_nodes_key)
+            if seed_nodes is None:
+                return batch
+            else:
+                seed_nodes = seed_nodes.to(device)
+                seed_times = batch.node_times.to(device)  # type: ignore #! to adjust later, it should point to node event time
+
+        return seed_nodes, seed_times
 
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
