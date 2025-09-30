@@ -119,11 +119,7 @@ class RandomProjectionModule(nn.Module):
         Returns:
             H_pairwise : Pairwise feature
         """
-        src_random_projections = self.get_random_projections(src)
-        dst_random_projections = self.get_random_projections(dst)
-        random_projections = torch.cat(  # @TODO: This takes up a lot GPU memory, especially for TGB evaluation
-            [src_random_projections, dst_random_projections], dim=1
-        ).to(self.device)
+        random_projections = self.get_random_projections([src, dst])
         random_feature = torch.matmul(
             random_projections, random_projections.transpose(1, 2)
         ).reshape(src.shape[0], -1)
@@ -179,7 +175,7 @@ class RandomProjectionModule(nn.Module):
         # set current timestamp to the biggest timestamp in this batch
         self.now_time.data = next_time.clone().detach()
 
-    def get_random_projections(self, node_ids: torch.Tensor) -> torch.Tensor:
+    def get_random_projections(self, node_ids: List[torch.Tensor]) -> torch.Tensor:
         f"""Get the random projections of the give node ids
 
         Args:
@@ -189,8 +185,10 @@ class RandomProjectionModule(nn.Module):
             Random projection of nodes
         """
         random_projections = []
-        for i in range(self.num_layer + 1):
-            random_projections.append(self.random_projections[i][node_ids])
+        for node_list in node_ids:
+            for i in range(self.num_layer + 1):
+                random_projections.append(self.random_projections[i][node_list])
+
         return torch.stack(random_projections, dim=1).to(self.device)
 
     def reset_random_projections(
@@ -225,7 +223,9 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        assert len(random_projections) == 2, (
+        assert (
+            len(random_projections) == 2
+        ), (
             'Expect a tuple of (now_time,random_projections)'
         )  # @TODO: Need to raise custom exception
         now_time, random_projections = random_projections
@@ -237,7 +237,9 @@ class RandomProjectionModule(nn.Module):
 
         self.now_time.data = now_time.clone()
         for i in range(1, self.num_layer + 1):
-            assert torch.is_tensor(random_projections[i - 1]), (
+            assert torch.is_tensor(
+                random_projections[i - 1]
+            ), (
                 'Not a valid state of random projection'
             )  # @TODO: Need to raise custom exception
             self.random_projections[i].data = random_projections[i - 1].clone()
