@@ -403,16 +403,12 @@ else:
     val_dg = DGraph(val_data, device=args.device)
     test_dg = DGraph(test_data, device=args.device)
 
-num_nodes = test_dg.num_nodes
-edge_feats_dim = train_dg.edge_feats_dim
-
 evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-    edge_feats_dim=test_dg.edge_feats_dim,
     seed_nodes_key='node_ids',
 )
 

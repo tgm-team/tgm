@@ -253,7 +253,6 @@ test_dg = DGraph(test_data, device=args.device)
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
     num_nodes=num_nodes,
-    edge_feats_dim=edge_feats_dim,
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
