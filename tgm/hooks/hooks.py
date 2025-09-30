@@ -550,6 +550,59 @@ class RecencyNeighborHook(StatefulHook):
             self._need_to_initialize_nbr_feats = False
 
 
+class SeenNodesTrackHook(StatefulHook):
+    """This hook return all nodes appearing in node events of current batch that have seen in the past edge events.
+    This hook is for the use case of nodeproppred for models computing node embeddings according to edges such as `DyGFormer` and `TPNet`.
+
+    Args:
+        num_nodes (int): Total number of nodes to track.
+
+    Raises:
+        ValueError: If the num_nodes list is negative.
+    """
+
+    requires = {'unique_nids'}
+    produces = {'seen_nodes', 'batch_nodes_mask'}
+
+    def __init__(
+        self,
+        num_nodes: int,
+    ) -> None:
+        if num_nodes < 0:
+            raise ValueError('num_nodes must be non-negative')
+        self._seen_mask = torch.zeros(num_nodes, dtype=torch.bool)
+        self._device = torch.device('cpu')
+
+    def reset_state(self) -> None:
+        self._seen_mask.fill_(False)
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        device = dg.device
+        self._move_to_device_if_needed(device)  # No-op after first batch
+
+        if batch.node_ids is not None:
+            batch_nodes = batch.node_ids
+        else:
+            batch_nodes = torch.empty(
+                0,
+                device=self._device,
+                dtype=torch.int,
+            )
+
+        edge_event_nodes = batch.unique_nids  # type: ignore[attr-defined]
+
+        self._seen_mask[edge_event_nodes] = True
+        previous_seen = self._seen_mask[batch_nodes]
+        batch.batch_nodes_mask = torch.nonzero(previous_seen, as_tuple=True)[0]  # type: ignore[attr-defined]
+        batch.seen_nodes = batch_nodes[previous_seen]  # type: ignore[attr-defined]
+        return batch
+
+    def _move_to_device_if_needed(self, device: torch.device) -> None:
+        if device != self._device:
+            self._device = device
+            self._seen_mask = self._seen_mask.to(device)
+
+
 def _apply_to_tensors_inplace(obj: Any, fn: Any) -> Any:
     if torch.is_tensor(obj):
         return fn(obj)
