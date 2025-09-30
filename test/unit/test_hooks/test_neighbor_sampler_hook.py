@@ -51,6 +51,41 @@ def test_bad_neighbor_sampler_init_bad_seed_keys():
         )
 
 
+@pytest.mark.skip('TODO')
+def test_sample_with_node_events_seeds():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_sample_with_None_seeds():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_sample_with_non_existent_seeds():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_bad_sample_with_non_tensor_non_None_seeds():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_bad_sample_with_non_1d_tensor_seeds():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_bad_sample_with_seeds_id_out_of_range():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_bad_sample_with_seeds_time_out_of_range():
+    pass
+
+
 def test_neighbor_sampler_hook_link_pred(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(num_nbrs=[2])
