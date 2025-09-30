@@ -273,7 +273,7 @@ class NeighborSamplerHook(StatelessHook):
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
 
-            # TODO: Device management
+            # TODO: Storage needs to use the right device
 
             # We slice on batch.start_time so that we only consider neighbor events
             # that occurred strictly before this batch
