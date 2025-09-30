@@ -228,6 +228,7 @@ class NeighborSamplerHook(StatelessHook):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
+
         self._num_nbrs = num_nbrs
         self._directed = directed
 
@@ -329,6 +330,21 @@ class NeighborSamplerHook(StatelessHook):
                     raise ValueError(f'{name} must be a Tensor, got {type(tensor)}')
                 if tensor.ndim != 1:
                     raise ValueError(f'{name} must be 1-D, got shape {tensor.shape}')
+
+                # Bounds checks
+                # TODO: Infer self._num_nodes from underlying graph
+                self._num_nodes = float('inf')
+                if name == node_attr:
+                    if (tensor < 0).any() or (tensor >= self._num_nodes).any():
+                        raise ValueError(
+                            f'Seed nodes in {name} must satisfy 0 <= x < {self._num_nodes}, '
+                            f'got values in range [{tensor.min().item()}, {tensor.max().item()}]'
+                        )
+                elif name == time_attr:
+                    if (tensor < 0).any():
+                        raise ValueError(
+                            f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
+                        )
 
             seeds.append(seed.to(device))
             times.append(time.to(device))
@@ -462,7 +478,6 @@ class RecencyNeighborHook(StatefulHook):
         return batch
 
     def _get_seed_tensors(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO: Need a bounds check on seed nodes and seed times
         device = batch.src.device
         seeds, times = [], []
 
@@ -494,6 +509,18 @@ class RecencyNeighborHook(StatefulHook):
                 if tensor.ndim != 1:
                     raise ValueError(f'{name} must be 1-D, got shape {tensor.shape}')
 
+                # Bounds checks
+                if name == node_attr:
+                    if (tensor < 0).any() or (tensor >= self._num_nodes).any():
+                        raise ValueError(
+                            f'Seed nodes in {name} must satisfy 0 <= x < {self._num_nodes}, '
+                            f'got values in range [{tensor.min().item()}, {tensor.max().item()}]'
+                        )
+                elif name == time_attr:
+                    if (tensor < 0).any():
+                        raise ValueError(
+                            f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
+                        )
             seeds.append(seed.to(device))
             times.append(time.to(device))
 
