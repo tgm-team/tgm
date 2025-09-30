@@ -256,20 +256,23 @@ class NeighborSamplerHook(StatelessHook):
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
         batch.nbr_feats = []  # type: ignore
 
+        def _append_empty_hop() -> None:
+            batch.nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+            batch.times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+            batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+            batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+            batch.nbr_feats.append(  # type: ignore
+                torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
+            )
+
+        seed_nodes, seed_times = self._get_seed_tensors(batch)
+        if not seed_nodes.numel():
+            for _ in self.num_nbrs:
+                _append_empty_hop()
+            return batch
+
         for hop, num_nbrs in enumerate(self.num_nbrs):
-            if hop == 0:
-                seed_nodes, seed_times = self._get_seed_tensors(batch)
-                if seed_nodes.numel() == 0:
-                    for hop in range(len(self.num_nbrs)):
-                        batch.nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
-                        batch.times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
-                        batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
-                        batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
-                        batch.nbr_feats.append(  # type: ignore
-                            torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
-                        )
-                    return batch
-            else:
+            if hop > 0:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
 
@@ -414,20 +417,23 @@ class RecencyNeighborHook(StatefulHook):
         batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
         batch.nbr_feats = []  # type: ignore
 
+        def _append_empty_hop() -> None:
+            batch.nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+            batch.times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+            batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+            batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+            batch.nbr_feats.append(  # type: ignore
+                torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
+            )
+
+        seed_nodes, seed_times = self._get_seed_tensors(batch)
+        if not seed_nodes.numel():
+            for _ in self.num_nbrs:
+                _append_empty_hop()
+            return batch
+
         for hop, num_nbrs in enumerate(self.num_nbrs):
-            if hop == 0:
-                seed_nodes, seed_times = self._get_seed_tensors(batch)
-                if seed_nodes.numel() == 0:
-                    for hop in range(len(self.num_nbrs)):
-                        batch.nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
-                        batch.times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
-                        batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
-                        batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
-                        batch.nbr_feats.append(  # type: ignore
-                            torch.empty(0, self._edge_feats_dim).float()  # type: ignore
-                        )
-                    return batch
-            else:
+            if hop > 0:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
 
