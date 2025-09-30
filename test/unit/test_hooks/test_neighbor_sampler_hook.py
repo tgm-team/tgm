@@ -40,6 +40,17 @@ def test_bad_neighbor_sampler_init():
         NeighborSamplerHook(num_nbrs=[1, 0])
 
 
+def test_bad_neighbor_sampler_init_bad_seed_keys():
+    with pytest.raises(ValueError):
+        NeighborSamplerHook(num_nbrs=[1], seed_nodes_keys=['foo'])
+    with pytest.raises(ValueError):
+        NeighborSamplerHook(num_nbrs=[1], seed_times_keys=['foo'])
+    with pytest.raises(ValueError):
+        NeighborSamplerHook(
+            num_nbrs=[1], seed_nodes_keys=['foo', 'bar'], seed_times_keys=['foo']
+        )
+
+
 def test_neighbor_sampler_hook_link_pred(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(num_nbrs=[2])

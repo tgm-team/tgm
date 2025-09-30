@@ -149,6 +149,20 @@ def test_bad_neighbor_sampler_init():
         RecencyNeighborHook(num_nbrs=[], num_nodes=2)
 
 
+def test_bad_neighbor_sampler_init_bad_seed_keys():
+    with pytest.raises(ValueError):
+        RecencyNeighborHook(num_nbrs=[1], num_nodes=2, seed_nodes_keys=['foo'])
+    with pytest.raises(ValueError):
+        RecencyNeighborHook(num_nbrs=[1], num_nodes=2, seed_times_keys=['foo'])
+    with pytest.raises(ValueError):
+        RecencyNeighborHook(
+            num_nbrs=[1],
+            num_nodes=2,
+            seed_nodes_keys=['foo', 'bar'],
+            seed_times_keys=['foo'],
+        )
+
+
 def _nbrs_2_np(batch: DGBatch) -> List[np.ndarray]:
     assert isinstance(batch, DGBatch)
     assert hasattr(batch, 'nids')
