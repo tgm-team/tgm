@@ -349,8 +349,11 @@ class NeighborSamplerHook(StatelessHook):
             seeds.append(seed.to(device))
             times.append(time.to(device))
 
-        seed_nodes = torch.cat(seeds)
-        seed_times = torch.cat(times)
+        if seeds and times:
+            seed_nodes, seed_times = torch.cat(seeds), torch.cat(times)
+        else:
+            seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
+            seed_times = torch.empty(0, dtype=torch.int64, device=device)
         return seed_nodes, seed_times
 
 
@@ -524,8 +527,11 @@ class RecencyNeighborHook(StatefulHook):
             seeds.append(seed.to(device))
             times.append(time.to(device))
 
-        seed_nodes = torch.cat(seeds)
-        seed_times = torch.cat(times)
+        if seeds and times:
+            seed_nodes, seed_times = torch.cat(seeds), torch.cat(times)
+        else:
+            seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
+            seed_times = torch.empty(0, dtype=torch.int64, device=device)
         return seed_nodes, seed_times
 
     def _get_recency_neighbors(
