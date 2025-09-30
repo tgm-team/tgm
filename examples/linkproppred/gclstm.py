@@ -12,7 +12,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph, RecipeRegistry
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.loader import DGDataLoader
-from tgm.nn.recurrent import GCLSTM
+from tgm.nn import GCLSTM
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 

@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
-from tgm.nn.recurrent import TGCN
+from tgm.nn import TGCN
 from tgm.split import TemporalRatioSplit
 from tgm.util.seed import seed_everything
 

@@ -8,13 +8,10 @@
 
 ::: tgm.nn.time_encoding
 
-### Recurrent
-
-::: tgm.nn.recurrent.gclstm
-::: tgm.nn.recurrent.tgcn
-
 ## Models
 
-::: tgm.nn.memory.edgebank
+::: tgm.nn.model.edgebank
 ::: tgm.nn.model.dygformer
 ::: tgm.nn.model.tpnet
+::: tgm.nn.model.gclstm
+::: tgm.nn.model.tgcn

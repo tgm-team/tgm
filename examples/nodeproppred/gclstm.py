@@ -12,7 +12,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.loader import DGDataLoader
-from tgm.nn.recurrent import GCLSTM
+from tgm.nn import GCLSTM
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
