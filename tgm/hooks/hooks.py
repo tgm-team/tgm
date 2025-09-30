@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import is_dataclass
 from pathlib import Path
 from typing import Any, List, Set, Tuple
+
+warnings.simplefilter('once', UserWarning)  # Only emit each warning in this module once
 
 import torch
 
@@ -228,7 +231,6 @@ class NeighborSamplerHook(StatelessHook):
         self._num_nbrs = num_nbrs
         self._directed = directed
 
-        # TODO: Should negatives be explicit or implicit?
         if seed_nodes_keys is None and seed_times_keys is None:
             self._seed_nodes_keys = ['src', 'dst', 'neg']
             self._seed_times_keys = ['time', 'time', 'neg_time']
@@ -300,16 +302,28 @@ class NeighborSamplerHook(StatelessHook):
         seeds, times = [], []
 
         for node_attr, time_attr in zip(self._seed_nodes_keys, self._seed_times_keys):
-            if not (hasattr(batch, node_attr) and hasattr(batch, time_attr)):
-                # TODO: Emit warning if requested seeds are not in the batch
+            missing = [
+                attr for attr in (node_attr, time_attr) if not hasattr(batch, attr)
+            ]
+            if missing:
+                warnings.warn(
+                    f'Missing seed attributes {missing} on batch, skipping', UserWarning
+                )
                 continue
 
             seed = getattr(batch, node_attr)
             time = getattr(batch, time_attr)
 
             for name, tensor in [(node_attr, seed), (time_attr, time)]:
-                # TODO: We should probably silently continue if not a tensor rather than error
-                # For instance, if no dynamic node features on a batch when using node_ids and node_times
+                # We recover from tensor = None, since the current batch could just
+                # be missing certain attributes (e.g. dynamic node events), but for
+                # non-Tensor and non-None attrs we explicitly raise
+                if tensor is None:
+                    warnings.warn(
+                        f'Seed attribute {name} is None on this batch, skipping',
+                        UserWarning,
+                    )
+                    break
                 if not isinstance(tensor, torch.Tensor):
                     raise ValueError(f'{name} must be a Tensor, got {type(tensor)}')
                 if tensor.ndim != 1:
@@ -317,10 +331,6 @@ class NeighborSamplerHook(StatelessHook):
 
             seeds.append(seed.to(device))
             times.append(time.to(device))
-
-        if not seeds:
-            # TODO: Emit warning and potentially recover
-            raise ValueError('No valid seed tensors found in batch')
 
         seed_nodes = torch.cat(seeds)
         seed_times = torch.cat(times)
@@ -367,7 +377,6 @@ class RecencyNeighborHook(StatefulHook):
         self._directed = directed
         self._device = torch.device('cpu')
 
-        # TODO: Should negatives be explicit or implicit?
         if seed_nodes_keys is None and seed_times_keys is None:
             self._seed_nodes_keys = ['src', 'dst', 'neg']
             self._seed_times_keys = ['time', 'time', 'neg_time']
@@ -456,14 +465,28 @@ class RecencyNeighborHook(StatefulHook):
         seeds, times = [], []
 
         for node_attr, time_attr in zip(self._seed_nodes_keys, self._seed_times_keys):
-            if not (hasattr(batch, node_attr) and hasattr(batch, time_attr)):
-                # TODO: Emit warning if requested seeds are not in the batch
+            missing = [
+                attr for attr in (node_attr, time_attr) if not hasattr(batch, attr)
+            ]
+            if missing:
+                warnings.warn(
+                    f'Missing seed attributes {missing} on batch, skipping', UserWarning
+                )
                 continue
 
             seed = getattr(batch, node_attr)
             time = getattr(batch, time_attr)
 
             for name, tensor in [(node_attr, seed), (time_attr, time)]:
+                # We recover from tensor = None, since the current batch could just
+                # be missing certain attributes (e.g. dynamic node events), but for
+                # non-Tensor and non-None attrs we explicitly raise
+                if tensor is None:
+                    warnings.warn(
+                        f'Seed attribute {name} is None on this batch, skipping',
+                        UserWarning,
+                    )
+                    break
                 if not isinstance(tensor, torch.Tensor):
                     raise ValueError(f'{name} must be a Tensor, got {type(tensor)}')
                 if tensor.ndim != 1:
@@ -471,10 +494,6 @@ class RecencyNeighborHook(StatefulHook):
 
             seeds.append(seed.to(device))
             times.append(time.to(device))
-
-        if not seeds:
-            # TODO: Emit warning and potentially recover
-            raise ValueError('No valid seed tensors found in batch')
 
         seed_nodes = torch.cat(seeds)
         seed_times = torch.cat(times)
