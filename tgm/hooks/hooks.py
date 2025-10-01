@@ -249,7 +249,6 @@ class NeighborSamplerHook(StatelessHook):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
-
         self._num_nbrs = num_nbrs
         self._directed = directed
 
