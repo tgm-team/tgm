@@ -13,6 +13,9 @@ from tgm.exceptions import (
 )
 from tgm.hooks import HookManager
 from tgm.timedelta import TimeDeltaDG
+from tgm.util.logging import _get_logger
+
+logger = _get_logger(__name__)
 
 
 class _SkippableDataLoaderMixin(ABC):
@@ -54,6 +57,7 @@ class _SkippableDataLoaderMixin(ABC):
                 if self._on_empty == 'raise':
                     raise EmptyBatchError('Empty batch encountered')
                 elif self._on_empty == 'skip':
+                    logger.debug('Skipping empty batch')
                     continue
             yield batch
 
@@ -108,6 +112,12 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
             raise ValueError(f'batch_size must be > 0 but got {batch_size}')
 
         batch_time_delta = TimeDeltaDG(batch_unit)
+        logger.info(
+            'Initializing DGDataLoader: batch_size=%d, batch_unit=%s, dg.time_delta.event_ordered=%s',
+            batch_size,
+            batch_unit,
+            dg.time_delta.is_event_ordered,
+        )
 
         if dg.time_delta.is_event_ordered and batch_time_delta.is_time_ordered:
             raise EventOrderedConversionError(
@@ -152,6 +162,12 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         dg = self._slice_op(slice_start[0], slice_end)
         batch = dg.materialize()
         if self._hook_manager is not None:
+            logger.debug(
+                'Applying hooks to batch %s [%d:%d)',
+                self._slice_op.__name__,
+                slice_start[0],
+                slice_end,
+            )
             batch = self._hook_manager.execute_active_hooks(dg, batch)
         return batch
 

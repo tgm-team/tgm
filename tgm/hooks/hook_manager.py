@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import time
 from collections import defaultdict, deque
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List
@@ -10,6 +12,9 @@ from tgm.exceptions import (
     UnresolvableHookDependenciesError,
 )
 from tgm.hooks import DGHook
+from tgm.util.logging import _get_logger, log_latency
+
+logger = _get_logger(__name__)
 
 
 class HookManager:
@@ -80,6 +85,7 @@ class HookManager:
         self._shared_hooks.append(hook)
         for k in self._dirty:  # Mark all keys as 'dirty'
             self._dirty[k] = True
+        logger.debug('Registered shared hook: %s', hook.__class__.__name__)
 
     def register(self, key: str, hook: DGHook) -> None:
         """Registers a key-specific hook.
@@ -98,6 +104,7 @@ class HookManager:
         self._ensure_no_active_key()
         self._key_to_hooks[key].append(hook)
         self._dirty[key] = True  # Mark registered key as 'dirty'
+        logger.debug('Registered hook: %s for key: %s', hook.__class__.__name__, key)
 
     def set_active_hooks(self, key: str) -> None:
         """Sets the currently active key for executing hooks.
@@ -110,7 +117,9 @@ class HookManager:
         """
         self._ensure_valid_key(key)
         self._active_key = key
+        logger.debug('Set active hooks to key: %s', key)
 
+    @log_latency(level=logging.DEBUG)
     def execute_active_hooks(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         """Executes all hooks (shared + key-specific) for the active key on a batch.
 
@@ -134,7 +143,11 @@ class HookManager:
             self.resolve_hooks(key)
 
         for hook in self._key_to_hooks[key]:
+            start_time = time.perf_counter()
             batch = hook(dg, batch)
+            latency = time.perf_counter() - start_time
+            logger.debug('%s hook executed in %.4fs', hook.__class__.__name__, latency)
+
         return batch
 
     def reset_state(self, key: str | None = None) -> None:
@@ -144,15 +157,18 @@ class HookManager:
             key (str | None): If specified, resets only hooks for this key.
                 Otherwise resets all keys and shared hooks.
         """
+        logger.debug('Resetting hooks for key: %s', key)
         if key is not None:
             self._ensure_valid_key(key)
 
         for hook in self._shared_hooks:
+            logger.debug('Resetting state for shared hook: %s', hook.__class__.__name__)
             hook.reset_state()
 
         keys_to_reset = [key] if key is not None else list(self._key_to_hooks.keys())
         for k in keys_to_reset:
             for h in self._key_to_hooks[k]:
+                logger.debug('Resetting state for keyed hook: %s', h.__class__.__name__)
                 h.reset_state()
 
     def resolve_hooks(self, key: str | None = None) -> None:
@@ -174,6 +190,7 @@ class HookManager:
             hooks = self._shared_hooks + [
                 h for h in self._key_to_hooks[k] if h not in self._shared_hooks
             ]
+            logger.debug('Running topological sort to resolve hooks for key: %s', k)
             self._key_to_hooks[k] = self._topological_sort_hooks(hooks)
             self._dirty[k] = False
 
@@ -209,6 +226,10 @@ class HookManager:
 
     @staticmethod
     def _topological_sort_hooks(hooks: List[DGHook]) -> List[DGHook]:
+        logger.debug('Hook ordering BEFORE topological sort:')
+        for h in hooks:
+            logger.debug(f'  - {h.__class__.__name__}')
+
         # Before producing a valid hook ordering, we need to ensure
         # that all the required attributes are produced by *some* hook.
         all_produced = set().union(*(h.produces for h in hooks))
@@ -228,7 +249,7 @@ class HookManager:
                     # If h2 requires something h1 produces, add edge
                     adj_list[h1].append(h2)
 
-                # TODO: This is a hacky short term fix for implcit hook ordering constraints.
+                # TODO: This is a hacky short term fix for implicit hook ordering constraints.
                 # If both a negative hook and a neighbor hook are present, it is crucial
                 # that the negatives come first (so that we sample neighbors for the negatives).
                 # But since neighbor sampler does not explicitly require negatives, the topological
@@ -265,5 +286,9 @@ class HookManager:
                 missing = h.requires - set().union(*[u.produces for u in ordered])
                 err_msg += f'\n - {repr(h)} requires {missing} but not produced (or stuck in cycle)'
             raise UnresolvableHookDependenciesError(err_msg)
+
+        logger.debug('Hook ordering AFTER topological sort:')
+        for h in hooks:
+            logger.debug(f'  - {h.__class__.__name__}')
 
         return ordered

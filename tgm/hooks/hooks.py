@@ -13,6 +13,9 @@ from tgm import DGBatch, DGraph
 from tgm._storage import DGSliceTracker
 from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import StatefulHook, StatelessHook
+from tgm.util.logging import _get_logger
+
+logger = _get_logger(__name__)
 
 
 class PinMemoryHook(StatelessHook):
@@ -70,6 +73,11 @@ class DeduplicationHook(StatelessHook):
 
         batch.unique_nids = unique_nids  # type: ignore
         batch.global_to_local = lambda x: torch.searchsorted(unique_nids, x).int()  # type: ignore
+        logger.debug(
+            'Deduplicated batch: %d ids to %d unique ids',
+            all_nids.numel(),
+            unique_nids.numel(),
+        )
 
         return batch
 
@@ -146,10 +154,14 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         else:
             version_suffix = ''
 
-        val_ns_fname = root / f'{dataset_name}_val_ns{version_suffix}.pkl'
-        test_ns_fname = root / f'{dataset_name}_test_ns{version_suffix}.pkl'
-        neg_sampler.load_eval_set(fname=str(val_ns_fname), split_mode='val')
-        neg_sampler.load_eval_set(fname=str(test_ns_fname), split_mode='test')
+        ns_fname = root / f'{dataset_name}_{split_mode}_ns{version_suffix}.pkl'
+        logger.debug(
+            'Loading %s split (neg_sampler.load_eval_set) for dataset: %s from file: %s',
+            split_mode,
+            dataset_name,
+            ns_fname,
+        )
+        neg_sampler.load_eval_set(fname=str(ns_fname), split_mode=split_mode)
 
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
@@ -292,6 +304,11 @@ class NeighborSamplerHook(StatelessHook):
 
             # We slice on batch.start_time so that we only consider neighbor events
             # that occurred strictly before this batch
+            logger.debug(
+                'Getting uniform nbrs for hop %d with %d seed nodes',
+                hop,
+                seed_nodes.numel(),
+            )
             nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
@@ -485,6 +502,12 @@ class RecencyNeighborHook(StatefulHook):
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
 
+            logger.debug(
+                'Getting last %d nbrs for hop %d with %d seed nodes',
+                num_nbrs,
+                hop,
+                seed_nodes.numel(),
+            )
             nbr_nids, nbr_times, nbr_feats = self._get_recency_neighbors(
                 seed_nodes, seed_times, num_nbrs
             )
@@ -496,6 +519,7 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
         if batch.src.numel():
+            logger.debug('Updating circular buffers')
             self._update(batch)
         return batch
 
