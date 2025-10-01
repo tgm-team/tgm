@@ -13,7 +13,13 @@ from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
-from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
+from tgm.util.logging import (
+    enable_logging,
+    log_gpu,
+    log_latency,
+    log_metric,
+    log_metrics_dict,
+)
 from tgm.util.seed import seed_everything
 
 """
@@ -295,13 +301,10 @@ for epoch in range(1, args.epochs + 1):
         val_loader, val_labels, static_node_feats, encoder, decoder, h_0, val_metrics
     )
     log_metric('Loss', loss, epoch=epoch)
-    for metric_name, metric_value in train_results.items():
-        log_metric(metric_name, metric_value, epoch=epoch)
-    for metric_name, metric_value in val_results.items():
-        log_metric(metric_name, metric_value, epoch=epoch)
+    log_metrics_dict(train_results, epoch=epoch)
+    log_metrics_dict(val_results, epoch=epoch)
 
 test_results, h_0 = eval(
     test_loader, test_labels, static_node_feats, encoder, decoder, h_0, test_metrics
 )
-for metric_name, metric_value in test_results.items():
-    log_metric(metric_name, metric_value, epoch=epoch)
+log_metrics_dict(test_results, epoch=args.epochs)

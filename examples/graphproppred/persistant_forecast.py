@@ -10,7 +10,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.split import TemporalRatioSplit
-from tgm.util.logging import enable_logging, log_latency, log_metric
+from tgm.util.logging import enable_logging, log_latency, log_metrics_dict
 from tgm.util.seed import seed_everything
 
 """
@@ -168,10 +168,8 @@ test_metrics = MetricCollection(metrics, prefix='Test')
 
 val_labels = generate_binary_trend_labels(val_loader, snapshot_measurement=edge_count)
 val_results = eval(val_loader, val_labels, model, val_metrics)
-for metric_name, metric_value in val_results.items():
-    log_metric(metric_name, metric_value)
+log_metrics_dict(val_results)
 
 test_labels = generate_binary_trend_labels(test_loader, snapshot_measurement=edge_count)
 test_results = eval(test_loader, test_labels, model, test_metrics)
-for metric_name, metric_value in test_results.items():
-    log_metric(metric_name, metric_value)
+log_metrics_dict(test_results)

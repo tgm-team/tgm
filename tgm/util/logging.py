@@ -158,6 +158,38 @@ def log_gpu(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
         return decorator(_func)
 
 
+def log_metrics_dict(
+    metrics_dict: Dict[str, Any],
+    *,
+    epoch: int | None = None,
+    level: int = logging.INFO,
+    extra: Dict[str, Any] | None = None,
+    logger: logging.Logger | None = None,
+) -> None:
+    """Log a set of metric with optional epoch and structured JSON output.
+
+    Logs human-readable info at `level`, and JSON-formatted debug log at DEBUG.
+
+    Note: This is equivalent to calling log_metric for each key-value pair.
+
+    Args:
+        metrics_dict (Dict[str, Any]): Dictionary of metric_name: metric_value pairs.
+        epoch (Optional[int]): Optional epoch number.
+        level (int): Logging level for human-readable log (default INFO)
+        extra (Dict[str, Any]): Optional dictionary of extra metadata to include in JSON.
+        logger (Optional[logging.Logger]): Logger to log to, defaults to tgm.util logger.
+    """
+    for metric_name, metric_value in metrics_dict.items():
+        log_metric(
+            metric_name,
+            metric_value,
+            epoch=epoch,
+            level=level,
+            extra=extra,
+            logger=logger,
+        )
+
+
 def log_metric(
     metric_name: str,
     metric_value: Any,
