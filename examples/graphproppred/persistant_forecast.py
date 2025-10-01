@@ -1,6 +1,4 @@
 import argparse
-import logging
-from pathlib import Path
 from typing import Callable
 
 import pandas as pd
@@ -54,7 +52,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
@@ -172,6 +169,8 @@ test_metrics = MetricCollection(metrics, prefix='Test')
 
 val_labels = generate_binary_trend_labels(val_loader, snapshot_measurement=edge_count)
 val_results = eval(val_loader, val_labels, model, val_metrics)
+
+# TODO: use log_metrics
 logger.info(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
 
 test_labels = generate_binary_trend_labels(test_loader, snapshot_measurement=edge_count)

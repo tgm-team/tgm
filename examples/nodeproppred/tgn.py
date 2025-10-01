@@ -1,7 +1,5 @@
 import argparse
 import copy
-import logging
-from pathlib import Path
 from typing import Callable, Dict, Tuple
 
 import numpy as np
@@ -21,7 +19,7 @@ from tgm.constants import METRIC_TGB_NODEPROPPRED, PADDED_NODE_ID
 from tgm.hooks import HookManager, RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
-from tgm.util.logging import enable_logging, log_gpu, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -56,7 +54,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class NodePredictor(torch.nn.Module):
@@ -457,17 +454,17 @@ opt = torch.optim.Adam(
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         loss, train_metric = train(train_loader, memory, encoder, decoder, opt)
-    logger.info(
-        f'Epoch={epoch:02d} Loss={loss:.4f} Train {METRIC_TGB_NODEPROPPRED}={train_metric:.4f}'
-    )
 
     with hm.activate('val'):
         val_metric = eval(val_loader, memory, encoder, decoder, evaluator)
-    logger.info(f'Validation {METRIC_TGB_NODEPROPPRED}={val_metric:.4f}')
+
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Train {METRIC_TGB_NODEPROPPRED}', train_metric, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_metric, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 with hm.activate('test'):
     test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
-    logger.info(f'Test {METRIC_TGB_NODEPROPPRED}={test_metric:.4f}')
+log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=args.epochs)

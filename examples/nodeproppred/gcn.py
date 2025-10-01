@@ -1,6 +1,4 @@
 import argparse
-import logging
-from pathlib import Path
 
 import numpy as np
 import torch
@@ -13,7 +11,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.loader import DGDataLoader
-from tgm.util.logging import enable_logging, log_gpu, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -43,7 +41,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class GCNEncoder(torch.nn.Module):
@@ -199,9 +196,8 @@ opt = torch.optim.Adam(
 for epoch in range(1, args.epochs + 1):
     loss = train(train_loader, static_node_feats, encoder, decoder, opt)
     val_ndcg = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
-    logger.info(
-        f'Epoch={epoch:02d} Loss={loss:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}'
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
 test_ndcg = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
-logger.info(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')
+log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)

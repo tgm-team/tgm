@@ -1,6 +1,4 @@
 import argparse
-import logging
-from pathlib import Path
 from typing import Callable, Tuple
 
 import pandas as pd
@@ -66,7 +64,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
@@ -297,6 +294,7 @@ for epoch in range(1, args.epochs + 1):
     val_results, h_0 = eval(
         val_loader, val_labels, static_node_feats, encoder, decoder, h_0, val_metrics
     )
+    # TODO: Use log metrics
     logger.info(
         f'Epoch={epoch:02d} Loss={loss:.4f} '
         + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
@@ -307,4 +305,5 @@ for epoch in range(1, args.epochs + 1):
 test_results, h_0 = eval(
     test_loader, test_labels, static_node_feats, encoder, decoder, h_0, test_metrics
 )
+# TODO: Use log metrics
 logger.info(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
