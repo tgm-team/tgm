@@ -19,7 +19,7 @@ from tgm.constants import (
 from tgm.hooks import RecencyNeighborHook, StatefulHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -193,6 +193,7 @@ class LinkPredictor(nn.Module):
         return self.fc2(h).view(-1)
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -222,6 +223,7 @@ def train(
     return total_loss
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(

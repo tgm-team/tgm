@@ -12,7 +12,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.split import TemporalRatioSplit
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency
 from tgm.util.seed import seed_everything
 
 """
@@ -119,6 +119,7 @@ class PersistantForecast:
         return pred
 
 
+@log_gpu
 @log_latency
 def eval(
     loader: DGDataLoader,

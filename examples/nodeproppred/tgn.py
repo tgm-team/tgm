@@ -21,7 +21,7 @@ from tgm.constants import METRIC_TGB_NODEPROPPRED, PADDED_NODE_ID
 from tgm.hooks import HookManager, RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -261,6 +261,7 @@ class TGNMemory(torch.nn.Module):
         super().train(mode)
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -332,6 +333,7 @@ def train(
     return total_loss, float(np.mean(perf_list))
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(

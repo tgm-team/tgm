@@ -14,7 +14,7 @@ from tgm import DGBatch, DGData, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -80,6 +80,7 @@ class NodePredictor(torch.nn.Module):
         return self.fc2(h)
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -113,6 +114,7 @@ def train(
     return total_loss, h_0, c_0
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(

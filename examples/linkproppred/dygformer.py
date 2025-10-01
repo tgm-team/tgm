@@ -17,7 +17,7 @@ from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import DyGFormer, Time2Vec
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -186,6 +186,7 @@ class DyGFormer_LinkPrediction(nn.Module):
         return pos_out, neg_out
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -207,6 +208,7 @@ def train(
     return total_loss
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(

@@ -1,8 +1,11 @@
 import functools
+import json
 import logging
 import time
 from pathlib import Path
 from typing import Any, Callable, List
+
+import torch
 
 
 def enable_logging(
@@ -52,24 +55,32 @@ def enable_logging(
 def log_latency(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
     """Function decorator to log latency at configurable log level.
 
+    Logs human-readable info at `level`, and JSON-formatted debug log at DEBUG.
+
     Usage:
-        - @log_latency # Logs at logging.INFO
-        - @log_latency() # Logs at logging.INFO
-        - @log_latency=level=logging.DEBUG) # Logs at logging.DEBUG
+        - @log_latency                      # Logs at logging.INFO
+        - @log_latency()                    # Logs at logging.INFO
+        - @log_latency=level=logging.DEBUG) # Logs at logging.DEBUG (JSON included)
 
     Returns:
         The output of calling func.
     """
 
     def decorator(func: Callable) -> Callable:
-        logger = logging.getLogger('tgm')
-
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.perf_counter()
             result = func(*args, **kwargs)
             latency = time.perf_counter() - start_time
             logger.log(level, 'Function %s executed in %.4fs', func.__name__, latency)
+
+            if logger.isEnabledFor(logging.DEBUG):
+                log_entry = {
+                    'metric': f'{func.__name__}_latency',
+                    'value': latency,
+                    'function': func.__name__,
+                }
+                logger.debug(json.dumps(log_entry))
             return result
 
         return wrapper
@@ -79,6 +90,69 @@ def log_latency(_func: Callable | None = None, *, level: int = logging.INFO) -> 
         return decorator
     else:
         # Decorator used without parens
+        return decorator(_func)
+
+
+def log_gpu(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
+    """Function decorator to log GPU memory usage during a function call.
+
+    Logs human-readable info at `level`, and JSON-formatted debug log at DEBUG.
+
+    Usage:
+        - @log_gpu                       # Logs at logging.INFO
+        - @log_gpu()                     # Logs at logging.INFO
+        - @log_gpu(level=logging.DEBUG)  # Logs at DEBUG (JSON included)
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            cuda_available = torch.cuda.is_available()
+            if cuda_available:
+                torch.cuda.reset_peak_memory_stats()
+                start_mem = torch.cuda.memory_allocated() / (1024**2)
+            else:
+                start_mem = 0.0
+
+            result = func(*args, **kwargs)
+
+            if cuda_available:
+                peak_mem = torch.cuda.max_memory_allocated() / (1024**2)
+                end_mem = torch.cuda.memory_allocated() / (1024**2)
+                mem_diff = peak_mem - start_mem
+            else:
+                peak_mem = end_mem = mem_diff = 0.0
+
+            logger.log(
+                level,
+                'Function %s GPU memory (CUDA available=%s) [MB]: start=%.2f, peak=%.2f, end=%.2f, diff=%.2f',
+                func.__name__,
+                cuda_available,
+                start_mem,
+                peak_mem,
+                end_mem,
+                mem_diff,
+            )
+
+            if logger.isEnabledFor(logging.DEBUG):
+                log_entry = {
+                    'metric': f'{func.__name__}_gpu_usage',
+                    'cuda_available': cuda_available,
+                    'start_mb': start_mem,
+                    'peak_mb': peak_mem,
+                    'end_mb': end_mem,
+                    'diff_mb': mem_diff,
+                    'function': func.__name__,
+                }
+                logger.debug(json.dumps(log_entry))
+
+            return result
+
+        return wrapper
+
+    if _func is None:
+        return decorator
+    else:
         return decorator(_func)
 
 

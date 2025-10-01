@@ -15,7 +15,7 @@ from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
 from tgm.timedelta import TimeDeltaDG
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -81,6 +81,7 @@ class LinkPredictor(nn.Module):
         return self.fc2(h).view(-1)
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -124,6 +125,7 @@ def train(
     return total_loss, z, h_0, c_0
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(
