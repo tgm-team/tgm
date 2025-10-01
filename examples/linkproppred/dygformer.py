@@ -277,7 +277,6 @@ else:
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # 1 remaining for seed node itself
     num_nodes=num_nodes,
-    edge_feats_dim=edge_feats_dim,
 )
 
 hm = RecipeRegistry.build(

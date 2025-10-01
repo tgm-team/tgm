@@ -61,6 +61,9 @@ class DeduplicationHook(StatelessHook):
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
                 nids.append(batch.nbr_nids[hop].to(batch.src.device))
+        nids.append(
+            batch.node_ids.to(batch.src.device)
+        ) if batch.node_ids is not None else None
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)
@@ -101,10 +104,14 @@ class NegativeEdgeSamplerHook(StatelessHook):
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.dst.size(0)),)
-        batch.neg = torch.randint(  # type: ignore
-            self.low, self.high, size, dtype=torch.int32, device=dg.device
-        )
-        batch.neg_time = batch.time.clone()  # type: ignore
+        if size[0] == 0:
+            batch.neg = torch.empty(size, dtype=torch.int32, device=dg.device)  # type: ignore
+            batch.neg_time = torch.empty(size, dtype=torch.int64, device=dg.device)  # type: ignore
+        else:
+            batch.neg = torch.randint(  # type: ignore
+                self.low, self.high, size, dtype=torch.int32, device=dg.device
+            )
+            batch.neg_time = batch.time.clone()  # type: ignore
         return batch
 
 
@@ -157,6 +164,15 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        if batch.src.size(0) == 0:
+            batch.neg = torch.empty(  # type: ignore
+                batch.src.size(0), dtype=torch.int32, device=dg.device
+            )
+            batch.neg_time = torch.empty(  # type: ignore
+                batch.src.size(0), dtype=torch.int64, device=dg.device
+            )
+            batch.neg_batch_list = []  # type: ignore
+            return batch  # empty batch
         try:
             neg_batch_list = self.neg_sampler.query_batch(
                 batch.src, batch.dst, batch.time, split_mode=self.split_mode
@@ -234,6 +250,16 @@ class NeighborSamplerHook(StatelessHook):
 
                 seed_nodes = torch.cat(seed)
                 seed_times = torch.cat(times)
+                if seed_nodes.numel() == 0:
+                    for hop in range(len(self.num_nbrs)):
+                        batch.nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+                        batch.times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+                        batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+                        batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+                        batch.nbr_feats.append(  # type: ignore
+                            torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
+                        )
+                    return batch
             else:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
@@ -272,7 +298,6 @@ class RecencyNeighborHook(StatefulHook):
     Args:
         num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
-        edge_feats_dim (int): Edge feature dimension on the dynamic graph.
         directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
         seed_nodes_key (str, optional): the str to identify the initial seed nodes to sample for.
 
@@ -284,7 +309,6 @@ class RecencyNeighborHook(StatefulHook):
         self,
         num_nodes: int,
         num_nbrs: List[int],
-        edge_feats_dim: int,
         directed: bool = False,
         seed_nodes_key: str = None,  # type: ignore
     ) -> None:
@@ -293,10 +317,10 @@ class RecencyNeighborHook(StatefulHook):
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
 
+        self._num_nodes = num_nodes
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
         self._directed = directed
-        self._edge_feats_dim = edge_feats_dim
         self._device = torch.device('cpu')
         self._seed_nodes_key = seed_nodes_key
 
@@ -304,8 +328,12 @@ class RecencyNeighborHook(StatefulHook):
             (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.int32
         )
         self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.int64)
-        self._nbr_feats = torch.zeros((num_nodes, self._max_nbrs, edge_feats_dim))
         self._write_pos = torch.zeros(num_nodes, dtype=torch.int32)
+
+        # Wait until first __call__ to infer the edge_feats_dim on the underlying graph
+        self._need_to_initialize_nbr_feats = True
+        self._edge_feats_dim = None
+        self._nbr_feats = None
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -314,10 +342,13 @@ class RecencyNeighborHook(StatefulHook):
     def reset_state(self) -> None:
         self._nbr_ids.fill_(PADDED_NODE_ID)
         self._nbr_times.zero_()
-        self._nbr_feats.zero_()
         self._write_pos.zero_()
 
+        if self._nbr_feats is not None:
+            self._nbr_feats.zero_()
+
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        self._initialize_nbr_feats_if_needed(dg)
         device = dg.device
         self._move_queues_to_device_if_needed(device)  # No-op after first batch
 
@@ -336,13 +367,23 @@ class RecencyNeighborHook(StatefulHook):
                         times.append(batch.neg_time)
                     seed_nodes = torch.cat(seed)
                     seed_times = torch.cat(times)
+                    if seed_nodes.numel() == 0:
+                        for hop in range(len(self.num_nbrs)):
+                            batch.nids.append(torch.empty(0, dtype=torch.int32))
+                            batch.times.append(torch.empty(0, dtype=torch.int64))
+                            batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))
+                            batch.nbr_times.append(torch.empty(0, dtype=torch.int64))
+                            batch.nbr_feats.append(
+                                torch.empty(0, self._edge_feats_dim).float()
+                            )
+                        return batch
                 else:
                     seed_nodes = getattr(batch, self._seed_nodes_key)
                     if seed_nodes is None:
                         return batch
                     else:
                         seed_nodes = seed_nodes.to(device)
-                        seed_times = batch.node_times.to(device)  # type: ignore #! to adjust later, it should point to node event time
+                        seed_times = batch.node_times.to(device)  # type: ignore
             else:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
                 seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
@@ -371,6 +412,7 @@ class RecencyNeighborHook(StatefulHook):
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
+        assert self._nbr_feats is not None  # For mypy
         B = self._max_nbrs  # buffer size
 
         nbr_nids = self._nbr_ids[node_ids]  # (N, B)
@@ -441,6 +483,7 @@ class RecencyNeighborHook(StatefulHook):
         return out_nbrs, out_times, out_feats
 
     def _update(self, batch: DGBatch) -> None:
+        assert self._nbr_feats is not None  # For mypy
         if batch.edge_feats is None:
             edge_feats = torch.zeros(
                 (len(batch.src), self._edge_feats_dim), device=self._device
@@ -514,12 +557,21 @@ class RecencyNeighborHook(StatefulHook):
         self._write_pos.scatter_add_(0, sorted_nodes.long(), num_writes)
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
+        assert self._nbr_feats is not None  # For mypy
         if device != self._device:
             self._device = device
             self._nbr_ids = self._nbr_ids.to(device)
             self._nbr_times = self._nbr_times.to(device)
             self._nbr_feats = self._nbr_feats.to(device)
             self._write_pos = self._write_pos.to(device)
+
+    def _initialize_nbr_feats_if_needed(self, dg: DGraph) -> None:
+        if self._need_to_initialize_nbr_feats:
+            self._edge_feats_dim = dg.edge_feats_dim or 0  # type: ignore
+            self._nbr_feats = torch.zeros(
+                (self._num_nodes, self._max_nbrs, self._edge_feats_dim)  # type: ignore
+            )
+            self._need_to_initialize_nbr_feats = False
 
 
 def _apply_to_tensors_inplace(obj: Any, fn: Any) -> Any:

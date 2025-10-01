@@ -402,7 +402,6 @@ test_dg = DGraph(test_data, device=args.device)
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-    edge_feats_dim=test_dg.edge_feats_dim,
 )
 
 hm = RecipeRegistry.build(
