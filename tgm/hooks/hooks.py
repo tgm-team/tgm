@@ -339,7 +339,7 @@ class NeighborSamplerHook(StatelessHook):
                     if not self._warned_seed_None:
                         warnings.warn(
                             f'Seed attribute {name} is None on this batch, skipping this batch. '
-                            'Future occurences will also be skipped but the warning will be suppressed',
+                            'Future occurrences will also be skipped but the warning will be suppressed',
                             UserWarning,
                         )
                         self._warned_seed_None = True
@@ -533,7 +533,7 @@ class RecencyNeighborHook(StatefulHook):
                     if not self._warned_seed_None:
                         warnings.warn(
                             f'Seed attribute {name} is None on this batch, skipping this batch. '
-                            'Future occurences will also be skipped but the warning will be suppressed',
+                            'Future occurrences will also be skipped but the warning will be suppressed',
                             UserWarning,
                         )
                         self._warned_seed_None = True
