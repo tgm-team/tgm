@@ -13,7 +13,7 @@ from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
-from tgm.util.logging import enable_logging, log_gpu, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 """
@@ -294,16 +294,14 @@ for epoch in range(1, args.epochs + 1):
     val_results, h_0 = eval(
         val_loader, val_labels, static_node_feats, encoder, decoder, h_0, val_metrics
     )
-    # TODO: Use log metrics
-    logger.info(
-        f'Epoch={epoch:02d} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
-        + ' '
-        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    for metric_name, metric_value in train_results.items():
+        log_metric(metric_name, metric_value, epoch=epoch)
+    for metric_name, metric_value in val_results.items():
+        log_metric(metric_name, metric_value, epoch=epoch)
 
 test_results, h_0 = eval(
     test_loader, test_labels, static_node_feats, encoder, decoder, h_0, test_metrics
 )
-# TODO: Use log metrics
-logger.info(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+for metric_name, metric_value in test_results.items():
+    log_metric(metric_name, metric_value, epoch=epoch)
