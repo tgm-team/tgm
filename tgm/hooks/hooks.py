@@ -5,8 +5,6 @@ from dataclasses import is_dataclass
 from pathlib import Path
 from typing import Any, List, Set, Tuple
 
-warnings.simplefilter('once', UserWarning)  # Only emit each warning in this module once
-
 import torch
 
 from tgm import DGBatch, DGraph
@@ -260,6 +258,7 @@ class NeighborSamplerHook(StatelessHook):
             self._seed_nodes_keys,
             self._seed_times_keys,
         )
+        self._warned_seed_None = False
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -337,10 +336,13 @@ class NeighborSamplerHook(StatelessHook):
                     logger.debug(
                         'Seed attribute %s is None on this batch, skipping', name
                     )
-                    warnings.warn(
-                        f'Seed attribute {name} is None on this batch, skipping',
-                        UserWarning,
-                    )
+                    if not self._warned_seed_None:
+                        warnings.warn(
+                            f'Seed attribute {name} is None on this batch, skipping this batch. '
+                            'Future occurences will also be skipped but the warning will be suppressed',
+                            UserWarning,
+                        )
+                        self._warned_seed_None = True
                     break
                 if not isinstance(tensor, torch.Tensor):
                     raise ValueError(f'{name} must be a Tensor, got {type(tensor)}')
@@ -431,6 +433,7 @@ class RecencyNeighborHook(StatefulHook):
             self._seed_nodes_keys,
             self._seed_times_keys,
         )
+        self._warned_seed_None = False
 
         self._nbr_ids = torch.full(
             (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.int32
@@ -527,10 +530,13 @@ class RecencyNeighborHook(StatefulHook):
                     logger.debug(
                         'Seed attribute %s is None on this batch, skipping', name
                     )
-                    warnings.warn(
-                        f'Seed attribute {name} is None on this batch, skipping',
-                        UserWarning,
-                    )
+                    if not self._warned_seed_None:
+                        warnings.warn(
+                            f'Seed attribute {name} is None on this batch, skipping this batch. '
+                            'Future occurences will also be skipped but the warning will be suppressed',
+                            UserWarning,
+                        )
+                        self._warned_seed_None = True
                     break
                 if not isinstance(tensor, torch.Tensor):
                     raise ValueError(f'{name} must be a Tensor, got {type(tensor)}')

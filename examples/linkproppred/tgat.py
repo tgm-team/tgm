@@ -227,11 +227,17 @@ else:
     static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
 
 if args.sampling == 'uniform':
-    nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
+    nbr_hook = NeighborSamplerHook(
+        num_nbrs=args.n_nbrs,
+        seed_nodes_keys=['src', 'dst', 'neg'],
+        seed_times_keys=['time', 'time', 'neg_time'],
+    )
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+        seed_nodes_keys=['src', 'dst', 'neg'],
+        seed_times_keys=['time', 'time', 'neg_time'],
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
