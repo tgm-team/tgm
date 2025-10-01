@@ -12,11 +12,7 @@ from torch import Tensor
 from tgm._storage import DGSliceTracker, DGStorage
 from tgm.data import DGData
 from tgm.timedelta import TimeDeltaDG
-from tgm.util.logging import (
-    _cached_property_log_cache_activity,
-    _get_logger,
-    log_latency,
-)
+from tgm.util.logging import _get_logger, _logged_cached_property, log_latency
 
 logger = _get_logger(__name__)
 
@@ -185,34 +181,34 @@ class DGraph:
             self._slice.end_time = self._storage.get_end_time(self._slice)
         return self._slice.end_time
 
-    @_cached_property_log_cache_activity
+    @_logged_cached_property
     def num_nodes(self) -> int:
         """The total number of unique nodes encountered over the dynamic graph."""
         nodes = self._storage.get_nodes(self._slice)
         return max(nodes) + 1 if len(nodes) else 0
 
-    @_cached_property_log_cache_activity
+    @_logged_cached_property
     def num_edges(self) -> int:
         """The total number of unique edges encountered over the dynamic graph."""
         src, *_ = self.edges
         return len(src)
 
-    @_cached_property_log_cache_activity
+    @_logged_cached_property
     def num_timestamps(self) -> int:
         """The total number of unique timestamps encountered over the dynamic graph."""
         return self._storage.get_num_timestamps(self._slice)
 
-    @_cached_property_log_cache_activity
+    @_logged_cached_property
     def num_events(self) -> int:
         """The total number of events encountered over the dynamic graph."""
         return self._storage.get_num_events(self._slice)
 
-    @_cached_property_log_cache_activity
+    @_logged_cached_property
     def nodes(self) -> Set[int]:
         """The set of node ids over the dynamic graph."""
         return self._storage.get_nodes(self._slice)
 
-    @_cached_property_log_cache_activity
+    @_logged_cached_property
     def _edges_cpu(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self._storage.get_edges(self._slice)
 
@@ -238,7 +234,7 @@ class DGraph:
             feats = feats.to(self.device)
         return feats
 
-    @_cached_property_log_cache_activity
+    @_logged_cached_property
     def _dynamic_node_feats_cpu(self) -> Optional[Tensor]:
         return self._storage.get_dynamic_node_feats(self._slice)
 
@@ -253,7 +249,7 @@ class DGraph:
             feats = feats.to(self.device)
         return feats
 
-    @_cached_property_log_cache_activity
+    @_logged_cached_property
     def _edge_feats_cpu(self) -> Optional[Tensor]:
         return self._storage.get_edge_feats(self._slice)
 

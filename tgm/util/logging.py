@@ -92,7 +92,7 @@ def _get_logger(name: str) -> logging.Logger:
 logger = _get_logger(__name__)
 
 
-class _cached_property_log_cache_activity(functools.cached_property):
+class _logged_cached_property(functools.cached_property):
     def __set_name__(self, owner: type, name: str) -> None:
         self.attrname = name
 
