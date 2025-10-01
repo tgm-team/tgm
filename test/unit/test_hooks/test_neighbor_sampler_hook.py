@@ -66,12 +66,24 @@ def test_sample_with_node_events_seeds(node_only_data):
     torch.testing.assert_close(batch.times[0], batch.node_times)
 
 
-def test_sample_with_non_existent_seeds(data):
+def test_bad_sample_with_non_existent_seeds(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
         num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
     )
     batch = dg.materialize()
+
+    with pytest.raises(ValueError):
+        _ = hook(dg, batch)
+
+
+def test_sample_with_none_seeds(data):
+    dg = DGraph(data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo, batch.bar = None, None
 
     with pytest.warns(UserWarning):
         batch = hook(dg, batch)

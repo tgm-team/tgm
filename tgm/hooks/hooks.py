@@ -204,15 +204,18 @@ class NeighborSamplerHook(StatelessHook):
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
         directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
         seed_nodes_keys (Optional[List[str]]): List of batch attribute keys to identify the initial seed nodes to sample for.
-                                               If not specified, defaults to batch edges: ['src', 'dst', 'neg']
+                                               If not specified, defaults to batch edges: ['src', 'dst']
         seed_times_keys (Optional[List[str]]): List of batch attribute keys to identify the initial seed times to sample for.
-                                               If not specified, defaults to batch times: ['time', 'time', 'neg_time']
+                                               If not specified, defaults to batch times: ['time', 'time']
 
     Note:
         The order of the ouput tensors respect the order of seed_nodes_keys.
         For instance, the default keys ['src', 'dst', 'neg'] will have the first output index (hop 0) contain the concatenation
         of batch.src, batch.dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.src
         followed by first-hop neighbors of batch.dst, and then those of batch.neg. This pattern repeats for deeper hops.
+
+        Not also that `batch.neg` and `batch.neg_time` will be implicitly added to seed_nodes_keys and seed_times_keys implicitly
+        if the batch has them.
 
     Raises:
         ValueError: If the num_nbrs list is empty or has non-positive entries.
@@ -239,8 +242,8 @@ class NeighborSamplerHook(StatelessHook):
         self._directed = directed
 
         if seed_nodes_keys is None and seed_times_keys is None:
-            self._seed_nodes_keys = ['src', 'dst', 'neg']
-            self._seed_times_keys = ['time', 'time', 'neg_time']
+            self._seed_nodes_keys = ['src', 'dst']
+            self._seed_times_keys = ['time', 'time']
         elif seed_nodes_keys is None or seed_times_keys is None:
             raise ValueError(
                 'Both seed_nodes_keys and seed_times_keys must be specified together'
@@ -309,15 +312,18 @@ class NeighborSamplerHook(StatelessHook):
         device = batch.src.device
         seeds, times = [], []
 
-        for node_attr, time_attr in zip(self._seed_nodes_keys, self._seed_times_keys):
+        # Implicitly add negatives to seed nodes and query times if they exist
+        seed_nodes_keys, seed_times_keys = self._seed_nodes_keys, self._seed_times_keys
+        if hasattr(batch, 'neg'):
+            seed_nodes_keys.append('neg')
+            seed_times_keys.append('neg_time')
+
+        for node_attr, time_attr in zip(seed_nodes_keys, seed_times_keys):
             missing = [
                 attr for attr in (node_attr, time_attr) if not hasattr(batch, attr)
             ]
             if missing:
-                warnings.warn(
-                    f'Missing seed attributes {missing} on batch, skipping', UserWarning
-                )
-                continue
+                raise ValueError(f'Missing seed attributes {missing} on batch')
 
             seed = getattr(batch, node_attr)
             time = getattr(batch, time_attr)
@@ -346,14 +352,13 @@ class NeighborSamplerHook(StatelessHook):
                             f'Seed nodes in {name} must satisfy 0 <= x < {self._num_nodes}, '
                             f'got values in range [{tensor.min().item()}, {tensor.max().item()}]'
                         )
+                    seeds.append(seed.to(device))
                 elif name == time_attr:
                     if (tensor < 0).any():
                         raise ValueError(
                             f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
                         )
-
-            seeds.append(seed.to(device))
-            times.append(time.to(device))
+                    times.append(time.to(device))
 
         if seeds and times:
             seed_nodes, seed_times = torch.cat(seeds), torch.cat(times)
@@ -374,15 +379,18 @@ class RecencyNeighborHook(StatefulHook):
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
         directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
         seed_nodes_keys (Optional[List[str]]): List of batch attribute keys to identify the initial seed nodes to sample for.
-                                               If not specified, defaults to batch edges: ['src', 'dst', 'neg']
+                                               If not specified, defaults to batch edges: ['src', 'dst']
         seed_times_keys (Optional[List[str]]): List of batch attribute keys to identify the initial seed times to sample for.
-                                               If not specified, defaults to batch times: ['time', 'time', 'neg_time']
+                                               If not specified, defaults to batch times: ['time', 'time']
 
     Note:
         The order of the ouput tensors respect the order of seed_nodes_keys.
-        For instance, the default keys ['src', 'dst', 'neg'] will have the first output index (hop 0) contain the concatenation
-        of batch.src, batch.dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.src
-        followed by first-hop neighbors of batch.dst, and then those of batch.neg. This pattern repeats for deeper hops.
+        For instance, the default keys ['src', 'dst'] will have the first output index (hop 0) contain the concatenation
+        of batch.src, batch.dst, (in that order). The next index (hop 1) will contain first-hop neighbors of batch.src
+        followed by first-hop neighbors of batch.dst. This pattern repeats for deeper hops.
+
+        Not also that `batch.neg` and `batch.neg_time` will be implicitly added to seed_nodes_keys and seed_times_keys implicitly
+        if the batch has them.
 
     Raises:
         ValueError: If the num_nbrs list is empty or has non-positive entries.
@@ -410,8 +418,8 @@ class RecencyNeighborHook(StatefulHook):
         self._device = torch.device('cpu')
 
         if seed_nodes_keys is None and seed_times_keys is None:
-            self._seed_nodes_keys = ['src', 'dst', 'neg']
-            self._seed_times_keys = ['time', 'time', 'neg_time']
+            self._seed_nodes_keys = ['src', 'dst']
+            self._seed_times_keys = ['time', 'time']
         elif seed_nodes_keys is None or seed_times_keys is None:
             raise ValueError(
                 'Both seed_nodes_keys and seed_times_keys must be specified together'
@@ -496,15 +504,18 @@ class RecencyNeighborHook(StatefulHook):
         device = batch.src.device
         seeds, times = [], []
 
-        for node_attr, time_attr in zip(self._seed_nodes_keys, self._seed_times_keys):
+        # Implicitly add negatives to seed nodes and query times if they exist
+        seed_nodes_keys, seed_times_keys = self._seed_nodes_keys, self._seed_times_keys
+        if hasattr(batch, 'neg'):
+            seed_nodes_keys.append('neg')
+            seed_times_keys.append('neg_time')
+
+        for node_attr, time_attr in zip(seed_nodes_keys, seed_times_keys):
             missing = [
                 attr for attr in (node_attr, time_attr) if not hasattr(batch, attr)
             ]
             if missing:
-                warnings.warn(
-                    f'Missing seed attributes {missing} on batch, skipping', UserWarning
-                )
-                continue
+                raise ValueError(f'Missing seed attributes {missing} on batch')
 
             seed = getattr(batch, node_attr)
             time = getattr(batch, time_attr)
@@ -531,13 +542,13 @@ class RecencyNeighborHook(StatefulHook):
                             f'Seed nodes in {name} must satisfy 0 <= x < {self._num_nodes}, '
                             f'got values in range [{tensor.min().item()}, {tensor.max().item()}]'
                         )
+                    seeds.append(seed.to(device))
                 elif name == time_attr:
                     if (tensor < 0).any():
                         raise ValueError(
                             f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
                         )
-            seeds.append(seed.to(device))
-            times.append(time.to(device))
+                    times.append(time.to(device))
 
         if seeds and times:
             seed_nodes, seed_times = torch.cat(seeds), torch.cat(times)
