@@ -35,16 +35,13 @@ def test_hook_reset_state():
 
 def test_bad_neighbor_sampler_init():
     with pytest.raises(ValueError):
-        NeighborSamplerHook(num_nbrs=[])
+        NeighborSamplerHook(
+            num_nbrs=[], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        )
     with pytest.raises(ValueError):
-        NeighborSamplerHook(num_nbrs=[1, 0])
-
-
-def test_bad_neighbor_sampler_init_bad_seed_keys():
-    with pytest.raises(ValueError):
-        NeighborSamplerHook(num_nbrs=[1], seed_nodes_keys=['foo'])
-    with pytest.raises(ValueError):
-        NeighborSamplerHook(num_nbrs=[1], seed_times_keys=['foo'])
+        NeighborSamplerHook(
+            num_nbrs=[1, 0], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        )
     with pytest.raises(ValueError):
         NeighborSamplerHook(
             num_nbrs=[1], seed_nodes_keys=['foo', 'bar'], seed_times_keys=['foo']
@@ -143,7 +140,11 @@ def test_bad_sample_with_seeds_time_out_of_range(data):
 
 def test_neighbor_sampler_hook_link_pred(data):
     dg = DGraph(data)
-    hook = NeighborSamplerHook(num_nbrs=[2])
+    hook = NeighborSamplerHook(
+        num_nbrs=[2],
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
     batch = dg.materialize()
 
     # Link Prediction will add negative edges to seed nodes for sampling
@@ -159,7 +160,11 @@ def test_neighbor_sampler_hook_link_pred(data):
 
 def test_neighbor_sampler_hook_node_pred(data):
     dg = DGraph(data)
-    hook = NeighborSamplerHook(num_nbrs=[2])
+    hook = NeighborSamplerHook(
+        num_nbrs=[2],
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
     batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
     assert hasattr(batch, 'nids')
@@ -218,7 +223,11 @@ def basic_sample_graph():
 def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     n_nbrs = [3]  # 3 neighbor for each node
-    uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs)
+    uniform_hook = NeighborSamplerHook(
+        num_nbrs=n_nbrs,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
     loader = DGDataLoader(dg, batch_size=1, hook_manager=hm)
@@ -298,7 +307,12 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
 def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     n_nbrs = [3]  # 3 neighbor for each node
-    uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs, directed=True)
+    uniform_hook = NeighborSamplerHook(
+        num_nbrs=n_nbrs,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+        directed=True,
+    )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
     loader = DGDataLoader(dg, batch_size=1, hook_manager=hm)
@@ -388,7 +402,11 @@ def no_edge_feat_data():
 def test_no_edge_feat_data_neighbor_sampler(no_edge_feat_data):
     dg = DGraph(no_edge_feat_data)
     n_nbrs = [1]
-    uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs)
+    uniform_hook = NeighborSamplerHook(
+        num_nbrs=n_nbrs,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
     loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
@@ -425,7 +443,11 @@ def test_node_only_batch_recency_nbr_sampler(node_only_data):
     dg = DGraph(node_only_data)
     hm = HookManager(keys=['unit'])
     n_nbrs = [1]  # 1 neighbor for each node
-    uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs)
+    uniform_hook = NeighborSamplerHook(
+        num_nbrs=n_nbrs,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
     loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
