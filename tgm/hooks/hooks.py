@@ -291,6 +291,7 @@ class NeighborSamplerHook(StatelessHook):
 
         seed_nodes, seed_times = self._get_seed_tensors(batch)
         if not seed_nodes.numel():
+            logger.debug('No seed_nodes found, appending empty hop information')
             for _ in self.num_nbrs:
                 _append_empty_hop()
             return batch
@@ -331,8 +332,16 @@ class NeighborSamplerHook(StatelessHook):
         # Implicitly add negatives to seed nodes and query times if they exist
         seed_nodes_keys, seed_times_keys = self._seed_nodes_keys, self._seed_times_keys
         if hasattr(batch, 'neg'):
+            logger.debug(
+                'Found negative edges in the batch, adding "neg" and "neg_time" to '
+                'seed_nodes_keys and seed_times_keys, respectively'
+            )
             seed_nodes_keys.append('neg')
             seed_times_keys.append('neg_time')
+
+        logger.debug(
+            'Seed nodes keys: %s, Seed times keys: %s', seed_nodes_keys, seed_times_keys
+        )
 
         for node_attr, time_attr in zip(seed_nodes_keys, seed_times_keys):
             missing = [
@@ -349,6 +358,9 @@ class NeighborSamplerHook(StatelessHook):
                 # be missing certain attributes (e.g. dynamic node events), but for
                 # non-Tensor and non-None attrs we explicitly raise
                 if tensor is None:
+                    logger.debug(
+                        'Seed attribute %s is None on this batch, skipping', name
+                    )
                     warnings.warn(
                         f'Seed attribute {name} is None on this batch, skipping',
                         UserWarning,
@@ -493,6 +505,7 @@ class RecencyNeighborHook(StatefulHook):
 
         seed_nodes, seed_times = self._get_seed_tensors(batch)
         if not seed_nodes.numel():
+            logger.debug('No seed_nodes found, appending empty hop information')
             for _ in self.num_nbrs:
                 _append_empty_hop()
             return batch
@@ -530,8 +543,16 @@ class RecencyNeighborHook(StatefulHook):
         # Implicitly add negatives to seed nodes and query times if they exist
         seed_nodes_keys, seed_times_keys = self._seed_nodes_keys, self._seed_times_keys
         if hasattr(batch, 'neg'):
+            logger.debug(
+                'Found negative edges in the batch, adding "neg" and "neg_time" to '
+                'seed_nodes_keys and seed_times_keys, respectively'
+            )
             seed_nodes_keys.append('neg')
             seed_times_keys.append('neg_time')
+
+        logger.debug(
+            'Seed nodes keys: %s, Seed times keys: %s', seed_nodes_keys, seed_times_keys
+        )
 
         for node_attr, time_attr in zip(seed_nodes_keys, seed_times_keys):
             missing = [
@@ -548,6 +569,9 @@ class RecencyNeighborHook(StatefulHook):
                 # be missing certain attributes (e.g. dynamic node events), but for
                 # non-Tensor and non-None attrs we explicitly raise
                 if tensor is None:
+                    logger.debug(
+                        'Seed attribute %s is None on this batch, skipping', name
+                    )
                     warnings.warn(
                         f'Seed attribute {name} is None on this batch, skipping',
                         UserWarning,
