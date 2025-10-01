@@ -343,7 +343,12 @@ hm = RecipeRegistry.build(
 train_key, val_key, test_key = hm.keys
 hm.register_shared(GraphMixerHook(args.time_gap))
 hm.register_shared(
-    RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=test_dg.num_nodes)
+    RecencyNeighborHook(
+        num_nbrs=[args.n_nbrs],
+        num_nodes=test_dg.num_nodes,
+        seed_nodes_keys=['src', 'dst', 'neg'],
+        seed_times_keys=['time', 'time', 'neg_time'],
+    )
 )
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
