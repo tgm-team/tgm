@@ -308,7 +308,6 @@ class NeighborSamplerHook(StatelessHook):
         return batch
 
     def _get_seed_tensors(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO: Need a bounds check on seed nodes and seed times
         device = batch.src.device
         seeds, times = [], []
 
