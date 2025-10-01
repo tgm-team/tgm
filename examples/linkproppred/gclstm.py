@@ -1,5 +1,6 @@
 import argparse
-import time
+import logging
+from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -14,6 +15,7 @@ from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
 from tgm.timedelta import TimeDeltaDG
+from tgm.util.logging import enable_logging, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -36,6 +38,13 @@ parser.add_argument(
     default='h',
     help='time granularity to operate on for snapshots',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
+logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class RecurrentGCN(torch.nn.Module):
@@ -72,6 +81,7 @@ class LinkPredictor(nn.Module):
         return self.fc2(h).view(-1)
 
 
+@log_latency
 def train(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
@@ -114,6 +124,7 @@ def train(
     return total_loss, z, h_0, c_0
 
 
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -159,9 +170,7 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
 evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -213,7 +222,6 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss, z, h_0, c_0 = train(
             train_loader,
             train_snapshots_loader,
@@ -223,8 +231,6 @@ for epoch in range(1, args.epochs + 1):
             opt,
             conversion_rate,
         )
-        end_time = time.perf_counter()
-        latency = end_time - start_time
 
     with hm.activate(val_key):
         val_mrr = eval(
@@ -239,8 +245,8 @@ for epoch in range(1, args.epochs + 1):
             evaluator,
             conversion_rate,
         )
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
+    logger.info(
+        f'Epoch={epoch:02d} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
     )
 
 
@@ -257,4 +263,4 @@ with hm.activate(test_key):
         evaluator,
         conversion_rate,
     )
-    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+    logger.info(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')

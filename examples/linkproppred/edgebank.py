@@ -1,5 +1,6 @@
 import argparse
-import time
+import logging
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -11,6 +12,7 @@ from tgm.constants import METRIC_TGB_LINKPROPPRED
 from tgm.hooks import HookManager, TGBNegativeEdgeSamplerHook
 from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
+from tgm.util.logging import enable_logging, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -29,8 +31,16 @@ parser.add_argument(
     choices=['unlimited', 'fixed'],
     help='Memory mode',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
+logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
+@log_latency
 def eval(
     loader: DGDataLoader,
     model: EdgeBankPredictor,
@@ -54,9 +64,7 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
 evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -83,12 +91,9 @@ model = EdgeBankPredictor(
 )
 
 with hm.activate('val'):
-    start_time = time.perf_counter()
     val_mrr = eval(val_loader, model, evaluator)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
-    print(f'Latency={latency:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}')
+    logger.info(f'Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}')
 
 with hm.activate('test'):
     test_mrr = eval(test_loader, model, evaluator)
-    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+    logger.info(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')

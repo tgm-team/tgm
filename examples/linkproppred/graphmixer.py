@@ -1,5 +1,5 @@
 import argparse
-import time
+import logging
 from collections import defaultdict, deque
 from typing import Any, Deque, Dict
 
@@ -19,6 +19,7 @@ from tgm.constants import (
 from tgm.hooks import RecencyNeighborHook, StatefulHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
+from tgm.util.logging import enable_logging, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -53,6 +54,13 @@ parser.add_argument(
     default=4.0,
     help='channel dimension expansion factor in MLP sub-blocks',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
+logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class GraphMixerEncoder(nn.Module):
@@ -185,6 +193,7 @@ class LinkPredictor(nn.Module):
         return self.fc2(h).view(-1)
 
 
+@log_latency
 def train(
     loader: DGDataLoader,
     static_node_feats: torch.Tensor,
@@ -213,6 +222,7 @@ def train(
     return total_loss
 
 
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -248,7 +258,6 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
@@ -366,15 +375,12 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss = train(train_loader, static_node_feats, encoder, decoder, opt)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
 
     with hm.activate(val_key):
         val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
+    logger.info(
+        f'Epoch={epoch:02d} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
     )
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
@@ -382,4 +388,4 @@ for epoch in range(1, args.epochs + 1):
 
 with hm.activate('test'):
     test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
-    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+    logger.info(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')

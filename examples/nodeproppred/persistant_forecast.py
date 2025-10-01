@@ -1,5 +1,6 @@
 import argparse
-import time
+import logging
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -9,6 +10,7 @@ from tqdm import tqdm
 from tgm import DGData, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.loader import DGDataLoader
+from tgm.util.logging import enable_logging, log_latency
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -23,6 +25,13 @@ parser.add_argument(
     default='Y',
     help='time granularity to operate on for snapshots',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
+logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class PersistantForecaster:
@@ -37,6 +46,7 @@ class PersistantForecaster:
         return self.memory.get(node_id, self._default_prediction)
 
 
+@log_latency
 def eval(
     loader: DGDataLoader,
     model: PersistantForecaster,
@@ -64,7 +74,6 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -80,13 +89,10 @@ evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
 model = PersistantForecaster(num_classes=num_classes)
 
-start_time = time.perf_counter()
 eval(train_loader, model, evaluator)
-end_time = time.perf_counter()
-latency = end_time - start_time
 
 val_ndcg = eval(val_loader, model, evaluator)
-print(f'Latency={latency:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}')
+logger.info(f'Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}')
 
 test_ndcg = eval(test_loader, model, evaluator)
-print(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')
+logger.info(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')
