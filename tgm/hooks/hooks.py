@@ -522,8 +522,7 @@ class SeenNodesTrackHook(StatefulHook):
         self._seen_mask.fill_(False)
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        device = dg.device
-        self._move_to_device_if_needed(device)  # No-op after first batch
+        self._move_to_device_if_needed(dg.device)  # No-op after first batch
 
         if batch.node_ids is not None:
             batch_nodes = batch.node_ids
