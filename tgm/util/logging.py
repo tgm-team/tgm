@@ -220,7 +220,7 @@ def log_metric(
 
     Args:
         metric_name (str): Name of the metric to log.
-        metric_value (Any): Value fo the metric to log.
+        metric_value (Any): Value of the metric to log.
         epoch (Optional[int]): Optional epoch number.
         level (int): Logging level for human-readable log (default INFO)
         extra (Dict[str, Any]): Optional dictionary of extra metadata to include in JSON.
