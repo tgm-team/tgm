@@ -69,7 +69,7 @@ def test_mock_move_queues_to_device(basic_sample_graph):
         seed_times_keys=['time'],
     )
     batch = dg.materialize()
-    batch._device = 'foo'  # Patch graph device to trigger queue movement
+    hook._device = 'foo'  # Patch graph device to trigger queue movement
     batch = hook(dg, batch)
 
 
