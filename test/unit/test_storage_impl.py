@@ -624,3 +624,17 @@ def test_dg_storage_get_nbrs_directed(DGStorageImpl, basic_sample_graph):
     assert nbr_feats[1][0][0] == 1.0
     assert nbr_feats[1][1][0] == 2.0
     assert nbr_feats[1][2][0] == null_value
+
+
+def test_dg_storage_get_nbrs_sample_required(DGStorageImpl):
+    edge_index = torch.IntTensor([[0, 1], [0, 2], [0, 3], [0, 4]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 4])
+    edge_feats = torch.Tensor([[1], [2], [3], [4]])
+    data = DGData.from_raw(edge_timestamps, edge_index, edge_feats)
+    storage = DGStorageImpl(data)
+    nbr_nids, nbr_times, nbr_feats = storage.get_nbrs(
+        torch.tensor([0]), num_nbrs=1, slice=DGSliceTracker(), directed=False
+    )
+    torch.testing.assert_close(nbr_nids, torch.IntTensor([[3]]))
+    torch.testing.assert_close(nbr_times, torch.LongTensor([[3]]))
+    torch.testing.assert_close(nbr_feats, torch.FloatTensor([[[3]]]))
