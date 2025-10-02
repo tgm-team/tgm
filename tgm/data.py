@@ -154,11 +154,6 @@ class DGData:
         # Validate edge event idx
         _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
         _assert_tensor_is_integral(self.edge_event_idx, 'edge_event_idx')
-        if self.edge_event_idx.ndim != 1 or self.edge_event_idx.shape[0] != num_edges:
-            raise ValueError(
-                'edge_event_idx must have shape [num_edges], '
-                f'got {num_edges} edges and shape {self.edge_event_idx.shape}'
-            )
         # Safe downcast since we ensured len(timestamps) fits in int32
         self.edge_event_idx = self.edge_event_idx.int()
 
@@ -177,10 +172,6 @@ class DGData:
         if self.node_event_idx is not None:
             _assert_is_tensor(self.node_event_idx, 'node_event_idx')
             _assert_tensor_is_integral(self.node_event_idx, 'node_event_idx')
-            if self.node_event_idx.ndim != 1:
-                raise ValueError(
-                    f'node_event_idx must have shape [num_node_events], got: {self.node_event_idx.shape}'
-                )
 
             # Safe downcast since we ensured len(timestamps) fits in int32
             self.node_event_idx = self.node_event_idx.int()
@@ -223,13 +214,6 @@ class DGData:
                     )
                 self.dynamic_node_feats = _maybe_cast_float_tensor(
                     self.dynamic_node_feats, 'dynamic_node_feats'
-                )
-        else:
-            if self.node_ids is not None:
-                raise ValueError('must specify node_event_idx if using node_ids')
-            if self.dynamic_node_feats is not None:
-                raise ValueError(
-                    'must specify node_event_idx if using dynamic_node_feats'
                 )
 
         # Validate static node features
@@ -663,29 +647,13 @@ class DGData:
             ImportError: If the Pandas package is not resolved in the current python environment.
         """
 
-        def _check_pandas_import(min_version_number: str | None = None) -> None:
+        def _check_pandas_import() -> None:
             try:
-                import pandas
-
-                user_pandas_version = pandas.__version__
+                pass
             except ImportError:
-                user_pandas_version = None
-
-            err_msg = 'User requires pandas '
-            if min_version_number is not None:
-                err_msg += f'>={min_version_number} '
-            err_msg += 'to initialize a DGraph a dataframe'
-
-            if user_pandas_version is None:
-                raise ImportError(err_msg)
-            elif (
-                min_version_number is not None
-                and user_pandas_version < min_version_number
-            ):
-                err_msg += (
-                    f', found pandas=={user_pandas_version} < {min_version_number}'
+                raise ImportError(
+                    'User requires pandas to initialize a DGraph from a pd.DataFrame'
                 )
-                raise ImportError(err_msg)
 
         _check_pandas_import()
 

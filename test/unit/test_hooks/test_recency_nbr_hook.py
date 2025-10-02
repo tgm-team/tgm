@@ -65,13 +65,12 @@ def test_mock_move_queues_to_device(basic_sample_graph):
     hook = RecencyNeighborHook(
         num_nbrs=[1],
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['node_ids'],
-        seed_times_keys=['node_times'],
+        seed_nodes_keys=['src'],
+        seed_times_keys=['time'],
     )
     batch = dg.materialize()
-    dg._device = 'foo'  # Patch graph device to trigger queue movement
-    with patch('torch.Tensor.to', lambda self, *args, **kwargs: self):
-        batch = hook(dg, batch)
+    batch._device = 'foo'  # Patch graph device to trigger queue movement
+    batch = hook(dg, batch)
 
 
 def test_hook_reset_state(basic_sample_graph):
