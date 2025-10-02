@@ -47,6 +47,15 @@ def test_init_bad_batch_size():
         _ = DGDataLoader(dg, batch_size=0)
 
 
+def test_init_bad_on_empty_arg():
+    edge_index = torch.IntTensor([[2, 3]])
+    edge_timestamps = torch.LongTensor([1])
+    data = DGData.from_raw(edge_timestamps, edge_index)
+    dg = DGraph(data)
+    with pytest.raises(ValueError):
+        _ = DGDataLoader(dg, on_empty='foo')
+
+
 @pytest.mark.parametrize('drop_last', [True, False])
 @pytest.mark.parametrize('time_delta', ['r', 's'])
 def test_iteration_ordered(drop_last, time_delta):
