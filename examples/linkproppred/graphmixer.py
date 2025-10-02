@@ -1,6 +1,7 @@
 import argparse
 import logging
 from collections import defaultdict, deque
+from pathlib import Path
 from typing import Any, Deque, Dict
 
 import numpy as np
@@ -18,7 +19,7 @@ from tgm.constants import (
 )
 from tgm.hooks import RecencyNeighborHook, StatefulHook
 from tgm.loader import DGDataLoader
-from tgm.nn import Time2Vec
+from tgm.nn import LinkPredictor, Time2Vec
 from tgm.util.logging import enable_logging, log_latency
 from tgm.util.seed import seed_everything
 
@@ -179,18 +180,6 @@ class MLPMixer(nn.Module):
         z = self.channel_ff(z)
         out = z + out
         return out
-
-
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).view(-1)
 
 
 @log_latency
@@ -373,7 +362,9 @@ encoder = GraphMixerEncoder(
     node_dim=static_node_feats.shape[1],
     edge_dim=train_dg.edge_feats_dim | args.embed_dim,
 ).to(args.device)
-decoder = LinkPredictor(args.embed_dim).to(args.device)
+decoder = LinkPredictor(
+    node_dim=args.embed_dim, out_dim=1, hids_sizes=args.embed_dim
+).to(args.device)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

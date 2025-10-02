@@ -3,6 +3,7 @@ from .memory import EdgeBankPredictor
 from .time_encoding import Time2Vec
 from .recurrent import GCLSTM
 from .model import DyGFormer, TPNet, RandomProjectionModule
+from .decoder import GraphPredictor, NodePredictor, LinkPredictor
 
 
 __all__ = [
@@ -13,4 +14,7 @@ __all__ = [
     'DyGFormer',
     'TPNet',
     'RandomProjectionModule',
+    'GraphPredictor',
+    'NodePredictor',
+    'LinkPredictor',
 ]

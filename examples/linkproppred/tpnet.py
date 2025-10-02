@@ -16,7 +16,7 @@ from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import RecencyNeighborHook
 from tgm.loader import DGDataLoader
-from tgm.nn import RandomProjectionModule, Time2Vec, TPNet
+from tgm.nn import LinkPredictor, RandomProjectionModule, Time2Vec, TPNet
 from tgm.util.logging import enable_logging, log_latency
 from tgm.util.seed import seed_everything
 
@@ -76,18 +76,6 @@ enable_logging(log_file_path=args.log_file_path)
 logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).view(-1)
-
-
 class TPNet_LinkPrediction(nn.Module):
     def __init__(
         self,
@@ -116,9 +104,10 @@ class TPNet_LinkPrediction(nn.Module):
             time_encoder=time_encoder,
         )
         self.rp_module = random_projection_module.to(device)
-        self.decoder = LinkPredictor(output_dim).to(
-            device
-        )  # @TODO: Make encoder/decoder to be explicit
+        # @TODO: Make encoder/decoder to be explicit
+        self.decoder = LinkPredictor(
+            node_dim=args.embed_dim, out_dim=1, hids_sizes=args.embed_dim
+        ).to(args.device)
 
     def forward(
         self, batch: DGBatch, static_node_feat: torch.Tensor

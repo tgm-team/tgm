@@ -1,5 +1,6 @@
 import argparse
 import logging
+from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -13,6 +14,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph, RecipeRegistry
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.loader import DGDataLoader
+from tgm.nn import LinkPredictor
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.logging import enable_logging, log_latency
 from tgm.util.seed import seed_everything
@@ -87,18 +89,6 @@ class GCNEncoder(torch.nn.Module):
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.convs[-1](x, edge_index)
         return x
-
-
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).view(-1)
 
 
 @log_latency
@@ -237,7 +227,9 @@ encoder = GCNEncoder(
     num_layers=args.n_layers,
     dropout=float(args.dropout),
 ).to(args.device)
-decoder = LinkPredictor(args.embed_dim).to(args.device)
+decoder = LinkPredictor(
+    node_dim=args.embed_dim, out_dim=1, hids_sizes=args.embed_dim
+).to(args.device)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
