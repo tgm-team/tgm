@@ -29,7 +29,6 @@ class SplitStrategy(ABC):
         Returns:
             Tuple[DGData, ...]: Split datasets according to the strategy.
         """
-        ...
 
     def _masked_copy(
         self,
