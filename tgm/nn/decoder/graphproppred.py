@@ -40,7 +40,7 @@ class GraphPredictor(torch.nn.Module):
         super().__init__()
         if graph_pooling not in POOLING_OP:
             raise ValueError(
-                f'{graph_pooling} pooling operations is not support. Please choose from {list(POOLING_OP.keys())}'
+                f'{graph_pooling} pooling operations is not supported. Please choose from {list(POOLING_OP.keys())}'
             )
 
         self.model = Sequential()
