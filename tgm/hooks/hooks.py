@@ -527,11 +527,7 @@ class SeenNodesTrackHook(StatefulHook):
         if batch.node_ids is not None:
             batch_nodes = batch.node_ids
         else:
-            batch_nodes = torch.empty(
-                0,
-                device=self._device,
-                dtype=torch.int,
-            )
+            batch_nodes = torch.empty(0, device=self._device, dtype=torch.int)
 
         edge_event_nodes = batch.unique_nids  # type: ignore[attr-defined]
 
