@@ -512,10 +512,7 @@ class SeenNodesTrackHook(StatefulHook):
     requires = {'unique_nids'}
     produces = {'seen_nodes', 'batch_nodes_mask'}
 
-    def __init__(
-        self,
-        num_nodes: int,
-    ) -> None:
+    def __init__(self, num_nodes: int) -> None:
         if num_nodes < 0:
             raise ValueError('num_nodes must be non-negative')
         self._seen_mask = torch.zeros(num_nodes, dtype=torch.bool)
