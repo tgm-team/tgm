@@ -98,7 +98,7 @@ class DyGFormer_LinkPrediction(nn.Module):
         )
         # @TODO: Make encoder/decoder to be explicit
         self.decoder = LinkPredictor(
-            node_dim=args.embed_dim, out_dim=1, hids_sizes=args.embed_dim
+            node_dim=args.embed_dim, hidden_dim=args.embed_dim
         ).to(args.device)
 
     def forward(

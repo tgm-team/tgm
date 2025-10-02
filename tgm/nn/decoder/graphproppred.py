@@ -25,16 +25,16 @@ class GraphPredictor(torch.nn.Module):
         in_dim (int): Dimension of input
         out_dim (int): Dimension of output
         nlayers (int): Number of layers
-        hids_sizes (int): Size of each hidden embeddings
-        graph_pooling (str): graph pooling operation (mean, max, etc.)
+        hidden_dim (int): Size of each hidden embeddings
+        graph_pooling (str): graph pooling operation (mean, sum.)
     """
 
     def __init__(
         self,
         in_dim: int,
-        out_dim: int,
+        out_dim: int = 1,
         nlayers: int = 2,
-        hids_sizes: int = 32,
+        hidden_dim: int = 32,
         graph_pooling: str = 'mean',
     ) -> None:
         super().__init__()
@@ -44,14 +44,14 @@ class GraphPredictor(torch.nn.Module):
             )
 
         self.model = Sequential()
-        self.model.append(nn.Linear(in_dim, hids_sizes))
+        self.model.append(nn.Linear(in_dim, hidden_dim))
         self.model.append(nn.ReLU())
 
         for i in range(1, nlayers - 1):
-            self.model.append(nn.Linear(hids_sizes, hids_sizes))
+            self.model.append(nn.Linear(hidden_dim, hidden_dim))
             self.model.append(nn.ReLU())
 
-        self.model.append(nn.Linear(hids_sizes, out_dim))
+        self.model.append(nn.Linear(hidden_dim, out_dim))
         self.graph_pooling = POOLING_OP[graph_pooling]
 
     def forward(self, z_nodes: torch.Tensor) -> torch.Tensor:

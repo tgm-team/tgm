@@ -243,9 +243,9 @@ else:
 encoder = RecurrentGCN(
     node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
 ).to(args.device)
-decoder = GraphPredictor(
-    in_dim=args.embed_dim, hids_sizes=args.embed_dim, out_dim=1
-).to(args.device)
+decoder = GraphPredictor(in_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
+    args.device
+)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

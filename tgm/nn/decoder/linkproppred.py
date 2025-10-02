@@ -21,15 +21,16 @@ class LinkPredictor(torch.nn.Module):
         node_dim (int): Dimension of node embedding
         out_dim (int): Dimension of output
         nlayers (int): Number of layers
-        hids_sizes (List[int]): Size of each hidden embeddings
+        hidden_dim (int): Size of each hidden embedding
+        merge_op (str): Operation to merge 2 node embeddings (concat)
     """
 
     def __init__(
         self,
         node_dim: int,
-        out_dim: int,
+        out_dim: int = 1,
         nlayers: int = 2,
-        hids_sizes: int = 32,
+        hidden_dim: int = 32,
         merge_op: str = 'concat',
     ) -> None:
         super().__init__()
@@ -43,14 +44,14 @@ class LinkPredictor(torch.nn.Module):
             node_dim = node_dim * 2
 
         self.model = Sequential()
-        self.model.append(nn.Linear(node_dim, hids_sizes))
+        self.model.append(nn.Linear(node_dim, hidden_dim))
         self.model.append(nn.ReLU())
 
         for i in range(1, nlayers - 1):
-            self.model.append(nn.Linear(hids_sizes, hids_sizes))
+            self.model.append(nn.Linear(hidden_dim, hidden_dim))
             self.model.append(nn.ReLU())
 
-        self.model.append(nn.Linear(hids_sizes, out_dim))
+        self.model.append(nn.Linear(hidden_dim, out_dim))
         self.merge_op = MERGE_OP[merge_op]
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:

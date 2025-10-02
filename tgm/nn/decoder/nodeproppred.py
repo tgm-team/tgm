@@ -9,27 +9,27 @@ class NodePredictor(torch.nn.Module):
     Args:
         in_dim (int): Dimension of input
         out_dim (int): Dimension of output
-        hids_sizes (List[int]): Size of each hidden embeddings
+        hidden_dim (int): Size of hidden embedding
     """
 
     def __init__(
         self,
         in_dim: int,
-        out_dim: int,
+        out_dim: int = 1,
         nlayers: int = 2,
-        hids_sizes: int = 32,
+        hidden_dim: int = 64,
     ) -> None:
         super().__init__()
 
         self.model = Sequential()
-        self.model.append(nn.Linear(in_dim, hids_sizes))
+        self.model.append(nn.Linear(in_dim, hidden_dim))
         self.model.append(nn.ReLU())
 
         for i in range(1, nlayers - 1):
-            self.model.append(nn.Linear(hids_sizes, hids_sizes))
+            self.model.append(nn.Linear(hidden_dim, hidden_dim))
             self.model.append(nn.ReLU())
 
-        self.model.append(nn.Linear(hids_sizes, out_dim))
+        self.model.append(nn.Linear(hidden_dim, out_dim))
 
     def forward(self, z_node: torch.Tensor) -> torch.Tensor:
         r"""Forward pass.

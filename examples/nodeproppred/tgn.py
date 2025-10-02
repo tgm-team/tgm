@@ -434,7 +434,7 @@ encoder = GraphAttentionEmbedding(
     time_enc=memory.time_enc,
 ).to(args.device)
 decoder = NodePredictor(
-    in_dim=args.embed_dim, out_dim=num_classes, hids_sizes=args.embed_dim
+    in_dim=args.embed_dim, out_dim=num_classes, hidden_dim=args.embed_dim
 ).to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),

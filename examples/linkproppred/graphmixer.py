@@ -361,9 +361,9 @@ encoder = GraphMixerEncoder(
     node_dim=static_node_feats.shape[1],
     edge_dim=train_dg.edge_feats_dim | args.embed_dim,
 ).to(args.device)
-decoder = LinkPredictor(
-    node_dim=args.embed_dim, out_dim=1, hids_sizes=args.embed_dim
-).to(args.device)
+decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
+    args.device
+)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
