@@ -2,6 +2,7 @@ import io
 import json
 import tempfile
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
 import tgm.util.logging as tgm_logging
 
@@ -19,6 +20,11 @@ def dummy_latency():
     return 42
 
 
+@tgm_logging.log_latency()
+def dummy_latency_with_parens():
+    return 42
+
+
 @tgm_logging.log_gpu
 def dummy_gpu():
     return 42
@@ -26,7 +32,7 @@ def dummy_gpu():
 
 def dummy_metrics():
     tgm_logging.log_metric('foo', 123, epoch=1)
-    tgm_logging.log_metric('bar', 234)
+    tgm_logging.log_metric('bar', 234, extra={'meta_data': 'foo'})
 
 
 def dummy_metrics_dict():
@@ -89,6 +95,18 @@ def test_log_latency_console_only(capsys):
         assert len(json_lines) == 0
 
 
+def test_log_latency_with_parens_console_only(capsys):
+    with tempfile.NamedTemporaryFile() as tmp_file:
+        tgm_logging.enable_logging()
+        capture_log_output(dummy_latency_with_parens)
+
+        console_logs = capsys.readouterr().err
+        assert 'Function dummy_latency_with_parens executed in ' in console_logs
+
+        json_lines = _parse_json(tmp_file)
+        assert len(json_lines) == 0
+
+
 def test_log_gpu_console_only(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tgm_logging.enable_logging()
@@ -99,6 +117,19 @@ def test_log_gpu_console_only(capsys):
 
         json_lines = _parse_json(tmp_file)
         assert len(json_lines) == 0
+
+
+def test_log_gpu_withou_cuda_available(capsys):
+    with patch('torch.cuda.is_available', return_value=False):
+        with tempfile.NamedTemporaryFile() as tmp_file:
+            tgm_logging.enable_logging()
+            capture_log_output(dummy_gpu)
+
+            console_logs = capsys.readouterr().err
+            assert 'Function dummy_gpu GPU memory' in console_logs
+
+            json_lines = _parse_json(tmp_file)
+            assert len(json_lines) == 0
 
 
 def test_log_metrics_console_only(capsys):
@@ -179,7 +210,7 @@ def test_log_metrics_console_and_file(capsys):
         json_lines = _parse_json(tmp_file)
         assert len(json_lines) == 2
         assert json_lines[0] == {'metric': 'foo', 'value': 123, 'epoch': 1}
-        assert json_lines[1] == {'metric': 'bar', 'value': 234}
+        assert json_lines[1] == {'metric': 'bar', 'value': 234, 'meta_data': 'foo'}
 
 
 def test_log_metrics_dict_console_and_file(capsys):
