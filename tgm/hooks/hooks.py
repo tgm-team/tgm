@@ -20,11 +20,12 @@ class PinMemoryHook(StatelessHook):
     """Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        pin_if_needed = (
-            lambda x: x.pin_memory() if not x.is_cuda and not x.is_pinned() else x
-        )
+        if torch.cuda.is_available():
+            pin_if_needed = (
+                lambda x: x.pin_memory() if not x.is_cuda and not x.is_pinned() else x
+            )
 
-        _apply_to_tensors_inplace(batch, pin_if_needed)
+            _apply_to_tensors_inplace(batch, pin_if_needed)
         return batch
 
 

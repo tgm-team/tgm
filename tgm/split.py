@@ -38,8 +38,6 @@ class SplitStrategy(ABC):
     ) -> 'DGData':  # type: ignore
         from tgm import DGData  # avoid circular dependency
 
-        if edge_mask.dtype != torch.bool:
-            raise ValueError('edge_mask must be a boolean tensor')
         edge_index = data.edge_index[edge_mask]
         edge_feats = data.edge_feats[edge_mask] if data.edge_feats is not None else None
         edge_timestamps = data.timestamps[data.edge_event_idx[edge_mask]]
@@ -48,8 +46,6 @@ class SplitStrategy(ABC):
         if data.node_ids is not None:
             if node_mask is None:
                 node_mask = torch.ones(data.node_ids.shape[0], dtype=torch.bool)
-            if node_mask.dtype != torch.bool:
-                raise ValueError('node_mask must be a boolean tensor')
             node_ids = data.node_ids[node_mask]
             node_timestamps = data.timestamps[data.node_event_idx[node_mask]]
             if data.dynamic_node_feats is not None:
