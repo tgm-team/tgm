@@ -59,14 +59,11 @@ class HookManager:
             lines.append(_stringify_hook(h))
 
         lines.append(f'  Active key: {self._active_key}')
-        if self._key_to_hooks:
-            lines.append('  Keyed hooks:')
-            for key, hooks in self._key_to_hooks.items():
-                lines.append(f'    {key}:')
-                for h in hooks:
-                    lines.append(_stringify_hook(h))
-        else:
-            lines.append('  No keyed hooks registered.')
+        lines.append('  Keyed hooks:')
+        for key, hooks in self._key_to_hooks.items():
+            lines.append(f'    {key}:')
+            for h in hooks:
+                lines.append(_stringify_hook(h))
 
         return '\n'.join(lines)
 

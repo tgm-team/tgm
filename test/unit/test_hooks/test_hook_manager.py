@@ -287,7 +287,7 @@ def execute_active_hooks_empty(dg):
     assert batch.src.device == torch.device('cpu')
 
 
-def execute_active_hooks_keyed(dg):
+def test_execute_active_hooks_keyed(dg):
     hm = HookManager(keys=['train'])
     hook = MockHook()
     hm.register('train', hook)
@@ -298,18 +298,24 @@ def execute_active_hooks_keyed(dg):
     assert batch == exp_batch
 
 
-def execute_active_hooks_keyed_and_shared(dg):
+def test_execute_active_hooks_keyed_and_shared(dg):
     hm = HookManager(keys=['train'])
     hook_shared = MockHook()
     hook_keyed = MockHook()
     hm.register_shared(hook_shared)
     hm.register('train', hook_keyed)
     hm.set_active_hooks('train')
-    assert len(hm._key_to_hooks['train']) == 2
+    assert len(hm._key_to_hooks['train']) == 1
     exp_batch = dg.materialize()
     exp_batch.time *= 4
     batch = hm.execute_active_hooks(dg, dg.materialize())
     assert batch == exp_batch
+
+
+def test_attempt_execute_without_active_hooks(dg):
+    hm = HookManager(keys=['train'])
+    with pytest.raises(RuntimeError):
+        hm.execute_active_hooks(dg, dg.materialize())
 
 
 def test_reset_state():
