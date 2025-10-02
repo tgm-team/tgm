@@ -1,7 +1,5 @@
 import argparse
 import copy
-import logging
-from pathlib import Path
 from typing import Callable, Tuple
 
 import numpy as np
@@ -17,7 +15,7 @@ from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import RandomProjectionModule, Time2Vec, TPNet
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -73,7 +71,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class LinkPredictor(nn.Module):
@@ -192,6 +189,7 @@ class TPNet_LinkPrediction(nn.Module):
         return pos_out, neg_out
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -213,6 +211,7 @@ def train(
     return total_loss
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(
@@ -324,9 +323,10 @@ for epoch in range(1, args.epochs + 1):
         loss = train(train_loader, model, opt, static_node_feat)
     with hm.activate(val_key):
         val_mrr = eval(evaluator, val_loader, model, static_node_feat)
-        logger.info(
-            f'Epoch={epoch:02d} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-        )
+
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
+
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
         hm.reset_state()
@@ -334,4 +334,4 @@ for epoch in range(1, args.epochs + 1):
 
 with hm.activate(test_key):
     test_mrr = eval(evaluator, test_loader, model, static_node_feat)
-    logger.info(f'Test MRR:{METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

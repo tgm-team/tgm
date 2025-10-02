@@ -1,5 +1,4 @@
 import argparse
-import logging
 from collections import defaultdict, deque
 from typing import Any, Deque, Dict
 
@@ -19,7 +18,7 @@ from tgm.constants import (
 from tgm.hooks import RecencyNeighborHook, StatefulHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -60,7 +59,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class GraphMixerEncoder(nn.Module):
@@ -193,6 +191,7 @@ class LinkPredictor(nn.Module):
         return self.fc2(h).view(-1)
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -222,6 +221,7 @@ def train(
     return total_loss
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(
@@ -384,13 +384,13 @@ for epoch in range(1, args.epochs + 1):
 
     with hm.activate(val_key):
         val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
-    logger.info(
-        f'Epoch={epoch:02d} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
+
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 with hm.activate('test'):
     test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
-    logger.info(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

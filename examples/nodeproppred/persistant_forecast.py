@@ -1,6 +1,4 @@
 import argparse
-import logging
-from pathlib import Path
 
 import numpy as np
 import torch
@@ -10,7 +8,7 @@ from tqdm import tqdm
 from tgm import DGData, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.loader import DGDataLoader
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -31,7 +29,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class PersistantForecaster:
@@ -92,7 +89,7 @@ model = PersistantForecaster(num_classes=num_classes)
 eval(train_loader, model, evaluator)
 
 val_ndcg = eval(val_loader, model, evaluator)
-logger.info(f'Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}')
+log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg)
 
 test_ndcg = eval(test_loader, model, evaluator)
-logger.info(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')
+log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg)

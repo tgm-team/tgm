@@ -1,6 +1,4 @@
 import argparse
-import logging
-from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -15,7 +13,7 @@ from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
 from tgm.timedelta import TimeDeltaDG
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -44,7 +42,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class RecurrentGCN(torch.nn.Module):
@@ -81,6 +78,7 @@ class LinkPredictor(nn.Module):
         return self.fc2(h).view(-1)
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -124,6 +122,7 @@ def train(
     return total_loss, z, h_0, c_0
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(
@@ -245,9 +244,8 @@ for epoch in range(1, args.epochs + 1):
             evaluator,
             conversion_rate,
         )
-    logger.info(
-        f'Epoch={epoch:02d} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
 
 with hm.activate(test_key):
@@ -263,4 +261,4 @@ with hm.activate(test_key):
         evaluator,
         conversion_rate,
     )
-    logger.info(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

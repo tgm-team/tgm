@@ -1,8 +1,11 @@
 import functools
+import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Callable, List
+from typing import Any, Callable, Dict, List
+
+import torch
 
 
 def enable_logging(
@@ -52,24 +55,34 @@ def enable_logging(
 def log_latency(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
     """Function decorator to log latency at configurable log level.
 
+    Logs human-readable info at `level`, and JSON-formatted debug log at DEBUG.
+
     Usage:
-        - @log_latency # Logs at logging.INFO
-        - @log_latency() # Logs at logging.INFO
-        - @log_latency=level=logging.DEBUG) # Logs at logging.DEBUG
+        - @log_latency                      # Logs at logging.INFO
+        - @log_latency()                    # Logs at logging.INFO
+        - @log_latency=level=logging.DEBUG) # Logs at logging.DEBUG (JSON included)
 
     Returns:
         The output of calling func.
     """
 
     def decorator(func: Callable) -> Callable:
-        logger = logging.getLogger('tgm')
-
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.perf_counter()
             result = func(*args, **kwargs)
             latency = time.perf_counter() - start_time
-            logger.log(level, 'Function %s executed in %.4fs', func.__name__, latency)
+            util_logger.log(
+                level, 'Function %s executed in %.4fs', func.__name__, latency
+            )
+
+            if util_logger.isEnabledFor(logging.DEBUG):
+                log_entry = {
+                    'metric': f'{func.__name__}_latency',
+                    'value': latency,
+                    'function': func.__name__,
+                }
+                util_logger.debug(json.dumps(log_entry))
             return result
 
         return wrapper
@@ -82,6 +95,143 @@ def log_latency(_func: Callable | None = None, *, level: int = logging.INFO) -> 
         return decorator(_func)
 
 
+def log_gpu(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
+    """Function decorator to log GPU memory usage during a function call.
+
+    Logs human-readable info at `level`, and JSON-formatted debug log at DEBUG.
+
+    Usage:
+        - @log_gpu                       # Logs at logging.INFO
+        - @log_gpu()                     # Logs at logging.INFO
+        - @log_gpu(level=logging.DEBUG)  # Logs at DEBUG (JSON included)
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            cuda_available = torch.cuda.is_available()
+            if cuda_available:
+                torch.cuda.reset_peak_memory_stats()
+                start_mem = torch.cuda.memory_allocated() / (1024**2)
+            else:
+                start_mem = 0.0
+
+            result = func(*args, **kwargs)
+
+            if cuda_available:
+                peak_mem = torch.cuda.max_memory_allocated() / (1024**2)
+                end_mem = torch.cuda.memory_allocated() / (1024**2)
+                mem_diff = peak_mem - start_mem
+            else:
+                peak_mem = end_mem = mem_diff = 0.0
+
+            util_logger.log(
+                level,
+                'Function %s GPU memory (CUDA available=%s) [MB]: start=%.2f, peak=%.2f, end=%.2f, diff=%.2f',
+                func.__name__,
+                cuda_available,
+                start_mem,
+                peak_mem,
+                end_mem,
+                mem_diff,
+            )
+
+            if util_logger.isEnabledFor(logging.DEBUG):
+                log_entry = {
+                    'metric': f'{func.__name__}_gpu_usage',
+                    'cuda_available': cuda_available,
+                    'start_mb': start_mem,
+                    'peak_mb': peak_mem,
+                    'end_mb': end_mem,
+                    'diff_mb': mem_diff,
+                    'function': func.__name__,
+                }
+                util_logger.debug(json.dumps(log_entry))
+
+            return result
+
+        return wrapper
+
+    if _func is None:
+        return decorator
+    else:
+        return decorator(_func)
+
+
+def log_metrics_dict(
+    metrics_dict: Dict[str, Any],
+    *,
+    epoch: int | None = None,
+    level: int = logging.INFO,
+    extra: Dict[str, Any] | None = None,
+    logger: logging.Logger | None = None,
+) -> None:
+    """Log a set of metric with optional epoch and structured JSON output.
+
+    Logs human-readable info at `level`, and JSON-formatted debug log at DEBUG.
+
+    Note: This is equivalent to calling log_metric for each key-value pair.
+
+    Args:
+        metrics_dict (Dict[str, Any]): Dictionary of metric_name: metric_value pairs.
+        epoch (Optional[int]): Optional epoch number.
+        level (int): Logging level for human-readable log (default INFO)
+        extra (Dict[str, Any]): Optional dictionary of extra metadata to include in JSON.
+        logger (Optional[logging.Logger]): Logger to log to, defaults to tgm.util logger.
+    """
+    for metric_name, metric_value in metrics_dict.items():
+        log_metric(
+            metric_name,
+            metric_value,
+            epoch=epoch,
+            level=level,
+            extra=extra,
+            logger=logger,
+        )
+
+
+def log_metric(
+    metric_name: str,
+    metric_value: Any,
+    *,
+    epoch: int | None = None,
+    level: int = logging.INFO,
+    extra: Dict[str, Any] | None = None,
+    logger: logging.Logger | None = None,
+) -> None:
+    """Log a metric with optional epoch and structured JSON output.
+
+    Logs human-readable info at `level`, and JSON-formatted debug log at DEBUG.
+
+    Args:
+        metric_name (str): Name of the metric to log.
+        metric_value (Any): Value fo the metric to log.
+        epoch (Optional[int]): Optional epoch number.
+        level (int): Logging level for human-readable log (default INFO)
+        extra (Dict[str, Any]): Optional dictionary of extra metadata to include in JSON.
+        logger (Optional[logging.Logger]): Logger to log to, defaults to tgm.util logger.
+    """
+    logger = logger or util_logger
+
+    display_value = (
+        round(metric_value, 4) if isinstance(metric_value, float) else metric_value
+    )
+    parts = []
+    if epoch is not None:
+        parts.append(f'Epoch={epoch:02d}')
+    parts.append(f'{metric_name}={display_value}')
+    msg = ' '.join(parts)
+    logger.log(level, msg)
+
+    if logger.isEnabledFor(logging.DEBUG):
+        log_entry = {'metric': metric_name, 'value': metric_value}
+        if epoch is not None:
+            log_entry['epoch'] = epoch
+        if extra is not None:
+            log_entry.update(extra)
+        logger.debug(json.dumps(log_entry))
+
+
 def _get_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
     if not logger.handlers:
@@ -89,7 +239,7 @@ def _get_logger(name: str) -> logging.Logger:
     return logger
 
 
-logger = _get_logger(__name__)
+util_logger = _get_logger(__name__)
 
 
 class _logged_cached_property(functools.cached_property):
@@ -100,9 +250,11 @@ class _logged_cached_property(functools.cached_property):
         if instance is None:
             return self
         if self.attrname in instance.__dict__:
-            logger.debug('%s Cache hit: %s', instance.__class__.__name__, self.attrname)
+            util_logger.debug(
+                '%s Cache hit: %s', instance.__class__.__name__, self.attrname
+            )
         else:
-            logger.debug(
+            util_logger.debug(
                 '%s Cache miss: %s', instance.__class__.__name__, self.attrname
             )
         return super().__get__(instance, owner)

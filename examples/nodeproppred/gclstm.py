@@ -1,6 +1,4 @@
 import argparse
-import logging
-from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -14,7 +12,7 @@ from tgm import DGBatch, DGData, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import GCLSTM
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -43,7 +41,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 class RecurrentGCN(torch.nn.Module):
@@ -80,6 +77,7 @@ class NodePredictor(torch.nn.Module):
         return self.fc2(h)
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -113,6 +111,7 @@ def train(
     return total_loss, h_0, c_0
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(
@@ -187,9 +186,8 @@ for epoch in range(1, args.epochs + 1):
         c_0,
         evaluator,
     )
-    logger.info(
-        f'Epoch={epoch:02d} Loss={loss:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}'
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
 test_ndcg = eval(test_loader, static_node_feats, encoder, decoder, h_0, c_0, evaluator)
-logger.info(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')
+log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)

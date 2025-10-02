@@ -1,6 +1,4 @@
 import argparse
-import logging
-from pathlib import Path
 from typing import Callable, Tuple
 
 import pandas as pd
@@ -15,7 +13,13 @@ from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
 from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import (
+    enable_logging,
+    log_gpu,
+    log_latency,
+    log_metric,
+    log_metrics_dict,
+)
 from tgm.util.seed import seed_everything
 
 """
@@ -66,7 +70,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-logger = logging.getLogger('tgm').getChild(Path(__file__).stem)
 
 
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
@@ -157,6 +160,7 @@ class GraphPredictor(torch.nn.Module):
         return self.fc2(h)
 
 
+@log_gpu
 @log_latency
 def train(
     loader: DGDataLoader,
@@ -195,6 +199,7 @@ def train(
     return total_loss, h_0, metrics.compute()
 
 
+@log_gpu
 @log_latency
 @torch.no_grad()
 def eval(
@@ -295,14 +300,11 @@ for epoch in range(1, args.epochs + 1):
     val_results, h_0 = eval(
         val_loader, val_labels, static_node_feats, encoder, decoder, h_0, val_metrics
     )
-    logger.info(
-        f'Epoch={epoch:02d} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
-        + ' '
-        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metrics_dict(train_results, epoch=epoch)
+    log_metrics_dict(val_results, epoch=epoch)
 
 test_results, h_0 = eval(
     test_loader, test_labels, static_node_feats, encoder, decoder, h_0, test_metrics
 )
-logger.info(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+log_metrics_dict(test_results, epoch=args.epochs)
