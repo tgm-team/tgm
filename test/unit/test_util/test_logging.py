@@ -36,103 +36,106 @@ def dummy_metrics_dict():
 def test_log_latency_logging_disabled(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         capture_log_output(dummy_latency)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        assert len(lines) == 0
 
         console_logs = capsys.readouterr().err
         assert console_logs == ''
+
+        json_lines = _parse_json(tmp_file)
+        assert len(json_lines) == 0
 
 
 def test_log_gpu_logging_disabled(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         capture_log_output(dummy_gpu)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        assert len(lines) == 0
 
         console_logs = capsys.readouterr().err
         assert console_logs == ''
+
+        json_lines = _parse_json(tmp_file)
+        assert len(json_lines) == 0
 
 
 def test_log_metrics_logging_disabled(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         capture_log_output(dummy_metrics)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        assert len(lines) == 0
 
         console_logs = capsys.readouterr().err
         assert console_logs == ''
+
+        json_lines = _parse_json(tmp_file)
+        assert len(json_lines) == 0
 
 
 def test_log_metrics_dict_logging_disabled(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         capture_log_output(dummy_metrics_dict)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        assert len(lines) == 0
 
         console_logs = capsys.readouterr().err
         assert console_logs == ''
+
+        json_lines = _parse_json(tmp_file)
+        assert len(json_lines) == 0
 
 
 def test_log_latency_console_only(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tgm_logging.enable_logging()
         capture_log_output(dummy_latency)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        assert len(lines) == 0
 
         console_logs = capsys.readouterr().err
         assert 'Function dummy_latency executed in ' in console_logs
+
+        json_lines = _parse_json(tmp_file)
+        assert len(json_lines) == 0
 
 
 def test_log_gpu_console_only(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tgm_logging.enable_logging()
         capture_log_output(dummy_gpu)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        assert len(lines) == 0
 
         console_logs = capsys.readouterr().err
         assert 'Function dummy_gpu GPU memory' in console_logs
+
+        json_lines = _parse_json(tmp_file)
+        assert len(json_lines) == 0
 
 
 def test_log_metrics_console_only(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tgm_logging.enable_logging()
         capture_log_output(dummy_metrics)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        assert len(lines) == 0
 
         console_logs = capsys.readouterr().err
         assert 'Epoch=01 foo=123' in console_logs
         assert 'bar=234' in console_logs
+
+        json_lines = _parse_json(tmp_file)
+        assert len(json_lines) == 0
 
 
 def test_log_metrics_dict_console_only(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tgm_logging.enable_logging()
         capture_log_output(dummy_metrics_dict)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        assert len(lines) == 0
 
         console_logs = capsys.readouterr().err
         assert 'Epoch=01 foo=123' in console_logs
         assert 'Epoch=01 bar=234' in console_logs
+
+        json_lines = _parse_json(tmp_file)
+        assert len(json_lines) == 0
 
 
 def test_log_latency_console_and_file(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tgm_logging.enable_logging(log_file_path=tmp_file.name)
         capture_log_output(dummy_latency)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        json_lines = [line for line in lines if line.endswith('}')]
-        json_lines = [
-            json.loads(line[line.find('{') : line.rfind('}') + 1])
-            for line in json_lines
-        ]
 
         console_logs = capsys.readouterr().err
         assert 'Function dummy_latency executed in ' in console_logs
 
+        json_lines = _parse_json(tmp_file)
         assert len(json_lines) == 1
         assert set(['metric', 'value', 'function']) == set(json_lines[0].keys())
         assert json_lines[0]['metric'] == 'dummy_latency_latency'
@@ -143,16 +146,11 @@ def test_log_gpu_console_and_file(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tgm_logging.enable_logging(log_file_path=tmp_file.name)
         capture_log_output(dummy_gpu)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        json_lines = [line for line in lines if line.endswith('}')]
-        json_lines = [
-            json.loads(line[line.find('{') : line.rfind('}') + 1])
-            for line in json_lines
-        ]
 
         console_logs = capsys.readouterr().err
         assert 'Function dummy_gpu GPU memory' in console_logs
 
+        json_lines = _parse_json(tmp_file)
         assert len(json_lines) == 1
         assert set(
             [
@@ -173,17 +171,12 @@ def test_log_metrics_console_and_file(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tgm_logging.enable_logging(log_file_path=tmp_file.name)
         capture_log_output(dummy_metrics)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        json_lines = [line for line in lines if line.endswith('}')]
-        json_lines = [
-            json.loads(line[line.find('{') : line.rfind('}') + 1])
-            for line in json_lines
-        ]
 
         console_logs = capsys.readouterr().err
         assert 'Epoch=01 foo=123' in console_logs
         assert 'bar=234' in console_logs
 
+        json_lines = _parse_json(tmp_file)
         assert len(json_lines) == 2
         assert json_lines[0] == {'metric': 'foo', 'value': 123, 'epoch': 1}
         assert json_lines[1] == {'metric': 'bar', 'value': 234}
@@ -193,17 +186,20 @@ def test_log_metrics_dict_console_and_file(capsys):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tgm_logging.enable_logging(log_file_path=tmp_file.name)
         capture_log_output(dummy_metrics_dict)
-        lines = [line.decode() for line in tmp_file.read().splitlines()]
-        json_lines = [line for line in lines if line.endswith('}')]
-        json_lines = [
-            json.loads(line[line.find('{') : line.rfind('}') + 1])
-            for line in json_lines
-        ]
 
         console_logs = capsys.readouterr().err
         assert 'Epoch=01 foo=123' in console_logs
         assert 'Epoch=01 bar=234' in console_logs
 
+        json_lines = _parse_json(tmp_file)
         assert len(json_lines) == 2
         assert json_lines[0] == {'metric': 'foo', 'value': 123, 'epoch': 1}
         assert json_lines[1] == {'metric': 'bar', 'value': 234, 'epoch': 1}
+
+
+def _parse_json(tmp_file):
+    lines = [line.decode() for line in tmp_file.read().splitlines()]
+    json_lines = [line for line in lines if line.endswith('}')]
+    return [
+        json.loads(line[line.find('{') : line.rfind('}') + 1]) for line in json_lines
+    ]
