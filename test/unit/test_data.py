@@ -303,6 +303,30 @@ def test_init_dg_data_bad_args_empty_graph():
         )
 
 
+def test_init_dg_data_bad_args_empty_node_data():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([0, 1])
+    node_ids = torch.empty(0, dtype=torch.int32)
+    node_timestamps = torch.empty(0, dtype=torch.int64)
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_ids=node_ids,
+            node_timestamps=node_timestamps,
+        )
+
+
+def test_init_dg_Data_bad_static_node_feats():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([0, 1])
+    static_node_feats = torch.rand(0)  # should be 2d
+    with pytest.raises(ValueError):
+        _ = DGData.from_raw(
+            edge_timestamps, edge_index, static_node_feats=static_node_feats
+        )
+
+
 def test_init_dg_data_bad_args_bad_timestamps():
     # Negative timestamps not supported
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
@@ -699,6 +723,79 @@ def test_from_csv_with_node_features():
         os.remove(tmp_name_static_node)
 
 
+def test_from_csv_bad_node_cols_not_specified():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 1])
+    node_ids = torch.IntTensor([7, 8])
+    node_timestamps = torch.LongTensor([3, 6])
+    dynamic_node_feats = torch.rand(2, 5)
+
+    edge_col_names = {
+        'edge_src_col': 'src',
+        'edge_dst_col': 'dst',
+        'edge_time_col': 't',
+    }
+    node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
+    node_feats_col = [f'dim_{i}' for i in range(5)]
+
+    tmp_edge = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_edge = tmp_edge.name
+    tmp_edge.close()
+
+    tmp_node = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_node = tmp_node.name
+    tmp_node.close()
+
+    try:
+        with open(tmp_name_edge, 'w', newline='') as edge_file:
+            writer = csv.writer(edge_file)
+            writer.writerow(list(edge_col_names.values()))
+            writer.writerows(
+                zip(
+                    edge_index[:, 0].tolist(),
+                    edge_index[:, 1].tolist(),
+                    edge_timestamps.tolist(),
+                )
+            )
+            edge_file.flush()
+
+        with open(tmp_name_node, 'w', newline='') as node_file:
+            writer = csv.writer(node_file)
+            writer.writerow(list(node_col_names.values()) + node_feats_col)
+            writer.writerows(
+                zip(
+                    node_ids.tolist(),
+                    node_timestamps.tolist(),
+                    dynamic_node_feats[:, 0].tolist(),
+                    dynamic_node_feats[:, 1].tolist(),
+                    dynamic_node_feats[:, 2].tolist(),
+                    dynamic_node_feats[:, 3].tolist(),
+                    dynamic_node_feats[:, 4].tolist(),
+                )
+            )
+            node_file.flush()
+
+        with pytest.raises(ValueError):
+            DGData.from_csv(
+                edge_file_path=edge_file.name,
+                node_file_path=node_file.name,
+                dynamic_node_feats_col=node_feats_col,
+                **edge_col_names,
+            )
+        with pytest.raises(ValueError):
+            DGData.from_csv(
+                edge_file_path=edge_file.name,
+                static_node_feats_file_path=node_file.name,
+                **edge_col_names,
+            )
+
+    except Exception as e:
+        raise e
+    finally:
+        os.remove(tmp_name_edge)
+        os.remove(tmp_name_node)
+
+
 def test_from_pandas_with_edge_features():
     events_dict = {
         'src': [2, 10],
@@ -726,11 +823,7 @@ def test_from_pandas_with_edge_features():
 
 
 def test_from_pandas_with_node_events():
-    edge_dict = {
-        'src': [2, 10],
-        'dst': [3, 20],
-        't': [1337, 1338],
-    }
+    edge_dict = {'src': [2, 10], 'dst': [3, 20], 't': [1337, 1338]}
     edge_df = pd.DataFrame(edge_dict)
     edge_df[['src', 'dst', 't']] = edge_df[['src', 'dst', 't']].astype('int32')
 
@@ -756,11 +849,7 @@ def test_from_pandas_with_node_events():
 
 
 def test_from_pandas_with_node_features():
-    edge_dict = {
-        'src': [2, 10],
-        'dst': [3, 20],
-        't': [1337, 1338],
-    }
+    edge_dict = {'src': [2, 10], 'dst': [3, 20], 't': [1337, 1338]}
     edge_df = pd.DataFrame(edge_dict)
     edge_df[['src', 'dst', 't']] = edge_df[['src', 'dst', 't']].astype('int32')
 
@@ -790,6 +879,73 @@ def test_from_pandas_with_node_features():
         data.dynamic_node_feats.tolist(), node_df.node_features.tolist()
     )
     assert data.time_delta == TimeDeltaDG('r')
+
+
+def test_from_pandas_with_static_node_features():
+    edge_dict = {'src': [2, 10], 'dst': [3, 20], 't': [1337, 1338]}
+    edge_df = pd.DataFrame(edge_dict)
+    edge_df[['src', 'dst', 't']] = edge_df[['src', 'dst', 't']].astype('int32')
+
+    node_dict = {
+        'node_features': [torch.rand(5).tolist() for _ in range(21)],
+    }
+    node_df = pd.DataFrame(node_dict)
+
+    data = DGData.from_pandas(
+        edge_df=edge_df,
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
+        static_node_feats_df=node_df,
+        static_node_feats_col='node_features',
+    )
+    assert isinstance(data, DGData)
+    torch.testing.assert_close(
+        data.static_node_feats.tolist(), node_df.node_features.tolist()
+    )
+
+
+def test_from_pandas_bad_static_node_features_col_no_specified():
+    edge_dict = {'src': [2, 10], 'dst': [3, 20], 't': [1337, 1338]}
+    edge_df = pd.DataFrame(edge_dict)
+    edge_df[['src', 'dst', 't']] = edge_df[['src', 'dst', 't']].astype('int32')
+
+    node_dict = {
+        'node_features': [torch.rand(5).tolist() for _ in range(21)],
+    }
+    node_df = pd.DataFrame(node_dict)
+
+    with pytest.raises(ValueError):
+        DGData.from_pandas(
+            edge_df=edge_df,
+            edge_src_col='src',
+            edge_dst_col='dst',
+            edge_time_col='t',
+            static_node_feats_df=node_df,
+        )
+
+
+def test_from_pandas_bad_node_cols_not_specified():
+    edge_dict = {'src': [2, 10], 'dst': [3, 20], 't': [1337, 1338]}
+    edge_df = pd.DataFrame(edge_dict)
+    edge_df[['src', 'dst', 't']] = edge_df[['src', 'dst', 't']].astype('int32')
+
+    node_dict = {
+        'node': [7, 8],
+        't': [3, 6],
+        'node_features': [torch.rand(5).tolist(), torch.rand(5).tolist()],
+    }
+    node_df = pd.DataFrame(node_dict)
+    node_df[['node', 't']] = node_df[['node', 't']].astype('int32')
+
+    with pytest.raises(ValueError):
+        DGData.from_pandas(
+            edge_df=edge_df,
+            edge_src_col='src',
+            edge_dst_col='dst',
+            edge_time_col='t',
+            node_df=node_df,
+        )
 
 
 @pytest.fixture
@@ -844,6 +1000,21 @@ def tgb_dataset_factory():
         return mock_dataset
 
     return _make_dataset
+
+
+def test_from_tkgl():
+    with pytest.raises(NotImplementedError):
+        DGData.from_tgb('tkgl-foo')
+
+
+def test_from_thgl():
+    with pytest.raises(NotImplementedError):
+        DGData.from_tgb('thgl-foo')
+
+
+def test_from_bad_tgb_name():
+    with pytest.raises(ValueError):
+        DGData.from_tgb('foo')
 
 
 @pytest.mark.parametrize('with_node_feats', [True, False])
@@ -931,6 +1102,18 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
+
+
+def test_discretize_reduce_op_bad():
+    edge_index = torch.IntTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
+    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        time_delta='m',
+    )
+    with pytest.raises(ValueError):
+        data.discretize('h', reduce_op='foo')
 
 
 def test_discretize_reduce_op_first():

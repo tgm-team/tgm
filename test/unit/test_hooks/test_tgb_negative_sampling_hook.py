@@ -55,6 +55,39 @@ def test_negative_edge_sampler(MockNegSampler, data):
     assert batch.neg_time.shape == batch.neg.shape
 
 
+@patch('tgb.utils.info.DATA_VERSION_DICT', {'foo': 1})
+@patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
+def test_negative_edge_sampler_with_version_info(MockNegSampler, data):
+    dg = DGraph(data)
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    hook = TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
+    batch = hook(dg, dg.materialize())
+    assert isinstance(batch, DGBatch)
+    assert torch.is_tensor(batch.neg)
+    assert torch.is_tensor(batch.neg_time)
+    assert len(batch.neg_batch_list) == batch.src.shape[0]
+    assert batch.neg_time.shape == batch.neg.shape
+
+
+@patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
+def test_negative_edge_sampler_throws_value_error(MockNegSampler, data):
+    dg = DGraph(data)
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    mock_sampler.query_batch.side_effect = ValueError('foo')
+    MockNegSampler.return_value = mock_sampler
+
+    hook = TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
+
+    with pytest.raises(ValueError, match='`pip install --upgrade py-tgb`'):
+        hook(dg, dg.materialize())
+
+
 @pytest.fixture
 def node_only_data():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])

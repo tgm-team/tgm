@@ -1,11 +1,17 @@
 import functools
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 import torch
+
+_TGM_LOGGING_ENABLED: bool = os.getenv('TGM_LOGGING_ENABLED', '0').lower() in (
+    '1',
+    'true',
+)
 
 
 def enable_logging(
@@ -21,6 +27,9 @@ def enable_logging(
         file_log_level (int): Logging level for file handler if configured (default = logging.DEBUG).
         log_file_path (Optional[str | Path]): Optional path to a log file.
     """
+    global _TGM_LOGGING_ENABLED
+    _TGM_LOGGING_ENABLED = True
+
     logger = logging.getLogger('tgm')
     logger.handlers.clear()  # Clear existing handlers, making this idempotent
 
@@ -69,6 +78,9 @@ def log_latency(_func: Callable | None = None, *, level: int = logging.INFO) -> 
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if not _TGM_LOGGING_ENABLED:
+                return func(*args, **kwargs)
+
             start_time = time.perf_counter()
             result = func(*args, **kwargs)
             latency = time.perf_counter() - start_time
@@ -109,6 +121,9 @@ def log_gpu(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if not _TGM_LOGGING_ENABLED:
+                return func(*args, **kwargs)
+
             cuda_available = torch.cuda.is_available()
             if cuda_available:
                 torch.cuda.reset_peak_memory_stats()
@@ -205,12 +220,15 @@ def log_metric(
 
     Args:
         metric_name (str): Name of the metric to log.
-        metric_value (Any): Value fo the metric to log.
+        metric_value (Any): Value of the metric to log.
         epoch (Optional[int]): Optional epoch number.
         level (int): Logging level for human-readable log (default INFO)
         extra (Dict[str, Any]): Optional dictionary of extra metadata to include in JSON.
         logger (Optional[logging.Logger]): Logger to log to, defaults to tgm.util logger.
     """
+    if not _TGM_LOGGING_ENABLED:
+        return
+
     logger = logger or util_logger
 
     display_value = (

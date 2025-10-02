@@ -27,6 +27,11 @@ def test_device_transfer_hook_cpu_cpu(dg):
     hook = DeviceTransferHook('cpu')
     batch = dg.materialize()
 
+    # Ensure recursive _apply_to_tensors_inplace does not have infinite recursion
+    batch.foo = ['a']  # add a list
+    batch.bar = tuple('a')  # add a tuple
+    batch.baz = {'a': 'b'}  # add a dict
+
     processed_batch = hook(dg, batch)
     assert batch == processed_batch
     assert processed_batch.src.device.type == 'cpu'

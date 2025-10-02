@@ -82,6 +82,19 @@ def test_init_gpu(data):
     torch.testing.assert_close(dg.edge_feats, data.edge_feats.to('cuda'))
 
 
+def test_to_cpu(data):
+    dg = DGraph(data)
+    dg = dg.to('cpu')
+    assert dg.device == torch.device('cpu')
+
+
+@pytest.mark.gpu
+def test_to_gpu(data):
+    dg = DGraph(data)
+    dg = dg.to('cuda')
+    assert dg.device == torch.device('cuda')
+
+
 def test_init_from_storage(data):
     dg_tmp = DGraph(data)
     dg = DGraph._from_storage(
@@ -383,3 +396,10 @@ def test_slice_events_slice_time_combination(data):
     exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
     assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
     assert torch.equal(dg1.edge_feats, data.edge_feats[1].unsqueeze(0))
+
+
+def test_batch_stringify(data):
+    dg = DGraph(data)
+    batch = dg.materialize()
+    batch.foo = ['a']  # Add an iterable to the batch
+    assert isinstance(str(batch), str)

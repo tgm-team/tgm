@@ -342,6 +342,8 @@ class DGBatch:
             description = ''
             if isinstance(object, torch.Tensor):
                 description = str(list(object.shape))
+            elif isinstance(object, str):
+                description = object
             elif isinstance(object, Iterable):
                 unique_type = set()
                 for element in object:
