@@ -13,9 +13,9 @@ from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import (
     DeduplicationHook,
+    EdgeEventsSeenNodesTrackHook,
     HookManager,
     RecencyNeighborHook,
-    SeenNodesTrackHook,
 )
 from tgm.loader import DGDataLoader
 from tgm.nn import DyGFormer, Time2Vec
@@ -251,7 +251,7 @@ nbr_hook = RecencyNeighborHook(
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
-hm.register('train', SeenNodesTrackHook(num_nodes))
+hm.register('train', EdgeEventsSeenNodesTrackHook(num_nodes))
 hm.register_shared(DeduplicationHook())
 hm.register_shared(nbr_hook)
 

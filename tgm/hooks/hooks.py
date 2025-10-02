@@ -498,8 +498,8 @@ class RecencyNeighborHook(StatefulHook):
             self._write_pos = self._write_pos.to(device)
 
 
-class SeenNodesTrackHook(StatefulHook):
-    """This hook return all nodes appearing in node events of current batch that have seen in the past edge events.
+class EdgeEventsSeenNodesTrackHook(StatefulHook):
+    """This hook return all nodes appearing in node events of the current batch that have seen in the past edge events.
     This hook is for the use case of nodeproppred for models computing node embeddings according to edges such as `DyGFormer` and `TPNet`.
 
     Args:
@@ -509,7 +509,7 @@ class SeenNodesTrackHook(StatefulHook):
         ValueError: If the num_nodes list is negative.
     """
 
-    requires = {'unique_nids'}
+    requires: Set[str] = set()
     produces = {'seen_nodes', 'batch_nodes_mask'}
 
     def __init__(self, num_nodes: int) -> None:
@@ -529,7 +529,7 @@ class SeenNodesTrackHook(StatefulHook):
         else:
             batch_nodes = torch.empty(0, device=self._device, dtype=torch.int)
 
-        edge_event_nodes = batch.unique_nids  # type: ignore[attr-defined]
+        edge_event_nodes = torch.unique(torch.cat([batch.src, batch.dst]))
 
         self._seen_mask[edge_event_nodes] = True
         previous_seen = self._seen_mask[batch_nodes]

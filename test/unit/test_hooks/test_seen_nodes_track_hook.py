@@ -3,7 +3,7 @@ import torch
 
 from tgm import DGraph
 from tgm.data import DGData
-from tgm.hooks import DeduplicationHook, SeenNodesTrackHook
+from tgm.hooks import EdgeEventsSeenNodesTrackHook
 from tgm.hooks.hook_manager import HookManager
 from tgm.loader import DGDataLoader
 
@@ -32,8 +32,7 @@ def dg():
 
 def test_seen_nodes_track_hook(dg):
     hm = HookManager(keys=['unit'])
-    hm.register('unit', DeduplicationHook())
-    hm.register('unit', SeenNodesTrackHook(6))
+    hm.register('unit', EdgeEventsSeenNodesTrackHook(6))
     hm.set_active_hooks('unit')
 
     loader = DGDataLoader(dg, batch_unit='s', hook_manager=hm)
@@ -57,4 +56,4 @@ def test_seen_nodes_track_hook(dg):
 
 def test_seen_nodes_track_hook_bad_init():
     with pytest.raises(ValueError):
-        SeenNodesTrackHook(-1)
+        EdgeEventsSeenNodesTrackHook(-1)
