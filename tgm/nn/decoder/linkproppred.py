@@ -30,7 +30,7 @@ class LinkPredictor(torch.nn.Module):
         node_dim: int,
         out_dim: int = 1,
         nlayers: int = 2,
-        hidden_dim: int = 32,
+        hidden_dim: int = 64,
         merge_op: str = 'concat',
     ) -> None:
         super().__init__()

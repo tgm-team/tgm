@@ -34,7 +34,7 @@ class GraphPredictor(torch.nn.Module):
         in_dim: int,
         out_dim: int = 1,
         nlayers: int = 2,
-        hidden_dim: int = 32,
+        hidden_dim: int = 64,
         graph_pooling: str = 'mean',
     ) -> None:
         super().__init__()
