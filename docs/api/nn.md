@@ -19,7 +19,7 @@
 ::: tgm.nn.model.dygformer
 ::: tgm.nn.model.tpnet
 
-## Encoder
+## Decoders
 
 ::: tgm.nn.decoder.graphproppred
 ::: tgm.nn.decoder.linkproppred
