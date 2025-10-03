@@ -17,7 +17,7 @@ from tgm.constants import (
 )
 from tgm.hooks import RecencyNeighborHook, StatefulHook
 from tgm.loader import DGDataLoader
-from tgm.nn import LinkPredictor, Time2Vec
+from tgm.nn import LinkPredictor, MLPMixer, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -87,8 +87,8 @@ class GraphMixerEncoder(nn.Module):
                 MLPMixer(
                     num_tokens=num_tokens,
                     num_channels=edge_dim,
-                    token_dim_expansion=token_dim_expansion,
-                    channel_dim_expansion=channel_dim_expansion,
+                    token_dim_expansion_factor=token_dim_expansion,
+                    channel_dim_expansion_factor=channel_dim_expansion,
                     dropout=dropout,
                 )
                 for _ in range(num_layers)
@@ -105,7 +105,7 @@ class GraphMixerEncoder(nn.Module):
         nbr_time_feat[batch.nbr_nids[0] == PADDED_NODE_ID] = 0.0
         z_link = self.projection_layer(torch.cat([edge_feat, nbr_time_feat], dim=-1))
         for mixer in self.mlp_mixers:
-            z_link = mixer(x=z_link)
+            z_link = mixer(z_link)
         z_link = torch.mean(z_link, dim=1)
 
         # Node Encoder
@@ -118,65 +118,6 @@ class GraphMixerEncoder(nn.Module):
 
         z = self.output_layer(torch.cat([z_link, z_node], dim=1))
         return z
-
-
-class FeedForwardNet(nn.Module):
-    def __init__(
-        self, input_dim: int, dim_expansion_factor: float, dropout: float = 0.0
-    ) -> None:
-        super().__init__()
-        self.ffn = nn.Sequential(
-            nn.Linear(
-                in_features=input_dim,
-                out_features=int(dim_expansion_factor * input_dim),
-            ),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(
-                in_features=int(dim_expansion_factor * input_dim),
-                out_features=input_dim,
-            ),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.ffn(x)
-
-
-class MLPMixer(nn.Module):
-    def __init__(
-        self,
-        num_tokens: int,
-        num_channels: int,
-        token_dim_expansion: float = 0.5,
-        channel_dim_expansion: float = 4.0,
-        dropout: float = 0.0,
-    ) -> None:
-        super().__init__()
-        self.token_norm = nn.LayerNorm(num_tokens)
-        self.token_ff = FeedForwardNet(
-            input_dim=num_tokens,
-            dim_expansion_factor=token_dim_expansion,
-            dropout=dropout,
-        )
-        self.channel_norm = nn.LayerNorm(num_channels)
-        self.channel_ff = FeedForwardNet(
-            input_dim=num_channels,
-            dim_expansion_factor=channel_dim_expansion,
-            dropout=dropout,
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # mix tokens
-        z = self.token_norm(x.permute(0, 2, 1))  # (B, num_channels, num_tokens)
-        z = self.token_ff(z).permute(0, 2, 1)  # (B, num_tokens, num_channels)
-        out = z + x
-
-        # mix channels
-        z = self.channel_norm(out)
-        z = self.channel_ff(z)
-        out = z + out
-        return out
 
 
 @log_gpu

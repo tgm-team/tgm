@@ -11,8 +11,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.loader import DGDataLoader
-from tgm.nn import NodePredictor
-from tgm.nn.recurrent import GCLSTM
+from tgm.nn import GCLSTM, NodePredictor
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 

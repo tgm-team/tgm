@@ -7,8 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from tgm.constants import PADDED_NODE_ID
-
-from ..time_encoding import Time2Vec
+from tgm.nn.modules import Time2Vec
 
 
 class NeighborCooccurrenceEncoder(nn.Module):
@@ -92,7 +91,7 @@ class TransformerEncoder(nn.Module):
     def __init__(
         self, attention_dim: int, num_heads: int, dropout: float = 0.1
     ) -> None:
-        super(TransformerEncoder, self).__init__()
+        super().__init__()
         self.attention_dim = attention_dim
         self.num_heads = num_heads
         self.dropout_rate = dropout
@@ -180,10 +179,9 @@ class DyGFormer(nn.Module):
         time_encoder: Callable[..., nn.Module] = Time2Vec,
         device: str = 'cpu',
     ) -> None:
-        super(DyGFormer, self).__init__()
-        assert max_input_sequence_length % patch_size == 0, (
-            'Max sequence length must be a multiple of path size'
-        )
+        super().__init__()
+        if max_input_sequence_length % patch_size != 0:
+            raise ValueError('Max sequence length must be a multiple of path size')
 
         self.node_feat_dim = node_feat_dim
         self.edge_feat_dim = edge_feat_dim
@@ -266,9 +264,7 @@ class DyGFormer(nn.Module):
 
         *Note: Information of about neighbours of both src and dst nodes are concated together. Neighbour information of all src nodes comes first, then that of all dst nodes*
         """
-
         src, dst = edge_index[0], edge_index[1]
-        batch_size = src.shape[0]
         num_edge = src.shape[0]
         src_neighbours = neighbours[:num_edge]
         dst_neighbours = neighbours[num_edge : num_edge * 2]
@@ -333,15 +329,15 @@ class DyGFormer(nn.Module):
             torch.cat([src_co_occurrence_feats, dst_co_occurrence_feats], dim=0)
         )
 
-        src_neighbours_node_features_patches = neighbours_node_feats[:batch_size]
-        src_neighbours_edge_features_patches = neighbours_edge_feats[:batch_size]
-        src_neighbours_time_features_patches = neighbours_time_feats[:batch_size]
-        src_co_occurence_features_patches = co_occurrence_feats[:batch_size]
+        src_neighbours_node_features_patches = neighbours_node_feats[:num_edge]
+        src_neighbours_edge_features_patches = neighbours_edge_feats[:num_edge]
+        src_neighbours_time_features_patches = neighbours_time_feats[:num_edge]
+        src_co_occurence_features_patches = co_occurrence_feats[:num_edge]
 
-        dst_neighbours_node_features_patches = neighbours_node_feats[batch_size:]
-        dst_neighbours_edge_features_patches = neighbours_edge_feats[batch_size:]
-        dst_neighbours_time_features_patches = neighbours_time_feats[batch_size:]
-        dst_co_occurence_features_patches = co_occurrence_feats[batch_size:]
+        dst_neighbours_node_features_patches = neighbours_node_feats[num_edge:]
+        dst_neighbours_edge_features_patches = neighbours_edge_feats[num_edge:]
+        dst_neighbours_time_features_patches = neighbours_time_feats[num_edge:]
+        dst_co_occurence_features_patches = co_occurrence_feats[num_edge:]
 
         # Use projection to align the patch encoding dimension for both dst and src
         src_neighbours_node_features_patches = self.projection_layer['node'](

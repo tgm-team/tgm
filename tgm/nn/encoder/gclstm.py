@@ -49,7 +49,7 @@ class GCLSTM(torch.nn.Module):
         normalization: str = 'sym',
         bias: bool = True,
     ) -> None:
-        super(GCLSTM, self).__init__()
+        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.K = K

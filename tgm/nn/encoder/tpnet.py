@@ -5,8 +5,7 @@ import torch
 import torch.nn as nn
 
 from tgm.constants import PADDED_NODE_ID
-
-from ..time_encoding import Time2Vec
+from tgm.nn.modules import MLPMixer, Time2Vec
 
 
 class RandomProjectionModule(nn.Module):
@@ -42,7 +41,7 @@ class RandomProjectionModule(nn.Module):
         dim_factor: int | None = None,
         device: str = 'cpu',
     ) -> None:
-        super(RandomProjectionModule, self).__init__()
+        super().__init__()
         if not use_matrix:
             if enforce_dim is not None:
                 self.dim = enforce_dim
@@ -225,120 +224,23 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        assert len(random_projections) == 2, (
-            'Expect a tuple of (now_time,random_projections)'
-        )  # @TODO: Need to raise custom exception
+        if len(random_projections) != 2:
+            raise ValueError('Expected a tuple of (now_time, random_projections)')
         now_time, random_projections = random_projections
-        assert (
-            torch.is_tensor(now_time) and len(random_projections) == self.num_layer
-        ), (
-            'Not a valid state of random projection'
-        )  # @TODO: Need to raise custom exception
+        if not torch.is_tensor(now_time):
+            raise ValueError(f'now time must be a torch.Tensor, got: {type(now_time)}')
+        if len(random_projections) != self.num_layer:
+            raise ValueError(
+                f'len(random_projections) ({len(random_projections)}) != self.num_layer ({self.num_layer})'
+            )
 
         self.now_time.data = now_time.clone()
         for i in range(1, self.num_layer + 1):
-            assert torch.is_tensor(random_projections[i - 1]), (
-                'Not a valid state of random projection'
-            )  # @TODO: Need to raise custom exception
+            if not torch.is_tensor(random_projections[i - 1]):
+                raise ValueError(
+                    f'random_projections[{i - 1}] must be a torch.Tensor, got: {type(random_projections[i - 1])}'
+                )
             self.random_projections[i].data = random_projections[i - 1].clone()
-
-
-class FeedForwardNet(nn.Module):
-    r"""Two-layered MLP with GELU activation function.
-
-    Args:
-        input_dim(int): dimension of input
-        dim_expansion_factor(float): dimension expansion factor
-        dropout(float): dropout rate
-
-    Reference: https://arxiv.org/abs/2410.04013.
-    """
-
-    def __init__(
-        self, input_dim: int, dim_expansion_factor: float, dropout: float = 0.0
-    ) -> None:
-        super(FeedForwardNet, self).__init__()
-        self.ffn = nn.Sequential(
-            nn.Linear(
-                in_features=input_dim,
-                out_features=int(dim_expansion_factor * input_dim),
-            ),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(
-                in_features=int(dim_expansion_factor * input_dim),
-                out_features=input_dim,
-            ),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        f"""Forward pass.
-
-        Args:
-            X (PyTorch Float Tensor): Input tensor
-
-        Returns:
-            H : Output tensor
-        """
-        return self.ffn(X)
-
-
-class MLPMixer(nn.Module):
-    r"""Implementation of MLPMixer.
-
-    Args:
-        num_tokens(int): number of tokens
-        num_channels(int): number of channels
-        token_dim_expansion_factor(float): dimension expansion factor for tokens
-        channel_dim_expansion_factor(float): dimension expansion factor for channels
-        dropout(float): dropout rate
-
-    Reference: https://openreview.net/forum?id=ayPPc0SyLv1
-    """
-
-    def __init__(
-        self,
-        num_tokens: int,
-        num_channels: int,
-        token_dim_expansion_factor: float = 0.5,
-        channel_dim_expansion_factor: float = 4.0,
-        dropout: float = 0.0,
-    ) -> None:
-        super(MLPMixer, self).__init__()
-
-        self.token_norm = nn.LayerNorm(num_tokens)
-        self.token_feedforward = FeedForwardNet(
-            input_dim=num_tokens,
-            dim_expansion_factor=token_dim_expansion_factor,
-            dropout=dropout,
-        )
-
-        self.channel_norm = nn.LayerNorm(num_channels)
-        self.channel_feedforward = FeedForwardNet(
-            input_dim=num_channels,
-            dim_expansion_factor=channel_dim_expansion_factor,
-            dropout=dropout,
-        )
-
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        f"""Forward pass.
-        Eq. 6 (Section  3.2)
-
-        Args:
-            X (PyTorch Float Tensor): Input tensor
-
-        Returns:
-            H : Output tensor
-        """
-        H_l_tilde = self.token_norm(X.permute(0, 2, 1))
-        H_l_tilde = self.token_feedforward(H_l_tilde).permute(0, 2, 1)
-        Z_l_tilde = X + H_l_tilde
-
-        H_l = self.channel_norm(Z_l_tilde)
-        H_l = self.channel_feedforward(H_l)
-        Z_l = Z_l_tilde + H_l
-        return Z_l
 
 
 class TPNet(nn.Module):
@@ -348,11 +250,10 @@ class TPNet(nn.Module):
         node_feat_dim (int): Dimension of static/dynamic node features (`d_N`).
         edge_feat_dim (int): Dimension of edge features (`d_E`).
         time_feat_dim (int): Dimension of time encodings (`d_T`).
-        channel_embedding_dim (int): Dimension of each channel embedding.
         output_dim (int): Dimension of output embedding.
-        dropout (float): Drop out rate.
-        num_layers (int): Number of transformer layers.
         num_neighbors (int): Number of recent temporal neighbors consider
+        num_layers (int): Number of transformer layers.
+        dropout (float): Drop out rate.
         random_projections (nn.Module): Random projection module that maintains a series temporal walk matrices
         device (str) : cpu or cuda
         time_encoder (PyTorch Module) : Time encoder module.
@@ -367,14 +268,14 @@ class TPNet(nn.Module):
         edge_feat_dim: int,
         time_feat_dim: int,
         output_dim: int,
-        dropout: float,
-        num_layers: int,
         num_neighbors: int,
+        num_layers: int = 2,
+        dropout: float = 0.1,
         random_projections: RandomProjectionModule | None = None,
         device: str = 'cpu',
         time_encoder: Callable[..., nn.Module] = Time2Vec,
     ) -> None:
-        super(TPNet, self).__init__()
+        super().__init__()
         self.device = device
         self.time_encoder = time_encoder(time_feat_dim).to(device)
         self.random_projections = random_projections

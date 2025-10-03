@@ -11,8 +11,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph, RecipeRegistry
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.loader import DGDataLoader
-from tgm.nn import LinkPredictor
-from tgm.nn.recurrent import GCLSTM
+from tgm.nn import GCLSTM, LinkPredictor
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything

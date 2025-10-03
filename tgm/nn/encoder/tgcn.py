@@ -26,7 +26,7 @@ class TGCN(torch.nn.Module):
         cached: bool = False,
         add_self_loops: bool = True,
     ) -> None:
-        super(TGCN, self).__init__()
+        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.improved = improved

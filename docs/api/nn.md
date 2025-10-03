@@ -1,26 +1,18 @@
-## Layers
+## Encoders
 
-### Attention
-
-::: tgm.nn.attention
-
-### Time Encoding
-
-::: tgm.nn.time_encoding
-
-### Recurrent
-
-::: tgm.nn.recurrent.gclstm
-::: tgm.nn.recurrent.tgcn
-
-## Models
-
-::: tgm.nn.memory.edgebank
-::: tgm.nn.model.dygformer
-::: tgm.nn.model.tpnet
+::: tgm.nn.encoder.dygformer
+::: tgm.nn.encoder.tpnet
+::: tgm.nn.encoder.gclstm
+::: tgm.nn.encoder.tgcn
 
 ## Decoders
 
 ::: tgm.nn.decoder.graphproppred
 ::: tgm.nn.decoder.linkproppred
 ::: tgm.nn.decoder.nodeproppred
+
+## Modules
+
+::: tgm.nn.modules.edgebank
+::: tgm.nn.modules.time_encoding
+::: tgm.nn.modules.attention
