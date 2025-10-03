@@ -16,7 +16,7 @@ class FeedForwardNet(nn.Module):
     def __init__(
         self, input_dim: int, dim_expansion_factor: float, dropout: float = 0.0
     ) -> None:
-        super(FeedForwardNet, self).__init__()
+        super().__init__()
         self.ffn = nn.Sequential(
             nn.Linear(
                 in_features=input_dim,
@@ -64,7 +64,7 @@ class MLPMixer(nn.Module):
         channel_dim_expansion_factor: float = 4.0,
         dropout: float = 0.0,
     ) -> None:
-        super(MLPMixer, self).__init__()
+        super().__init__()
 
         self.token_norm = nn.LayerNorm(num_tokens)
         self.token_feedforward = FeedForwardNet(
