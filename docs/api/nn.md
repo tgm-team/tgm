@@ -15,3 +15,9 @@
 ::: tgm.nn.model.tpnet
 ::: tgm.nn.model.gclstm
 ::: tgm.nn.model.tgcn
+
+## Decoders
+
+::: tgm.nn.decoder.graphproppred
+::: tgm.nn.decoder.linkproppred
+::: tgm.nn.decoder.nodeproppred

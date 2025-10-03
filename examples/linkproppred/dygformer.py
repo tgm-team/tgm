@@ -14,7 +14,7 @@ from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import RecencyNeighborHook
 from tgm.loader import DGDataLoader
-from tgm.nn import DyGFormer, Time2Vec
+from tgm.nn import DyGFormer, LinkPredictor, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -63,18 +63,6 @@ args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).view(-1)
-
-
 class DyGFormer_LinkPrediction(nn.Module):
     def __init__(
         self,
@@ -108,9 +96,10 @@ class DyGFormer_LinkPrediction(nn.Module):
             time_encoder,
             device,
         )
+        # @TODO: Make encoder/decoder to be explicit
         self.decoder = LinkPredictor(
-            output_dim
-        )  # @TODO: Make encoder/decoder to be explicit
+            node_dim=args.embed_dim, hidden_dim=args.embed_dim
+        ).to(args.device)
 
     def forward(
         self, batch: DGBatch, static_node_feat: torch.Tensor

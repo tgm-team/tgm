@@ -11,7 +11,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph, RecipeRegistry
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.loader import DGDataLoader
-from tgm.nn import GCLSTM
+from tgm.nn import GCLSTM, LinkPredictor
 from tgm.timedelta import TimeDeltaDG
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
@@ -64,18 +64,6 @@ class RecurrentGCN(torch.nn.Module):
         z = F.relu(h_0)
         z = self.linear(z)
         return z, h_0, c_0
-
-
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).view(-1)
 
 
 @log_gpu
@@ -214,7 +202,9 @@ else:
 encoder = RecurrentGCN(
     node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
 ).to(args.device)
-decoder = LinkPredictor(args.embed_dim).to(args.device)
+decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
+    args.device
+)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

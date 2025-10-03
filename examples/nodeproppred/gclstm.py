@@ -11,7 +11,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGData, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.loader import DGDataLoader
-from tgm.nn import GCLSTM
+from tgm.nn import GCLSTM, NodePredictor
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -63,18 +63,6 @@ class RecurrentGCN(torch.nn.Module):
         z = F.relu(h_0)
         z = self.linear(z)
         return z, h_0, c_0
-
-
-class NodePredictor(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(in_dim, in_dim)
-        self.fc2 = nn.Linear(in_dim, out_dim)
-
-    def forward(self, z_node: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(z_node)
-        h = h.relu()
-        return self.fc2(h)
 
 
 @log_gpu
@@ -170,7 +158,9 @@ num_classes = train_dg.dynamic_node_feats_dim
 encoder = RecurrentGCN(
     node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
 ).to(args.device)
-decoder = NodePredictor(in_dim=args.embed_dim, out_dim=num_classes).to(args.device)
+decoder = NodePredictor(
+    in_dim=args.embed_dim, out_dim=num_classes, hidden_dim=args.embed_dim
+).to(args.device)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

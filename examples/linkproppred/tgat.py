@@ -15,7 +15,7 @@ from tgm.constants import (
 )
 from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook
 from tgm.loader import DGDataLoader
-from tgm.nn import TemporalAttention, Time2Vec
+from tgm.nn import LinkPredictor, TemporalAttention, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -131,18 +131,6 @@ class TGAT(nn.Module):
                 z[j][i] = self.merge_layers[j - 1](out, z[0][i])
 
         return z[self.num_layers][0]
-
-
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).view(-1)
 
 
 @log_gpu
@@ -261,7 +249,9 @@ encoder = TGAT(
     n_heads=args.n_heads,
     dropout=float(args.dropout),
 ).to(args.device)
-decoder = LinkPredictor(dim=args.embed_dim).to(args.device)
+decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
+    args.device
+)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

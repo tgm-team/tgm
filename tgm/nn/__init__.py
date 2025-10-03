@@ -9,6 +9,7 @@ from .model import (
     GCLSTM,
     MLPMixer,
 )
+from .decoder import GraphPredictor, NodePredictor, LinkPredictor
 
 
 __all__ = [
@@ -21,4 +22,7 @@ __all__ = [
     'RandomProjectionModule',
     'TGCN',
     'MLPMixer',
+    'GraphPredictor',
+    'NodePredictor',
+    'LinkPredictor',
 ]
