@@ -41,7 +41,7 @@ class RandomProjectionModule(nn.Module):
         dim_factor: int | None = None,
         device: str = 'cpu',
     ) -> None:
-        super(RandomProjectionModule, self).__init__()
+        super().__init__()
         if not use_matrix:
             if enforce_dim is not None:
                 self.dim = enforce_dim
@@ -250,11 +250,10 @@ class TPNet(nn.Module):
         node_feat_dim (int): Dimension of static/dynamic node features (`d_N`).
         edge_feat_dim (int): Dimension of edge features (`d_E`).
         time_feat_dim (int): Dimension of time encodings (`d_T`).
-        channel_embedding_dim (int): Dimension of each channel embedding.
         output_dim (int): Dimension of output embedding.
-        dropout (float): Drop out rate.
-        num_layers (int): Number of transformer layers.
         num_neighbors (int): Number of recent temporal neighbors consider
+        num_layers (int): Number of transformer layers.
+        dropout (float): Drop out rate.
         random_projections (nn.Module): Random projection module that maintains a series temporal walk matrices
         device (str) : cpu or cuda
         time_encoder (PyTorch Module) : Time encoder module.
@@ -269,14 +268,14 @@ class TPNet(nn.Module):
         edge_feat_dim: int,
         time_feat_dim: int,
         output_dim: int,
-        dropout: float,
-        num_layers: int,
         num_neighbors: int,
+        num_layers: int = 2,
+        dropout: float = 0.1,
         random_projections: RandomProjectionModule | None = None,
         device: str = 'cpu',
         time_encoder: Callable[..., nn.Module] = Time2Vec,
     ) -> None:
-        super(TPNet, self).__init__()
+        super().__init__()
         self.device = device
         self.time_encoder = time_encoder(time_feat_dim).to(device)
         self.random_projections = random_projections
