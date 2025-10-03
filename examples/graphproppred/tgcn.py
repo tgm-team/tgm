@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from tgm import DGBatch, DGData, DGraph
 from tgm.loader import DGDataLoader
+from tgm.nn import GraphPredictor
 from tgm.nn.recurrent import TGCN
 from tgm.split import TemporalRatioSplit
 from tgm.util.logging import (
@@ -115,14 +116,6 @@ def preprocess_raw_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def sum_pooling(z: torch.Tensor) -> torch.Tensor:
-    return torch.sum(z, dim=0).squeeze()
-
-
-def mean_pooling(z: torch.Tensor) -> torch.Tensor:
-    return torch.mean(z, dim=0).squeeze()
-
-
 class RecurrentGCN(torch.nn.Module):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
@@ -142,22 +135,6 @@ class RecurrentGCN(torch.nn.Module):
         z = F.relu(h_0)
         z = self.linear(z)
         return z, h_0
-
-
-class GraphPredictor(torch.nn.Module):
-    def __init__(
-        self, in_dim: int, out_dim: int, graph_pooling: Callable = mean_pooling
-    ) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(in_dim, in_dim)
-        self.fc2 = nn.Linear(in_dim, out_dim)
-        self.graph_pooling = graph_pooling
-
-    def forward(self, z_node: torch.Tensor) -> torch.Tensor:
-        z_graph = self.graph_pooling(z_node)
-        h = self.fc1(z_graph)
-        h = h.relu()
-        return self.fc2(h)
 
 
 @log_gpu
@@ -266,7 +243,9 @@ else:
 encoder = RecurrentGCN(
     node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
 ).to(args.device)
-decoder = GraphPredictor(in_dim=args.embed_dim, out_dim=1).to(args.device)
+decoder = GraphPredictor(in_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
+    args.device
+)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

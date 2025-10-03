@@ -18,3 +18,9 @@
 ::: tgm.nn.memory.edgebank
 ::: tgm.nn.model.dygformer
 ::: tgm.nn.model.tpnet
+
+## Decoders
+
+::: tgm.nn.decoder.graphproppred
+::: tgm.nn.decoder.linkproppred
+::: tgm.nn.decoder.nodeproppred

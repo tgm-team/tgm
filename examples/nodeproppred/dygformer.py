@@ -12,7 +12,7 @@ from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import DeduplicationHook, HookManager, RecencyNeighborHook
 from tgm.loader import DGDataLoader
-from tgm.nn import DyGFormer, Time2Vec
+from tgm.nn import DyGFormer, NodePredictor, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -65,18 +65,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-
-
-class NodePredictor(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(in_dim, in_dim)
-        self.fc2 = nn.Linear(in_dim, out_dim)
-
-    def forward(self, z_node: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(z_node)
-        h = h.relu()
-        return self.fc2(h)
 
 
 class DyGFormer_NodePrediction(nn.Module):
@@ -300,7 +288,9 @@ encoder = DyGFormer_NodePrediction(
     patch_size=args.patch_size,
 ).to(args.device)
 
-decoder = NodePredictor(in_dim=args.embed_dim, out_dim=num_classes).to(args.device)
+decoder = NodePredictor(
+    in_dim=args.embed_dim, out_dim=num_classes, hidden_dim=args.embed_dim
+).to(args.device)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
