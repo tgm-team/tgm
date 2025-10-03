@@ -13,6 +13,6 @@
 
 ## Modules
 
-::: tgm.nn.encoder.edgebank
-::: tgm.nn.time_encoding
-::: tgm.nn.attention
+::: tgm.nn.modules.edgebank
+::: tgm.nn.modules.time_encoding
+::: tgm.nn.modules.attention
