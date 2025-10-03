@@ -181,9 +181,9 @@ class DyGFormer(nn.Module):
         device: str = 'cpu',
     ) -> None:
         super(DyGFormer, self).__init__()
-        assert max_input_sequence_length % patch_size == 0, (
-            'Max sequence length must be a multiple of path size'
-        )
+        assert (
+            max_input_sequence_length % patch_size == 0
+        ), 'Max sequence length must be a multiple of path size'
 
         self.node_feat_dim = node_feat_dim
         self.edge_feat_dim = edge_feat_dim

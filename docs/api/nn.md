@@ -10,11 +10,11 @@
 
 ## Models
 
-::: tgm.nn.model.edgebank
-::: tgm.nn.model.dygformer
-::: tgm.nn.model.tpnet
-::: tgm.nn.model.gclstm
-::: tgm.nn.model.tgcn
+::: tgm.nn.encoder.edgebank
+::: tgm.nn.encoder.dygformer
+::: tgm.nn.encoder.tpnet
+::: tgm.nn.encoder.gclstm
+::: tgm.nn.encoder.tgcn
 
 ## Decoders
 

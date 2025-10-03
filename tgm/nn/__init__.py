@@ -1,6 +1,6 @@
 from .attention import TemporalAttention
 from .time_encoding import Time2Vec
-from .model import (
+from .encoder import (
     DyGFormer,
     TPNet,
     RandomProjectionModule,
