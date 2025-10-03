@@ -1,15 +1,13 @@
-from .attention import TemporalAttention
-from .time_encoding import Time2Vec
 from .encoder import (
     DyGFormer,
     TPNet,
     RandomProjectionModule,
-    EdgeBankPredictor,
     TGCN,
     GCLSTM,
     MLPMixer,
 )
 from .decoder import GraphPredictor, NodePredictor, LinkPredictor
+from .modules import Time2Vec, TemporalAttention, EdgeBankPredictor
 
 
 __all__ = [

@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 
 from tgm.constants import PADDED_NODE_ID
+from tgm.nn.modules import Time2Vec
 
-from ..time_encoding import Time2Vec
 from .graphmixer import MLPMixer
 
 

@@ -1,14 +1,4 @@
-## Layers
-
-### Attention
-
-::: tgm.nn.attention
-
-### Time Encoding
-
-::: tgm.nn.time_encoding
-
-## Models
+## Encoders
 
 ::: tgm.nn.encoder.edgebank
 ::: tgm.nn.encoder.dygformer
@@ -21,3 +11,8 @@
 ::: tgm.nn.decoder.graphproppred
 ::: tgm.nn.decoder.linkproppred
 ::: tgm.nn.decoder.nodeproppred
+
+## Modules
+
+::: tgm.nn.time_encoding
+::: tgm.nn.attention

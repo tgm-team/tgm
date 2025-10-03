@@ -7,8 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from tgm.constants import PADDED_NODE_ID
-
-from ..time_encoding import Time2Vec
+from tgm.nn.modules import Time2Vec
 
 
 class NeighborCooccurrenceEncoder(nn.Module):
