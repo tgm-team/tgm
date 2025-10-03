@@ -226,25 +226,22 @@ class RandomProjectionModule(nn.Module):
 
         Returns:
         """
-        assert (
-            len(random_projections) == 2
-        ), (
-            'Expect a tuple of (now_time,random_projections)'
-        )  # @TODO: Need to raise custom exception
+        if len(random_projections) != 2:
+            raise ValueError('Expected a tuple of (now_time, random_projections)')
         now_time, random_projections = random_projections
-        assert (
-            torch.is_tensor(now_time) and len(random_projections) == self.num_layer
-        ), (
-            'Not a valid state of random projection'
-        )  # @TODO: Need to raise custom exception
+        if not torch.is_tensor(now_time):
+            raise ValueError(f'now time must be a torch.Tensor, got: {type(now_time)}')
+        if len(random_projections) != self.num_layer:
+            raise ValueError(
+                f'len(random_projections) ({len(random_projections)}) != self.num_layer ({self.num_layer})'
+            )
 
         self.now_time.data = now_time.clone()
         for i in range(1, self.num_layer + 1):
-            assert torch.is_tensor(
-                random_projections[i - 1]
-            ), (
-                'Not a valid state of random projection'
-            )  # @TODO: Need to raise custom exception
+            if not torch.is_tensor(random_projections[i - 1]):
+                raise ValueError(
+                    f'random_projections[{i - 1}] must be a torch.Tensor, got: {type(random_projections[i - 1])}'
+                )
             self.random_projections[i].data = random_projections[i - 1].clone()
 
 
