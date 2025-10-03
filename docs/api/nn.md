@@ -1,6 +1,5 @@
 ## Encoders
 
-::: tgm.nn.encoder.edgebank
 ::: tgm.nn.encoder.dygformer
 ::: tgm.nn.encoder.tpnet
 ::: tgm.nn.encoder.gclstm
@@ -14,5 +13,6 @@
 
 ## Modules
 
+::: tgm.nn.encoder.edgebank
 ::: tgm.nn.time_encoding
 ::: tgm.nn.attention
