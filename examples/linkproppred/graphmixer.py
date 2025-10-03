@@ -1,5 +1,4 @@
 import argparse
-import time
 from collections import defaultdict, deque
 from typing import Any, Deque, Dict
 
@@ -19,6 +18,7 @@ from tgm.constants import (
 from tgm.hooks import RecencyNeighborHook, StatefulHook
 from tgm.loader import DGDataLoader
 from tgm.nn import MLPMixer, Time2Vec
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -53,6 +53,12 @@ parser.add_argument(
     default=4.0,
     help='channel dimension expansion factor in MLP sub-blocks',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 class GraphMixerEncoder(nn.Module):
@@ -126,6 +132,8 @@ class LinkPredictor(nn.Module):
         return self.fc2(h).view(-1)
 
 
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     static_node_feats: torch.Tensor,
@@ -154,6 +162,8 @@ def train(
     return total_loss
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -189,7 +199,6 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
@@ -275,7 +284,12 @@ hm = RecipeRegistry.build(
 train_key, val_key, test_key = hm.keys
 hm.register_shared(GraphMixerHook(args.time_gap))
 hm.register_shared(
-    RecencyNeighborHook(num_nbrs=[args.n_nbrs], num_nodes=test_dg.num_nodes)
+    RecencyNeighborHook(
+        num_nbrs=[args.n_nbrs],
+        num_nodes=test_dg.num_nodes,
+        seed_nodes_keys=['src', 'dst', 'neg'],
+        seed_times_keys=['time', 'time', 'neg_time'],
+    )
 )
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
@@ -307,20 +321,17 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss = train(train_loader, static_node_feats, encoder, decoder, opt)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
 
     with hm.activate(val_key):
         val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
+
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 with hm.activate('test'):
     test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
-    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

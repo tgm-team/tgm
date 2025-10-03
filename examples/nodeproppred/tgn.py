@@ -1,6 +1,5 @@
 import argparse
 import copy
-import time
 from typing import Callable, Dict, Tuple
 
 import numpy as np
@@ -20,6 +19,7 @@ from tgm.constants import METRIC_TGB_NODEPROPPRED, PADDED_NODE_ID
 from tgm.hooks import HookManager, RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -48,6 +48,12 @@ parser.add_argument(
     default=None,
     help='raw time granularity for dataset',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 class NodePredictor(torch.nn.Module):
@@ -252,6 +258,8 @@ class TGNMemory(torch.nn.Module):
         super().train(mode)
 
 
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     memory: nn.Module,
@@ -322,6 +330,8 @@ def train(
     return total_loss, float(np.mean(perf_list))
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -384,7 +394,6 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 
 if args.time_gran is not None:
@@ -409,7 +418,8 @@ num_classes = train_dg.dynamic_node_feats_dim
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-    seed_nodes_key='node_ids',
+    seed_nodes_keys=['node_ids'],
+    seed_times_keys=['node_times'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
@@ -443,26 +453,18 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
-        start_time = time.perf_counter()
         loss, train_metric = train(train_loader, memory, encoder, decoder, opt)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
-    print(
-        f'Epoch={epoch:02d} Train Latency={latency:.4f} Loss={loss:.4f} Train {METRIC_TGB_NODEPROPPRED}={train_metric:.4f}'
-    )
 
     with hm.activate('val'):
-        start_time = time.perf_counter()
         val_metric = eval(val_loader, memory, encoder, decoder, evaluator)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
-    print(
-        f'Val Latency={latency:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_metric:.4f}'
-    )
+
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Train {METRIC_TGB_NODEPROPPRED}', train_metric, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_metric, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 with hm.activate('test'):
     test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
-    print(f'Test {METRIC_TGB_NODEPROPPRED}={test_metric:.4f}')
+log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=args.epochs)

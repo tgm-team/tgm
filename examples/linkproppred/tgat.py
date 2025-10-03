@@ -1,5 +1,4 @@
 import argparse
-import time
 
 import numpy as np
 import torch
@@ -17,6 +16,7 @@ from tgm.constants import (
 from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import TemporalAttention, Time2Vec
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -47,6 +47,12 @@ parser.add_argument(
     choices=['uniform', 'recency'],
     help='sampling strategy',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 class MergeLayer(nn.Module):
@@ -139,6 +145,8 @@ class LinkPredictor(nn.Module):
         return self.fc2(h).view(-1)
 
 
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     static_node_feats: torch.Tensor,
@@ -167,6 +175,8 @@ def train(
     return total_loss
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -202,9 +212,7 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
 evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -218,11 +226,17 @@ else:
     static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
 
 if args.sampling == 'uniform':
-    nbr_hook = NeighborSamplerHook(num_nbrs=args.n_nbrs)
+    nbr_hook = NeighborSamplerHook(
+        num_nbrs=args.n_nbrs,
+        seed_nodes_keys=['src', 'dst', 'neg'],
+        seed_times_keys=['time', 'time', 'neg_time'],
+    )
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+        seed_nodes_keys=['src', 'dst', 'neg'],
+        seed_times_keys=['time', 'time', 'neg_time'],
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
@@ -254,20 +268,16 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss = train(train_loader, static_node_feats, encoder, decoder, opt)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
 
     with hm.activate(val_key):
         val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 with hm.activate(test_key):
     test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
-    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

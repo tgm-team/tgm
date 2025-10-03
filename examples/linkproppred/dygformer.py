@@ -15,6 +15,7 @@ from tgm.graph import DGBatch, DGData, DGraph
 from tgm.hooks import RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import DyGFormer, Time2Vec
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -54,6 +55,12 @@ parser.add_argument(
     help='number of channels used in attention layer',
 )
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 class LinkPredictor(nn.Module):
@@ -176,6 +183,8 @@ class DyGFormer_LinkPrediction(nn.Module):
         return pos_out, neg_out
 
 
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     model: nn.Module,
@@ -196,6 +205,8 @@ def train(
     return total_loss
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     evaluator: Evaluator,
@@ -242,9 +253,7 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
 evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
@@ -267,6 +276,8 @@ else:
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # 1 remaining for seed node itself
     num_nodes=num_nodes,
+    seed_nodes_keys=['src', 'dst', 'neg'],
+    seed_times_keys=['time', 'time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(
@@ -296,21 +307,19 @@ model = DyGFormer_LinkPrediction(
 
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
-# for epoch in range(1, args.epochs + 1):
-#     with hm.activate(train_key):
-#         start_time = time.perf_counter()
-#         loss = train(train_loader, model, opt, static_node_feat)
-#         end_time = time.perf_counter()
-#         latency = end_time - start_time
-#     with hm.activate(val_key):
-#         val_mrr = eval(evaluator, val_loader, model, static_node_feat)
-#         print(
-#             f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-#         )
-#     # Clear memory state between epochs, except last epoch
-#     if epoch < args.epochs:
-#         hm.reset_state()
+for epoch in range(1, args.epochs + 1):
+    with hm.activate(train_key):
+        loss = train(train_loader, model, opt, static_node_feat)
+    with hm.activate(val_key):
+        val_mrr = eval(evaluator, val_loader, model, static_node_feat)
+
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
+
+    # Clear memory state between epochs, except last epoch
+    if epoch < args.epochs:
+        hm.reset_state()
 
 with hm.activate(test_key):
     test_mrr = eval(evaluator, test_loader, model, static_node_feat)
-    print(f'Test MRR:{METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

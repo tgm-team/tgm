@@ -23,67 +23,54 @@ class DGStorageBase(ABC):
     @abstractmethod
     def __init__(self, data: DGData) -> None:
         """Initialize the storage engine from DGData."""
-        ...
 
     @abstractmethod
     def get_start_time(self, slice: DGSliceTracker) -> Optional[int]:
         """Return the first timestamp in the slice, or None if empty."""
-        ...
 
     @abstractmethod
     def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
         """Return the last timestamp in the slice, or None if empty."""
-        ...
 
     @abstractmethod
     def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         """Return the set of nodes present in the slice."""
-        ...
 
     @abstractmethod
     def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
         """Return (src, dst, time) tensors for edges in the slice."""
-        ...
 
     @abstractmethod
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         """Return the number of unique timestamps in the slice."""
-        ...
 
     @abstractmethod
     def get_num_events(self, slice: DGSliceTracker) -> int:
         """Return the total number of events in the slice."""
-        ...
 
     @abstractmethod
     def get_dynamic_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         """Return dynamic node features as a sparse COO tensor within the slice, if any."""
-        ...
 
     @abstractmethod
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         """Return edge features within the slice, if any."""
-        ...
 
     @abstractmethod
     def get_static_node_feats(self) -> Optional[Tensor]:
         """Return static node features of the entire graph."""
-        ...
 
     @abstractmethod
     def get_dynamic_node_feats_dim(self) -> Optional[int]:
         """Return dimension of dynamic node features, if any."""
-        ...
 
     @abstractmethod
     def get_edge_feats_dim(self) -> Optional[int]:
         """Return dimension of edge features, if any."""
-        ...
 
     @abstractmethod
     def get_static_node_feats_dim(self) -> Optional[int]:
         """Return dimension of static node features, if any."""
-        ...
 
     @abstractmethod
     def get_nbrs(
@@ -105,4 +92,3 @@ class DGStorageBase(ABC):
             (nbr_nids, nbr_times, nbr_feats) tensors containing the relevant neighborhood
             information, padded using tgm.constants.PADDED_NODE_ID.
         """
-        ...

@@ -1,6 +1,5 @@
 import argparse
 import copy
-import time
 from typing import Callable, Dict, Tuple
 
 import numpy as np
@@ -24,6 +23,7 @@ from tgm.constants import (
 from tgm.hooks import RecencyNeighborHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -46,6 +46,12 @@ parser.add_argument(
     default=[10],
     help='num sampled nbrs at each hop',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 class LinkPredictor(nn.Module):
@@ -250,6 +256,8 @@ class TGNMemory(torch.nn.Module):
         super().train(mode)
 
 
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     memory: nn.Module,
@@ -317,6 +325,8 @@ def train(
     return total_loss
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -380,9 +390,7 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
 evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -393,6 +401,8 @@ test_dg = DGraph(test_data, device=args.device)
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+    seed_nodes_keys=['src', 'dst', 'neg'],
+    seed_times_keys=['time', 'time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(
@@ -429,16 +439,12 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss = train(train_loader, memory, encoder, decoder, opt)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
 
     with hm.activate(val_key):
         val_mrr = eval(val_loader, memory, encoder, decoder, evaluator)
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
@@ -446,4 +452,4 @@ for epoch in range(1, args.epochs + 1):
 
 with hm.activate(test_key):
     test_mrr = eval(test_loader, memory, encoder, decoder, evaluator)
-    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable, Sized
 from dataclasses import dataclass, replace
 from functools import cached_property
@@ -11,6 +12,9 @@ from torch import Tensor
 from tgm._storage import DGSliceTracker, DGStorage
 from tgm.data import DGData
 from tgm.timedelta import TimeDeltaDG
+from tgm.util.logging import _get_logger, _logged_cached_property, log_latency
+
+logger = _get_logger(__name__)
 
 
 class DGraph:
@@ -60,6 +64,11 @@ class DGraph:
         self._device = torch.device(device)
         self._slice = DGSliceTracker()
 
+        logger.debug(
+            'Created DGraph with device=%s, time_delta=%s, device, data.time_delta'
+        )
+
+    @log_latency(level=logging.DEBUG)
     def materialize(self, materialize_features: bool = True) -> DGBatch:
         """Materialize the current DGraph slice into a dense `DGBatch`.
 
@@ -78,6 +87,12 @@ class DGraph:
             batch.dynamic_node_feats = self.dynamic_node_feats._values()
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats
+
+        logger.debug(
+            'Materialized DGraph slice: %d edge events, %d node events',
+            batch.src.numel(),
+            0 if batch.node_ids is None else batch.node_ids.numel(),
+        )
         return batch
 
     def slice_events(
@@ -148,6 +163,7 @@ class DGraph:
         Returns:
             DGraph: A new view on the specified device.
         """
+        logger.debug('Moving DGraph to device %s', device)
         device = torch.device(device)
         slice = replace(self._slice)
         return DGraph._from_storage(self._storage, self.time_delta, device, slice)
@@ -166,34 +182,34 @@ class DGraph:
             self._slice.end_time = self._storage.get_end_time(self._slice)
         return self._slice.end_time
 
-    @cached_property
+    @_logged_cached_property
     def num_nodes(self) -> int:
         """The total number of unique nodes encountered over the dynamic graph."""
         nodes = self._storage.get_nodes(self._slice)
         return max(nodes) + 1 if len(nodes) else 0
 
-    @cached_property
+    @_logged_cached_property
     def num_edges(self) -> int:
         """The total number of unique edges encountered over the dynamic graph."""
         src, *_ = self.edges
         return len(src)
 
-    @cached_property
+    @_logged_cached_property
     def num_timestamps(self) -> int:
         """The total number of unique timestamps encountered over the dynamic graph."""
         return self._storage.get_num_timestamps(self._slice)
 
-    @cached_property
+    @_logged_cached_property
     def num_events(self) -> int:
         """The total number of events encountered over the dynamic graph."""
         return self._storage.get_num_events(self._slice)
 
-    @cached_property
+    @_logged_cached_property
     def nodes(self) -> Set[int]:
         """The set of node ids over the dynamic graph."""
         return self._storage.get_nodes(self._slice)
 
-    @cached_property
+    @_logged_cached_property
     def _edges_cpu(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self._storage.get_edges(self._slice)
 
@@ -219,7 +235,7 @@ class DGraph:
             feats = feats.to(self.device)
         return feats
 
-    @cached_property
+    @_logged_cached_property
     def _dynamic_node_feats_cpu(self) -> Optional[Tensor]:
         return self._storage.get_dynamic_node_feats(self._slice)
 
@@ -234,7 +250,7 @@ class DGraph:
             feats = feats.to(self.device)
         return feats
 
-    @cached_property
+    @_logged_cached_property
     def _edge_feats_cpu(self) -> Optional[Tensor]:
         return self._storage.get_edge_feats(self._slice)
 
@@ -284,6 +300,7 @@ class DGraph:
         device: torch.device,
         slice: DGSliceTracker,
     ) -> DGraph:
+        logger.debug('Creating a DGraph view with slice: %s', slice)
         obj = cls.__new__(cls)
         obj._storage = storage
         obj._time_delta = time_delta
@@ -325,6 +342,8 @@ class DGBatch:
             description = ''
             if isinstance(object, torch.Tensor):
                 description = str(list(object.shape))
+            elif isinstance(object, str):
+                description = object
             elif isinstance(object, Iterable):
                 unique_type = set()
                 for element in object:

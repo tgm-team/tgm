@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import logging
 import pathlib
 import warnings
 from dataclasses import dataclass, fields, replace
@@ -21,6 +22,9 @@ from tgm.exceptions import (
 from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.util._tgb import suppress_output
+from tgm.util.logging import _get_logger, log_latency
+
+logger = _get_logger(__name__)
 
 
 @dataclass
@@ -83,6 +87,9 @@ class DGData:
 
         def _maybe_cast_float_tensor(x: Tensor, name: str) -> Tensor:
             if x.dtype == torch.float64:
+                logger.warning(
+                    'Downcasting %s from torch.float64 to torch.float32', name
+                )
                 warnings.warn(
                     f'Downcasting {name} from torch.float64 to torch.float32',
                     UserWarning,
@@ -92,6 +99,7 @@ class DGData:
 
         def _maybe_cast_integral_tensor(x: Tensor, name: str) -> Tensor:
             if x.dtype == torch.int64:
+                logger.warning('Downcasting %s from torch.int64 to torch.int32', name)
                 warnings.warn(
                     f'Downcasting {name} from torch.int64 to torch.int32', UserWarning
                 )
@@ -111,6 +119,7 @@ class DGData:
                 'TGM does not yet support graphs this large.'
             )
         if self.timestamps.dtype != torch.int64:  # This can only be an upcast
+            logger.debug('Upcasting global timestamps to torch.int64')
             self.timestamps = self.timestamps.to(torch.int64)
 
         # Ensure our data does not overflow int32 capacity
@@ -140,16 +149,11 @@ class DGData:
 
         num_edges = self.edge_index.shape[0]
         if num_edges == 0:
-            raise EmptyGraphError('empty graphs not supported')
+            raise EmptyGraphError('TGM does not support graphs without edge events')
 
         # Validate edge event idx
         _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
         _assert_tensor_is_integral(self.edge_event_idx, 'edge_event_idx')
-        if self.edge_event_idx.ndim != 1 or self.edge_event_idx.shape[0] != num_edges:
-            raise ValueError(
-                'edge_event_idx must have shape [num_edges], '
-                f'got {num_edges} edges and shape {self.edge_event_idx.shape}'
-            )
         # Safe downcast since we ensured len(timestamps) fits in int32
         self.edge_event_idx = self.edge_event_idx.int()
 
@@ -168,10 +172,6 @@ class DGData:
         if self.node_event_idx is not None:
             _assert_is_tensor(self.node_event_idx, 'node_event_idx')
             _assert_tensor_is_integral(self.node_event_idx, 'node_event_idx')
-            if self.node_event_idx.ndim != 1:
-                raise ValueError(
-                    f'node_event_idx must have shape [num_node_events], got: {self.node_event_idx.shape}'
-                )
 
             # Safe downcast since we ensured len(timestamps) fits in int32
             self.node_event_idx = self.node_event_idx.int()
@@ -215,13 +215,6 @@ class DGData:
                 self.dynamic_node_feats = _maybe_cast_float_tensor(
                     self.dynamic_node_feats, 'dynamic_node_feats'
                 )
-        else:
-            if self.node_ids is not None:
-                raise ValueError('must specify node_event_idx if using node_ids')
-            if self.dynamic_node_feats is not None:
-                raise ValueError(
-                    'must specify node_event_idx if using dynamic_node_feats'
-                )
 
         # Validate static node features
         num_nodes = torch.max(self.edge_index).item() + 1  # 0-indexed
@@ -260,6 +253,11 @@ class DGData:
 
         # Sort if necessary
         if not torch.all(torch.diff(self.timestamps) >= 0):
+            logger.warning(
+                'Timestamps in DGData are not globally sorted. Reordering all events '
+                '(edge_index, edge_feats, node_ids, etc.) to match sorted time order'
+            )
+
             # Sort timestamps
             sort_idx = torch.argsort(self.timestamps).int()
             inverse_sort_idx = torch.empty_like(sort_idx)
@@ -310,6 +308,7 @@ class DGData:
 
         return strategy.apply(self)
 
+    @log_latency(level=logging.DEBUG)
     def discretize(
         self, time_delta: TimeDeltaDG | str | None, reduce_op: str = 'first'
     ) -> DGData:
@@ -328,6 +327,12 @@ class DGData:
         """
         if isinstance(time_delta, str):
             time_delta = TimeDeltaDG(time_delta)
+        logger.debug(
+            'Discretizing from %s to %s, reduce_op: %s',
+            self.time_delta,
+            time_delta,
+            reduce_op,
+        )
 
         if time_delta is None or self.time_delta == time_delta:
             return self.clone()  # Deepcopy
@@ -405,6 +410,7 @@ class DGData:
 
         static_node_feats = None
         if self.static_node_feats is not None:  # Need a deep copy
+            logger.debug('Deep copying static_node_features for coarser DGData')
             static_node_feats = self.static_node_feats.clone()
 
         return DGData.from_raw(
@@ -452,6 +458,16 @@ class DGData:
             ValueError: If any data attributes have non-well defined tensor shapes.
             EmptyGraphError: If attempting to initialize an empty graph.
         """
+        _log_tensor_args(
+            edge_timestamps=edge_timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            static_node_feats=static_node_feats,
+            time_delta=time_delta,
+        )
         # Build unified event timeline
         timestamps = edge_timestamps
         event_types = torch.zeros_like(edge_timestamps)
@@ -524,6 +540,7 @@ class DGData:
                 return list(csv.DictReader(f))
 
         # Read in edge data
+        logger.debug('Reading edge_file_path: %s', edge_file_path)
         edge_reader = _read_csv(edge_file_path)
         num_edges = len(edge_reader)
 
@@ -548,6 +565,7 @@ class DGData:
                 raise ValueError(
                     'specified node_file_path without specifying node_id_col and node_time_col'
                 )
+            logger.debug('Reading node_file_path: %s', node_file_path)
             node_reader = _read_csv(node_file_path)
             num_node_events = len(node_reader)
 
@@ -572,6 +590,7 @@ class DGData:
                 raise ValueError(
                     'specified static_node_feats_file_path without specifying static_node_feats_col'
                 )
+            logger.debug('Reading static_node_file_path: %s', node_file_path)
             static_node_feats_reader = _read_csv(static_node_feats_file_path)
             num_nodes = len(static_node_feats_reader)
             static_node_feats = torch.empty((num_nodes, len(static_node_feats_col)))
@@ -628,29 +647,13 @@ class DGData:
             ImportError: If the Pandas package is not resolved in the current python environment.
         """
 
-        def _check_pandas_import(min_version_number: str | None = None) -> None:
+        def _check_pandas_import() -> None:
             try:
-                import pandas
-
-                user_pandas_version = pandas.__version__
+                pass
             except ImportError:
-                user_pandas_version = None
-
-            err_msg = 'User requires pandas '
-            if min_version_number is not None:
-                err_msg += f'>={min_version_number} '
-            err_msg += 'to initialize a DGraph a dataframe'
-
-            if user_pandas_version is None:
-                raise ImportError(err_msg)
-            elif (
-                min_version_number is not None
-                and user_pandas_version < min_version_number
-            ):
-                err_msg += (
-                    f', found pandas=={user_pandas_version} < {min_version_number}'
+                raise ImportError(
+                    'User requires pandas to initialize a DGraph from a pd.DataFrame'
                 )
-                raise ImportError(err_msg)
 
         _check_pandas_import()
 
@@ -720,6 +723,7 @@ class DGData:
             - TGBLinkPrediction (`tgbl-`) and TGBNodePrediction (`tgbn-`) are supported.
             - The split strategy of a TGB dataset cannot be modified.
         """
+        logger.debug('Loading DGData from TGB dataset: %s', name)
         try:
             from tgb.linkproppred.dataset import LinkPropPredDataset
             from tgb.nodeproppred.dataset import NodePropPredDataset
@@ -822,4 +826,20 @@ class DGData:
         )
 
         data._split_strategy = TGBSplit(split_bounds)
+        logger.debug('Finished loading DGData from TGB dataset: %s', name)
         return data
+
+
+def _log_tensor_args(**kwargs: Any) -> None:
+    for name, value in kwargs.items():
+        if value is None:
+            logger.debug('%s: None', name)
+        elif isinstance(value, Tensor):
+            logger.debug(
+                '%s: Tensor, shape: %s, dtype: %s',
+                name,
+                tuple(value.shape),
+                value.dtype,
+            )
+        else:
+            logger.debug('%s: %s = %s', name, type(value).__name__, value)
