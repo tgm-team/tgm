@@ -120,29 +120,6 @@ class GraphMixerEncoder(nn.Module):
         return z
 
 
-class FeedForwardNet(nn.Module):
-    def __init__(
-        self, input_dim: int, dim_expansion_factor: float, dropout: float = 0.0
-    ) -> None:
-        super().__init__()
-        self.ffn = nn.Sequential(
-            nn.Linear(
-                in_features=input_dim,
-                out_features=int(dim_expansion_factor * input_dim),
-            ),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(
-                in_features=int(dim_expansion_factor * input_dim),
-                out_features=input_dim,
-            ),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.ffn(x)
-
-
 @log_gpu
 @log_latency
 def train(

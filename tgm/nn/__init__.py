@@ -1,13 +1,11 @@
 from .encoder import (
     DyGFormer,
     TPNet,
-    RandomProjectionModule,
     TGCN,
     GCLSTM,
-    MLPMixer,
 )
 from .decoder import GraphPredictor, NodePredictor, LinkPredictor
-from .modules import Time2Vec, TemporalAttention, EdgeBankPredictor
+from .modules import Time2Vec, TemporalAttention, EdgeBankPredictor, MLPMixer
 
 
 __all__ = [
@@ -17,7 +15,6 @@ __all__ = [
     'TemporalAttention',
     'DyGFormer',
     'TPNet',
-    'RandomProjectionModule',
     'TGCN',
     'MLPMixer',
     'GraphPredictor',
