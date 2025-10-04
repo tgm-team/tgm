@@ -8,7 +8,7 @@ Dotted lines denote lazy execution with shallow memory ownership. Solid arrows d
 
 The TGM storage backend provides a read-only, static interface for querying dynamic graph data-timestamps, edge pairs, features, and node IDs. Optimized for offline training, the backend uses caching to accelerate access and supports extensibility for particular hardware or access patterns in the future.
 
-Our default implementation uses a chronologically sorted COO format, enabling binary search over timestamps and linear scans within time windows. A temporal index cache further reduces query costs. We plan to add a Temporal Compressed Sparse Row (TCSR) backend which organizes time-aware neighbour lists in contiguous memory blocks. Though expensive to construct, TCSR aligns with OpenDG’s immutable data assumption.
+Our default implementation uses a chronologically sorted coordinate format, enabling binary search over timestamps and linear scans within time windows. A temporal index cache further reduces query costs. We plan to add a Temporal Compressed Sparse Row (TCSR) backend which organizes time-aware neighbour lists in contiguous memory blocks. Though expensive to construct, TCSR aligns with OpenDG’s immutable data assumption.
 
 ### Graph Views and Lazy Slice Tracking
 

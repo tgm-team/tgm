@@ -131,7 +131,7 @@ See [`tgm.loader.DGDataLoader`](../api/loader.md) for full reference.
 Discretization allows you to *coarsen* a time-ordered graph to a new time granularity:
 
 - multiple edge and node events are partitioned into time buckets based on the requested granularity
-- if multiple events map to the same edge in the same bucket, only the first occurence is kept (future versions will support other reduction ops)
+- if multiple events map to the same edge in the same bucket, only the first occurrence is kept (future versions will support other reduction ops)
 
 This is useful for tuning dataset granularity (e.g. converting from continuous to discrete temporal graphs).
 
