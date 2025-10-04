@@ -2,7 +2,7 @@
 
 ### Dataset Splitting
 
-::: tgm.split.SplitStrategy
-::: tgm.split.TemporalSplit
-::: tgm.split.TemporalRatioSplit
-::: tgm.split.TGBSplit
+::: tgm.data.split.SplitStrategy
+::: tgm.data.split.TemporalSplit
+::: tgm.data.split.TemporalRatioSplit
+::: tgm.data.split.TGBSplit
