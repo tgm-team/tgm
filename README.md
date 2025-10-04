@@ -22,7 +22,7 @@ TGM is a research library designed to accelerate training workloads over dynamic
 Our main goal is to provide an efficient abstraction over dynamic graphs to enable new practitioners to quickly contribute to research in the field. We natively support both discrete and continuous-time graphs.
 
 > \[!NOTE\]
-> TGM is still alpha software, and may introduce breaking changes.
+> TGM is in beta, and may introduce breaking changes.
 
 ### Library Highlights
 
@@ -55,30 +55,16 @@ Work in progress.
 
 ## Installation
 
-#### Using [uv](https://docs.astral.sh/uv/) (recommended)
+#### From Source (recommended)
 
 ```sh
-# Create and activate your venv
-uv venv my_venv --python 3.10 && source my_venv/bin/activate
-
-# Install the wheels into the venv
-uv add tgm-lib
-
-# Test the install
-uv run python -c 'import tgm; print(tgm.__version__)'
+pip install git+https://github.com/tgm-team/tgm.git@main
 ```
 
-#### Using [pip](https://pip.pypa.io/en/stable/installation/)
+#### From PyPi
 
-```sh
-# Create and activate your venv
-python3.10 -m venv my_venv && source my_venv/bin/activate
-
-# Install the wheels into the venv
+```
 pip install tgm-lib
-
-# Test the install
-python -c 'import tgm; print(tgm.__version__)'
 ```
 
 These steps should work on Linux systems. We have not officially tested on other platforms, so expect additional work may be required. If you encounter issues on your system, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
