@@ -5,10 +5,10 @@ import torch
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGData, DGraph
+from tgm import DGraph
 from tgm.constants import METRIC_TGB_LINKPROPPRED
+from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, TGBNegativeEdgeSamplerHook
-from tgm.loader import DGDataLoader
 from tgm.nn import EdgeBankPredictor
 from tgm.util.logging import enable_logging, log_latency, log_metric
 from tgm.util.seed import seed_everything

@@ -8,8 +8,8 @@ from typing import Any, List, Set, Tuple
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm._storage import DGSliceTracker
 from tgm.constants import PADDED_NODE_ID
+from tgm.core._storage import DGSliceTracker
 from tgm.hooks import StatefulHook, StatelessHook
 from tgm.util.logging import _get_logger
 

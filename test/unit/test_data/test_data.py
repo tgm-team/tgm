@@ -8,16 +8,16 @@ import pandas as pd
 import pytest
 import torch
 
+from tgm import TimeDeltaDG
 from tgm.constants import PADDED_NODE_ID
-from tgm.data import DGData
+from tgm.data import DGData, TemporalRatioSplit
+from tgm.data.split import TGBSplit
 from tgm.exceptions import (
     EmptyGraphError,
     EventOrderedConversionError,
     InvalidDiscretizationError,
     InvalidNodeIDError,
 )
-from tgm.split import TemporalRatioSplit, TGBSplit
-from tgm.timedelta import TimeDeltaDG
 
 
 def test_init_dg_data():
@@ -1019,7 +1019,7 @@ def test_from_bad_tgb_name():
 
 @pytest.mark.parametrize('with_node_feats', [True, False])
 @patch('tgb.linkproppred.dataset.LinkPropPredDataset')
-@patch.dict('tgm.timedelta.TGB_TIME_DELTAS', {'tgbl-wiki': TimeDeltaDG('D')})
+@patch.dict('tgm.core.timedelta.TGB_TIME_DELTAS', {'tgbl-wiki': TimeDeltaDG('D')})
 def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, with_node_feats):
     dataset = tgb_dataset_factory(with_node_feats=with_node_feats)
     mock_dataset_cls.return_value = dataset
@@ -1051,7 +1051,7 @@ def test_from_tgbl(mock_dataset_cls, tgb_dataset_factory, with_node_feats):
 
 
 @patch('tgb.nodeproppred.dataset.NodePropPredDataset')
-@patch.dict('tgm.timedelta.TGB_TIME_DELTAS', {'tgbn-trade': TimeDeltaDG('D')})
+@patch.dict('tgm.core.timedelta.TGB_TIME_DELTAS', {'tgbn-trade': TimeDeltaDG('D')})
 def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
     dataset = tgb_dataset_factory()
     mock_dataset_cls.return_value = dataset
@@ -1276,7 +1276,7 @@ def test_split_default_calls_ratio_split(monkeypatch):
     expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
     mock_strategy = MagicMock()
     mock_strategy.apply.return_value = expected
-    monkeypatch.setattr('tgm.data.TemporalRatioSplit', lambda: mock_strategy)
+    monkeypatch.setattr('tgm.data.data.TemporalRatioSplit', lambda: mock_strategy)
 
     result = data.split()
     mock_strategy.apply.assert_called_once_with(data)

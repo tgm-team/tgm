@@ -36,7 +36,7 @@ class SplitStrategy(ABC):
         edge_mask: Tensor,
         node_mask: Tensor | None = None,
     ) -> 'DGData':  # type: ignore
-        from tgm import DGData  # avoid circular dependency
+        from tgm.data import DGData  # avoid circular dependency
 
         edge_index = data.edge_index[edge_mask]
         edge_feats = data.edge_feats[edge_mask] if data.edge_feats is not None else None

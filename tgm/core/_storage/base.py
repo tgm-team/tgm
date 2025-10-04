@@ -1,10 +1,10 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Set, Tuple
 
 from torch import Tensor
-
-from tgm.data import DGData
 
 
 @dataclass(slots=True)
@@ -21,7 +21,7 @@ class DGStorageBase(ABC):
     """Base class for dynamic graph storage engines."""
 
     @abstractmethod
-    def __init__(self, data: DGData) -> None:
+    def __init__(self, data: 'DGData') -> None:  # type: ignore
         """Initialize the storage engine from DGData."""
 
     @abstractmethod

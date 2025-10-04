@@ -9,10 +9,10 @@ from typing import Any, Optional, Set, Tuple
 import torch
 from torch import Tensor
 
-from tgm._storage import DGSliceTracker, DGStorage
-from tgm.data import DGData
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.logging import _get_logger, _logged_cached_property, log_latency
+
+from ._storage import DGSliceTracker, DGStorage
+from .timedelta import TimeDeltaDG
 
 logger = _get_logger(__name__)
 
@@ -55,7 +55,9 @@ class DGraph:
           copied unless explicitly materialized.
     """
 
-    def __init__(self, data: DGData, device: str | torch.device = 'cpu') -> None:
+    def __init__(self, data: 'DGData', device: str | torch.device = 'cpu') -> None:  # type: ignore
+        from tgm.data import DGData  # Avoid circular dependancy
+
         if not isinstance(data, DGData):
             raise TypeError(f'DGraph must be initialized with DGData, got {type(data)}')
 
