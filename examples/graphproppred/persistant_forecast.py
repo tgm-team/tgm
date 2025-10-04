@@ -7,9 +7,8 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm import DGBatch, DGData, DGraph
-from tgm.loader import DGDataLoader
-from tgm.split import TemporalRatioSplit
+from tgm import DGBatch, DGraph
+from tgm.data import DGData, DGDataLoader, TemporalRatioSplit
 from tgm.util.logging import enable_logging, log_latency, log_metrics_dict
 from tgm.util.seed import seed_everything
 

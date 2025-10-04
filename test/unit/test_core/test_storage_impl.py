@@ -4,14 +4,14 @@ import pytest
 import torch
 
 from tgm import DGraph
-from tgm._storage import (
+from tgm.constants import PADDED_NODE_ID
+from tgm.core._storage import (
     DGSliceTracker,
     DGStorageBackends,
     get_dg_storage_backend,
     set_dg_storage_backend,
 )
-from tgm._storage.backends import DGStorageArrayBackend
-from tgm.constants import PADDED_NODE_ID
+from tgm.core._storage.backends import DGStorageArrayBackend
 from tgm.data import DGData
 
 

@@ -1,12 +1,13 @@
 from .dygformer import DyGFormer
-from .tpnet import TPNet
+from .tpnet import TPNet, RandomProjectionModule
 from .tgcn import TGCN
 from .gclstm import GCLSTM
 
 __all__ = [
     'DyGFormer',
-    'TPNet',
-    'TGCN',
     'GCLSTM',
     'MLPMixer',
+    'RandomProjectionModule',
+    'TGCN',
+    'TPNet',
 ]
