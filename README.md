@@ -67,8 +67,6 @@ pip install git+https://github.com/tgm-team/tgm.git@main
 pip install tgm-lib
 ```
 
-These steps should work on Linux systems. We have not officially tested on other platforms, so expect additional work may be required. If you encounter issues on your system, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
-
 ### Windows
 
 To enable GPU on non-linux platforms, you will need to manually install the appropriate torch wheels for your drivers. For instance, for *cuda:12.4*, follow the steps above and then issue:
