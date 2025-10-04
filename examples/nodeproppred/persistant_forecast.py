@@ -5,9 +5,9 @@ import torch
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGData, DGraph
+from tgm import DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
-from tgm.loader import DGDataLoader
+from tgm.data import DGData, DGDataLoader
 from tgm.util.logging import enable_logging, log_latency, log_metric
 from tgm.util.seed import seed_everything
 

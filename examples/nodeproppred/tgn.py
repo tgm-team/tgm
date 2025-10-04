@@ -14,10 +14,10 @@ from torch_geometric.nn.inits import zeros
 from torch_geometric.utils import scatter
 from tqdm import tqdm
 
-from tgm import DGData, DGraph
+from tgm import DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED, PADDED_NODE_ID
+from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, RecencyNeighborHook
-from tgm.loader import DGDataLoader
 from tgm.nn import NodePredictor, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything

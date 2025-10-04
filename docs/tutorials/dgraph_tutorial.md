@@ -70,7 +70,7 @@ class DGData:
     """
 ```
 
-See [`tgm.data.DGData`](../api/data.md) for full reference.
+See [`tgm.data.dg_data.DGData`](../api/data.md) for full reference.
 
 ## 3. Constructing DGData
 
@@ -85,7 +85,7 @@ This is most likely all you need. The [Temporal Graph Benchmark (TGB)](https://t
 > **Note**: To load a TGB dataset, you must have the `py-tgb` package in your python env.
 
 ```python
-from tgm import DGData
+from tgm.data import DGData
 
 # Load the Wikipedia dataset from TGB
 data = DGData.from_tgb('tgbl-wiki')
@@ -250,7 +250,7 @@ def split(self, strategy: SplitStrategy | None = None) -> Tuple[DGData, ...]:
 ### Splitting TGB Datasets
 
 ```python
-from tgm import DGData
+from tgm.data import DGData, TemporalRatioSplit
 
 # Load the Wikipedia dataset from TGB
 data = DGData.from_tgb('tgbl-wiki')
@@ -259,8 +259,6 @@ data = DGData.from_tgb('tgbl-wiki')
 train_data, val_data, test_data = data.split()
 
 # If you tried to override the split strategy, you'll get an error
-
-from tgm.split import TemporalRatioSplit
 split_strategy = TemporalRatioSplit(train=0.8, val=0.1, test=0.1)
 _ data.split(strategy=split_strategy) # Raises ValueError
 ```
@@ -301,7 +299,8 @@ See our [time management tutorial](../tutorials/time_delta_tutorial.md) for more
 Once your dataset is ready to go, you can cast it to `DGraph`:
 
 ```python
-from tgm import DGraph, DGData
+from tgm import DGraph
+from tgm.data import DGData
 
 data = DGData.from_tgb(...)
 dg = DGraph(data, device=...)
@@ -432,7 +431,7 @@ Internally, the `DGDataLoader` is responsible for materializing slices of graph 
 
 ```python
 from tgm import DGraph
-from tgm.loader import DGDataLoader
+from tgm.data import DGDataLoader
 
 dg = DGraph(...)
 loader = DGDataLoader(dg, ...)

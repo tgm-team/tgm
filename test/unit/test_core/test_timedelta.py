@@ -1,7 +1,8 @@
 import pytest
 
+from tgm import TimeDeltaDG
+from tgm.core.timedelta import TGB_TIME_DELTAS
 from tgm.exceptions import EventOrderedConversionError
-from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 
 
 @pytest.fixture(params=['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])

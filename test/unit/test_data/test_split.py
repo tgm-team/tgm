@@ -4,9 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from tgm import DGData
-from tgm.split import TemporalRatioSplit, TemporalSplit
-from tgm.timedelta import TimeDeltaDG
+from tgm import TimeDeltaDG
+from tgm.data import DGData, TemporalRatioSplit, TemporalSplit
 
 
 def test_time_split_bad_args():
