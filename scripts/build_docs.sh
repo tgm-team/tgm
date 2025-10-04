@@ -32,7 +32,7 @@ setup_venv_if_missing() {
 
 build_docs() {
     echo "Building documentation..."
-    uv run mkdocs serve
+    uv run mkdocs serve --strict
 }
 
 main() {

@@ -66,7 +66,7 @@ Hooks are executed automatically during data loading, allowing different transfo
 
 ```python
 from tgm.hooks import NegativeEdgeSamplerHook # A real negative edge sampler
-from tgm.loader import DGDataLoader
+from tgm.data import DGDataLoader
 
 # Create our graph
 train_dg, test_dg = ...
@@ -150,7 +150,7 @@ In temporal graph learning, it is common that information you received in the pa
 For this purpose, we have the notion of `shared hooks`, which are automatically attributed to **all** keys in the `HookManager`:
 
 ```python
-from tgm.loader import DGDataLoader
+from tgm.data import DGDataLoader
 
 # Create our graph
 train_dg, test_dg = ...
