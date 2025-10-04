@@ -5,7 +5,6 @@ import torch
 from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
-from tgm.data import DGData
 from tgm.util.logging import _get_logger
 
 from ..base import DGSliceTracker, DGStorageBase
@@ -16,7 +15,7 @@ logger = _get_logger(__name__)
 class DGStorageArrayBackend(DGStorageBase):
     r"""Array backed implementation of temporal graph storage engine."""
 
-    def __init__(self, data: DGData) -> None:
+    def __init__(self, data: 'DGData') -> None:  # type: ignore
         self._data = data
 
         # Binary search caches for finding timestamps in event array
@@ -51,7 +50,7 @@ class DGStorageArrayBackend(DGStorageBase):
             node_mask = (self._data.node_event_idx >= lb_idx) & (
                 self._data.node_event_idx < ub_idx
             )
-            node_event_nodes = self._data.node_ids[node_mask].unique().tolist()  # type: ignore
+            node_event_nodes = self._data.node_ids[node_mask].unique().tolist()
             all_nodes.update(node_event_nodes)
         if not all_nodes:
             logger.debug('No events in slice: %s', slice)
@@ -176,7 +175,7 @@ class DGStorageArrayBackend(DGStorageBase):
             self._data.edge_event_idx < ub_idx
         )
         if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
-            max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())  # type: ignore
+            max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
 
         max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
         node_feats_dim = self.get_dynamic_node_feats_dim()

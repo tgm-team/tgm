@@ -1,3 +1,3 @@
 ## DGDataLoader
 
-::: tgm.loader
+::: tgm.data.loader

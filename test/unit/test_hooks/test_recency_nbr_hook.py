@@ -7,10 +7,9 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
-from tgm.data import DGData
+from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, TGBNegativeEdgeSamplerHook
 from tgm.hooks.hook_manager import HookManager
-from tgm.loader import DGDataLoader
 
 _PADDED_TIME_ID = 0
 _PADDED_FEAT_ID = 0.0

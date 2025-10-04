@@ -8,9 +8,9 @@ import torch.nn.functional as F
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
+from tgm import DGBatch, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
-from tgm.graph import DGBatch, DGData, DGraph
-from tgm.loader import DGDataLoader
+from tgm.data import DGData, DGDataLoader
 from tgm.nn import TGCN, NodePredictor
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything

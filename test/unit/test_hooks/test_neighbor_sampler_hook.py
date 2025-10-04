@@ -6,9 +6,8 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
-from tgm.data import DGData
+from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, NeighborSamplerHook
-from tgm.loader import DGDataLoader
 
 
 @pytest.fixture

@@ -1,15 +1,13 @@
 import pytest
 import torch
 
-from tgm import DGBatch, DGraph
-from tgm.data import DGData
+from tgm import DGBatch, DGraph, TimeDeltaDG
+from tgm.data import DGData, DGDataLoader
 from tgm.exceptions import (
     EmptyBatchError,
     EventOrderedConversionError,
     InvalidDiscretizationError,
 )
-from tgm.loader import DGDataLoader
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.seed import seed_everything
 
 

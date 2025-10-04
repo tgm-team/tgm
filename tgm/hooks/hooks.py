@@ -8,8 +8,8 @@ from typing import Any, List, Set, Tuple
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm._storage import DGSliceTracker
 from tgm.constants import PADDED_NODE_ID
+from tgm.core._storage import DGSliceTracker
 from tgm.hooks import StatefulHook, StatelessHook
 from tgm.util.logging import _get_logger
 
@@ -122,7 +122,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
     Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
 
     Args:
-        neg_sampler (object): The negative sampler object to use for sampling.
+        dataset_name (str): The name of the TGB dataset to produce sampler for.
         split_mode (str): The split mode to use for sampling, either 'val' or 'test'.
 
     Raises:

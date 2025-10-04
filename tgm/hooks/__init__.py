@@ -9,3 +9,4 @@ from .hooks import (
     RecencyNeighborHook,
 )
 from .hook_manager import HookManager
+from .recipe import RecipeRegistry

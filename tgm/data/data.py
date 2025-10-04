@@ -13,14 +13,14 @@ import torch
 from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
+from tgm.core import TGB_TIME_DELTAS, TimeDeltaDG
+from tgm.data.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.exceptions import (
     EmptyGraphError,
     EventOrderedConversionError,
     InvalidDiscretizationError,
     InvalidNodeIDError,
 )
-from tgm.split import SplitStrategy, TemporalRatioSplit, TGBSplit
-from tgm.timedelta import TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.util._tgb import suppress_output
 from tgm.util.logging import _get_logger, log_latency
 

@@ -13,17 +13,17 @@ class RandomProjectionModule(nn.Module):
     random feature propagation, and extract the pairwise features from the obtained random projections.
 
     Args:
-        num_nodes(int): the number of nodes
-        num_layer(int): the max hop of the maintained temporal walk matrices
-        time_decay_weight(float): the time decay weight (lambda of the original paper)
-        beginning_time(float): the earliest time in the given temporal graph
-        use_matrix(bool): if True, explicitly maintain the temporal walk matrices
-        scale_random_projection(bool) if True, the inner product of nodes' random projections will be scaled
-        enforce_dim(int) if not None, explicitly set the dimension of random projections to enforce_dim
-        num_edges(int): the number of edges
-        dim_factor(int): the parameter to control the dimension of random projections. Specifically, the
+        num_nodes (int): the number of nodes
+        num_layer (int): the max hop of the maintained temporal walk matrices
+        time_decay_weight (float): the time decay weight (lambda of the original paper)
+        beginning_time (float): the earliest time in the given temporal graph
+        use_matrix (bool): if True, explicitly maintain the temporal walk matrices
+        scale_random_projection (bool): if True, the inner product of nodes' random projections will be scaled
+        enforce_dim (int): if not None, explicitly set the dimension of random projections to enforce_dim
+        num_edges (int): the number of edges
+        dim_factor (int): the parameter to control the dimension of random projections. Specifically, the
                            dimension of the random projections is set to be dim_factor * log(2*edge_num)
-        device(str): torch device
+        device (str): torch device
 
     *Note: For large-scale dataset, the authors suggested to set `use_matrix=False` and use number of edge and `dim_factor=10` to make it scalable.*
     """

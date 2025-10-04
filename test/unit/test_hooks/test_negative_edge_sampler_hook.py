@@ -2,9 +2,8 @@ import pytest
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm.data import DGData
+from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, NegativeEdgeSamplerHook
-from tgm.loader import DGDataLoader
 
 
 @pytest.fixture

@@ -4,13 +4,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
-from tgm import DGraph, RecipeRegistry
+from tgm import DGraph
 from tgm.constants import RECIPE_TGB_LINK_PRED
 from tgm.data import DGData
 from tgm.exceptions import UndefinedRecipe
 from tgm.hooks import (
     HookManager,
     NegativeEdgeSamplerHook,
+    RecipeRegistry,
     TGBNegativeEdgeSamplerHook,
 )
 

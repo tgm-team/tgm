@@ -4,7 +4,6 @@ about: Report a reproducible bug
 title: ''
 labels: bug
 assignees: ''
-
 ---
 
 **Describe the bug**
@@ -20,9 +19,10 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 **Environment:**
- - OS:
- - TGM Version:
- - CPU / GPU
+
+- OS:
+- TGM Version:
+- CPU / GPU
 
 **Additional context**
 Add any other context about the problem here.

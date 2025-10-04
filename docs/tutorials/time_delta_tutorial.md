@@ -15,7 +15,7 @@ See [`tgm.timedelta.TimeDeltaDG`](../api/timedelta.md) for full reference.
 You can create a `TimeDeltaDG` using a string alias or by explicitly providing a unit and a multiplier:
 
 ```python
-from tgm.timedelta import TimeDeltaDG
+from tgm import TimeDeltaDG
 
 # Basic usage
 td_seconds = TimeDeltaDG("s")       # 1-second granularity
@@ -111,7 +111,7 @@ There are two different modes of iteration in TGM, depending on whether the `bat
 > **Note**: Time-based iteration can result in empty batches if no edge and no node events occur in the window. You can specify `on_empty='raise'` to error on empty batches, `on_empty='skip'` to ignore them, or `on_empty=None` to materialize the empty snapshots for your model. The default will materialize empty snapshots.
 
 ```python
-from tgm.loader import DGDataLoader
+from tgm.data import DGDataLoader
 
 # Event-ordered iteration: yield 10 events per batch
 loader = DGDataLoader(dg_data, batch_size=10)
@@ -131,7 +131,7 @@ See [`tgm.loader.DGDataLoader`](../api/loader.md) for full reference.
 Discretization allows you to *coarsen* a time-ordered graph to a new time granularity:
 
 - multiple edge and node events are partitioned into time buckets based on the requested granularity
-- if multiple events map to the same edge in the same bucket, only the first occurence is kept (future versions will support other reduction ops)
+- if multiple events map to the same edge in the same bucket, only the first occurrence is kept (future versions will support other reduction ops)
 
 This is useful for tuning dataset granularity (e.g. converting from continuous to discrete temporal graphs).
 
@@ -165,8 +165,8 @@ This is the simplest setup. Simply use `DGData.from_tgb()` to load the TGB datas
 By default, `batch_unit='r'` in the data loader so we can iterate by batches of 200 events with:
 
 ```python
-from tgm import DGData, DGraph
-from tgm.loader import DGDataLoader
+from tgm import DGraph
+from tgm.data import DGDataLoader, DGData
 
 data = DGData.from_tgb('tgbl-wiki')
 dg = DGraph(data)
@@ -180,8 +180,8 @@ In this case, we can still load the native time granularity for the given TGB da
 Here, we use `tgbl-wiki` which has second-wise data, and we iterate over it in weekly snapshots:
 
 ```python
-from tgm import DGData, DGraph
-from tgm.loader import DGDataLoader
+from tgm import DGraph
+from tgm.data import DGDataLoader, DGData
 
 data = DGData.from_tgb('tgbl-wiki')
 dg = DGraph(data)
@@ -191,8 +191,8 @@ loader = DGDataLoader(dg, batch_unit='W')
 We can just as easily iterate over biweekly graph snapshots:
 
 ```python
-from tgm import DGData, DGraph
-from tgm.loader import DGDataLoader
+from tgm import DGraph
+from tgm.data import DGDataLoader, DGData
 
 data = DGData.from_tgb('tgbl-wiki')
 dg = DGraph(data)

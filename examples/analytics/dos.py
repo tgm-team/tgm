@@ -7,9 +7,9 @@ import numpy as np
 import scipy.sparse as sp
 from tqdm import tqdm
 
-from tgm import DGBatch, DGData, DGraph
+from tgm import DGBatch, DGraph
+from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, StatelessHook
-from tgm.loader import DGDataLoader
 from tgm.util.logging import enable_logging
 from tgm.util.seed import seed_everything
 

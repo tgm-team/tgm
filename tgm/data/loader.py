@@ -5,14 +5,13 @@ from typing import Any, Iterator, List, Literal
 
 import torch
 
-from tgm import DGBatch, DGraph
+from tgm.core import DGBatch, DGraph, TimeDeltaDG
 from tgm.exceptions import (
     EmptyBatchError,
     EventOrderedConversionError,
     InvalidDiscretizationError,
 )
 from tgm.hooks import HookManager
-from tgm.timedelta import TimeDeltaDG
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
