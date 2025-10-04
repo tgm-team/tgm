@@ -1,0 +1,30 @@
+name: Build Documentation
+
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  mypy:
+    env:
+      UV_CACHE_DIR: /tmp/.uv-cache
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up python
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Build Docs
+        run: ./scripts/build_docs.sh
