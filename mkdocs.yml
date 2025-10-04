@@ -26,7 +26,7 @@ nav:
           - Hooks: api/hooks/hooks.md
           - Hook Manager: api/hooks/hook_manager.md
           - Recipes: api/hooks/recipe.md
-      - Neural Networks: api/nn.md
+      - Neural Layers: api/nn.md
       - Utilities: api/util.md
       - Constants: api/constants.md
 

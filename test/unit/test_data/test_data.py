@@ -1276,7 +1276,7 @@ def test_split_default_calls_ratio_split(monkeypatch):
     expected = (MagicMock(spec=DGData), MagicMock(spec=DGData), MagicMock(spec=DGData))
     mock_strategy = MagicMock()
     mock_strategy.apply.return_value = expected
-    monkeypatch.setattr('tgm.data.data.TemporalRatioSplit', lambda: mock_strategy)
+    monkeypatch.setattr('tgm.data.dg_data.TemporalRatioSplit', lambda: mock_strategy)
 
     result = data.split()
     mock_strategy.apply.assert_called_once_with(data)
