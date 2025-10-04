@@ -56,7 +56,7 @@ class DGraph:
     """
 
     def __init__(self, data: 'DGData', device: str | torch.device = 'cpu') -> None:  # type: ignore
-        from tgm.data import DGData  # Avoid circular dependancy
+        from tgm.data import DGData  # Avoid circular dependency
 
         if not isinstance(data, DGData):
             raise TypeError(f'DGraph must be initialized with DGData, got {type(data)}')
