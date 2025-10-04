@@ -70,7 +70,7 @@ class DGData:
     """
 ```
 
-See [`tgm.data.data.DGData`](../api/data.md) for full reference.
+See [`tgm.data.dg_data.DGData`](../api/data.md) for full reference.
 
 ## 3. Constructing DGData
 

@@ -1,4 +1,4 @@
-::: tgm.data.data
+::: tgm.data.dg_data
 
 ### Dataset Splitting
 
