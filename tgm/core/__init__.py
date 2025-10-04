@@ -1,2 +1,3 @@
 from .timedelta import TimeDeltaDG, TGB_TIME_DELTAS
-from .graph import DGraph, DGBatch
+from .graph import DGraph
+from .batch import DGBatch
