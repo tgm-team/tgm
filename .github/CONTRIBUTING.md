@@ -1,85 +1,79 @@
 # Contributing to TGM
 
+Thank you for your interest in contributing! This guide covers setup, development workflow, testing, and submitting contributions.
+
 ## Prerequisites
 
-The project uses [uv](https://docs.astral.sh/uv/) to manage and lock project dependencies for a consistent and reproducible environment. If you do not have `uv` installed on your system, visit [this page](https://docs.astral.sh/uv/getting-started/installation/) for installation instructions.
-
-**Note**: If you have `pip` installed globally you can just invoke:
+TGM uses [uv](https://docs.astral.sh/uv/) to manage project dependencies and provide a reproducible environment. If you do not have `uv` installed:
 
 ```sh
 pip install uv
 ```
 
+> \[!NOTE\]
+> `uv` creates an isolated virtual environment in `.venv` based on the lockfile `uv.lock` to ensure consistent dependencies.
+
 ### Using uv
-
-#### Background
-
-_uv_ manages a lockfile which maintains a consistent and fixed dependency graph for all _TGM_ dependencies. These dependencies are bundled in a python virtual environment stored in a hidden `.venv` folder in the root project directory. The virtual environment is generated on the fly based on the lockfile and is created upon calling `uv sync`.
 
 #### Running commands
 
-_uv_ bundles all dependencies (including Python itself) into the virtual environment. Most commands can be run by simply prepending `uv run`
-to the respective command.
-
-For example:
+Most commands can be run by simply prepending `uv run` to the respective command:
 
 - Instead of running `python <command>`, you will run `uv run python <command>`
 - Instead of running `pytest`, you will run `uv run pytest`
 
-#### Adding and Removing Dependencies
+#### Managing dependencies
 
-_uv_ has a package resolver which will automatically resolve all packages to their most recent version at the time of installation while respecting the current dependencies.
+_uv_ automatically resolves package versions while respecting existing dependencies.
 
-To add or remove a _core_ dependency, issue `uv add <package>` and `uv remove <package>`, respectively. For instance, to add `numpy` as a core dependency, we would issue:
-
-```sh
-uv add numpy
-```
-
-**Note**: this will automatically update the [pyproject.toml](../pyproject.toml) and [uv lock file](../uv.lock) with the new package which will be reflected in version control.
-
-In order to facilitate modularity and avoid burdening users with dependencies they don't need, it's recommended to minimize core dependencies to those that **all** users will require for **every** release. To support this, _uv_ has the notion of _dependency groups_, which facilitate auxilary dependencies. For instance, the _dev_ group is the set of dependencies required for TGM development, but is not necessarily shipped to end-users of the library.
-
-To add or remove a package from a dependency group, issue `uv add --<group> <package>` and `uv remove --<group> <package>`, respectively. For instance, to add `hypothesis` as a `dev` dependancy, we would issue:
+**Add or remove a core dependency**:
 
 ```sh
-uv add --dev hypothesis
+uv add <package>
+uv remove <package>
 ```
 
-Note, that auxilary dependency groups can be synced by running `uv sync --group <group name>`.
+> \[!IMPORTANT\]
+> This updates `pyproject.toml` and `uv.lock` automatically, which should be committed.
 
-In general, any wheels published on [pypi](https://pypi.org/) can be directly added, making _uv_ a drop-in replacement for _pip_. For more complex use cases such as non-python dependencies, or installing specific package versions, consult the [uv documentation](https://docs.astral.sh/uv/).
+Core dependencies should be kept to an absolute minimum. To add optional dependencies, `uv` has the notion of _dependency groups_. For instance, the _dev_ group is the set of dependencies required for TGM development, but is not necessarily shipped to end-users of the library.
 
-#### Activating the virtual environment
-
-Sometimes you will want to activate the virtual environment manually in order to access the dependencies explicitly (for instance, for integration with a language server for code completion). The virtual environment can be activated by invoking the appropriate activation file, dependencing on your shell. For instance, for _bash_, you can issue:
+**Add or remove a group dependency**:
 
 ```sh
-. .venv/bin/activate
+uv add --group <group> <package>
+uv remove --group <group> <package>
 ```
 
-to activate the environment.
+> \[!TIP\]
+> Any package on PyPI can be added, making `uv` a drop in replacement for `pip`. For complex use cases such as non-python dependencies, or installing specific package versions, consult the [uv documentation](https://docs.astral.sh/uv/).
+
+#### Activating the Virtual Environment
+
+Sometimes you may want to activate .venv manually (e.g., for IDE integration):
+
+```sh
+. .venv/bin/activate # bash
+```
 
 **Note**: after doing so, you will have direct access to all executables (e.g. Python) as usual.
 
-## Dev Installation
+## Development Setup
 
-### Install TGM
-
-#### From Source
+### Install TGM from source
 
 ```sh
 # Clone the repo
 git clone https://github.com/tgm-team/tgm.git
 cd tgm
 
-# Install core dependencies into an isolated environment
+# Install core dependencies
 uv sync
 ```
 
 ### Install pre-commit hooks:
 
-TGM ships with a set of [pre-commit hooks](../.pre-commit-config.yaml) that automatically apply code formatting, linting, static type analysis, and more.
+TGM includes [pre-commit hooks](../.pre-commit-config.yaml) for formatting, linting, static type analysis, and more.
 
 The hooks can be installed by issuing:
 
@@ -87,44 +81,63 @@ The hooks can be installed by issuing:
 uv run pre-commit install
 ```
 
-It is recommended to use these hooks when commiting code remotely but they can also be skipped by commiting with the `--no-verify` flag.
+> \[!TIP\]
+> Hooks can be bypassed with the `--no-verify` flag, but using them is strongly recommended.
 
-## Unit Testing
+## Testing
 
-The TGM test suite is located uner `test/`.
+The TGM test suite is organized into:
+
+- `test/unit`: unit tests
+- `test/integration`: integration tests
+- `test/performance`: performance tests
+
+### Unit Tests
+
 Run the entire (unit) test suite with
 
 ```sh
-uv run pytest test/unit
+./scripts/run_unit_tests.sh
 ```
 
-## Continuous Integration
+### Integration Tests
 
-TGM uses [Github Actions](https://github.com/tgm-team/tgm/tree/main/.github/workflows) for continuous integration.
+Integration tests run periodicaly on our CI cluster to validate example correctness, latency, throughput and GPU usage.
 
-Everytime you send a Pull Request, your commit will be built and checked against the TGM guidelines:
+To trigger manually:
 
-1. Ensure that your code is formatted correctly. We use the [`Ruff-Formatter`](https://docs.astral.sh/ruff/formatter/).
+```sh
+./scripts/triger_integration_tests.sh
+```
 
-   ```bash
-   uv run ruff format .
-   ```
+> \[!IMPORTANT\]
+> You will need to setup an auth key for permission to trigger remote jobs on our CI. Contact [Jacob Chmura](jacobpaul.chmura@gmail.com) for details. At minimum, run examples locally to ensure nothing breaks.
 
-   The pre-commit hooks will auto-format your code according to our style spec.
+### Performance Tests
 
-1. Ensure that the entire test suite passes and that code coverage roughly stays the same.
+Performance tests also run on our CI cluster to stress test various aspect of our core library. They can be triggered similar to our integration tests, assuming you have the permissions:
 
-   ```bash
-   uv run pytest --cov
-   ```
+```sh
+./scripts/trigger_perf_tests.sh
+```
+
+## Proposing a new model
+
+1. To propose a new model, start by writing a new example akin to our previous examples, outside of TGM core.
+1. Next, add the example into our integration test harness.
+1. Once the harness is setup, we'll report some performance and efficiency benchmark of your model within TGM, to confirm the implementation is correct.
+1. If you have reusable components (hooks, layers, etc.) that are broadly useful, they may be migrated to TGM core. Note each addition must include unit tests and a justification for inclusion.
+
+## Submitting PRs
+
+TGM uses [Github Actions](https://github.com/tgm-team/tgm/tree/main/.github/workflows) for continuous integration. Everytime you send a Pull Request, your commit will be built and checked against the TGM guidelines.
+
+Please ensure all the automatic checks pass and then tag members of the core team for review.
 
 ## Building Documentation
 
-To build the documentation:
+To build (and serve) the documentation locally:
 
-1. [Build and install](#Installation) TGM from source.
-1. Generate the documentation via:
-   ```sh
-   uv sync --group docs
-   uv run mkdocs serve
-   ```
+```sh
+./scripts/build_docs.sh
+```
