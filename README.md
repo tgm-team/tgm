@@ -12,6 +12,9 @@
 [![GitHub Repo stars](https://img.shields.io/github/stars/tgm-team/tgm)](https://github.com/tgm-team/tgm/stargazers)
 [![Unit Tests](https://github.com/tgm-team/tgm/actions/workflows/testing.yml/badge.svg)](https://github.com/tgm-team/tgm/actions/workflows/testing.yml)
 [![Linting](https://github.com/tgm-team/tgm/actions/workflows/ruff.yml/badge.svg)](https://github.com/tgm-team/tgm/actions/workflows/ruff.yml)
+[![Coverage](https://codecov.io/gh/tgm-team/tgm/branch/main/graph/badge.svg)](https://codecov.io/gh/tgm-team/tgm)
+[![Documentation Status](https://readthedocs.org/projects/tgm/badge/?version=latest)](https://tgm.readthedocs.io/en/latest/?badge=latest)
+[![PyPI version](https://badge.fury.io/py/tgm.svg)](https://pypi.org/project/tgm/)
 
 </div>
 
