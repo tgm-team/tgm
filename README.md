@@ -66,8 +66,6 @@ pip install tgm-lib
 
 ## Quick Tour for New Users
 
-In this quick tour, you'll get an overview of the system design, see a minimal example, and learn how to explore pre-packaged examples and tutorials.
-
 ### System Design Overview
 
 ![image](./docs/img/architecture-dark.svg#gh-dark-mode-only)
@@ -94,11 +92,11 @@ TGM is organized as a **three-layer architecture**:
    - Supports **node-, link-, and graph-level prediction**.
 
 > \[!TIP\]
-> Check out [our paper](https://tgm.readthedocs.io/) for more information and technical details.
+> Check out [our paper](https://tgm.readthedocs.io/) for technical details.
 
 ### Minimal Example
 
-Here’s a basic workflow demonstrating how to setup and train TGCN for dynamic node property prediction on `tgbl-trade`:
+Here’s a basic example demonstrating how to train TGCN for dynamic node property prediction on `tgbl-trade`:
 
 ```python
 import torch
@@ -139,6 +137,7 @@ encoder = RecurrentGCN(node_dim=static_node_feats.shape[1], embed_dim=128)
 decoder = NodePredictor(in_dim=128, out_dim=train_dg.dynamic_node_feats_dim)
 opt = torch.optim.Adam(set(encoder.parameters()) | set(decoder.parameters()), lr=0.001)
 
+# Training loop
 h_0 = None
 for batch in train_loader:
     opt.zero_grad()
