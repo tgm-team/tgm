@@ -56,10 +56,10 @@ To request a method for prioritization, please [open an issue](https://github.co
 | DyGMamba   | Planned     | [Link](https://arxiv.org/abs/2408.04713) |
 | NAT        | Planned     | [Link](https://arxiv.org/abs/2209.01084) |
 
-| Status      | Methods                                                         |
-| ----------- | --------------------------------------------------------------- |
-| Implemented | EdgeBank, GCN, GC-LSTM, GraphMixer, TGAT, TGN, DygFormer, TPNet |
-| Planned     | TNCN, DyGMamba, NAT                                             |
+| Status      | Methods                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8] |
+| Planned     | TNCN[^9], DyGMamba[^10], NAT[^11]                                                               |
 
 ### Performance Benchmarks
 
