@@ -36,19 +36,24 @@ It provides a unified abstraction for both discrete and continuous-time graphs, 
 
 ### Supported Methods
 
-We aim to support the following temporal graph learning methods. If you want us to prioritize a new method, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
+TGM implements a range of temporal graph learning methods. To request a method for prioritization, please [open an issue](https://github.com/tgm-team/tgm/issues) or [join the discussion](https://github.com/tgm-team/tgm/discussions).
 
-- :white_check_mark: [EdgeBank](https://arxiv.org/abs/2207.10128)
-- :white_check_mark: [GCN](https://arxiv.org/abs/1609.02907)
-- :white_check_mark: [GC-LSTM](https://arxiv.org/abs/1812.04206)
-- :white_check_mark: [GraphMixer](https://arxiv.org/abs/2302.11636)
-- :white_check_mark: [TGAT](https://arxiv.org/abs/2002.07962)
-- :white_check_mark: [TGN](https://arxiv.org/abs/2006.10637)
-- :white_check_mark: [DygFormer](https://arxiv.org/abs/2303.13047)
-- :white_check_mark: [TPNet](https://arxiv.org/abs/2410.04013)
-- :white_large_square: [TNCN](https://arxiv.org/abs/2406.07926)
-- :white_large_square: [DyGMamba](https://arxiv.org/abs/2408.04713)
-- :white_large_square: [NAT](https://arxiv.org/abs/2209.01084)
+#### Implemented Methods
+
+- [EdgeBank](https://arxiv.org/abs/2207.10128)
+- [GCN](https://arxiv.org/abs/1609.02907)
+- [GC-LSTM](https://arxiv.org/abs/1812.04206)
+- [GraphMixer](https://arxiv.org/abs/2302.11636)
+- [TGAT](https://arxiv.org/abs/2002.07962)
+- [TGN](https://arxiv.org/abs/2006.10637)
+- [DygFormer](https://arxiv.org/abs/2303.13047)
+- [TPNet](https://arxiv.org/abs/2410.04013)
+
+#### Planned Methods
+
+- [TNCN](https://arxiv.org/abs/2406.07926)
+- [DyGMamba](https://arxiv.org/abs/2408.04713)
+- [NAT](https://arxiv.org/abs/2209.01084)
 
 ### Performance Benchmarks
 
