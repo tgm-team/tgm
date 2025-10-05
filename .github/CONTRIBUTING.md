@@ -1,8 +1,6 @@
 # Contributing to TGM
 
-Thank you for your interest in contributing! This guide covers setup, deveopment workflow and testing processes in TGM.
-
-We also invite you to join the [TGL slack group](https://tglworkshop.slack.com/ssb/redirect), where you can connect with the community and ask questions.
+Thank you for your interest in contributing! This guide covers setup, deveopment workflow and testing processes in TGM. We also invite you to join the [TGL slack group](https://tglworkshop.slack.com/ssb/redirect), where you can connect with the community and ask questions.
 
 ## Prerequisites
 
