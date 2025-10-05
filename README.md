@@ -42,6 +42,14 @@ Implemented: [EdgeBank](https://arxiv.org/abs/2207.10128), [GCN](https://arxiv.o
 
 Planned: [TNCN](https://arxiv.org/abs/2406.07926), [DyGMamba](https://arxiv.org/abs/2408.04713), [NAT](https://arxiv.org/abs/2209.01084)
 
+### Supported Methods
+
+TGM implements a range of temporal graph learning methods. To request a method for prioritization, please [open an issue](https://github.com/tgm-team/tgm/issues) or [join the discussion](https://github.com/tgm-team/tgm/discussions).
+
+**Implemented:** EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8]
+
+**Planned:** TNCN[^9], DyGMamba[^10], NAT[^11]
+
 ### Performance Benchmarks
 
 Work in progress.
@@ -121,3 +129,25 @@ If you notice anything unexpected, or would like to propose a new feature, pleas
 To learn more about making a contribution to TGM see our [contribution guide](./.github/CONTRIBUTING.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+[^1]: https://arxiv.org/abs/2207.10128
+
+[^2]: https://arxiv.org/abs/1609.02907
+
+[^3]: https://arxiv.org/abs/1812.04206
+
+[^4]: https://arxiv.org/abs/2302.11636
+
+[^5]: https://arxiv.org/abs/2002.07962
+
+[^6]: https://arxiv.org/abs/2006.10637
+
+[^7]: https://arxiv.org/abs/2303.13047
+
+[^8]: https://arxiv.org/abs/2410.04013
+
+[^9]: https://arxiv.org/abs/2406.07926
+
+[^10]: https://arxiv.org/abs/2408.04713
+
+[^11]: https://arxiv.org/abs/2209.01084
