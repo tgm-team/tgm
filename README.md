@@ -42,6 +42,25 @@ To request a method for prioritization, please [open an issue](https://github.co
 
 **Planned:** TNCN[^9], DyGMamba[^10], NAT[^11]
 
+| Method     | Status      | Paper                                    |
+| ---------- | ----------- | ---------------------------------------- |
+| EdgeBank   | Implemented | [Link](https://arxiv.org/abs/2207.10128) |
+| GCN        | Implemented | [Link](https://arxiv.org/abs/1609.02907) |
+| GC-LSTM    | Implemented | [Link](https://arxiv.org/abs/1812.04206) |
+| GraphMixer | Implemented | [Link](https://arxiv.org/abs/2302.11636) |
+| TGAT       | Implemented | [Link](https://arxiv.org/abs/2002.07962) |
+| TGN        | Implemented | [Link](https://arxiv.org/abs/2006.10637) |
+| DygFormer  | Implemented | [Link](https://arxiv.org/abs/2303.13047) |
+| TPNet      | Implemented | [Link](https://arxiv.org/abs/2410.04013) |
+| TNCN       | Planned     | [Link](https://arxiv.org/abs/2406.07926) |
+| DyGMamba   | Planned     | [Link](https://arxiv.org/abs/2408.04713) |
+| NAT        | Planned     | [Link](https://arxiv.org/abs/2209.01084) |
+
+| Status      | Methods                                                         |
+| ----------- | --------------------------------------------------------------- |
+| Implemented | EdgeBank, GCN, GC-LSTM, GraphMixer, TGAT, TGN, DygFormer, TPNet |
+| Planned     | TNCN, DyGMamba, NAT                                             |
+
 ### Performance Benchmarks
 
 Work in progress.
