@@ -36,7 +36,7 @@ It provides a unified abstraction for both discrete and continuous-time graphs, 
 
 ### Supported Methods
 
-TGM implements a range of temporal graph learning methods. To request a method for prioritization, please [open an issue](https://github.com/tgm-team/tgm/issues) or [join the discussion](https://github.com/tgm-team/tgm/discussions).
+To request a method for prioritization, please [open an issue](https://github.com/tgm-team/tgm/issues) or [join the discussion](https://github.com/tgm-team/tgm/discussions).
 
 **Implemented:** EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8]
 
