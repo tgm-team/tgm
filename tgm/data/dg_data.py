@@ -21,7 +21,6 @@ from tgm.exceptions import (
     InvalidDiscretizationError,
     InvalidNodeIDError,
 )
-from tgm.util._tgb import suppress_output
 from tgm.util.logging import _get_logger, log_latency
 
 logger = _get_logger(__name__)
@@ -731,9 +730,9 @@ class DGData:
             raise ImportError('TGB required to load TGB data, try `pip install py-tgb`')
 
         if name.startswith('tgbl-'):
-            dataset = suppress_output(LinkPropPredDataset, name=name, **kwargs)
+            dataset = LinkPropPredDataset(name=name, **kwargs)
         elif name.startswith('tgbn-'):
-            dataset = suppress_output(NodePropPredDataset, name=name, **kwargs)
+            dataset = NodePropPredDataset(name=name, **kwargs)
         elif name.startswith('tkgl-'):
             raise NotImplementedError('TGB Temporal Knowledge Graphs not yet supported')
         elif name.startswith('thgl-'):
