@@ -31,7 +31,7 @@ It provides a unified abstraction for both discrete and continuous-time graphs, 
 - **Unified Temporal API**: supports both continuous-time and discrete-time graphs, and graph discretization
 - **Efficiency**: ~7.8× faster training and ~175× faster discretization vs. existing research libraries
 - **Research-Oriented**: modular hook framework standardizes workflows for link, node, and graph-level tasks
-- **Datasets**: built-in support for popular datasets (e.g., [TGB](https://tgb.complexdatalab.com/))
+- **Datasets**: built-in support for popular datasets (e.g., \[TGB\][^12]
 - **Validated Methods**: 8+ implemented methods across diverse architectures
 
 ### Supported Methods
@@ -122,6 +122,8 @@ If you notice anything unexpected, or would like to propose a new feature, pleas
 To learn more about making a contribution to TGM see our [contribution guide](./.github/CONTRIBUTING.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+[^12]: https://tgb.complexdatalab.com/
 
 [^1]: https://arxiv.org/abs/2207.10128
 
