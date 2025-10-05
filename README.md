@@ -4,8 +4,8 @@
 
 <div align="center">
 <h3 style="font-size: 22px">Efficient and Modular ML on Temporal Graphs</h3>
-<a href="https://tgm.readthedocs.io/en/latest"/><strong style="font-size: 18px;"/>Read Our Docs»</strong></a>
-<a href="https://github.com/tgm-team/tgm"/><strong style="font-size: 18px;"/>Read Our Paper»</strong></a>
+<a href="https://tgm.readthedocs.io/en/latest"/><strong style="font-size: 18px;"/>Documentation»</strong></a>
+<a href="https://github.com/tgm-team/tgm"/><strong style="font-size: 18px;"/>Our Paper»</strong></a>
 <br/>
 <br/>
 
