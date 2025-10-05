@@ -28,12 +28,12 @@ It provides a unified abstraction for both discrete and continuous-time graphs, 
 
 ### Library Highlights
 
-- First unified temporal graph library supporting both continuous-time and discrete-time graphs, with 8+ methods across diverse architectures
-- Time-first API: native support for temporal granularity, graph discretization, and snapshot iteration
-- Efficiency: ~7.8× faster training and ~175× faster graph discretization compared to existing research libraries
-- Research-oriented: modular hook framework standardizes TG transforms and supports a broad range of tasks (link, node, and graph-level prediction)
-- Built-in support for popular datasets (e.g., [TGB datasets](https://tgb.complexdatalab.com/))
-- Validated implementations of popular methods (TGAT, TGN, etc.)
+- **Unified Support**: handles both continuous-time and discrete-time graphs
+- **Time-First API**: native support for time granularity, graph discretization, and snapshot iteration
+- **Efficiency**: ~7.8× faster training and ~175× faster graph discretization vs. existing research libraries
+- **Research-Oriented**: modular hook framework standardizes TG transforms for link, node, and graph-level tasks
+- **Datasets**: built-in support for popular datasets (e.g., [TGB](https://tgb.complexdatalab.com/))
+- **Validated Methods**: 8+ implemented methods across diverse architectures
 
 ### Supported Methods
 
