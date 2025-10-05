@@ -1,17 +1,17 @@
 # Contributing to TGM
 
-Thank you for your interest in contributing! This guide covers setup, development workflow, testing, and submitting contributions.
+Thank you for your interest in contributing! This guide covers setup, development workflow and testing processes in TGM.
 
 ## Prerequisites
 
-TGM uses [uv](https://docs.astral.sh/uv/) to manage project dependencies and provide a reproducible environment. If you do not have `uv` installed:
+TGM uses [uv](https://docs.astral.sh/uv/) to manage dependencies and provide a reproducible environment. If you don't have `uv` installed:
 
 ```sh
 pip install uv
 ```
 
 > \[!NOTE\]
-> `uv` creates an isolated virtual environment in `.venv` based on the lockfile `uv.lock` to ensure consistent dependencies.
+> `uv` creates an isolated environment in `.venv` based on the lockfile `uv.lock`.
 
 ### Using uv
 
@@ -121,23 +121,23 @@ Performance tests also run on our CI cluster to stress test various aspect of ou
 ./scripts/trigger_perf_tests.sh
 ```
 
-## Proposing a new model
-
-1. To propose a new model, start by writing a new example akin to our previous examples, outside of TGM core.
-1. Next, add the example into our integration test harness.
-1. Once the harness is setup, we'll report some performance and efficiency benchmark of your model within TGM, to confirm the implementation is correct.
-1. If you have reusable components (hooks, layers, etc.) that are broadly useful, they may be migrated to TGM core. Note each addition must include unit tests and a justification for inclusion.
-
-## Submitting PRs
-
-TGM uses [Github Actions](https://github.com/tgm-team/tgm/tree/main/.github/workflows) for continuous integration. Everytime you send a Pull Request, your commit will be built and checked against the TGM guidelines.
-
-Please ensure all the automatic checks pass and then tag members of the core team for review.
-
-## Building Documentation
+### Building Documentation
 
 To build (and serve) the documentation locally:
 
 ```sh
 ./scripts/build_docs.sh
 ```
+
+## Proposing a new model
+
+1. Start by writing a new example akin to our previous examples, outside of TGM core.
+1. Next, add the example into our integration test harness. Request the minimal amount of resources needed.
+1. Once the harness is setup, we'll report some performance and efficiency numbers, to confirm the implementation is correct.
+1. If you have reusable components (hooks, layers, etc.) that are broadly useful, they may be migrated to TGM core. Note each addition must include unit tests and a justification for inclusion.
+
+### Submitting PRs
+
+TGM uses [Github Actions](https://github.com/tgm-team/tgm/tree/main/.github/workflows) for continuous integration. Everytime you send a Pull Request, your commit will be built and checked against the TGM guidelines.
+
+Please ensure all the automatic checks pass and then tag members of the core team for review.
