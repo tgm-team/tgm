@@ -9,12 +9,15 @@
 <br/>
 <br/>
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/tgm-team/tgm)](https://github.com/tgm-team/tgm/stargazers)
-[![Unit Tests](https://github.com/tgm-team/tgm/actions/workflows/testing.yml/badge.svg)](https://github.com/tgm-team/tgm/actions/workflows/testing.yml)
-[![Linting](https://github.com/tgm-team/tgm/actions/workflows/ruff.yml/badge.svg)](https://github.com/tgm-team/tgm/actions/workflows/ruff.yml)
-[![Coverage](https://codecov.io/gh/tgm-team/tgm/branch/main/graph/badge.svg)](https://codecov.io/gh/tgm-team/tgm)
-[![Documentation Status](https://readthedocs.org/projects/tgm/badge/?version=latest)](https://tgm.readthedocs.io/en/latest/?badge=latest)
-[![PyPI version](https://badge.fury.io/py/tgm.svg)](https://pypi.org/project/tgm/)
+[![Stars](https://img.shields.io/github/stars/tgm-team/tgm?style=flat-square)](https://github.com/tgm-team/tgm/stargazers)
+
+[![Tests](https://img.shields.io/github/actions/workflow/status/tgm-team/tgm/testing.yml?label=tests&style=flat-square)](https://github.com/tgm-team/tgm/actions/workflows/testing.yml)
+[![Lint](https://img.shields.io/github/actions/workflow/status/tgm-team/tgm/ruff.yml?label=lint&style=flat-square)](https://github.com/tgm-team/tgm/actions/workflows/ruff.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/tgm-team/tgm?style=flat-square)](https://codecov.io/gh/tgm-team/tgm)
+
+[![Docs](https://img.shields.io/readthedocs/tgm?style=flat-square)](https://tgm.readthedocs.io/en/latest/?badge=latest)
+[![PyPI](https://img.shields.io/pypi/v/tgm?style=flat-square)](https://pypi.org/project/tgm-lib/)
+[![Downloads](https://img.shields.io/pypi/dm/tgm?style=flat-square)](https://pypi.org/project/tgm-lib/)
 
 </div>
 
