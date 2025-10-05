@@ -157,23 +157,23 @@ for batch in train_loader:
 
 ### Running Pre-packaged Examples
 
-Start by syncing additional dependencies in our example scripts:
+TGM includes pre-packaged example scripts to help you get started quickly. The examples require extra dependencies beyond the core library.
+
+To get started, [follow our installation from source instructions](#installation) and then install the additional dependencies:
 
 ```sh
-uv sync --group examples
+pip install -e .[examples]
 ```
 
-For this example, we'll run [TGAT](https://arxiv.org/abs/2002.07962) dynamic link-prediction on [tgbl-wiki](https://tgb.complexdatalab.com/docs/leader_linkprop/#tgbl-wiki-v2). We'll use standard parameters on run on GPU. We show some explicit arguments for clarity:
+After installing the dependencies, you can run any of our examples. For instance, TGAT dynamic link prediction on `tgbl-wiki`:
 
+```sh
+python examples/linkproppred/tgat.py --dataset tgbl-wiki --device cuda
 ```
-python examples/linkproppred/tgat.py \
-  --dataset tgbl-wiki \
-  --bsize 200 \
-  --device cuda \
-  --epochs 1 \
-  --n-nbrs 20 20 \
-  --sampling recency
-```
+
+> \[!NOTE\]
+> By default, our link prediction examples default to `tgbl-wiki`, and node prediction use `tgbn-trade`.
+> Examples run on CPU by default; use the `--device` flag to override this as shown above.
 
 ### Next steps
 
