@@ -66,7 +66,6 @@ pip install tgm-lib
 >
 > ```sh
 > pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-> `
 > ```
 
 ## Quick Tour for New Users
