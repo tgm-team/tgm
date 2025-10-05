@@ -75,7 +75,7 @@ TGM is organized as a **three-layer architecture**:
 
 1. **Data Layer**
 
-   - Immutable, time-sorted COO graph storage with lightweight, concurrency-safe graph views.
+   - Immutable, time-sorted coordinate-format graph storage with lightweight, concurrency-safe graph views.
    - Efficient time-based slicing and binary search over timestamps, enabling fast recent-neighbor retrieval.
    - Supports continuous-time and discrete-time loading, with vectorized snapshot creation.
    - Extensible backend allows alternative storage layouts for future models.
