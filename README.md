@@ -12,7 +12,7 @@
 [![Stars](https://img.shields.io/github/stars/tgm-team/tgm?style=flat&label=Stars&labelColor=white&logo=github&logoColor=black)](https://github.com/tgm-team/tgm/stargazers)
 [![PyPI](https://img.shields.io/pypi/v/tgm-lib?style=flat&label=PyPI&labelColor=white&logo=pypi&logoColor=black)](https://pypi.org/project/tgm-lib/)
 [![Downloads](https://img.shields.io/pypi/dm/tgm-lib?style=flat&label=Downloads&labelColor=white&logo=pypi&logoColor=black)](https://pypi.org/project/tgm-lib/)
-[![Tests](https://img.shields.io/github/actions/workflow/status/tgm-team/tgm/testing.yml?label=Tests&style=flat&labelColor=white&logo=github&logoColor=black)](https://github.com/tgm-team/tgm/actions/workflows/testing.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/tgm-team/tgm/testing.yml?label=Tests&style=flat&labelColor=white&logo=github-actions&logoColor=black)](https://github.com/tgm-team/tgm/actions/workflows/testing.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/tgm-team/tgm?style=flat&label=Coverage&labelColor=white&logo=codecov&logoColor=black)](https://codecov.io/gh/tgm-team/tgm)
 [![Docs](https://img.shields.io/readthedocs/tgm?style=flat&label=Docs&labelColor=white&logo=readthedocs&logoColor=black)](https://tgm.readthedocs.io/en/latest/?badge=latest)
 
