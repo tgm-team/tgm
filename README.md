@@ -62,10 +62,11 @@ pip install tgm-lib
 
 ### Windows
 
-To enable GPU on non-linux platforms, you will need to manually install the appropriate torch wheels for your drivers. For instance, for *cuda:12.4*, follow the steps above and then issue:
+> \[!NOTE\]
+> Windows is not directly tested in our CI. Additional setup may be required for GPU support. For instance, for *cuda:12.4* you will need to manually install the appropriate PyTorch wheels for your drivers:
 
 ```sh
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
 ## Quick Tour for New Users
