@@ -66,8 +66,51 @@ pip install tgm-lib
 
 ## Quick Tour for New Users
 
+TGM provides a modular and efficient workflow for temporal graph learning. In this quick tour, you'll get an overview of the system design, see a minimal example, and learn how to explore pre-packaged examples and tutorials.
+
+### System Design Overview
+
 ![image](./docs/img/architecture-dark.svg#gh-dark-mode-only)
 ![image](./docs/img/architecture-light.svg#gh-light-mode-only)
+
+TODO
+
+### Minimal Example
+
+Here’s a basic workflow demonstrating how to load a dataset, define a model, and run training:
+
+```python
+
+from tgm import DGData, DGraph
+from tgm.nn import GCNEncoder, NodePredictor
+
+train_data, val_data, test_data = DGData.from_tgb("tgbl-trade").split()
+train_dg = DGraph(train_data)
+train_loader = DGDataLoader(train_dg, batch_unit="s")
+
+encoder = GCNEncoder(
+    in_channels=train_dg.static_node_feats.shape[1],
+    embed_dim=128,
+    out_channels=128,
+    num_layers=2,
+)
+decoder = NodePredictor(in_dim=args.embed_dim, out_dim=???)
+opt = torch.optim.Adam(set(encoder.parameters()) | set(decoder.parameters()), lr=0.001)
+
+for batch in loader:
+    opt.zero_grad()
+    y_true = batch.dynamic_node_feats
+    if y_true is None:
+        continue
+
+    z = encoder(batch, static_node_feats)
+    z_node = z[batch.node_ids]
+    y_pred = decoder(z_node)
+
+    loss = F.cross_entropy(y_pred, y_true)
+    loss.backward()
+    opt.step()
+```
 
 ### Running Pre-packaged Examples
 
@@ -89,12 +132,13 @@ python examples/linkproppred/tgat.py \
   --sampling recency
 ```
 
+### Next steps
+
+- Explore more of our [examples](../tgm/examples/)
+- Dive deeper into TGM with our [tutorials](../tgm/docs/tutorials/)
+
 > \[!TIP\]
 > Refer to our [our docs](https://tgm.readthedocs.io/) for more information and TG example recipes.
-
-### Creating a new model
-
-Work in progress.
 
 ## Citation
 
