@@ -66,7 +66,7 @@ pip install tgm-lib
 
 ## Quick Tour for New Users
 
-TGM provides a modular and efficient workflow for temporal graph learning. In this quick tour, you'll get an overview of the system design, see a minimal example, and learn how to explore pre-packaged examples and tutorials.
+In this quick tour, you'll get an overview of the system design, see a minimal example, and learn how to explore pre-packaged examples and tutorials.
 
 ### System Design Overview
 
@@ -81,17 +81,21 @@ Here’s a basic workflow demonstrating how to setup and train TGCN for dynamic 
 
 ```python
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from tgm import DGraph, DGBatch
 from tgm.data import DGData, DGDataLoader
 from tgm.nn import TGCN, NodePredictor
 
-train_data, val_data, test_data = DGData.from_tgb("tgbn-trade").split() # Load tgb data splits
-train_dg = DGraph(train_data) # Constructor a DGraph
-train_loader = DGDataLoader(train_dg, batch_unit="Y") # Iterate by yearly snapshots
+# Load TGB data splits
+train_data, val_data, test_data = DGData.from_tgb("tgbn-trade").split()
 
-# tgbl-trade has no static node features, we'll create gaussian ones
+# Construct a DGraph and setup iteration by yearly ('Y') snapshots
+train_dg = DGraph(train_data)
+train_loader = DGDataLoader(train_dg, batch_unit="Y")
+
+# tgbl-trade has no static node features, so we create Gaussian ones (dim=64)
 static_node_feats = torch.randn((train_dg.num_nodes, 64))
 
 class RecurrentGCN(torch.nn.Module):
@@ -109,6 +113,7 @@ class RecurrentGCN(torch.nn.Module):
         z = self.linear(z)
         return z, h_0
 
+# Initialize our model and optimizer
 encoder = RecurrentGCN(node_dim=static_node_feats.shape[1], embed_dim=128)
 decoder = NodePredictor(in_dim=128, out_dim=train_dg.dynamic_node_feats_dim)
 opt = torch.optim.Adam(set(encoder.parameters()) | set(decoder.parameters()), lr=0.001)
@@ -150,13 +155,13 @@ python examples/linkproppred/tgat.py \
   --sampling recency
 ```
 
+> \[!TIP\]
+> Check out [our documentation](https://tgm.readthedocs.io/) for more information.
+
 ### Next steps
 
 - Explore more of our [examples](../tgm/examples/)
 - Dive deeper into TGM with our [tutorials](../tgm/docs/tutorials/)
-
-> \[!TIP\]
-> Refer to our [our docs](https://tgm.readthedocs.io/) for more information and TG example recipes.
 
 ## Citation
 
