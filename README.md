@@ -73,7 +73,28 @@ In this quick tour, you'll get an overview of the system design, see a minimal e
 ![image](./docs/img/architecture-dark.svg#gh-dark-mode-only)
 ![image](./docs/img/architecture-light.svg#gh-light-mode-only)
 
-TODO
+TGM is organized as a **three-layer architecture**:
+
+1. **Data Layer**
+
+   - Immutable, time-sorted COO graph storage with lightweight, concurrency-safe graph views.
+   - Efficient time-based slicing and binary search over timestamps, enabling fast recent-neighbor retrieval.
+   - Supports both **continuous-time (CTDG)** and **discrete-time (DTDG)** loading, with fully vectorized snapshot creation.
+   - Extensible backend allows alternative storage layouts for future models.
+
+1. **Execution Layer**
+
+   - **HookManager** orchestrates complex transformations during data loading (e.g., temporal neighbor sampling).
+   - Hooks can be combined and registered under specific conditions (analytics, training, etc.).
+   - Pre-defined recipes simplify common tasks like link prediction and prevent common pitfalls (e.g., mismanaging state or negatives).
+
+1. **ML Layer**
+
+   - Materializes batches directly on-device for model computation.
+   - Supports **node-, link-, and graph-level prediction** with modular, reusable components.
+
+> \[!TIP\]
+> Check out [our paper](https://tgm.readthedocs.io/) for more information and technical details.
 
 ### Minimal Example
 
@@ -154,9 +175,6 @@ python examples/linkproppred/tgat.py \
   --n-nbrs 20 20 \
   --sampling recency
 ```
-
-> \[!TIP\]
-> Check out [our documentation](https://tgm.readthedocs.io/) for more information.
 
 ### Next steps
 
