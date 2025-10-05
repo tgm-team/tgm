@@ -8,7 +8,6 @@ nav:
       - index.md
       - Quickstart: quickstart.md
       - Architecture: architecture.md
-      - Benchmarks: benchmarks.md
 
   - Tutorials:
       - Temporal Graph Construction: tutorials/dgraph_tutorial.md
