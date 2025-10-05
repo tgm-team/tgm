@@ -42,10 +42,6 @@ To request a method for prioritization, please [open an issue](https://github.co
 | Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8] |
 | Planned     | TNCN[^9], DyGMamba[^10], NAT[^11]                                                               |
 
-### Performance Benchmarks
-
-Work in progress.
-
 ## Installation
 
 #### From Source (recommended)
