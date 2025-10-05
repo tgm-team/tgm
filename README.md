@@ -102,23 +102,23 @@ Work in progress.
 
 ## Citation
 
-Please cite [our paper](https://github.com/tgm-team/tgm) if your use this code in your own work:
+If you use TGM in your work, please cite [our paper](https://github.com/tgm-team/tgm):
 
-```
+```bibtex
 @article{TODO,
-title   = "TODO",
-author  = "TODO"
-journal = "TODO",
-url     = "TODO"
-year    = "2025",
+  title   = "TODO",
+  author  = "TODO",
+  journal = "TODO",
+  year    = "2025",
+  url     = "TODO"
 }
 ```
 
 ## Contributing
 
-If you notice anything unexpected, or would like to propose a new feature, please open an [issue](https://github.com/tgm-team/tgm/issues) and feel free [to discuss them with us](https://github.com/tgm-team/tgm/discussions).
+We welcome contributions. If you encounter problems or would like to propose a new features, please open an [issue](https://github.com/tgm-team/tgm/issues) [and join the discussion](https://github.com/tgm-team/tgm/discussions).
 
-To learn more about making a contribution to TGM see our [contribution guide](./.github/CONTRIBUTING.md).
+For details on contributin to TGM, see our [contribution guide](./.github/CONTRIBUTING.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
