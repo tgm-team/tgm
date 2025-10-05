@@ -20,21 +20,20 @@
 
 ## About The Project
 
-TGM is a research library designed to accelerate training workloads over dynamic graphs and facilitate prototyping of temporal graph learning methods.
-
-Our main goal is to provide an efficient abstraction over dynamic graphs to enable new practitioners to quickly contribute to research in the field. We natively support both discrete and continuous-time graphs.
+TGM is a research library for temporal graph learning, designed to accelerate training on dynamic graphs while enabling rapid prototyping of new methods.
+It provides a unified abstraction for both discrete and continuous-time graphs, supporting diverse tasks across link, node, and graph-level prediction.
 
 > \[!NOTE\]
 > TGM is in beta, and may introduce breaking changes.
 
 ### Library Highlights
 
-- :zap: It's not that fast yet but it will be soon :)
-- :hourglass_flowing_sand: First library to support both discrete and continuous-time graphs
-- :wrench: Built-in support for [TGB datasets](https://tgb.complexdatalab.com/), MRR-based link prediction, Node Property Prediction and Graph level tasks
-- :sparkles: Modular, intuitive API for rapid model prototyping
-- :atom: Efficient dataloading with edge and time-based batching
-- :heavy_check_mark: Validated implementations of popular TG methods
+- First unified temporal graph library supporting both continuous-time and discrete-time graphs, with 8+ methods across diverse architectures
+- Time-first API: native support for temporal granularity, graph discretization, and snapshot iteration
+- Efficiency: ~7.8× faster training and ~175× faster graph discretization compared to existing research libraries
+- Research-oriented: modular hook framework standardizes TG transforms and supports a broad range of tasks (link, node, and graph-level prediction)
+- Built-in support for popular datasets (e.g., [TGB datasets](https://tgb.complexdatalab.com/))
+- Validated implementations of popular methods (TGAT, TGN, etc.)
 
 ### Supported Methods
 
