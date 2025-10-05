@@ -60,10 +60,8 @@ pip install git+https://github.com/tgm-team/tgm.git@main
 pip install tgm-lib
 ```
 
-### Windows
-
 > \[!NOTE\]
-> Windows is not directly tested in our CI. Additional setup may be required for GPU support. For instance, for *cuda:12.4* you will need to manually install the appropriate PyTorch wheels for your drivers:
+> Windows is not directly tested in our CI. Additional setup may be required. For instance, for *cuda:12.4* you will need to manually install the appropriate PyTorch wheels for your drivers:
 
 ```sh
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
