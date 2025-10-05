@@ -38,24 +38,6 @@ It provides a unified abstraction for both discrete and continuous-time graphs, 
 
 To request a method for prioritization, please [open an issue](https://github.com/tgm-team/tgm/issues) or [join the discussion](https://github.com/tgm-team/tgm/discussions).
 
-**Implemented:** EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8]
-
-**Planned:** TNCN[^9], DyGMamba[^10], NAT[^11]
-
-| Method     | Status      | Paper                                    |
-| ---------- | ----------- | ---------------------------------------- |
-| EdgeBank   | Implemented | [Link](https://arxiv.org/abs/2207.10128) |
-| GCN        | Implemented | [Link](https://arxiv.org/abs/1609.02907) |
-| GC-LSTM    | Implemented | [Link](https://arxiv.org/abs/1812.04206) |
-| GraphMixer | Implemented | [Link](https://arxiv.org/abs/2302.11636) |
-| TGAT       | Implemented | [Link](https://arxiv.org/abs/2002.07962) |
-| TGN        | Implemented | [Link](https://arxiv.org/abs/2006.10637) |
-| DygFormer  | Implemented | [Link](https://arxiv.org/abs/2303.13047) |
-| TPNet      | Implemented | [Link](https://arxiv.org/abs/2410.04013) |
-| TNCN       | Planned     | [Link](https://arxiv.org/abs/2406.07926) |
-| DyGMamba   | Planned     | [Link](https://arxiv.org/abs/2408.04713) |
-| NAT        | Planned     | [Link](https://arxiv.org/abs/2209.01084) |
-
 | Status      | Methods                                                                                         |
 | ----------- | ----------------------------------------------------------------------------------------------- |
 | Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8] |
