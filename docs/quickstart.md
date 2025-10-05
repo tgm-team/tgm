@@ -2,7 +2,7 @@
 
 ### Minimal Example
 
-Here’s a basic example demonstrating how to train TGCN for dynamic node property prediction on `tgbl-trade`:
+Here’s a basic example demonstrating how to train TGCN for dynamic node property prediction on `tgbn-trade`:
 
 ```python
 import torch
