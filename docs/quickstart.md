@@ -65,8 +65,6 @@ for batch in train_loader:
 
 TGM includes pre-packaged example scripts to help you get started quickly. The examples require extra dependencies beyond the core library.
 
-To get started, [follow our installation from source instructions](#installation) and then install the additional dependencies:
-
 ```sh
 pip install -e .[examples]
 ```
@@ -83,5 +81,5 @@ python examples/linkproppred/tgat.py --dataset tgbl-wiki --device cuda
 
 ### Next steps
 
-- Explore more of our [examples](../tgm/examples/)
-- Dive deeper into TGM with our [tutorials](../tgm/docs/tutorials/)
+- Explore more of our [examples](../examples/)
+- Dive deeper into TGM with our [tutorials](./tutorials/)
