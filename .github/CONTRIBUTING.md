@@ -148,6 +148,4 @@ Once you are ready to contribute code:
 1. Implement your changes and ensure that all tests pass locally
 1. Open a pull request referencing the related issue.
 
-TGM uses [Github Actions](https://github.com/tgm-team/tgm/tree/main/.github/workflows) for continuous integration. Each PR will automatically be built and validated against the TGM guidelines.
-
-Please ensure all the automatic checks pass and then tag members of the core team for review and further discussion.
+TGM uses [Github Actions](https://github.com/tgm-team/tgm/tree/main/.github/workflows) for continuous integration. Each PR will automatically be built and validated against the TGM guidelines. Please ensure all the automatic checks pass and then tag members of the core team for review and further discussion.
