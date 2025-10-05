@@ -116,9 +116,7 @@ If you use TGM in your work, please cite [our paper](https://github.com/tgm-team
 
 ## Contributing
 
-We welcome contributions. If you encounter problems or would like to propose a new features, please open an [issue](https://github.com/tgm-team/tgm/issues) [and join the discussion](https://github.com/tgm-team/tgm/discussions).
-
-For details on contributin to TGM, see our [contribution guide](./.github/CONTRIBUTING.md).
+We welcome contributions. If you encounter problems or would like to propose a new features, please open an [issue](https://github.com/tgm-team/tgm/issues) [and join the discussion](https://github.com/tgm-team/tgm/discussions). For details on contributin to TGM, see our [contribution guide](./.github/CONTRIBUTING.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
