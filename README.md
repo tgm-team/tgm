@@ -32,7 +32,6 @@ It provides a unified abstraction for both discrete and continuous-time graphs, 
 - **Efficiency**: ~7.8× faster training and ~175× faster discretization vs. existing research libraries
 - **Research-Oriented**: modular hook framework standardizes workflows for link, node, and graph-level tasks
 - **Datasets**: built-in support for popular datasets (e.g., TGB[^12])
-- **Validated Methods**: 8+ implemented methods across diverse architectures
 
 ### Supported Methods
 
