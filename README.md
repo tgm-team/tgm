@@ -107,10 +107,6 @@ python examples/linkproppred/tgat.py \
 
 Work in progress.
 
-## Documentation
-
-Documentation along with a quick start guide can be found on the [docs website](https://tgm.readthedocs.io/).
-
 ## Citation
 
 Please cite [our paper](https://github.com/tgm-team/tgm) if your use this code in your own work:
