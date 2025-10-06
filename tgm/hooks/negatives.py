@@ -79,7 +79,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
 
         # Load evaluation sets
         root = Path(PROJ_DIR + 'datasets') / dataset_name.replace('-', '_')
-        if dataset_name in DATA_VERSION_DICT:
+        if DATA_VERSION_DICT.get(dataset_name, 1) > 1:
             version_suffix = f'_v{DATA_VERSION_DICT[dataset_name]}'
         else:
             version_suffix = ''
