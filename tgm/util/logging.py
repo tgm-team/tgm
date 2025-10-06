@@ -185,7 +185,7 @@ def log_metrics_dict(
 
     Logs human-readable info at `level`, and JSON-formatted debug log at DEBUG.
 
-    Note: This is equivalent to calling log_metric for each key-x pair.
+    Note: This is equivalent to calling log_metric for each key-value pair.
 
     Args:
         metrics_dict (Dict[str, Any]): Dictionary of metric_name: metric_value pairs.
