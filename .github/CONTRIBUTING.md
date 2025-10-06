@@ -144,7 +144,7 @@ Before opening a Pull Request, please first [open a new issue](https://github.co
 
 Once you are ready to contribute code:
 
-1. Fork the repository and create a feature brnach.
+1. Fork the repository and create a feature branch.
 1. Implement your changes and ensure that all tests pass locally
 1. Open a pull request referencing the related issue.
 
