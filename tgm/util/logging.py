@@ -185,7 +185,7 @@ def log_metrics_dict(
 
     Logs human-readable info at `level`, and JSON-formatted debug log at DEBUG.
 
-    Note: This is equivalent to calling log_metric for each key-value pair.
+    Note: This is equivalent to calling log_metric for each key-x pair.
 
     Args:
         metrics_dict (Dict[str, Any]): Dictionary of metric_name: metric_value pairs.
@@ -258,6 +258,33 @@ def _get_logger(name: str) -> logging.Logger:
 
 
 util_logger = _get_logger(__name__)
+
+
+def human_format(x: int | float) -> str:
+    try:
+        # Handle inf and nan
+        if isinstance(x, float) and (x == float('inf') or x == float('-inf') or x != x):
+            return str(x)
+
+        n = float(x)
+
+        # Small numbers: comma separated
+        if abs(n) < 1_000_000:
+            if n.is_integer():
+                return f'{int(n):,}'
+            else:
+                return f'{n:,.2f}'
+
+        # Large numbers: suffix
+        suffixes = ['', 'K', 'M', 'B', 'T']
+        magnitude = 0
+        while abs(n) >= 1000 and magnitude < len(suffixes) - 1:
+            magnitude += 1
+            n /= 1000.0
+        return f'{n:.2f}{suffixes[magnitude]}'
+
+    except Exception:
+        return str(x)
 
 
 class _logged_cached_property(functools.cached_property):
