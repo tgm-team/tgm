@@ -1,10 +1,12 @@
 # Contributing to TGM
 
-Thank you for your interest in contributing! This guide covers setup, development workflow and testing processes in TGM.
+Thank you for your interest in contributing! This guide covers setup, deveopment workflow and testing processes in TGM. We also invite you to join the [TGL slack group](https://tglworkshop.slack.com/ssb/redirect), where you can connect with the community and ask questions.
 
 ## Prerequisites
 
-TGM uses [uv](https://docs.astral.sh/uv/) to manage dependencies and provide a reproducible environment. If you don't have `uv` installed:
+TGM requires **Python 3.10**.
+
+We use [uv](https://docs.astral.sh/uv/) to manage dependencies and provide a reproducible environment. If you don't have `uv` installed:
 
 ```sh
 pip install uv
@@ -138,6 +140,12 @@ To build (and serve) the documentation locally:
 
 ### Submitting PRs
 
-TGM uses [Github Actions](https://github.com/tgm-team/tgm/tree/main/.github/workflows) for continuous integration. Everytime you send a Pull Request, your commit will be built and checked against the TGM guidelines.
+Before opening a Pull Request, please first [open a new issue](https://github.com/tgm-team/tgm/issues) describing the feature you’d like to add or the bug you’d like to fix. Assign yourself to the issue so others know you’re working on it, and feel free to tag a core library developer if you’d like early feedback on your proposed approach.
 
-Please ensure all the automatic checks pass and then tag members of the core team for review.
+Once you are ready to contribute code:
+
+1. Fork the repository and create a feature branch.
+1. Implement your changes and ensure that all tests pass locally
+1. Open a pull request referencing the related issue.
+
+TGM uses [Github Actions](https://github.com/tgm-team/tgm/tree/main/.github/workflows) for continuous integration. Each PR will automatically be built and validated against the TGM guidelines. Please ensure all the automatic checks pass and then tag members of the core team for review and further discussion.
