@@ -251,19 +251,19 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
 else:
-    static_node_feats = torch.randn(
+    static_node_feats = torch.zeros(
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
 encoder = GraphMixerEncoder(
-    embed_dim=args.embed_dim,
+    node_dim=static_node_feats.shape[1],
+    edge_dim=train_dg.edge_feats_dim,
     time_dim=args.time_dim,
+    embed_dim=args.embed_dim,
     num_tokens=args.n_nbrs,
     token_dim_expansion=float(args.token_dim_expansion),
     channel_dim_expansion=float(args.channel_dim_expansion),
     dropout=float(args.dropout),
-    node_dim=static_node_feats.shape[1],
-    edge_dim=train_dg.edge_feats_dim | args.embed_dim,
 ).to(args.device)
 decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device
