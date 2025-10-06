@@ -260,7 +260,7 @@ def _get_logger(name: str) -> logging.Logger:
 util_logger = _get_logger(__name__)
 
 
-def human_format(x: int | float) -> str:
+def pretty_number_format(x: int | float) -> str:
     try:
         # Handle inf and nan
         if isinstance(x, float) and (x == float('inf') or x == float('-inf') or x != x):

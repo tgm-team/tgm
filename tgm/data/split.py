@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 import torch
 from torch import Tensor
 
-from tgm.util.logging import _get_logger, human_format
+from tgm.util.logging import _get_logger, pretty_number_format
 
 logger = _get_logger(__name__)
 
@@ -120,8 +120,8 @@ class TemporalSplit(SplitStrategy):
                 logger.warning(
                     'No edges found in %s split time range [%s, %s)',
                     split_name,
-                    human_format(start),
-                    human_format(end),
+                    pretty_number_format(start),
+                    pretty_number_format(end),
                 )
                 continue
 
@@ -133,10 +133,10 @@ class TemporalSplit(SplitStrategy):
             logger.info(
                 '%s split time range: [%s, %s),  %s edge events, %s node events',
                 split_name,
-                human_format(start),
-                human_format(end),
-                human_format(split_data.edge_index.size(0)),
-                human_format(
+                pretty_number_format(start),
+                pretty_number_format(end),
+                pretty_number_format(split_data.edge_index.size(0)),
+                pretty_number_format(
                     0 if split_data.node_ids is None else split_data.node_ids.size(0)
                 ),
             )
@@ -190,12 +190,12 @@ class TemporalRatioSplit(SplitStrategy):
             self.train_ratio,
             self.val_ratio,
             self.test_ratio,
-            human_format(min_time),
-            human_format(val_time),
-            human_format(val_time),
-            human_format(test_time),
-            human_format(test_time),
-            human_format(max_time),
+            pretty_number_format(min_time),
+            pretty_number_format(val_time),
+            pretty_number_format(val_time),
+            pretty_number_format(test_time),
+            pretty_number_format(test_time),
+            pretty_number_format(max_time),
         )
 
         time_split = TemporalSplit(val_time=val_time, test_time=test_time)
@@ -238,10 +238,10 @@ class TGBSplit(SplitStrategy):
             logger.info(
                 'TGB %s split time range [%s, %s], %s edge events, %s node events',
                 split_name,
-                human_format(edge_start_time),
-                human_format(edge_end_time),
-                human_format(split_data.edge_index.size(0)),
-                human_format(
+                pretty_number_format(edge_start_time),
+                pretty_number_format(edge_end_time),
+                pretty_number_format(split_data.edge_index.size(0)),
+                pretty_number_format(
                     0 if split_data.node_ids is None else split_data.node_ids.size(0)
                 ),
             )
