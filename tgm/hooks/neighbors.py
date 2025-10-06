@@ -535,3 +535,23 @@ class RecencyNeighborHook(StatefulHook):
                 (self._num_nodes, self._max_nbrs, self._edge_feats_dim)  # type: ignore
             )
             self._need_to_initialize_nbr_feats = False
+
+
+class NodeEventTemporalSubgraphHook(StatelessHook):
+    requires = {'nbr_nids', 'nbr_times', 'nbr_feats'}
+    produces = {'src', 'dst', 'time', 'edge_feats'}
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        if batch.dynamic_node_feats is not None:
+            src = batch.node_ids
+            num_nbrs = len(batch.nbr_nids[0][0])  # type: ignore
+            dst = batch.nbr_nids[0].flatten()  # type: ignore
+
+            mask = dst != PADDED_NODE_ID
+            src = src.repeat_interleave(num_nbrs)  # type: ignore
+            batch.src = src[mask]
+            batch.dst = dst[mask]
+            batch.time = batch.nbr_times[0].flatten()[mask]  # type: ignore
+            batch.edge_feats = batch.nbr_feats[0].flatten(0, -2).float()[mask]  # type: ignore
+
+        return batch
