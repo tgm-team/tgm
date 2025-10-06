@@ -7,9 +7,9 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm import DGBatch, DGData, DGraph
-from tgm.loader import DGDataLoader
-from tgm.split import TemporalRatioSplit
+from tgm import DGBatch, DGraph
+from tgm.data import DGData, DGDataLoader, TemporalRatioSplit
+from tgm.util.logging import enable_logging, log_latency, log_metrics_dict
 from tgm.util.seed import seed_everything
 
 """
@@ -45,6 +45,12 @@ parser.add_argument(
     default='W',
     help='time granularity to operate on for snapshots',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
@@ -109,6 +115,7 @@ class PersistantForecast:
         return pred
 
 
+@log_latency
 def eval(
     loader: DGDataLoader,
     y_true: torch.Tensor,
@@ -126,7 +133,6 @@ def eval(
     return metrics.compute()
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 
 df = pd.read_csv(args.path_dataset)
@@ -161,8 +167,8 @@ test_metrics = MetricCollection(metrics, prefix='Test')
 
 val_labels = generate_binary_trend_labels(val_loader, snapshot_measurement=edge_count)
 val_results = eval(val_loader, val_labels, model, val_metrics)
-print(' '.join(f'{k}={v:.4f}' for k, v in val_results.items()))
+log_metrics_dict(val_results)
 
 test_labels = generate_binary_trend_labels(test_loader, snapshot_measurement=edge_count)
 test_results = eval(test_loader, test_labels, model, test_metrics)
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+log_metrics_dict(test_results)

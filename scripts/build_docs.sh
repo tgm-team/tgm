@@ -9,6 +9,7 @@ print_usage() {
     echo "Usage: $0"
     echo
     echo "Build and serve documentation locally."
+    echo "  --build-only    Build docs exit instead of serving"
     echo
     echo "Environment:"
     echo "  If .venv is missing, it will be created automatically with:"
@@ -32,13 +33,33 @@ setup_venv_if_missing() {
 
 build_docs() {
     echo "Building documentation..."
-    uv run mkdocs serve
+    uv run mkdocs build --strict
+}
+
+serve_docs() {
+    echo "Serving documentation..."
+    uv run mkdocs serve --strict
+
 }
 
 main() {
     check_uv_install
     setup_venv_if_missing
-    build_docs
+
+    BUILD_ONLY=false
+    for arg in "$@"; do
+        case $arg in
+            --build-only)
+                BUILD_ONLY=true
+                ;;
+        esac
+    done
+
+    if [ "$BUILD_ONLY" = true ]; then
+        build_docs
+    else
+        serve_docs
+    fi
 }
 
 main "$@"

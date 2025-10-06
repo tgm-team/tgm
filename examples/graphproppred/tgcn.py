@@ -1,5 +1,4 @@
 import argparse
-import time
 from typing import Callable, Tuple
 
 import pandas as pd
@@ -10,10 +9,16 @@ from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 from tqdm import tqdm
 
-from tgm import DGBatch, DGData, DGraph
-from tgm.loader import DGDataLoader
-from tgm.nn.recurrent import TGCN
-from tgm.split import TemporalRatioSplit
+from tgm import DGBatch, DGraph
+from tgm.data import DGData, DGDataLoader, TemporalRatioSplit
+from tgm.nn import TGCN, GraphPredictor
+from tgm.util.logging import (
+    enable_logging,
+    log_gpu,
+    log_latency,
+    log_metric,
+    log_metrics_dict,
+)
 from tgm.util.seed import seed_everything
 
 """
@@ -58,6 +63,12 @@ parser.add_argument(
     default='W',
     help='time granularity to operate on for snapshots',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
@@ -103,14 +114,6 @@ def preprocess_raw_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def sum_pooling(z: torch.Tensor) -> torch.Tensor:
-    return torch.sum(z, dim=0).squeeze()
-
-
-def mean_pooling(z: torch.Tensor) -> torch.Tensor:
-    return torch.mean(z, dim=0).squeeze()
-
-
 class RecurrentGCN(torch.nn.Module):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
@@ -132,22 +135,8 @@ class RecurrentGCN(torch.nn.Module):
         return z, h_0
 
 
-class GraphPredictor(torch.nn.Module):
-    def __init__(
-        self, in_dim: int, out_dim: int, graph_pooling: Callable = mean_pooling
-    ) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(in_dim, in_dim)
-        self.fc2 = nn.Linear(in_dim, out_dim)
-        self.graph_pooling = graph_pooling
-
-    def forward(self, z_node: torch.Tensor) -> torch.Tensor:
-        z_graph = self.graph_pooling(z_node)
-        h = self.fc1(z_graph)
-        h = h.relu()
-        return self.fc2(h)
-
-
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     labels: torch.Tensor,
@@ -185,6 +174,8 @@ def train(
     return total_loss, h_0, metrics.compute()
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -210,7 +201,6 @@ def eval(
     return metrics.compute(), h_0
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 
 df = pd.read_csv(args.path_dataset)
@@ -251,7 +241,9 @@ else:
 encoder = RecurrentGCN(
     node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
 ).to(args.device)
-decoder = GraphPredictor(in_dim=args.embed_dim, out_dim=1).to(args.device)
+decoder = GraphPredictor(in_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
+    args.device
+)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
@@ -272,7 +264,6 @@ test_labels = generate_binary_trend_labels(
 ).to(args.device)
 
 for epoch in range(1, args.epochs + 1):
-    start_time = time.perf_counter()
     loss, h_0, train_results = train(
         train_loader,
         train_labels,
@@ -282,20 +273,15 @@ for epoch in range(1, args.epochs + 1):
         opt,
         train_metrics,
     )
-    end_time = time.perf_counter()
-    latency = end_time - start_time
 
     val_results, h_0 = eval(
         val_loader, val_labels, static_node_feats, encoder, decoder, h_0, val_metrics
     )
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} '
-        + ' '.join(f'{k}={v:.4f}' for k, v in train_results.items())
-        + ' '
-        + ' '.join(f'{k}={v:.4f}' for k, v in val_results.items())
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metrics_dict(train_results, epoch=epoch)
+    log_metrics_dict(val_results, epoch=epoch)
 
 test_results, h_0 = eval(
     test_loader, test_labels, static_node_feats, encoder, decoder, h_0, test_metrics
 )
-print(' '.join(f'{k}={v:.4f}' for k, v in test_results.items()))
+log_metrics_dict(test_results, epoch=args.epochs)

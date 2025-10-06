@@ -1,5 +1,4 @@
 import argparse
-import time
 from typing import Tuple
 
 import numpy as np
@@ -9,10 +8,11 @@ import torch.nn.functional as F
 from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGData, DGraph
+from tgm import DGBatch, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
-from tgm.loader import DGDataLoader
-from tgm.nn.recurrent import GCLSTM
+from tgm.data import DGData, DGDataLoader
+from tgm.nn import GCLSTM, NodePredictor
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -35,6 +35,12 @@ parser.add_argument(
     default='Y',
     help='time granularity to operate on for snapshots',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 class RecurrentGCN(torch.nn.Module):
@@ -59,18 +65,8 @@ class RecurrentGCN(torch.nn.Module):
         return z, h_0, c_0
 
 
-class NodePredictor(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(in_dim, in_dim)
-        self.fc2 = nn.Linear(in_dim, out_dim)
-
-    def forward(self, z_node: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(z_node)
-        h = h.relu()
-        return self.fc2(h)
-
-
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     static_node_feats: torch.Tensor,
@@ -103,6 +99,8 @@ def train(
     return total_loss, h_0, c_0
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -136,7 +134,6 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -161,17 +158,15 @@ num_classes = train_dg.dynamic_node_feats_dim
 encoder = RecurrentGCN(
     node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
 ).to(args.device)
-decoder = NodePredictor(in_dim=args.embed_dim, out_dim=num_classes).to(args.device)
+decoder = NodePredictor(
+    in_dim=args.embed_dim, out_dim=num_classes, hidden_dim=args.embed_dim
+).to(args.device)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
 for epoch in range(1, args.epochs + 1):
-    start_time = time.perf_counter()
     loss, h_0, c_0 = train(train_loader, static_node_feats, encoder, decoder, opt)
-    end_time = time.perf_counter()
-    latency = end_time - start_time
-
     val_ndcg = eval(
         val_loader,
         static_node_feats,
@@ -181,9 +176,8 @@ for epoch in range(1, args.epochs + 1):
         c_0,
         evaluator,
     )
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_NODEPROPPRED}={val_ndcg:.4f}'
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
 test_ndcg = eval(test_loader, static_node_feats, encoder, decoder, h_0, c_0, evaluator)
-print(f'Test {METRIC_TGB_NODEPROPPRED}={test_ndcg:.4f}')
+log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
