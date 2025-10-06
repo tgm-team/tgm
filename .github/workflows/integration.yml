@@ -93,5 +93,20 @@ jobs:
                 ${{ steps.get-log-dir.outputs.log_path }}/*.err
                 ${{ steps.get-log-dir.outputs.log_path }}/*.log
 
+      - name: Parse structured logs
+        run: |
+          set -euo pipefail
+          LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
+          for log_file in "$LOG_DIR"/*.log; do
+            ./scripts/parse_logs.sh "$log_file"
+          done
+
+      - name: Upload parsed logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: parsed-logs
+          path: |
+            ${{ steps.get-log-dir.outputs.log_path }}/*.json
+
       - name: Minimize uv cache
         run: uv cache prune --ci
