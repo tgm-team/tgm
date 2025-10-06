@@ -1,27 +1,25 @@
 ![image](./img/architecture-gray.svg)
 
-**High-Level Design and Architecture of TGM**
+TGM is organized as a **three-layer architecture**:
 
-Dotted lines denote lazy execution with shallow memory ownership. Solid arrows denote the passage of ownership and data materialization on-device. Users load a dynamic graph into a storage backend and register message-passing hooks. At runtime, the hooks execute and materialize the relevant sub-graph/feature vectors automatically when yielding a batch of data. Caching layers in both view objects and storage prevent duplicate computational work.
+1. **Data Layer**
 
-### Storage Backend
+   - Immutable, time-sorted coordinate-format graph storage with lightweight, concurrency-safe graph views.
+   - Efficient time-based slicing and binary search over timestamps, enabling fast recent-neighbor retrieval.
+   - Supports continuous-time and discrete-time loading, with vectorized snapshot creation.
+   - Extensible backend allows alternative storage layouts for future models.
 
-The TGM storage backend provides a read-only, static interface for querying dynamic graph data-timestamps, edge pairs, features, and node IDs. Optimized for offline training, the backend uses caching to accelerate access and supports extensibility for particular hardware or access patterns in the future.
+1. **Execution Layer**
 
-Our default implementation uses a chronologically sorted coordinate format, enabling binary search over timestamps and linear scans within time windows. A temporal index cache further reduces query costs. We plan to add a Temporal Compressed Sparse Row (TCSR) backend which organizes time-aware neighbour lists in contiguous memory blocks. Though expensive to construct, TCSR aligns with OpenDG’s immutable data assumption.
+   - The DataLoader is responsible for iterating through the temporal graph data stream by time or events based on the user-defined granularity.
+   - HookManager orchestrates transformations during data loading (e.g., temporal neighbor sampling), dynamically adding relevant attributes to the Batch yielded by the dataloader.
+   - Hooks can be combined and registered under specific conditions (analytics, training, etc.).
+   - Pre-defined recipes simplify common setups (e.g. TGB link prediction) and prevent common pitfalls (e.g., mismanaging negatives).
 
-### Graph Views and Lazy Slice Tracking
+1. **ML Layer**
 
-TGM exposes immutable graph views as the primary user interface. A Graph View holds a reference to the storage backend and contains a TimeDelta for temporal resolution, a Slice Tracker for subgraph operations, and a local cache for computed properties. The Slice Tracker records metadata about requested operations on the Graph View. Immutability guarantees that views are safe for concurrent access. Read-only queries are delegated to the backend and automatically cached for efficiency. Subgraphs are lazily materialized at runtime, enabling optimized query execution while abstracting system-level optimizations behind a simple interface.
+   - Materializes batches directly on-device for model computation.
+   - Supports **node-, link-, and graph-level prediction**.
 
-### Temporal Index Management
-
-TGM uses a TimeDelta abstraction to define temporal granularity—whether timestamps represent ordered indices or real durations (e.g., seconds). This decouples time semantics from data layout and informs access patterns and iteration. The dataloader leverages TimeDelta to support batch iteration by event count (e.g., 200 events) or fixed time windows (e.g., 500 ms), enabling batching strategies that align with GPU efficiency or time-aware modelling, where event density varies—an approach that has demonstrated improved performance in recent dynamic link prediction tasks.
-
-### Graph Hooks
-
-TGM supports flexible prototyping via a modular hook mechanism. Hooks are composable transformations applied to sliced graph views during data iteration, enabling custom logic, such as memory updates or neighbourhood sampling, without modifying core code. Hooks we currently support include Materialize: converts a graph slice into dense edge index/feature tensors, Negative Sampling: generates negative edges for link prediction, and Temporal Neighbourhood: retrieves node interaction histories using online buffering or backend queries.
-
-### Neural Layers and Runtime
-
-TGM provides a PyTorch-Geometric-style frontend with modular components tailored for temporal graph learning, including time encoders, memory modules, attention layers, and link decoders. The current support includes validated implementations of temporal self-attention and time encoding, with additional components planned for future release.
+> \[!TIP\]
+> Check out [our paper](https://tgm.readthedocs.io/) for technical details.
