@@ -98,7 +98,7 @@ jobs:
           set -euo pipefail
           LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
           for log_file in "$LOG_DIR"/*.log; do
-            ./scripts/parse_logs.sh "$log_file"
+            ./scripts/parse_log_to_json.sh "$log_file"
           done
 
       - name: Upload parsed logs
