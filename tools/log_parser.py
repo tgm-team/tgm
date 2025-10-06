@@ -10,18 +10,25 @@ parser = argparse.ArgumentParser(
     ),
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument('--log-file-path', type=str, required=True, help='Path to log file')
+parser.add_argument('log_file_path', type=str, help='Path to the log file')
 parser.add_argument(
-    '--json-save-path', type=str, required=True, help='Path to save parsed logs'
+    'json_save_path',
+    type=str,
+    nargs='?',
+    default=None,
+    help='Optional path to save parsed logs. If not provided, defaults to the log file path with .json suffix',
 )
 
 
-def main(log_file_str: str, json_save_str: str) -> None:
+def main(log_file_str: str, json_save_str: str | None) -> None:
     log_file_path = Path(log_file_str)
     print(f'Parsing log file: {log_file_path}')
     structured_metrics = parse_log_file(log_file_path)
 
-    json_save_path = Path(json_save_str)
+    if json_save_str is None:
+        json_save_path = log_file_path.with_suffix('.json')
+    else:
+        json_save_path = Path(json_save_str)
     json_save_path.parent.mkdir(parents=True, exist_ok=True)
     json_save_path.write_text(json.dumps(structured_metrics, indent=2))
     print(f'Saved parsed metrics to {json_save_path}')

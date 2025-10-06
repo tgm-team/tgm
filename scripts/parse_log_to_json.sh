@@ -45,7 +45,7 @@ main() {
     fi
 
     local log_file="$1"
-    local json_save_path="${2:-$log_file.json}"
+    local json_save_path="${2:-${log_file%.log}.json}" # replace .log suffix with .json if present
     parse_structured_logs "$log_file" "$json_save_path"
 }
 
