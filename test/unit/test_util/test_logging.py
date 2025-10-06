@@ -168,9 +168,8 @@ def test_log_latency_console_and_file(capsys):
 
         json_lines = _parse_json(tmp_file)
         assert len(json_lines) == 1
-        assert set(['metric', 'value', 'function']) == set(json_lines[0].keys())
-        assert json_lines[0]['metric'] == 'dummy_latency_latency'
-        assert json_lines[0]['function'] == 'dummy_latency'
+        assert set(['metric', 'value']) == set(json_lines[0].keys())
+        assert json_lines[0]['metric'] == 'dummy_latency latency'
 
 
 def test_log_gpu_console_and_file(capsys):
@@ -182,20 +181,14 @@ def test_log_gpu_console_and_file(capsys):
         assert 'Function dummy_gpu GPU memory' in console_logs
 
         json_lines = _parse_json(tmp_file)
-        assert len(json_lines) == 1
-        assert set(
-            [
-                'metric',
-                'cuda_available',
-                'start_mb',
-                'peak_mb',
-                'end_mb',
-                'diff_mb',
-                'function',
-            ]
-        ) == set(json_lines[0].keys())
-        assert json_lines[0]['metric'] == 'dummy_gpu_gpu_usage'
-        assert json_lines[0]['function'] == 'dummy_gpu'
+        assert len(json_lines) == 2
+        assert set(['metric', 'value']) == set(json_lines[0].keys())
+        assert set(['metric', 'value']) == set(json_lines[1].keys())
+        assert json_lines[0]['metric'] == 'dummy_gpu peak_gpu_mb'
+        assert json_lines[0]['value'] == 0.0
+
+        assert json_lines[1]['metric'] == 'dummy_gpu alloc_gpu_mb'
+        assert json_lines[1]['value'] == 0.0
 
 
 def test_log_metrics_console_and_file(capsys):
@@ -209,7 +202,7 @@ def test_log_metrics_console_and_file(capsys):
 
         json_lines = _parse_json(tmp_file)
         assert len(json_lines) == 2
-        assert json_lines[0] == {'metric': 'foo', 'value': 123, 'epoch': 1}
+        assert json_lines[0] == {'metric': 'foo epoch 1', 'value': 123}
         assert json_lines[1] == {'metric': 'bar', 'value': 234, 'meta_data': 'foo'}
 
 
@@ -224,8 +217,8 @@ def test_log_metrics_dict_console_and_file(capsys):
 
         json_lines = _parse_json(tmp_file)
         assert len(json_lines) == 2
-        assert json_lines[0] == {'metric': 'foo', 'value': 123, 'epoch': 1}
-        assert json_lines[1] == {'metric': 'bar', 'value': 234, 'epoch': 1}
+        assert json_lines[0] == {'metric': 'foo epoch 1', 'value': 123}
+        assert json_lines[1] == {'metric': 'bar epoch 1', 'value': 234}
 
 
 def test_pretty_number_format():
