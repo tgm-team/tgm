@@ -112,10 +112,9 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
 
         batch_time_delta = TimeDeltaDG(batch_unit)
         logger.info(
-            'Initializing DGDataLoader: batch_size=%d, batch_unit=%s, dg.time_delta.event_ordered=%s',
+            'Initializing DGDataLoader: batch_size=%d, batch_unit=%s',
             batch_size,
             batch_unit,
-            dg.time_delta.is_event_ordered,
         )
 
         if dg.time_delta.is_event_ordered and batch_time_delta.is_time_ordered:

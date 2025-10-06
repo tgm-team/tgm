@@ -228,6 +228,17 @@ def test_log_metrics_dict_console_and_file(capsys):
         assert json_lines[1] == {'metric': 'bar', 'value': 234, 'epoch': 1}
 
 
+def test_pretty_number_format():
+    assert tgm_logging.pretty_number_format(None) == 'None'
+    assert tgm_logging.pretty_number_format(123) == '123'
+    assert tgm_logging.pretty_number_format(123.45) == '123.45'
+    assert tgm_logging.pretty_number_format(12345) == '12,345'
+    assert tgm_logging.pretty_number_format(9876543210) == '9.88B'
+    assert tgm_logging.pretty_number_format(float('inf')) == 'inf'
+    assert tgm_logging.pretty_number_format(float('-inf')) == '-inf'
+    assert tgm_logging.pretty_number_format(float('nan')) == 'nan'
+
+
 def _parse_json(tmp_file):
     lines = [line.decode() for line in tmp_file.read().splitlines()]
     json_lines = [line for line in lines if line.endswith('}')]
