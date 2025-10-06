@@ -48,7 +48,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: non-gpu
-          name: codecov-pr-${{ github.event.pull_request.number }}
+          name: codecov-${{ github.event_name }}
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Minimize uv cache
