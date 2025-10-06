@@ -1,9 +1,6 @@
 name: Spellcheck Action
 
 on:  # yamllint disable-line rule:truthy
-  push:
-    branches:
-      - master
   pull_request:
 
 concurrency:
