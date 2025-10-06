@@ -27,26 +27,15 @@ parse_structured_logs() {
     local json_save_path="$2"
     echo "Parsing JSON logs from $log_file → $json_save_path"
 
-    uv run python - <<'EOF' "$log_file" "$json_save_path"
-import sys, json, pathlib
+    echo "Parsing structured logs from $log_file → $json_save_path"
 
-log_file, out_file = sys.argv[1], sys.argv[2]
-out_path = pathlib.Path(out_file)
+    # Ensure paths are absolute
+    log_file="$(realpath "$log_file")"
+    json_save_path="$(realpath "$json_save_path")"
 
-with open(log_file, "rb") as f:
-    lines = [line.decode() for line in f.read().splitlines()]
-    json_lines = [line for line in lines if line.endswith("}")]
-    objs = [
-        json.loads(line[line.find("{") : line.rfind("}") + 1])
-        for line in json_lines
-    ]
-
-with out_path.open("w") as f:
-    json.dump(objs, f, indent=2)
-
-print(f"✅ Parsed {len(objs)} JSON objects into {out_file}")
-EOF
-
+    uv run python "$PROJECT_ROOT/tools/log_parser.py" \
+        --log-file-path "$log_file" \
+        --json-save-path "$json_save_path"
 }
 
 main() {
