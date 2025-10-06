@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 import torch
 from torch import Tensor
 
-from tgm.util.logging import _get_logger
+from tgm.util.logging import _get_logger, human_format
 
 logger = _get_logger(__name__)
 
@@ -118,7 +118,10 @@ class TemporalSplit(SplitStrategy):
             edge_mask = (edge_times >= start) & (edge_times < end)
             if not edge_mask.any():
                 logger.warning(
-                    'No edges found in %s split [%s, %s)', split_name, start, end
+                    'No edges found in %s split time range [%s, %s)',
+                    split_name,
+                    human_format(start),
+                    human_format(end),
                 )
                 continue
 
@@ -128,12 +131,14 @@ class TemporalSplit(SplitStrategy):
             split_data = self._masked_copy(data, edge_mask, node_mask)
             splits.append(split_data)
             logger.info(
-                '%s split [%s, %s): %d edge events, %d node events',
+                '%s split time range: [%s, %s),  %s edge events, %s node events',
                 split_name,
-                start,
-                end,
-                split_data.edge_index.size(0),
-                0 if split_data.node_ids is None else split_data.node_ids.size(0),
+                human_format(start),
+                human_format(end),
+                human_format(split_data.edge_index.size(0)),
+                human_format(
+                    0 if split_data.node_ids is None else split_data.node_ids.size(0)
+                ),
             )
 
         return tuple(splits)
@@ -181,16 +186,16 @@ class TemporalRatioSplit(SplitStrategy):
 
         logger.info(
             'TemporalRatioSplit (train=%.2f, val=%.2f, test=%.2f): '
-            'train=[%s, %s), val=[%s, %s), test=[%s, %s]',
+            'train time range: [%s, %s), val time range: =[%s, %s), test time range: [%s, %s]',
             self.train_ratio,
             self.val_ratio,
             self.test_ratio,
-            min_time,
-            val_time,
-            val_time,
-            test_time,
-            test_time,
-            max_time,
+            human_format(min_time),
+            human_format(val_time),
+            human_format(val_time),
+            human_format(test_time),
+            human_format(test_time),
+            human_format(max_time),
         )
 
         time_split = TemporalSplit(val_time=val_time, test_time=test_time)
@@ -231,12 +236,14 @@ class TGBSplit(SplitStrategy):
             split_data = self._masked_copy(data, edge_mask, node_mask)
             splits.append(split_data)
             logger.info(
-                'TGB %s split [%s, %s], %d edge events, %d node events',
+                'TGB %s split time range [%s, %s], %s edge events, %s node events',
                 split_name,
-                edge_start_time,
-                edge_end_time,
-                split_data.edge_index.size(0),
-                0 if split_data.node_ids is None else split_data.node_ids.size(0),
+                human_format(edge_start_time),
+                human_format(edge_end_time),
+                human_format(split_data.edge_index.size(0)),
+                human_format(
+                    0 if split_data.node_ids is None else split_data.node_ids.size(0)
+                ),
             )
 
         return tuple(splits)
