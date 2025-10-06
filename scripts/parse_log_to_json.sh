@@ -25,13 +25,11 @@ check_uv_install() {
 parse_structured_logs() {
     local log_file="$1"
     local json_save_path="$2"
-    echo "Parsing JSON logs from $log_file → $json_save_path"
-
-    echo "Parsing structured logs from $log_file → $json_save_path"
 
     # Ensure paths are absolute
     log_file="$(realpath "$log_file")"
     json_save_path="$(realpath "$json_save_path")"
+    echo "Parsing JSON logs from $log_file → $json_save_path"
 
     uv run python "$PROJECT_ROOT/tools/log_parser.py" \
         --log-file-path "$log_file" \
