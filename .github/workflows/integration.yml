@@ -83,16 +83,6 @@ jobs:
           echo "Resolved log path: $LOG_PATH"
           echo "Resolved run dir: $CI_RUN_DIR"
 
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.get-log-dir.outputs.ci_run_dir }}
-          path: |
-                ${{ steps.get-log-dir.outputs.log_path }}/*.out
-                ${{ steps.get-log-dir.outputs.log_path }}/*.err
-                ${{ steps.get-log-dir.outputs.log_path }}/*.log
-
       - name: Parse structured logs
         run: |
           set -euo pipefail
