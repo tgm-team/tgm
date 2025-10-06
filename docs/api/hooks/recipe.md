@@ -1,0 +1,1 @@
+::: tgm.hooks.recipe

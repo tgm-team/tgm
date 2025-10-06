@@ -66,7 +66,7 @@ Hooks are executed automatically during data loading, allowing different transfo
 
 ```python
 from tgm.hooks import NegativeEdgeSamplerHook # A real negative edge sampler
-from tgm.loader import DGDataLoader
+from tgm.data import DGDataLoader
 
 # Create our graph
 train_dg, test_dg = ...
@@ -84,7 +84,7 @@ train_loader = DGDataLoader(train_dg, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, hook_manager=hm)
 ```
 
-**Important**: When creating custom hooks, you need to make sure you follow the correct hook API. See [`tgm.hooks`](../api/hooks/hooks.md) for more information. A `BadHookProtocolError` will be thrown if you accidentlly tried registering a hook with the wrong API. We suggest you write some unit tests to accompany your custom protocols. You can see [some of our hook tests](https://github.com/tgm-team/tgm/tree/main/test/unit/test_hooks) as a starting point. If your hook has general utility to the TG community, we can add it to TGM and enable code re-use for other practitioners.
+**Important**: When creating custom hooks, you need to make sure you follow the correct hook API. See [`tgm.hooks`](../api/hooks/hooks.md) for more information. A `BadHookProtocolError` will be thrown if you accidentally tried registering a hook with the wrong API. We suggest you write some unit tests to accompany your custom protocols. You can see [some of our hook tests](https://github.com/tgm-team/tgm/tree/main/test/unit/test_hooks) as a starting point. If your hook has general utility to the TG community, we can add it to TGM and enable code reuse for other practitioners.
 
 What now? Well, when we iterate our training graph, we have access to the attributes produced by `NegativeEdgeSamplerHook`, which are `neg` and `neg_time`. In order to see these transformations get applied, we need to *activate* the key we are interested in...
 
@@ -150,7 +150,7 @@ In temporal graph learning, it is common that information you received in the pa
 For this purpose, we have the notion of `shared hooks`, which are automatically attributed to **all** keys in the `HookManager`:
 
 ```python
-from tgm.loader import DGDataLoader
+from tgm.data import DGDataLoader
 
 # Create our graph
 train_dg, test_dg = ...

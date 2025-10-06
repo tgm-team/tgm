@@ -67,9 +67,9 @@ download_dataset() {
     echo "Downloading dataset: $dataset_name"
 
     if [[ "$dataset" == tgbl_* ]]; then
-        echo "y" | .venv/bin/python -c "from tgb.linkproppred.dataset import LinkPropPredDataset as DS; DS(name='$dataset_name')"
+        .venv/bin/python -c "from tgb.linkproppred.dataset import LinkPropPredDataset as DS; DS(name='$dataset_name')"
     elif [[ "$dataset" == tgbn_* ]]; then
-        echo "y" | .venv/bin/python -c "from tgb.nodeproppred.dataset import NodePropPredDataset as DS; DS(name='$dataset_name')"
+        .venv/bin/python -c "from tgb.nodeproppred.dataset import NodePropPredDataset as DS; DS(name='$dataset_name')"
     else
         echo "Unknown TGB dataset: $dataset" >&2
         exit 1

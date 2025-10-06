@@ -1,5 +1,4 @@
 import argparse
-import time
 from typing import Tuple
 
 import numpy as np
@@ -9,11 +8,12 @@ import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGData, DGraph, RecipeRegistry
+from tgm import DGBatch, DGraph, TimeDeltaDG
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
-from tgm.loader import DGDataLoader
-from tgm.nn.recurrent import GCLSTM
-from tgm.timedelta import TimeDeltaDG
+from tgm.data import DGData, DGDataLoader
+from tgm.hooks import RecipeRegistry
+from tgm.nn import GCLSTM, LinkPredictor
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -36,6 +36,12 @@ parser.add_argument(
     default='h',
     help='time granularity to operate on for snapshots',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 class RecurrentGCN(torch.nn.Module):
@@ -60,18 +66,8 @@ class RecurrentGCN(torch.nn.Module):
         return z, h_0, c_0
 
 
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).view(-1)
-
-
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
@@ -114,6 +110,8 @@ def train(
     return total_loss, z, h_0, c_0
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -159,9 +157,7 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
 evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -206,14 +202,15 @@ else:
 encoder = RecurrentGCN(
     node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
 ).to(args.device)
-decoder = LinkPredictor(args.embed_dim).to(args.device)
+decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
+    args.device
+)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss, z, h_0, c_0 = train(
             train_loader,
             train_snapshots_loader,
@@ -223,8 +220,6 @@ for epoch in range(1, args.epochs + 1):
             opt,
             conversion_rate,
         )
-        end_time = time.perf_counter()
-        latency = end_time - start_time
 
     with hm.activate(val_key):
         val_mrr = eval(
@@ -239,9 +234,8 @@ for epoch in range(1, args.epochs + 1):
             evaluator,
             conversion_rate,
         )
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
 
 with hm.activate(test_key):
@@ -257,4 +251,4 @@ with hm.activate(test_key):
         evaluator,
         conversion_rate,
     )
-    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

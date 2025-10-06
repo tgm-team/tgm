@@ -1,16 +1,19 @@
-from .attention import TemporalAttention
-from .memory import EdgeBankPredictor
-from .time_encoding import Time2Vec
-from .recurrent import GCLSTM
-from .model import DyGFormer, TPNet, RandomProjectionModule
+from .encoder import DyGFormer, TPNet, TGCN, GCLSTM, RandomProjectionModule
+from .decoder import GraphPredictor, NodePredictor, LinkPredictor
+from .modules import Time2Vec, TemporalAttention, EdgeBankPredictor, MLPMixer
 
 
 __all__ = [
+    'DyGFormer',
     'EdgeBankPredictor',
     'GCLSTM',
-    'Time2Vec',
-    'TemporalAttention',
-    'DyGFormer',
+    'GraphPredictor',
+    'LinkPredictor',
+    'MLPMixer',
+    'NodePredictor',
+    'RandomProjectionmodule',
+    'TGCN',
     'TPNet',
-    'RandomProjectionModule',
+    'TemporalAttention',
+    'Time2Vec',
 ]

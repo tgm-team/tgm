@@ -6,9 +6,8 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
-from tgm.data import DGData
+from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, NeighborSamplerHook
-from tgm.loader import DGDataLoader
 
 
 @pytest.fixture
@@ -35,14 +34,116 @@ def test_hook_reset_state():
 
 def test_bad_neighbor_sampler_init():
     with pytest.raises(ValueError):
-        NeighborSamplerHook(num_nbrs=[])
+        NeighborSamplerHook(
+            num_nbrs=[], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        )
     with pytest.raises(ValueError):
-        NeighborSamplerHook(num_nbrs=[1, 0])
+        NeighborSamplerHook(
+            num_nbrs=[1, 0], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        )
+    with pytest.raises(ValueError):
+        NeighborSamplerHook(
+            num_nbrs=[1], seed_nodes_keys=['foo', 'bar'], seed_times_keys=['foo']
+        )
+
+
+def test_sample_with_node_events_seeds(node_only_data):
+    dg = DGraph(node_only_data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[1],
+        seed_nodes_keys=['node_ids'],
+        seed_times_keys=['node_times'],
+    )
+    batch = dg.materialize()
+    batch = hook(dg, batch)
+    assert len(batch.nids) == 1
+    assert len(batch.times) == 1
+    torch.testing.assert_close(batch.nids[0], batch.node_ids)
+    torch.testing.assert_close(batch.times[0], batch.node_times)
+
+
+def test_bad_sample_with_non_existent_seeds(data):
+    dg = DGraph(data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+
+    with pytest.raises(ValueError):
+        _ = hook(dg, batch)
+
+
+def test_sample_with_none_seeds(data):
+    dg = DGraph(data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo, batch.bar = None, None
+
+    with pytest.warns(UserWarning):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_non_tensor_non_None_seeds(data):
+    dg = DGraph(data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = 'should_be_1d_tensor'
+    batch.bar = 'should_be_1d_tensor'
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_non_1d_tensor_seeds(data):
+    dg = DGraph(data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = torch.rand(2, 3)  # should be 1-d
+    batch.bar = torch.rand(2, 3)  # should be 1-d
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_seeds_id_out_of_range(data):
+    dg = DGraph(data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = torch.IntTensor([-1])  # should be positive
+    batch.bar = torch.LongTensor([1])
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_seeds_time_out_of_range(data):
+    dg = DGraph(data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = torch.IntTensor([1])
+    batch.bar = torch.LongTensor([-1])  # should be positive
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
 
 
 def test_neighbor_sampler_hook_link_pred(data):
     dg = DGraph(data)
-    hook = NeighborSamplerHook(num_nbrs=[2])
+    hook = NeighborSamplerHook(
+        num_nbrs=[2],
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
     batch = dg.materialize()
 
     # Link Prediction will add negative edges to seed nodes for sampling
@@ -58,7 +159,11 @@ def test_neighbor_sampler_hook_link_pred(data):
 
 def test_neighbor_sampler_hook_node_pred(data):
     dg = DGraph(data)
-    hook = NeighborSamplerHook(num_nbrs=[2])
+    hook = NeighborSamplerHook(
+        num_nbrs=[2],
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
     batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
     assert hasattr(batch, 'nids')
@@ -117,7 +222,11 @@ def basic_sample_graph():
 def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     n_nbrs = [3]  # 3 neighbor for each node
-    uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs)
+    uniform_hook = NeighborSamplerHook(
+        num_nbrs=n_nbrs,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
     loader = DGDataLoader(dg, batch_size=1, hook_manager=hm)
@@ -194,10 +303,81 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
         assert nbr_feats[0][1][1][0] == 2.0
 
 
+def test_init_basic_sampled_graph_2_hop(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    n_nbrs = [1, 1]  # 3 neighbor for each node
+    uniform_hook = NeighborSamplerHook(
+        num_nbrs=n_nbrs,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register_shared(uniform_hook)
+    loader = DGDataLoader(dg, batch_size=1, hook_manager=hm)
+    assert loader._batch_size == 1
+    with hm.activate('unit'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+        assert nids.shape == (2, 2)
+        assert nids[0][0] == 0
+        assert nids[0][1] == 1
+        assert nbr_nids.shape == (2, 2, 1)
+        assert nbr_nids[0][0][0] == PADDED_NODE_ID
+        assert nbr_nids[0][1][0] == PADDED_NODE_ID
+        assert nbr_times.shape == (2, 2, 1)
+        assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+
+        batch_2 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_2)
+        assert nids.shape == (2, 2)
+        assert nids[0][0] == 0
+        assert nids[0][1] == 2
+        assert nbr_nids.shape == (2, 2, 1)
+        assert nbr_nids[0][0][0] == 1
+        assert nbr_nids[0][1][0] == PADDED_NODE_ID
+        assert nbr_times.shape == (2, 2, 1)
+        assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+        assert nbr_feats[0][0][0][0] == 1.0
+
+        batch_3 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_3)
+        assert nids.shape == (2, 2)
+        assert nids[0][0] == 2
+        assert nids[0][1] == 3
+        assert nbr_nids.shape == (2, 2, 1)
+        assert nbr_nids[0][0][0] == 0
+        assert nbr_nids[0][1][0] == PADDED_NODE_ID
+        assert nbr_times.shape == (2, 2, 1)
+        assert nbr_times[0][0][0] == 2
+        assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+        assert nbr_feats[0][0][0][0] == 2.0
+
+        batch_4 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_4)
+        assert nids.shape == (2, 2)
+        assert nids[0][0] == 2
+        assert nids[0][1] == 0
+        assert nbr_nids.shape == (2, 2, 1)
+        assert nbr_nids[0][0][0] == 3
+        assert nbr_nids[0][1][0] == 1
+        assert nbr_times.shape == (2, 2, 1)
+        assert nbr_times[0][0][0] == 3
+        assert nbr_times[0][1][0] == 1
+        assert nbr_feats.shape == (2, 2, 1, 1)  # 1 feature per edge
+        assert nbr_feats[0][0][0][0] == 5.0
+        assert nbr_feats[0][1][0][0] == 1.0
+
+
 def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     n_nbrs = [3]  # 3 neighbor for each node
-    uniform_hook = NeighborSamplerHook(num_nbrs=n_nbrs, directed=True)
+    uniform_hook = NeighborSamplerHook(
+        num_nbrs=n_nbrs,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+        directed=True,
+    )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
     loader = DGDataLoader(dg, batch_size=1, hook_manager=hm)
@@ -272,3 +452,89 @@ def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
         assert nbr_feats[0][0][1][0] == 0.0
         assert nbr_feats[0][1][0][0] == 1.0
         assert nbr_feats[0][1][1][0] == 2.0
+
+
+@pytest.fixture
+def no_edge_feat_data():
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
+    edge_timestamps = torch.IntTensor([1, 2, 3])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+    )
+
+
+def test_no_edge_feat_data_neighbor_sampler(no_edge_feat_data):
+    dg = DGraph(no_edge_feat_data)
+    n_nbrs = [1]
+    uniform_hook = NeighborSamplerHook(
+        num_nbrs=n_nbrs,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register_shared(uniform_hook)
+    loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
+    assert loader._batch_size == 3
+    with hm.activate('unit'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+        assert nids.shape == (1, 6)
+        assert nbr_nids.shape == (1, 6, 1)
+        assert nbr_times.shape == (1, 6, 1)
+        assert nbr_feats.shape == (1, 6, 1, 0)
+
+
+@pytest.fixture
+def node_only_data():
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
+    edge_timestamps = torch.IntTensor([1, 2, 3])
+    edge_feats = torch.IntTensor([[1], [2], [3]])
+    dynamic_node_feats = torch.rand(2, 5)
+    node_timestamps = torch.IntTensor([4, 5])
+    node_ids = torch.IntTensor([5, 6])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats=edge_feats,
+        dynamic_node_feats=dynamic_node_feats,
+        node_timestamps=node_timestamps,
+        node_ids=node_ids,
+    )
+
+
+def test_node_only_batch_recency_nbr_sampler(node_only_data):
+    dg = DGraph(node_only_data)
+    hm = HookManager(keys=['unit'])
+    n_nbrs = [1]  # 1 neighbor for each node
+    uniform_hook = NeighborSamplerHook(
+        num_nbrs=n_nbrs,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register_shared(uniform_hook)
+    loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
+    with hm.activate('unit'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        assert isinstance(batch_1, DGBatch)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+        assert nids.shape == (1, 6)
+        assert nbr_nids.shape == (1, 6, 1)
+        assert nbr_times.shape == (1, 6, 1)
+        assert nbr_feats.shape == (1, 6, 1, 1)
+
+        batch_2 = next(batch_iter)
+        assert isinstance(batch_2, DGBatch)
+        torch.testing.assert_close(batch_2.nids[0], torch.empty(0, dtype=torch.int32))
+        torch.testing.assert_close(
+            batch_2.nbr_nids[0], torch.empty(0, dtype=torch.int32)
+        )
+        torch.testing.assert_close(
+            batch_2.nbr_times[0], torch.empty(0, dtype=torch.int64)
+        )
+        torch.testing.assert_close(
+            batch_2.nbr_feats[0], torch.empty((0, 1), dtype=torch.float32)
+        )

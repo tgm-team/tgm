@@ -7,10 +7,9 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
-from tgm.data import DGData
+from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, TGBNegativeEdgeSamplerHook
 from tgm.hooks.hook_manager import HookManager
-from tgm.loader import DGDataLoader
 
 _PADDED_TIME_ID = 0
 _PADDED_FEAT_ID = 0.0
@@ -60,6 +59,19 @@ def test_hook_dependancies():
     }
 
 
+def test_mock_move_queues_to_device(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['src'],
+        seed_times_keys=['time'],
+    )
+    batch = dg.materialize()
+    hook._device = 'foo'  # Patch graph device to trigger queue movement
+    batch = hook(dg, batch)
+
+
 def test_hook_reset_state(basic_sample_graph):
     assert RecencyNeighborHook.has_state == True
 
@@ -68,7 +80,8 @@ def test_hook_reset_state(basic_sample_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -146,11 +159,119 @@ def test_hook_reset_state(basic_sample_graph):
 
 def test_bad_neighbor_sampler_init():
     with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[0], num_nodes=2, edge_feats_dim=1)
+        RecencyNeighborHook(
+            num_nbrs=[0], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        )
     with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[-1], num_nodes=2, edge_feats_dim=1)
+        RecencyNeighborHook(
+            num_nbrs=[-1], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        )
     with pytest.raises(ValueError):
-        RecencyNeighborHook(num_nbrs=[], num_nodes=2, edge_feats_dim=1)
+        RecencyNeighborHook(
+            num_nbrs=[], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        )
+    with pytest.raises(ValueError):
+        RecencyNeighborHook(
+            num_nbrs=[1],
+            num_nodes=2,
+            seed_nodes_keys=['foo', 'bar'],
+            seed_times_keys=['foo'],
+        )
+
+
+def test_sample_with_node_events_seeds(node_only_data):
+    dg = DGraph(node_only_data)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['node_ids'],
+        seed_times_keys=['node_times'],
+    )
+    batch = dg.materialize()
+    batch = hook(dg, batch)
+    assert len(batch.nids) == 1
+    assert len(batch.times) == 1
+    torch.testing.assert_close(batch.nids[0], batch.node_ids)
+    torch.testing.assert_close(batch.times[0], batch.node_times)
+
+
+def test_bad_sample_with_non_existent_seeds(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+
+    with pytest.raises(ValueError):
+        _ = hook(dg, batch)
+
+
+def test_sample_with_none_seeds(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo, batch.bar = None, None
+
+    with pytest.warns(UserWarning):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_non_tensor_non_None_seeds(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = 'should_be_1d_tensor'
+    batch.bar = 'should_be_1d_tensor'
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_non_1d_tensor_seeds(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = torch.rand(2, 3)  # should be 1-d
+    batch.bar = torch.rand(2, 3)  # should be 1-d
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_seeds_id_out_of_range(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = torch.IntTensor([-1])  # should be positive
+    batch.bar = torch.LongTensor([1])
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+    batch.foo = torch.IntTensor([3])  # cannot be > num_nodes
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_seeds_time_out_of_range(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = torch.IntTensor([1])
+    batch.bar = torch.LongTensor([-1])  # should be positive
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
 
 
 def _nbrs_2_np(batch: DGBatch) -> List[np.ndarray]:
@@ -173,7 +294,8 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -248,7 +370,8 @@ def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -348,7 +471,8 @@ def test_recency_exceed_buffer(recency_buffer_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -419,7 +543,8 @@ def test_2_hop_graph(two_hop_basic_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -506,7 +631,8 @@ def test_2_hop_directed_graph(two_hop_basic_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -604,7 +730,8 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        edge_feats_dim=dg.edge_feats_dim,
+        seed_nodes_keys=['src', 'dst', 'neg'],
+        seed_times_keys=['time', 'time', 'neg_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', tgb_hook)
@@ -703,3 +830,94 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
     assert nbr_nids[0][4][0] == 2
     assert nbr_nids[1][4][0] == PADDED_NODE_ID
     assert nbr_nids[0][5][0] == 2
+
+
+@pytest.fixture
+def no_edge_feat_data():
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
+    edge_timestamps = torch.IntTensor([1, 2, 3])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+    )
+
+
+def test_no_edge_feat_recency_nbr_sampler(no_edge_feat_data):
+    dg = DGraph(no_edge_feat_data)
+    hm = HookManager(keys=['unit'])
+    n_nbrs = [1]  # 1 neighbor for each node
+    recency_hook = RecencyNeighborHook(
+        num_nbrs=n_nbrs,
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+        directed=True,
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register('unit', recency_hook)
+    loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
+    with hm.activate('unit'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        assert isinstance(batch_1, DGBatch)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+        assert nids.shape == (1, 6)
+        assert nbr_nids.shape == (1, 6, 1)
+        assert nbr_times.shape == (1, 6, 1)
+        assert nbr_feats.shape == (1, 6, 1, 0)  # No edge features
+
+
+@pytest.fixture
+def node_only_data():
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
+    edge_timestamps = torch.IntTensor([1, 2, 3])
+    edge_feats = torch.IntTensor([[1], [2], [3]])
+    dynamic_node_feats = torch.rand(2, 5)
+    node_timestamps = torch.IntTensor([4, 5])
+    node_ids = torch.IntTensor([5, 6])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats=edge_feats,
+        dynamic_node_feats=dynamic_node_feats,
+        node_timestamps=node_timestamps,
+        node_ids=node_ids,
+    )
+
+
+def test_node_only_batch_recency_nbr_sampler(node_only_data):
+    dg = DGraph(node_only_data)
+    hm = HookManager(keys=['unit'])
+    n_nbrs = [1]  # 1 neighbor for each node
+    recency_hook = RecencyNeighborHook(
+        num_nbrs=n_nbrs,
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+        directed=True,
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register('unit', recency_hook)
+    loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
+    with hm.activate('unit'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        assert isinstance(batch_1, DGBatch)
+        nids, nbr_nids, nbr_times, nbr_feats = _nbrs_2_np(batch_1)
+        assert nids.shape == (1, 6)
+        assert nbr_nids.shape == (1, 6, 1)
+        assert nbr_times.shape == (1, 6, 1)
+        assert nbr_feats.shape == (1, 6, 1, 1)
+
+        batch_2 = next(batch_iter)
+        assert isinstance(batch_2, DGBatch)
+        torch.testing.assert_close(batch_2.nids[0], torch.empty(0, dtype=torch.int32))
+        torch.testing.assert_close(
+            batch_2.nbr_nids[0], torch.empty(0, dtype=torch.int32)
+        )
+        torch.testing.assert_close(
+            batch_2.nbr_times[0], torch.empty(0, dtype=torch.int64)
+        )
+        torch.testing.assert_close(
+            batch_2.nbr_feats[0], torch.empty((0, 1), dtype=torch.float32)
+        )
