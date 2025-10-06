@@ -94,7 +94,7 @@ jobs:
       - name: Merge structured logs
         run: |
           LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
-          python3 ../scripts/merge_json_files.py "$LOG_DIR"
+          python3 ./.github/scripts/merge_json_files.py "$LOG_DIR"
 
       - name: Upload logs and parsed JSON
         if: always()
