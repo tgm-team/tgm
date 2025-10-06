@@ -90,9 +90,8 @@ def log_latency(_func: Callable | None = None, *, level: int = logging.INFO) -> 
 
             if util_logger.isEnabledFor(logging.DEBUG):
                 log_entry = {
-                    'metric': 'latency',
+                    'metric': f'{func.__name__} latency',
                     'value': latency,
-                    'function': func.__name__,
                 }
                 util_logger.debug(json.dumps(log_entry))
             return result
@@ -150,18 +149,14 @@ def log_gpu(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
 
             if util_logger.isEnabledFor(logging.DEBUG):
                 log_entry = {
-                    'metric': 'peak_gpu_mb',
-                    'cuda_available': cuda_available,
+                    'metric': f'{func.__name__} peak_gpu_mb',
                     'value': peak_mem,
-                    'function': func.__name__,
                 }
                 util_logger.debug(json.dumps(log_entry))
 
                 log_entry = {
-                    'metric': 'alloc_gpu_mb',
-                    'cuda_available': cuda_available,
+                    'metric': f'{func.__name__} alloc_gpu_mb',
                     'value': mem_diff,
-                    'function': func.__name__,
                 }
                 util_logger.debug(json.dumps(log_entry))
             return result
