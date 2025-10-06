@@ -1,6 +1,6 @@
 import argparse
 import time
-from collections import deque
+from dataclasses import replace
 
 import numpy as np
 import torch
@@ -15,7 +15,7 @@ from tgm.constants import (
     PADDED_NODE_ID,
     RECIPE_TGB_LINK_PRED,
 )
-from tgm.hooks import RecencyNeighborHook, StatefulHook
+from tgm.hooks import RecencyNeighborHook, StatelessHook
 from tgm.loader import DGDataLoader
 from tgm.nn import Time2Vec
 from tgm.util.seed import seed_everything
@@ -257,7 +257,7 @@ val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
 
-class GraphMixerHook(StatefulHook):
+class GraphMixerHook(StatelessHook):
     r"""Custom hook that gets 1-hop neighbors in a specific window.
 
     If N(v_i, t_s, t_e) = nbrs of v_i from [t_s, t_e], then we materialize
@@ -268,12 +268,8 @@ class GraphMixerHook(StatefulHook):
     produces = {'time_gap_node_nids'}
 
     def __init__(self, time_gap: int) -> None:
-        self._num_nbrs = time_gap
-        self._history = deque(maxlen=self._num_nbrs)
+        self._time_gap = time_gap
         self._device = torch.device('cpu')
-
-    def reset_state(self) -> None:
-        self._history.clear()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         device = dg.device
@@ -282,13 +278,23 @@ class GraphMixerHook(StatefulHook):
         batch.neg = batch.neg.to(device)
 
         seed_nodes = torch.cat([batch.src, batch.dst, batch.neg])
-        seed_times = torch.cat([batch.time.repeat(2), batch.neg_time])
+        torch.cat([batch.time.repeat(2), batch.neg_time])
 
-        batch.time_gap_node_nids = self._get_recency_neighbors(
-            seed_nodes, seed_times, self._num_nbrs
+        # Hacky
+        time_gap_slice = replace(dg._slice)
+        time_gap_slice.start_idx = max(dg._slice.end_idx - self._time_gap, 0)
+        time_gap_src, time_gap_dst, time_gap_time = dg._storage.get_edges(
+            time_gap_slice
         )
 
-        self._update(batch)
+        num_nodes = seed_nodes.size(0)
+        time_gap_nids = torch.full(
+            (num_nodes, self._time_gap), PADDED_NODE_ID, dtype=torch.long, device=device
+        )
+        print(time_gap_src.shape)
+        input()
+
+        batch.time_gap_node_nids = time_gap_nids  # type: ignore
         return batch
 
     def _get_recency_neighbors(
@@ -303,7 +309,7 @@ class GraphMixerHook(StatefulHook):
         for i in range(num_nodes):
             nid, qtime = int(node_ids[i]), int(query_times[i])
             nbrs = []
-            for u, v, t in reversed(self._history):  # most recent first
+            for u, v, t in self._history:
                 if t < qtime:
                     if u == nid:
                         nbrs.append(v)
@@ -315,16 +321,6 @@ class GraphMixerHook(StatefulHook):
             if nbrs:
                 nbr_nids[i, -len(nbrs) :] = torch.tensor(nbrs, device=device)
         return nbr_nids
-
-    def _update(self, batch: DGBatch) -> None:
-        src, dst, time = batch.src.tolist(), batch.dst.tolist(), batch.time.tolist()
-        for s, d, t in zip(src, dst, time):
-            self._history.append((s, d, t))
-            self._history.append((d, s, t))  # undirected
-
-    def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
-        if device != self._device:
-            self._device = device
 
 
 hm = RecipeRegistry.build(
