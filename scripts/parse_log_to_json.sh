@@ -30,10 +30,7 @@ parse_structured_logs() {
     log_file="$(realpath "$log_file")"
     json_save_path="$(realpath "$json_save_path")"
     echo "Parsing JSON logs from $log_file → $json_save_path"
-
-    uv run python "$PROJECT_ROOT/tools/log_parser.py" \
-        --log-file-path "$log_file" \
-        --json-save-path "$json_save_path"
+    uv run python "$PROJECT_ROOT/tools/log_parser.py" "$log_file" "$json_save_path"
 }
 
 main() {
