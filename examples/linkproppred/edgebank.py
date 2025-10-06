@@ -93,4 +93,4 @@ with hm.activate('val'):
 
 with hm.activate('test'):
     test_mrr = eval(test_loader, model, evaluator)
-    log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', val_mrr)
+    log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr)
