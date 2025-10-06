@@ -91,6 +91,7 @@ jobs:
           path: |
                 ${{ steps.get-log-dir.outputs.log_path }}/*.out
                 ${{ steps.get-log-dir.outputs.log_path }}/*.err
+                ${{ steps.get-log-dir.outputs.log_path }}/*.log
 
       - name: Minimize uv cache
         run: uv cache prune --ci
