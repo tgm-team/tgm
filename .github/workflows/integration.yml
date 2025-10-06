@@ -100,26 +100,21 @@ jobs:
           for log_file in "$LOG_DIR"/*.log; do
             ./scripts/parse_log_to_json.sh "$log_file"
           done
-          MERGED_JSON="$LOG_DIR/metrics.json"
-                    python - <<'EOF'
-          import json
-          from pathlib import Path
 
-          log_dir = Path("${LOG_DIR}")
-          merged = {}
-          for f in log_dir.glob("*.json"):
-              if f.name != "metrics.json":
-                merged[f.stem] = json.load(f)
-          merged_file = log_dir / "merged.json"
-          merged_file.write_text(json.dumps(merged, indent=2))
-          EOF
-          echo "Merged JSON saved to $MERGED_JSON"
+      - name: Merge structured logs
+        run: |
+          LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
+          python3 ./github/scripts/merge_json_files.py "$LOG_DIR"
 
-      - name: Upload parsed logs
+      - name: Upload logs and parsed JSON
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: parsed-logs
+          name: ci-artifacts
           path: |
+            ${{ steps.get-log-dir.outputs.log_path }}/*.out
+            ${{ steps.get-log-dir.outputs.log_path }}/*.err
+            ${{ steps.get-log-dir.outputs.log_path }}/*.log
             ${{ steps.get-log-dir.outputs.log_path }}/*.json
 
       - name: Minimize uv cache
