@@ -97,7 +97,7 @@ TGM is organized as a **three-layer architecture**:
 
 ### Minimal Example
 
-Here’s a basic example demonstrating how to train TGCN for dynamic node property prediction on `tgbl-trade`:
+Here’s a basic example demonstrating how to train TGCN for dynamic node property prediction on `tgbn-trade`:
 
 ```python
 import torch
@@ -201,26 +201,28 @@ We welcome contributions. If you encounter problems or would like to propose a n
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-[^12]: https://tgb.complexdatalab.com/
+## References
 
-[^1]: https://arxiv.org/abs/2207.10128
+[^12]: [Temporal Graph Benchmark](https://tgb.complexdatalab.com/)
 
-[^2]: https://arxiv.org/abs/1609.02907
+[^1]: [Towards Better Evaluation for Dynamic Link Prediction](https://arxiv.org/abs/2207.10128)
 
-[^3]: https://arxiv.org/abs/1812.04206
+[^2]: [Semi-Supervised Classification with Graph Convolutional Networks](https://arxiv.org/abs/1609.02907)
 
-[^4]: https://arxiv.org/abs/2302.11636
+[^3]: [GC-LSTM: Graph Convolution Embedded LSTM for Dynamic Link Prediction](https://arxiv.org/abs/1812.04206)
 
-[^5]: https://arxiv.org/abs/2002.07962
+[^4]: [Do We Really Need Complicated Model Architectures For Temporal Networks?](https://arxiv.org/abs/2302.11636)
 
-[^6]: https://arxiv.org/abs/2006.10637
+[^5]: [Inductive Representation Learning on Temporal Graphs](https://arxiv.org/abs/2002.07962)
 
-[^7]: https://arxiv.org/abs/2303.13047
+[^6]: [Temporal Graph Networks for Deep Learning on Dynamic Graphs](https://arxiv.org/abs/2006.10637)
 
-[^8]: https://arxiv.org/abs/2410.04013
+[^7]: [Towards Better Dynamic Graph Learning: New Architecture and Unified Library](https://arxiv.org/abs/2303.13047)
 
-[^9]: https://arxiv.org/abs/2406.07926
+[^8]: [Improving Temporal Link Prediction via Temporal Walk Matrix Projection](https://arxiv.org/abs/2410.04013)
 
-[^10]: https://arxiv.org/abs/2408.04713
+[^9]: [Efficient Neural Common Neighbor for Temporal Graph Link Prediction](https://arxiv.org/abs/2406.07926)
 
-[^11]: https://arxiv.org/abs/2209.01084
+[^10]: [DyGMamba: Efficiently Modeling Long-Term Temporal Dependency on Continuous-Time Dynamic Graphs with State Space Models](https://arxiv.org/abs/2408.04713)
+
+[^11]: [Neighborhood-aware Scalable Temporal Network Representation Learning](https://arxiv.org/abs/2209.01084)
