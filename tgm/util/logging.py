@@ -90,7 +90,7 @@ def log_latency(_func: Callable | None = None, *, level: int = logging.INFO) -> 
 
             if util_logger.isEnabledFor(logging.DEBUG):
                 log_entry = {
-                    'metric': f'{func.__name__}_latency',
+                    'metric': 'latency',
                     'value': latency,
                     'function': func.__name__,
                 }
@@ -135,34 +135,35 @@ def log_gpu(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
 
             if cuda_available:
                 peak_mem = torch.cuda.max_memory_allocated() / (1024**2)
-                end_mem = torch.cuda.memory_allocated() / (1024**2)
                 mem_diff = peak_mem - start_mem
             else:
-                peak_mem = end_mem = mem_diff = 0.0
+                peak_mem = mem_diff = 0.0
 
             util_logger.log(
                 level,
-                'Function %s GPU memory (CUDA available=%s) [MB]: start=%.2f, peak=%.2f, end=%.2f, diff=%.2f',
+                'Function %s GPU memory (CUDA available=%s) [MB]: peak=%.2f, alloc=%.2f',
                 func.__name__,
                 cuda_available,
-                start_mem,
                 peak_mem,
-                end_mem,
                 mem_diff,
             )
 
             if util_logger.isEnabledFor(logging.DEBUG):
                 log_entry = {
-                    'metric': f'{func.__name__}_gpu_usage',
+                    'metric': 'peak_gpu_mb',
                     'cuda_available': cuda_available,
-                    'start_mb': start_mem,
-                    'peak_mb': peak_mem,
-                    'end_mb': end_mem,
-                    'diff_mb': mem_diff,
+                    'value': peak_mem,
                     'function': func.__name__,
                 }
                 util_logger.debug(json.dumps(log_entry))
 
+                log_entry = {
+                    'metric': 'alloc_gpu_mb',
+                    'cuda_available': cuda_available,
+                    'value': mem_diff,
+                    'function': func.__name__,
+                }
+                util_logger.debug(json.dumps(log_entry))
             return result
 
         return wrapper
@@ -242,9 +243,9 @@ def log_metric(
     logger.log(level, msg)
 
     if logger.isEnabledFor(logging.DEBUG):
-        log_entry = {'metric': metric_name, 'value': metric_value}
         if epoch is not None:
-            log_entry['epoch'] = epoch
+            metric_name += f' epoch {epoch}'
+        log_entry = {'metric': metric_name, 'value': metric_value}
         if extra is not None:
             log_entry.update(extra)
         logger.debug(json.dumps(log_entry))
