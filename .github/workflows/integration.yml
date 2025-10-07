@@ -137,14 +137,22 @@ jobs:
             const zipPath = "${{ steps.zip-raw-logs.outputs.zip_file }}";
 
             const metrics = JSON.parse(fs.readFileSync(metricsPath, "utf8"));
-            let body = "| Job | Metric | Value |\n|--------|--------|-------|\n";
+
+            let body = "";
             for (const [method, vals] of Object.entries(metrics)) {
+              body += `### Job: ${method}\n\n`;
+              body += `| Metric | Value |\n|--------|-------|\n`;
               for (const [metric, value] of Object.entries(vals)) {
-                body += `| ${method} | ${metric} | ${value.toFixed(3)} |\n`;
+                let displayValue = value;
+                if (typeof value === "number") {
+                  displayValue = value.toFixed(3);
+                }
+                body += `| ${metric} | ${displayValue} |\n`;
               }
+              body += "\n";
             }
 
-            body += `\n[Download raw logs](${zipPath})`;
+            body += `[Download raw logs](${zipPath})`;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
