@@ -9,6 +9,10 @@ on: # yamllint disable-line rule:truthy
         description: 'PR number to comment metrics on'
         type: number
         required: false
+      methods:
+        description: 'Optional test filer (e.g. "edgebank", "linkprop")'
+        type: string
+        required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -72,7 +76,14 @@ jobs:
         run: uv sync --group examples
 
       - name: Run Integration Tests
-        run: uv run pytest test/integration/test_edgebank.py -m "integration" -n 2 -vvv
+        run: |
+          if [ -n "${{ github.event.inputs.methods }}" ]; then
+            echo "Running filtered integration tests: ${{ github.event.inputs.methods }}"
+            uv run pytest -m "integration" -n 2 -vvv -k "${{ github.event.inputs.methods }}"
+          else
+            echo "Running all integration tests"
+            uv run pytest -m "integration" -n 2 -vvv
+          fi
 
       - name: Get Latest CI Run Log Path
         if: always()
