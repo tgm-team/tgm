@@ -79,10 +79,10 @@ jobs:
         run: |
           if [ -n "${{ github.event.inputs.methods }}" ]; then
             echo "Running filtered integration tests: ${{ github.event.inputs.methods }}"
-            uv run pytest -m "integration" -n 2 -vvv -k "${{ github.event.inputs.methods }}"
+            uv run pytest test/integration -m "integration" -n 2 -vvv -k "${{ github.event.inputs.methods }}"
           else
             echo "Running all integration tests"
-            uv run pytest -m "integration" -n 2 -vvv
+            uv run pytest test/integration -m "integration" -n 2 -vvv
           fi
 
       - name: Get Latest CI Run Log Path
