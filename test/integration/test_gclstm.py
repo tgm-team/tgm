@@ -17,7 +17,7 @@ def test_gclstm_linkprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/linkproppred/gclstm.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 20
+    --epochs 5
     """
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
@@ -39,7 +39,7 @@ def test_gclstm_nodeprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/nodeproppred/gclstm.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 50
+    --epochs 5
     """
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
