@@ -28,7 +28,7 @@ python "$ROOT_DIR/examples/nodeproppred/persistant_forecast.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=3:00:00',
+        '--time=0:03:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -39,7 +39,6 @@ def test_persistant_forecast_graphprop_pred(slurm_job_runner, dataset_csv):
     dataset_path = f'{data_root}/tokens_data/{dataset_csv}'
     cmd = f"""
 python "$ROOT_DIR/examples/graphproppred/persistant_forecast.py" \
-    --path-dataset {dataset_path} \
-    """
+    --path-dataset {dataset_path}"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'

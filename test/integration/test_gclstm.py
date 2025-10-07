@@ -8,7 +8,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:15:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -30,7 +30,7 @@ python "$ROOT_DIR/examples/linkproppred/gclstm.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:10:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )

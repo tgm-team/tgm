@@ -8,7 +8,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=3:00:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -25,6 +25,17 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     assert state == 'COMPLETED'
 
 
+@pytest.mark.integration
+@pytest.mark.parametrize('dataset', ['tgbl-wiki'])
+@pytest.mark.slurm(
+    resources=[
+        '--partition=main',
+        '--cpus-per-task=2',
+        '--mem=8G',
+        '--time=0:05:00',
+        '--gres=gpu:a100l:1',
+    ]
+)
 def test_tgat_linkprop_pred_uniform_sampler(slurm_job_runner, dataset):
     cmd = f"""
 python "$ROOT_DIR/examples/linkproppred/tgat.py" \

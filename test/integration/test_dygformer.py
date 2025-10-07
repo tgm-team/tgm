@@ -8,7 +8,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=3:00:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -17,7 +17,7 @@ def test_dygformer_linkprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/linkproppred/dygformer.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 1 \
+    --epochs 1
     """
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
@@ -30,7 +30,7 @@ python "$ROOT_DIR/examples/linkproppred/dygformer.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:10:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )
