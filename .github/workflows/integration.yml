@@ -4,9 +4,11 @@ on: # yamllint disable-line rule:truthy
   schedule:
     - cron: "30 6 * * 1"  # every Monday at 6:30 AM UTC
   workflow_dispatch:
-    pr_number:
-      description: 'PR number to comment metrics on'
-      required: false
+    inputs:
+      pr_number:
+        description: 'PR number to comment metrics on'
+        type: number
+        required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
