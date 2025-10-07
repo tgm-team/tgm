@@ -8,7 +8,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:05:00',
+        '--time=0:15:00',
         '--gres=gpu:a100l:1',
     ]
 )

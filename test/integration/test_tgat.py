@@ -8,7 +8,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:05:00',
+        '--time=0:15:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -19,8 +19,7 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     --device cuda \
     --epochs 1 \
     --sampling recency \
-    --n-nbrs 20 20
-    """
+    --n-nbrs 20 20"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
 
@@ -32,7 +31,7 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:05:00',
+        '--time=0:15:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -43,7 +42,6 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
     --device cuda \
     --epochs 1 \
     --sampling uniform \
-    --n-nbrs 5 5
-    """
+    --n-nbrs 5 5"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'

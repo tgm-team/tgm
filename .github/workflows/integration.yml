@@ -128,9 +128,6 @@ jobs:
         with:
           name: ci-artifacts
           path: |
-            ${{ steps.get-log-dir.outputs.log_path }}/*.out
-            ${{ steps.get-log-dir.outputs.log_path }}/*.err
-            ${{ steps.get-log-dir.outputs.log_path }}/*.log
             ${{ steps.get-log-dir.outputs.log_path }}/*.json
             ${{ steps.zip-raw-logs.outputs.zip_file }}
 
@@ -151,7 +148,7 @@ jobs:
 
             let body = "";
             for (const [method, vals] of Object.entries(metrics)) {
-              body += `#### Job: ${method}\n\n`;
+              body += `####${method}\n\n`;
               body += `| Metric | Value |\n|--------|-------|\n`;
               for (const [metric, value] of Object.entries(vals)) {
                 let displayValue = value;

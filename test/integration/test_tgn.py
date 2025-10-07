@@ -17,7 +17,6 @@ def test_tgn_linkprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/linkproppred/tgn.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 1
-    """
+    --epochs 1"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
