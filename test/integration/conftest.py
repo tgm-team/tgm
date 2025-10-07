@@ -56,8 +56,6 @@ def slurm_job_runner(ci_run_context, request):
 
         # Inject debug log path based on job name
         cmd += f'\n --log-file-path {log_file_path}'
-        print(cmd)
-        input()
 
         job_script = f"""#!/bin/bash
 set -euo pipefail
