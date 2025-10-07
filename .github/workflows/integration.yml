@@ -4,6 +4,9 @@ on: # yamllint disable-line rule:truthy
   schedule:
     - cron: "30 6 * * 1"  # every Monday at 6:30 AM UTC
   workflow_dispatch:
+    pr_number:
+      description: 'PR number to comment metrics on'
+      required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -83,14 +86,63 @@ jobs:
           echo "Resolved log path: $LOG_PATH"
           echo "Resolved run dir: $CI_RUN_DIR"
 
-      - name: Upload logs
+      - name: Parse structured logs
+        run: |
+          set -euo pipefail
+          LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
+          for log_file in "$LOG_DIR"/*.log; do
+            ./scripts/parse_log_to_json.sh "$log_file"
+          done
+
+      - name: Merge structured logs
+        run: |
+          LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
+          ./.github/scripts/merge_json_files.py "$LOG_DIR"
+
+      - name: Zip raw logs
+        if: ${{ github.event.inputs.pr_number }}
+        id: zip-raw-logs
+        run: |
+          LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
+          ZIP_FILE="$LOG_DIR/raw_logs.zip"
+          cd "$LOG_DIR"
+          zip -r raw_logs.zip *.out *.err *.log
+          echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload all logs and parsed JSON
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.get-log-dir.outputs.ci_run_dir }}
+          name: ci-artifacts
           path: |
-                ${{ steps.get-log-dir.outputs.log_path }}/*.out
-                ${{ steps.get-log-dir.outputs.log_path }}/*.err
+            ${{ steps.get-log-dir.outputs.log_path }}/*.out
+            ${{ steps.get-log-dir.outputs.log_path }}/*.err
+            ${{ steps.get-log-dir.outputs.log_path }}/*.log
+            ${{ steps.get-log-dir.outputs.log_path }}/*.json
+            ${{ steps.zip-raw-logs.outputs.zip_file }}
+
+      - name: Comment metrics + raw logs on PR
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const pr_number = parseInt("${{ github.event.inputs.pr_number }}");
+            const metrics = JSON.parse(fs.readFileSync("path/to/metrics.json", "utf8"));
+            let body = "| Job | Metric | Value |\n|--------|--------|-------|\n";
+            for (const [method, vals] of Object.entries(metrics)) {
+              for (const [metric, value] of Object.entries(vals)) {
+                body += `| ${method} | ${metric} | ${value} |\n`;
+              }
+            }
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr_number,
+              body: body
+            });
+
 
       - name: Minimize uv cache
         run: uv cache prune --ci

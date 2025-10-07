@@ -44,6 +44,19 @@ def ci_run_context():
 @pytest.fixture
 def slurm_job_runner(ci_run_context, request):
     def run(cmd):
+        caller = request.node
+        marker = caller.get_closest_marker('slurm')
+        slurm_resources = marker.kwargs.get('resources', []) if marker else []
+
+        log_dir = ci_run_context['log_dir']
+        job_name = caller.name.replace('[', '_').replace(']', '').replace(':', '_')
+        slurm_out = log_dir / f'{job_name}.out'
+        slurm_err = log_dir / f'{job_name}.err'
+        log_file_path = log_dir / f'{job_name}.log'
+
+        # Inject debug log path based on job name
+        cmd += f' --log-file-path {log_file_path}'
+
         job_script = f"""#!/bin/bash
 set -euo pipefail
 
@@ -66,15 +79,6 @@ echo "===================="
         with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.sh') as f:
             f.write(job_script)
             script_path = f.name
-
-        caller = request.node
-        marker = caller.get_closest_marker('slurm')
-        slurm_resources = marker.kwargs.get('resources', []) if marker else []
-
-        log_dir = ci_run_context['log_dir']
-        job_name = caller.name.replace('[', '_').replace(']', '').replace(':', '_')
-        slurm_out = log_dir / f'{job_name}.out'
-        slurm_err = log_dir / f'{job_name}.err'
 
         sbatch_cmd = [
             'sbatch',
