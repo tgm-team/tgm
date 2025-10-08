@@ -26,6 +26,12 @@ parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset na
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument(
+    '--max-eval-batches-per-epoch',
+    type=int,
+    default=None,
+    help='if specified, restricts the number of batches used in validation. Primarily meant to speed up integration tests',
+)
+parser.add_argument(
     '--num-neighbors',
     type=int,
     default=32,
@@ -207,10 +213,12 @@ def eval(
     loader: DGDataLoader,
     model: nn.Module,
     static_node_feat: torch.Tensor,
+    max_eval_batches_per_epoch: int | None,
 ) -> float:
     model.eval()
     perf_list = []
-    for batch in tqdm(loader):
+
+    for batch_num, batch in tqdm(enumerate(loader)):
         copy_batch = copy.deepcopy(batch)
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             copy_batch.src = batch.src[idx].unsqueeze(0)
@@ -243,6 +251,11 @@ def eval(
                 'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
+
+        if max_eval_batches_per_epoch and batch_num >= max_eval_batches_per_epoch:
+            print(
+                f'Exiting evaluation prematurely since max_eval_batches_per_epoch ({max_eval_batches_per_epoch}) was reached. Reported performance may not reflect ground truth on the entire dataset.'
+            )
 
     return float(np.mean(perf_list))
 
@@ -310,7 +323,13 @@ for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
         loss = train(train_loader, model, opt, static_node_feat)
     with hm.activate(val_key):
-        val_mrr = eval(evaluator, val_loader, model, static_node_feat)
+        val_mrr = eval(
+            evaluator,
+            val_loader,
+            model,
+            static_node_feat,
+            args.max_eval_batches_per_epoch,
+        )
 
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
@@ -321,5 +340,7 @@ for epoch in range(1, args.epochs + 1):
         model.rp_module.reset_random_projections()
 
 with hm.activate(test_key):
-    test_mrr = eval(evaluator, test_loader, model, static_node_feat)
+    test_mrr = eval(
+        evaluator, test_loader, model, static_node_feat, args.max_eval_batches_per_epoch
+    )
 log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
