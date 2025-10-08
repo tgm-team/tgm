@@ -145,8 +145,6 @@ jobs:
             const pr_number = parseInt("${{ github.event.inputs.pr_number }}");
             const logDir = "${{ steps.get-log-dir.outputs.log_path }}";
             const metricsPath = path.join(logDir, "metrics.json");
-            const zipPath = "${{ steps.zip-raw-logs.outputs.zip_file }}";
-
             const metrics = JSON.parse(fs.readFileSync(metricsPath, "utf8"));
 
             let body = "";
@@ -163,7 +161,8 @@ jobs:
               body += "\n";
             }
 
-            body += `[Download raw logs](${zipPath})`;
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            body += `[Download raw logs](${runUrl})`;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
