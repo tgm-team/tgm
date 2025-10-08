@@ -128,6 +128,9 @@ jobs:
         with:
           name: ci-artifacts
           path: |
+            ${{ steps.get-log-dir.outputs.log_path }}/*.out
+            ${{ steps.get-log-dir.outputs.log_path }}/*.err
+            ${{ steps.get-log-dir.outputs.log_path }}/*.log
             ${{ steps.get-log-dir.outputs.log_path }}/*.json
             ${{ steps.zip-raw-logs.outputs.zip_file }}
 
