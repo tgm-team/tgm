@@ -5,3 +5,4 @@ from .negatives import NegativeEdgeSamplerHook, TGBNegativeEdgeSamplerHook
 from .neighbors import NeighborSamplerHook, RecencyNeighborHook
 from .hook_manager import HookManager
 from .recipe import RecipeRegistry
+from .node_tracks import EdgeEventsSeenNodesTrackHook
