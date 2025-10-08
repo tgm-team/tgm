@@ -259,6 +259,7 @@ def eval(
             logger.debug(
                 f'Exiting evaluation prematurely since max_eval_batches_per_epoch ({max_eval_batches_per_epoch}) was reached. Reported performance may not reflect ground truth on the entire dataset.'
             )
+            break
 
     return float(np.mean(perf_list))
 
