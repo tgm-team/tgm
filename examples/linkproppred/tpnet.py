@@ -1,5 +1,7 @@
 import argparse
 import copy
+import logging
+from pathlib import Path
 from typing import Callable, Tuple
 
 import numpy as np
@@ -76,6 +78,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
+logger = logging.getLogger(f'tgm.{Path(__file__).stem}')
 
 
 class TPNet_LinkPrediction(nn.Module):
@@ -253,7 +256,7 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         if max_eval_batches_per_epoch and batch_num >= max_eval_batches_per_epoch:
-            print(
+            logger.debug(
                 f'Exiting evaluation prematurely since max_eval_batches_per_epoch ({max_eval_batches_per_epoch}) was reached. Reported performance may not reflect ground truth on the entire dataset.'
             )
 
