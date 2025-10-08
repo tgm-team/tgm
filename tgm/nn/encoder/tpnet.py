@@ -99,7 +99,7 @@ class RandomProjectionModule(nn.Module):
                         )
                     )
 
-        self.out_dim = (self.num_layer + 1) ** 2
+        self.out_dim = (2 * self.num_layer + 2) ** 2
         self.mlp = nn.Sequential(
             nn.Linear(self.out_dim, self.out_dim * 4),
             nn.ReLU(),
@@ -120,8 +120,11 @@ class RandomProjectionModule(nn.Module):
         """
         src_random_projections = self.get_random_projections(src)
         dst_random_projections = self.get_random_projections(dst)
+        random_projections = torch.cat(  # @TODO: This takes up a lot GPU memory, especially for TGB evaluation
+            [src_random_projections, dst_random_projections], dim=1
+        ).to(self.device)
         random_feature = torch.matmul(
-            src_random_projections, dst_random_projections.transpose(1, 2)
+            random_projections, random_projections.transpose(1, 2)
         ).reshape(src.shape[0], -1)
 
         if not self.scale:
