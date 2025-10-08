@@ -256,7 +256,7 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         if max_eval_batches_per_epoch and batch_num >= max_eval_batches_per_epoch:
-            logger.debug(
+            logger.warning(
                 f'Exiting evaluation prematurely since max_eval_batches_per_epoch ({max_eval_batches_per_epoch}) was reached. Reported performance may not reflect ground truth on the entire dataset.'
             )
             break
