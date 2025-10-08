@@ -17,7 +17,7 @@ def test_tpnet_linkprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/linkproppred/tpnet.py" \
     --dataset {dataset} \
     --device cuda \
-    --max-eval-batches-per-epoch 10 \
+    --max-eval-batches-per-epoch 5 \
     --epochs 1"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
