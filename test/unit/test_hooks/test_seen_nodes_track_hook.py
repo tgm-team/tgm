@@ -2,10 +2,9 @@ import pytest
 import torch
 
 from tgm import DGraph
-from tgm.data import DGData
+from tgm.data import DGData, DGDataLoader
 from tgm.hooks import EdgeEventsSeenNodesTrackHook
 from tgm.hooks.hook_manager import HookManager
-from tgm.loader import DGDataLoader
 
 
 @pytest.fixture
