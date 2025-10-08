@@ -31,7 +31,8 @@ def dg():
 
 def test_seen_nodes_track_hook(dg):
     hm = HookManager(keys=['unit'])
-    hm.register('unit', EdgeEventsSeenNodesTrackHook(6))
+    seen_nodes_track_hook = EdgeEventsSeenNodesTrackHook(6)
+    hm.register('unit', seen_nodes_track_hook)
     hm.set_active_hooks('unit')
 
     loader = DGDataLoader(dg, batch_unit='s', hook_manager=hm)
@@ -51,6 +52,23 @@ def test_seen_nodes_track_hook(dg):
     assert batch_4.seen_nodes[0].item() == 5
     assert batch_4.seen_nodes[1].item() == 2
     assert torch.equal(batch_4.batch_nodes_mask, torch.Tensor([0, 2]))
+
+
+def test_reset_state_seen_nodes_track_hook():
+    hm = HookManager(keys=['unit'])
+    seen_nodes_track_hook = EdgeEventsSeenNodesTrackHook(6)
+    hm.register('unit', seen_nodes_track_hook)
+    hm.set_active_hooks('unit')
+    hm.reset_state()
+    assert not seen_nodes_track_hook._seen_mask.any()
+
+
+def test_move_device_seen_nodes_track_hook():
+    seen_nodes_track_hook = EdgeEventsSeenNodesTrackHook(1)
+    seen_nodes_track_hook._move_to_device_if_needed(torch.device('cpu'))
+
+    assert seen_nodes_track_hook._device == torch.device('cpu')
+    assert seen_nodes_track_hook._seen_mask.device == torch.device('cpu')
 
 
 def test_seen_nodes_track_hook_bad_init():
