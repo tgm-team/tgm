@@ -3,7 +3,7 @@ name: Testing
 on: # yamllint disable-line rule:truthy
   push:
     branches:
-      - master
+      - main
   pull_request:
 
 concurrency:
@@ -44,12 +44,11 @@ jobs:
         run: uv run pytest test/unit -m "not gpu" --cov=tgm --cov-report=xml --cov-append -vvv
 
       - name: Upload coverage to Codecov
-        if: github.event_name == 'pull_request'
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
           flags: non-gpu
-          name: codecov-pr-${{ github.event.pull_request.number }}
+          name: codecov-${{ github.event_name }}
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Minimize uv cache

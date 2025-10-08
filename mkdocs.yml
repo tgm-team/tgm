@@ -8,7 +8,6 @@ nav:
       - index.md
       - Quickstart: quickstart.md
       - Architecture: architecture.md
-      - Benchmarks: benchmarks.md
 
   - Tutorials:
       - Temporal Graph Construction: tutorials/dgraph_tutorial.md
@@ -19,13 +18,14 @@ nav:
       - Dynamic Graphs:
           - DGraph: api/graph.md
           - DGBatch: api/batch.md
-          - TimeDeltaDG: api/timedelta.md
+          - TimeDelta: api/timedelta.md
       - Datasets: api/data.md
       - Data Loading: api/loader.md
       - Hooks:
-          - DGHook: api/hooks/hooks.md
+          - Hooks: api/hooks/hooks.md
           - Hook Manager: api/hooks/hook_manager.md
-      - Neural Networks: api/nn.md
+          - Recipes: api/hooks/recipe.md
+      - Neural Layers: api/nn.md
       - Utilities: api/util.md
       - Constants: api/constants.md
 

@@ -1,1 +1,1 @@
-::: tgm.timedelta
+::: tgm.core.timedelta

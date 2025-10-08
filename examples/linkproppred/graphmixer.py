@@ -1,5 +1,4 @@
 import argparse
-import time
 from collections import defaultdict, deque
 from typing import Any, Deque, Dict
 
@@ -10,15 +9,16 @@ import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGData, DGraph, RecipeRegistry
+from tgm import DGBatch, DGraph
 from tgm.constants import (
     METRIC_TGB_LINKPROPPRED,
     PADDED_NODE_ID,
     RECIPE_TGB_LINK_PRED,
 )
-from tgm.hooks import RecencyNeighborHook, StatefulHook
-from tgm.loader import DGDataLoader
-from tgm.nn import Time2Vec
+from tgm.data import DGData, DGDataLoader
+from tgm.hooks import RecencyNeighborHook, RecipeRegistry, StatefulHook
+from tgm.nn import LinkPredictor, MLPMixer, Time2Vec
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -53,6 +53,12 @@ parser.add_argument(
     default=4.0,
     help='channel dimension expansion factor in MLP sub-blocks',
 )
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 class GraphMixerEncoder(nn.Module):
@@ -81,8 +87,8 @@ class GraphMixerEncoder(nn.Module):
                 MLPMixer(
                     num_tokens=num_tokens,
                     num_channels=edge_dim,
-                    token_dim_expansion=token_dim_expansion,
-                    channel_dim_expansion=channel_dim_expansion,
+                    token_dim_expansion_factor=token_dim_expansion,
+                    channel_dim_expansion_factor=channel_dim_expansion,
                     dropout=dropout,
                 )
                 for _ in range(num_layers)
@@ -99,7 +105,7 @@ class GraphMixerEncoder(nn.Module):
         nbr_time_feat[batch.nbr_nids[0] == PADDED_NODE_ID] = 0.0
         z_link = self.projection_layer(torch.cat([edge_feat, nbr_time_feat], dim=-1))
         for mixer in self.mlp_mixers:
-            z_link = mixer(x=z_link)
+            z_link = mixer(z_link)
         z_link = torch.mean(z_link, dim=1)
 
         # Node Encoder
@@ -114,77 +120,8 @@ class GraphMixerEncoder(nn.Module):
         return z
 
 
-class FeedForwardNet(nn.Module):
-    def __init__(
-        self, input_dim: int, dim_expansion_factor: float, dropout: float = 0.0
-    ) -> None:
-        super().__init__()
-        self.ffn = nn.Sequential(
-            nn.Linear(
-                in_features=input_dim,
-                out_features=int(dim_expansion_factor * input_dim),
-            ),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(
-                in_features=int(dim_expansion_factor * input_dim),
-                out_features=input_dim,
-            ),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.ffn(x)
-
-
-class MLPMixer(nn.Module):
-    def __init__(
-        self,
-        num_tokens: int,
-        num_channels: int,
-        token_dim_expansion: float = 0.5,
-        channel_dim_expansion: float = 4.0,
-        dropout: float = 0.0,
-    ) -> None:
-        super().__init__()
-        self.token_norm = nn.LayerNorm(num_tokens)
-        self.token_ff = FeedForwardNet(
-            input_dim=num_tokens,
-            dim_expansion_factor=token_dim_expansion,
-            dropout=dropout,
-        )
-        self.channel_norm = nn.LayerNorm(num_channels)
-        self.channel_ff = FeedForwardNet(
-            input_dim=num_channels,
-            dim_expansion_factor=channel_dim_expansion,
-            dropout=dropout,
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # mix tokens
-        z = self.token_norm(x.permute(0, 2, 1))  # (B, num_channels, num_tokens)
-        z = self.token_ff(z).permute(0, 2, 1)  # (B, num_tokens, num_channels)
-        out = z + x
-
-        # mix channels
-        z = self.channel_norm(out)
-        z = self.channel_ff(z)
-        out = z + out
-        return out
-
-
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).view(-1)
-
-
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     static_node_feats: torch.Tensor,
@@ -213,6 +150,8 @@ def train(
     return total_loss
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -248,7 +187,6 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
@@ -337,7 +275,8 @@ hm.register_shared(
     RecencyNeighborHook(
         num_nbrs=[args.n_nbrs],
         num_nodes=test_dg.num_nodes,
-        edge_feats_dim=test_dg.edge_feats_dim,
+        seed_nodes_keys=['src', 'dst', 'neg'],
+        seed_times_keys=['time', 'time', 'neg_time'],
     )
 )
 
@@ -363,27 +302,26 @@ encoder = GraphMixerEncoder(
     node_dim=static_node_feats.shape[1],
     edge_dim=train_dg.edge_feats_dim | args.embed_dim,
 ).to(args.device)
-decoder = LinkPredictor(args.embed_dim).to(args.device)
+decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
+    args.device
+)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss = train(train_loader, static_node_feats, encoder, decoder, opt)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
 
     with hm.activate(val_key):
         val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
+
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 with hm.activate('test'):
     test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
-    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

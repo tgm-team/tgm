@@ -1,9 +1,6 @@
 name: Performance Tests
 
 on: # yamllint disable-line rule:truthy
-  push:
-    branches:
-      - master
   schedule:
     - cron: "30 6 * * 1"  # every Monday at 6:30 AM UTC
   workflow_dispatch:

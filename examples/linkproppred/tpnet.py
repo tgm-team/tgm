@@ -1,6 +1,5 @@
 import argparse
 import copy
-import time
 from typing import Callable, Tuple
 
 import numpy as np
@@ -10,12 +9,12 @@ import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import RecipeRegistry
+from tgm import DGBatch, DGraph
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
-from tgm.graph import DGBatch, DGData, DGraph
-from tgm.hooks import RecencyNeighborHook
-from tgm.loader import DGDataLoader
-from tgm.nn import RandomProjectionModule, Time2Vec, TPNet
+from tgm.data import DGData, DGDataLoader
+from tgm.hooks import RecencyNeighborHook, RecipeRegistry
+from tgm.nn import LinkPredictor, RandomProjectionModule, Time2Vec, TPNet
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -65,18 +64,12 @@ parser.add_argument('--num-layers', type=int, default=2, help='number of model l
 parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
 
-
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).view(-1)
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
 
 class TPNet_LinkPrediction(nn.Module):
@@ -107,9 +100,10 @@ class TPNet_LinkPrediction(nn.Module):
             time_encoder=time_encoder,
         )
         self.rp_module = random_projection_module.to(device)
-        self.decoder = LinkPredictor(output_dim).to(
-            device
-        )  # @TODO: Make encoder/decoder to be explicit
+        # @TODO: Make encoder/decoder to be explicit
+        self.decoder = LinkPredictor(
+            node_dim=args.embed_dim, hidden_dim=args.embed_dim
+        ).to(args.device)
 
     def forward(
         self, batch: DGBatch, static_node_feat: torch.Tensor
@@ -183,6 +177,8 @@ class TPNet_LinkPrediction(nn.Module):
         return pos_out, neg_out
 
 
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     model: nn.Module,
@@ -203,6 +199,8 @@ def train(
     return total_loss
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     evaluator: Evaluator,
@@ -249,9 +247,7 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
 evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
@@ -266,16 +262,18 @@ else:
         (test_dg.num_nodes, args.node_dim), device=args.device
     )
 
-nbr_hook = RecencyNeighborHook(
-    num_nbrs=[args.num_neighbors],
-    num_nodes=test_dg.num_nodes,
-    edge_feats_dim=test_dg.edge_feats_dim,
-)
 
 hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
-hm.register_shared(nbr_hook)
+hm.register_shared(
+    RecencyNeighborHook(
+        num_nbrs=[args.num_neighbors],
+        num_nodes=test_dg.num_nodes,
+        seed_nodes_keys=['src', 'dst', 'neg'],
+        seed_times_keys=['time', 'time', 'neg_time'],
+    )
+)
 train_key, val_key, test_key = hm.keys
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
@@ -310,15 +308,13 @@ opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss = train(train_loader, model, opt, static_node_feat)
-        end_time = time.perf_counter()
-        latency = end_time - start_time
     with hm.activate(val_key):
         val_mrr = eval(evaluator, val_loader, model, static_node_feat)
-        print(
-            f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-        )
+
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
+
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
         hm.reset_state()
@@ -326,4 +322,4 @@ for epoch in range(1, args.epochs + 1):
 
 with hm.activate(test_key):
     test_mrr = eval(evaluator, test_loader, model, static_node_feat)
-    print(f'Test MRR:{METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
