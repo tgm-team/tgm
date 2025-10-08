@@ -539,7 +539,14 @@ class RecencyNeighborHook(StatefulHook):
 
 class NodeEventTemporalSubgraphHook(StatelessHook):
     requires = {'nbr_nids', 'nbr_times', 'nbr_feats'}
-    produces = {'src', 'dst', 'time', 'edge_feats'}
+    produces = {
+        'sg_src',
+        'sg_dst',
+        'sg_time',
+        'sg_edge_feats',
+        'sg_unique_nids',
+        'sg_global_to_local',
+    }
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         if batch.dynamic_node_feats is not None:
@@ -549,9 +556,16 @@ class NodeEventTemporalSubgraphHook(StatelessHook):
 
             mask = dst != PADDED_NODE_ID
             src = src.repeat_interleave(num_nbrs)  # type: ignore
-            batch.src = src[mask]
-            batch.dst = dst[mask]
-            batch.time = batch.nbr_times[0].flatten()[mask]  # type: ignore
-            batch.edge_feats = batch.nbr_feats[0].flatten(0, -2).float()[mask]  # type: ignore
+            batch.sg_src = src[mask]  # type: ignore
+            batch.sg_dst = dst[mask]  # type: ignore
+            batch.sg_time = batch.nbr_times[0].flatten()[mask]  # type: ignore
+            batch.sg_edge_feats = batch.nbr_feats[0].flatten(0, -2).float()[mask]  # type: ignore
+
+            all_nids = torch.cat([batch.sg_src, batch.sg_dst])  # type: ignore
+            batch.sg_unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
+            batch.sg_global_to_local = lambda x: torch.searchsorted(  # type: ignore
+                batch.sg_unique_nids,  # type: ignore
+                x,
+            )
 
         return batch
