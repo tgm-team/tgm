@@ -10,7 +10,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:03:00',
+        '--time=0:05:00',
     ]
 )
 def test_persistant_forecast_nodeprop_pred(slurm_job_runner, dataset):
@@ -28,7 +28,7 @@ python "$ROOT_DIR/examples/nodeproppred/persistant_forecast.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:03:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )

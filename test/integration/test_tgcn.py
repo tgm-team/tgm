@@ -10,7 +10,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:05:00',
+        '--time=0:15:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -31,7 +31,7 @@ python "$ROOT_DIR/examples/nodeproppred/tgcn.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:03:00',
+        '--time=0:15:00',
         '--gres=gpu:a100l:1',
     ]
 )

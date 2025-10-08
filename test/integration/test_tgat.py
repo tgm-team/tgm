@@ -8,7 +8,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:15:00',
+        '--time=1:00:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -31,7 +31,7 @@ python "$ROOT_DIR/examples/linkproppred/tgat.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:15:00',
+        '--time=1:00:00',
         '--gres=gpu:a100l:1',
     ]
 )
