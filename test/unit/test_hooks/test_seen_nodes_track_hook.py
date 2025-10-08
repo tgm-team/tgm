@@ -65,7 +65,7 @@ def test_reset_state_seen_nodes_track_hook():
 
 def test_move_device_seen_nodes_track_hook():
     seen_nodes_track_hook = EdgeEventsSeenNodesTrackHook(1)
-    seen_nodes_track_hook.device = 'foo'
+    seen_nodes_track_hook._device = 'foo'
     seen_nodes_track_hook._move_to_device_if_needed(torch.device('cpu'))
 
     assert seen_nodes_track_hook._device == torch.device('cpu')
