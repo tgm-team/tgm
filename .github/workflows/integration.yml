@@ -148,7 +148,7 @@ jobs:
 
             let body = "";
             for (const [method, vals] of Object.entries(metrics)) {
-              body += `####${method}\n\n`;
+              body += `#### ${method}\n\n`;
               body += `| Metric | Value |\n|--------|-------|\n`;
               for (const [metric, value] of Object.entries(vals)) {
                 let displayValue = value;
