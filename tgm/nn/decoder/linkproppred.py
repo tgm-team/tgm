@@ -61,4 +61,4 @@ class LinkPredictor(torch.nn.Module):
             z_src (torch.Tensor): embedding of src node
             z_dst (torch.Tensor): embedding of dst node
         """
-        return self.model(self.merge_op(z_src, z_dst))
+        return self.model(self.merge_op(z_src, z_dst)).view(-1)
