@@ -90,7 +90,7 @@ TGM is organized as a **three-layer architecture**:
 1. **ML Layer**
 
    - Materializes batches directly on-device for model computation.
-   - Supports **node-, link-, and graph-level prediction**.
+   - Supports node-, link-, and graph-level prediction.
 
 > \[!TIP\]
 > Check out [our paper](https://tgm.readthedocs.io/) for technical details.
