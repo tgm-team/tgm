@@ -102,11 +102,15 @@ class GraphMixerEncoder(nn.Module):
         # Link Encoder
         edge_feat = batch.nbr_feats[0]
         nbr_time_feat = self.time_encoder(batch.times[0][:, None] - batch.nbr_times[0])
-        nbr_time_feat[batch.nbr_nids[0] == PADDED_NODE_ID] = 0.0
         z_link = self.projection_layer(torch.cat([edge_feat, nbr_time_feat], dim=-1))
         for mixer in self.mlp_mixers:
             z_link = mixer(z_link)
-        z_link = torch.mean(z_link, dim=1)
+
+        valid_nbrs_mask = batch.nbr_nids[0] != PADDED_NODE_ID
+        z_link = z_link * valid_nbrs_mask.unsqueeze(-1)
+        z_link = z_link.sum(dim=1) / valid_nbrs_mask.sum(dim=1, keepdim=True).clamp(
+            min=1
+        )
 
         # Node Encoder
         num_nodes, feat_dim = len(batch.time_gap_nbrs), node_feat.shape[1]
@@ -211,9 +215,6 @@ class GraphMixerHook(StatelessHook):
         self._device = torch.device('cpu')
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        device = dg.device
-        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg.to(device)])
-
         # Construct a the time_gap slice
         time_gap_slice = replace(dg._slice)
         time_gap_slice.start_idx = max(dg._slice.end_idx - self._time_gap, 0)
@@ -225,6 +226,7 @@ class GraphMixerHook(StatelessHook):
             nbr_index[u].append(v)
             nbr_index[v].append(u)  # undirected
 
+        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg.to(dg.device)])
         batch.time_gap_nbrs = [nbr_index.get(nid, []) for nid in seed_nodes.tolist()]  # type: ignore
         return batch
 
