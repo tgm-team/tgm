@@ -15,9 +15,13 @@ from torch_geometric.utils import scatter
 from tqdm import tqdm
 
 from tgm import DGraph
-from tgm.constants import METRIC_TGB_NODEPROPPRED, PADDED_NODE_ID
+from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import HookManager, RecencyNeighborHook
+from tgm.hooks import (
+    HookManager,
+    NodeEventTemporalSubgraphHook,
+    RecencyNeighborHook,
+)
 from tgm.nn import NodePredictor, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
@@ -266,34 +270,13 @@ def train(
         opt.zero_grad()
         y_labels = batch.dynamic_node_feats
         if y_labels is not None:
-            nbr_nodes = batch.nbr_nids[0].flatten()
-            nbr_mask = nbr_nodes != PADDED_NODE_ID
-
-            #! run my own deduplication
-            all_nids = torch.cat([batch.node_ids, nbr_nodes[nbr_mask]])
-            batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-            batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
-            src_nodes = torch.cat(
-                [
-                    batch.node_ids.repeat_interleave(num_nbrs),
-                ]
-            )
-            nbr_edge_index = torch.stack(
-                [
-                    batch.global_to_local(src_nodes[nbr_mask]),
-                    batch.global_to_local(nbr_nodes[nbr_mask]),
-                ]
+            sg_edge_index = torch.stack([batch.sg_src, batch.sg_dst])
+            z, last_update = memory(batch.sg_unique_nids)
+            z = encoder(
+                z, last_update, sg_edge_index, batch.sg_time, batch.sg_edge_feats
             )
 
-            nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-            nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
-
-            z, last_update = memory(batch.unique_nids)
-            z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
-
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.sg_global_to_local(batch.node_ids)
             y_pred = decoder(z[inv_src])
             loss = F.cross_entropy(y_pred, y_labels)
             loss.backward()
@@ -336,34 +319,14 @@ def eval(
     for batch in tqdm(loader):
         y_labels = batch.dynamic_node_feats
         if y_labels is not None:
-            nbr_nodes = batch.nbr_nids[0].flatten()
-            nbr_mask = nbr_nodes != PADDED_NODE_ID
+            sg_edge_index = torch.stack([batch.sg_src, batch.sg_dst])
 
-            #! run my own deduplication
-            all_nids = torch.cat([batch.node_ids, nbr_nodes[nbr_mask]])
-            batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-            batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
-            src_nodes = torch.cat(
-                [
-                    batch.node_ids.repeat_interleave(num_nbrs),
-                ]
-            )
-            nbr_edge_index = torch.stack(
-                [
-                    batch.global_to_local(src_nodes[nbr_mask]),
-                    batch.global_to_local(nbr_nodes[nbr_mask]),
-                ]
+            z, last_update = memory(batch.sg_unique_nids)
+            z = encoder(
+                z, last_update, sg_edge_index, batch.sg_time, batch.sg_edge_feats
             )
 
-            nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-            nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
-
-            z, last_update = memory(batch.unique_nids)
-            z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
-
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.sg_global_to_local(batch.node_ids)
             y_pred = decoder(z[inv_src])
 
             input_dict = {
@@ -412,6 +375,7 @@ nbr_hook = RecencyNeighborHook(
 
 hm = HookManager(keys=['train', 'val', 'test'])
 hm.register_shared(nbr_hook)
+hm.register_shared(NodeEventTemporalSubgraphHook())
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
