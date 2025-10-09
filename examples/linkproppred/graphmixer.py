@@ -102,11 +102,15 @@ class GraphMixerEncoder(nn.Module):
         # Link Encoder
         edge_feat = batch.nbr_feats[0]
         nbr_time_feat = self.time_encoder(batch.times[0][:, None] - batch.nbr_times[0])
-        nbr_time_feat[batch.nbr_nids[0] == PADDED_NODE_ID] = 0.0
         z_link = self.projection_layer(torch.cat([edge_feat, nbr_time_feat], dim=-1))
         for mixer in self.mlp_mixers:
             z_link = mixer(z_link)
-        z_link = z_link.mean(dim=1)
+
+        valid_nbrs_mask = batch.nbr_nids[0] != PADDED_NODE_ID
+        z_link = z_link * valid_nbrs_mask.unsqueeze(-1)
+        z_link = z_link.sum(dim=1) / valid_nbrs_mask.sum(dim=1, keepdim=True).clamp(
+            min=1
+        )
 
         # Node Encoder
         seed_node = torch.cat([batch.src, batch.dst, batch.neg])
