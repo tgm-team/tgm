@@ -113,13 +113,11 @@ class GraphMixerEncoder(nn.Module):
         )
 
         # Node Encoder
-        seed_node = torch.cat([batch.src, batch.dst, batch.neg])
-        time_gap_feat = torch.zeros(
-            (len(seed_node), node_feat.shape[1]), device=node_feat.device
-        )
-        for i, node_id in enumerate(seed_node.tolist()):
-            if node_id in batch.time_gap_nbr_index:
-                time_gap_feat[i] = node_feat[batch.time_gap_nbr_index[i]].mean(dim=0)
+        num_nodes, feat_dim = len(batch.time_gap_nbrs), node_feat.shape[1]
+        time_gap_feat = torch.zeros((num_nodes, feat_dim), device=node_feat.device)
+        for i in range(num_nodes):
+            if batch.time_gap_nbrs[i]:
+                time_gap_feat[i] = node_feat[batch.time_gap_nbrs[i]].mean(dim=0)
 
         z_node = time_gap_feat + node_feat[seed_node]
         z = self.output_layer(torch.cat([z_link, z_node], dim=1))
@@ -210,7 +208,7 @@ class GraphMixerHook(StatelessHook):
     """
 
     requires = {'neg'}
-    produces = {'time_gap_nbr_index'}
+    produces = {'time_gap_nbrs'}
 
     def __init__(self, time_gap: int) -> None:
         self._time_gap = time_gap
@@ -227,7 +225,8 @@ class GraphMixerHook(StatelessHook):
             nbr_index[u].append(v)
             nbr_index[v].append(u)  # undirected
 
-        batch.time_gap_nbr_index = nbr_index  # type: ignore
+        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg.to(dg.device)])
+        batch.time_gap_nbrs = [nbr_index.get(nid, []) for nid in seed_nodes.tolist()]  # type: ignore
         return batch
 
 
