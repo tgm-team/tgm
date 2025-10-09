@@ -119,7 +119,7 @@ class GraphMixerEncoder(nn.Module):
             if batch.time_gap_nbrs[i]:
                 time_gap_feat[i] = node_feat[batch.time_gap_nbrs[i]].mean(dim=0)
 
-        z_node = time_gap_feat + node_feat[seed_node]
+        z_node = time_gap_feat + node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
         z = self.output_layer(torch.cat([z_link, z_node], dim=1))
         return z
 
