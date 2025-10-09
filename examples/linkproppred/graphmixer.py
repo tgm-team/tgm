@@ -34,7 +34,7 @@ parser.add_argument('--lr', type=float, default=0.0002, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed-dim', type=int, default=128, help='attention dimension')
+parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
     '--node-dim', type=int, default=100, help='node feat dimension if not provided'
 )
@@ -212,7 +212,6 @@ class GraphMixerHook(StatelessHook):
 
     def __init__(self, time_gap: int) -> None:
         self._time_gap = time_gap
-        self._device = torch.device('cpu')
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         # Construct a the time_gap slice
