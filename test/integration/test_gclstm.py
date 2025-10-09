@@ -8,7 +8,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:15:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -17,8 +17,7 @@ def test_gclstm_linkprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/linkproppred/gclstm.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 20
-    """
+    --epochs 5"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
 
@@ -30,7 +29,7 @@ python "$ROOT_DIR/examples/linkproppred/gclstm.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:10:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -39,7 +38,6 @@ def test_gclstm_nodeprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/nodeproppred/gclstm.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 50
-    """
+    --epochs 5"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'

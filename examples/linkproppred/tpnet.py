@@ -1,5 +1,8 @@
 import argparse
 import copy
+import logging
+import os
+from pathlib import Path
 from typing import Callable, Tuple
 
 import numpy as np
@@ -70,6 +73,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
+logger = logging.getLogger(f'tgm.{Path(__file__).stem}')
 
 
 class TPNet_LinkPrediction(nn.Module):
@@ -210,7 +214,9 @@ def eval(
 ) -> float:
     model.eval()
     perf_list = []
-    for batch in tqdm(loader):
+    max_eval_batches_per_epoch = os.getenv('TGM_CI_MAX_EVAL_BATCHES_PER_EPOCH')
+
+    for batch_num, batch in enumerate(tqdm(loader)):
         copy_batch = copy.deepcopy(batch)
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             copy_batch.src = batch.src[idx].unsqueeze(0)
@@ -243,6 +249,12 @@ def eval(
                 'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
+
+        if max_eval_batches_per_epoch and batch_num >= int(max_eval_batches_per_epoch):
+            logger.warning(
+                f'Exiting evaluation prematurely since max_eval_batches_per_epoch ({max_eval_batches_per_epoch}) was reached. Reported performance may not reflect ground truth on the entire dataset.'
+            )
+            break
 
     return float(np.mean(perf_list))
 

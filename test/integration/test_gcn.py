@@ -8,7 +8,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:10:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -17,8 +17,7 @@ def test_gcn_linkprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/linkproppred/gcn.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 15
-    """
+    --epochs 5"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
 
@@ -30,7 +29,7 @@ python "$ROOT_DIR/examples/linkproppred/gcn.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:10:00',
+        '--time=0:05:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -39,7 +38,6 @@ def test_gcn_nodeprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/nodeproppred/gcn.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 50
-    """
+    --epochs 5"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'

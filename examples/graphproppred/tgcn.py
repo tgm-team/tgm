@@ -171,7 +171,8 @@ def train(
 
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, labels, indexes=indexes)
-    return total_loss, h_0, metrics.compute()
+    metrics_dict = {k: v.item() for k, v in metrics.compute().items()}
+    return total_loss, h_0, metrics_dict
 
 
 @log_gpu
@@ -198,7 +199,8 @@ def eval(
 
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
     metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute(), h_0
+    metrics_dict = {k: v.item() for k, v in metrics.compute().items()}
+    return metrics_dict, h_0
 
 
 seed_everything(args.seed)
