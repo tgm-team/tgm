@@ -20,7 +20,7 @@ train_data, val_data, test_data = DGData.from_tgb("tgbn-trade").split()
 train_dg = DGraph(train_data)
 train_loader = DGDataLoader(train_dg, batch_unit="Y")
 
-# tgbl-trade has no static node features, so we create Gaussian ones (dim=64)
+# tgbn-trade has no static node features, so we create Gaussian ones (dim=64)
 static_node_feats = torch.randn((train_dg.num_nodes, 64))
 
 class RecurrentGCN(torch.nn.Module):
@@ -83,3 +83,4 @@ python examples/linkproppred/tgat.py --dataset tgbl-wiki --device cuda
 
 - Explore more of our [examples](../examples/)
 - Dive deeper into TGM with our [tutorials](./tutorials/)
+- Read [our paper](https://arxiv.org/abs/2510.07586)

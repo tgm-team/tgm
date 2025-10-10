@@ -5,7 +5,7 @@
 <div align="center">
 <h3 style="font-size: 22px">Efficient and Modular ML on Temporal Graphs</h3>
 <a href="https://tgm.readthedocs.io/en/latest"/><strong style="font-size: 18px;"/>Read Our Docs»</strong></a>
-<a href="https://github.com/tgm-team/tgm"/><strong style="font-size: 18px;"/>Read Our Paper»</strong></a>
+<a href="https://arxiv.org/abs/2510.07586"/><strong style="font-size: 18px;"/>Read Our Paper»</strong></a>
 <br/>
 <br/>
 
@@ -90,10 +90,10 @@ TGM is organized as a **three-layer architecture**:
 1. **ML Layer**
 
    - Materializes batches directly on-device for model computation.
-   - Supports **node-, link-, and graph-level prediction**.
+   - Supports node-, link-, and graph-level prediction.
 
 > \[!TIP\]
-> Check out [our paper](https://tgm.readthedocs.io/) for technical details.
+> Check out [our paper](https://arxiv.org/abs/2510.07586) for technical details.
 
 ### Minimal Example
 
@@ -115,7 +115,7 @@ train_data, val_data, test_data = DGData.from_tgb("tgbn-trade").split()
 train_dg = DGraph(train_data)
 train_loader = DGDataLoader(train_dg, batch_unit="Y")
 
-# tgbl-trade has no static node features, so we create Gaussian ones (dim=64)
+# tgbn-trade has no static node features, so we create Gaussian ones (dim=64)
 static_node_feats = torch.randn((train_dg.num_nodes, 64))
 
 class RecurrentGCN(torch.nn.Module):
@@ -183,15 +183,14 @@ python examples/linkproppred/tgat.py --dataset tgbl-wiki --device cuda
 
 ## Citation
 
-If you use TGM in your work, please cite [our paper](https://github.com/tgm-team/tgm):
+If you use TGM in your work, please cite [our paper](https://arxiv.org/abs/2510.07586):
 
 ```bibtex
-@article{TODO,
-  title   = "TODO",
-  author  = "TODO",
-  journal = "TODO",
-  year    = "2025",
-  url     = "TODO"
+@misc{chmura2025tgm,
+  title  = {TGM: A Modular and Efficient Library for Machine Learning on Temporal Graphs},
+  author = {Chmura, Jacob and Huang, Shenyang and Ngo, Tran Gia Bao and Parviz, Ali and Poursafaei, Farimah and Leskovec, Jure and Bronstein, Michael and Rabusseau, Guillaume and Fey, Matthias and Rabbany, Reihaneh},
+  year   = {2025},
+  note   = {arXiv:2510.07586}
 }
 ```
 
