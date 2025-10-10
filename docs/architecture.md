@@ -22,4 +22,4 @@ TGM is organized as a **three-layer architecture**:
    - Supports **node-, link-, and graph-level prediction**.
 
 > \[!TIP\]
-> Check out [our paper](https://tgm.readthedocs.io/) for technical details.
+> Check out [our paper](https://arxiv.org/abs/2510.07586) for technical details.
