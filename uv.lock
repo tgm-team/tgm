@@ -1295,7 +1295,7 @@ wheels = [
 
 [[package]]
 name = "py-tgb"
-version = "2.1.0"
+version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "clint" },
@@ -1306,9 +1306,9 @@ dependencies = [
     { name = "torch-geometric" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/2f/1f73b9562d089466089b5f6e5b76454a42625b60fe9c7ddf750b4ecc0ffa/py_tgb-2.1.0.tar.gz", hash = "sha256:0098793cc787beeb9f95fdc32d682cf1a455074c849d7d14e8d6e44d94f8a1a5", size = 107094, upload-time = "2025-06-05T16:33:11.755Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/ad/9aa5963f598cd0e908c39f9471e63e08ae9913cab7463e97754e1edfb891/py_tgb-2.2.0.tar.gz", hash = "sha256:f8873a5621beba637db60d16ac12774aef81272b184ed3a310d7ea1952f17001", size = 107987, upload-time = "2025-10-05T17:36:14.059Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/08/d9a0467ade78ce7783b29309db13611686d97a5cc44b3865102477e90a49/py_tgb-2.1.0-py3-none-any.whl", hash = "sha256:eae7afc6af716c19a24389da5da39bbd51de11c5b3cfc67377938596ab5a0f58", size = 153371, upload-time = "2025-06-05T16:33:10.066Z" },
+    { url = "https://files.pythonhosted.org/packages/78/b2/87ff16174a8ffe660d19742a23f826142ae94fd47c66bb09ffc0e4e36ec2/py_tgb-2.2.0-py3-none-any.whl", hash = "sha256:67b704a71606cc18cee7944b151da66b900b78026124a235bf410ac425cfd742", size = 154353, upload-time = "2025-10-05T17:36:13.1Z" },
 ]
 
 [[package]]
@@ -1641,7 +1641,7 @@ wheels = [
 
 [[package]]
 name = "tgm-lib"
-version = "0.1.0a0"
+version = "0.1.0b0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -1690,7 +1690,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 analytics = [
     { name = "networkx", specifier = ">=3.2.1" },
-    { name = "py-tgb", specifier = ">=2.1.0" },
+    { name = "py-tgb", specifier = ">=2.2.0" },
     { name = "scipy", specifier = ">=1.15.2" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
@@ -1699,7 +1699,7 @@ dev = [
     { name = "mypy", specifier = ">=1.13.0" },
     { name = "pandas", specifier = ">=1.5.3" },
     { name = "pre-commit", specifier = ">=4.0.1" },
-    { name = "py-tgb", specifier = ">=2.1.0" },
+    { name = "py-tgb", specifier = ">=2.2.0" },
     { name = "pytest", specifier = ">=8.3.3" },
     { name = "pytest-benchmark", specifier = ">=5.1.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
@@ -1713,7 +1713,7 @@ docs = [
 ]
 examples = [
     { name = "pandas", specifier = ">=2.3.0" },
-    { name = "py-tgb", specifier = ">=2.1.0" },
+    { name = "py-tgb", specifier = ">=2.2.0" },
     { name = "torchmetrics", specifier = ">=1.7.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]

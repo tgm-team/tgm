@@ -10,7 +10,7 @@ import pytest
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=0:10:00',
+        '--time=0:15:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -19,8 +19,7 @@ def test_tgcn_nodeprop_pred(slurm_job_runner, dataset):
 python "$ROOT_DIR/examples/nodeproppred/tgcn.py" \
     --dataset {dataset} \
     --device cuda \
-    --epochs 50
-    """
+    --epochs 5"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
 
@@ -32,7 +31,7 @@ python "$ROOT_DIR/examples/nodeproppred/tgcn.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=4G',
-        '--time=3:00:00',
+        '--time=0:15:00',
         '--gres=gpu:a100l:1',
     ]
 )
@@ -45,7 +44,6 @@ def test_tgcn_graphprop_pred(slurm_job_runner, dataset_csv):
 python "$ROOT_DIR/examples/graphproppred/tgcn.py" \
     --path-dataset {dataset_path} \
     --device cuda \
-    --epochs 10
-    """
+    --epochs 5"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'

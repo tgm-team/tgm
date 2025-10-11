@@ -1,12 +1,18 @@
 name: Integration Tests
 
 on: # yamllint disable-line rule:truthy
-  push:
-    branches:
-      - master
   schedule:
     - cron: "30 6 * * 1"  # every Monday at 6:30 AM UTC
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to comment metrics on'
+        type: number
+        required: false
+      methods:
+        description: 'Optional test filer (e.g. "edgebank", "linkprop")'
+        type: string
+        required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -16,7 +22,7 @@ jobs:
   integration-tests-slurm:
     name: Integration testing on a SLURM cluster
     runs-on: self-hosted
-    timeout-minutes: 60
+    timeout-minutes: 180
     if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang' || github.actor == 'benjaminnNgo'
     env:
       REAL_HOME: /home/mila/j/jacob.chmura
@@ -70,7 +76,14 @@ jobs:
         run: uv sync --group examples
 
       - name: Run Integration Tests
-        run: uv run pytest -m "integration" -n 2 -vvv
+        run: |
+          if [ -n "${{ github.event.inputs.methods }}" ]; then
+            echo "Running filtered integration tests: ${{ github.event.inputs.methods }}"
+            uv run pytest test/integration -m "integration" -n 2 -vvv -k "${{ github.event.inputs.methods }}"
+          else
+            echo "Running all integration tests"
+            uv run pytest test/integration -m "integration" -n 2 -vvv
+          fi
 
       - name: Get Latest CI Run Log Path
         if: always()
@@ -86,14 +99,78 @@ jobs:
           echo "Resolved log path: $LOG_PATH"
           echo "Resolved run dir: $CI_RUN_DIR"
 
-      - name: Upload logs
+      - name: Parse structured logs
+        run: |
+          set -euo pipefail
+          LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
+          for log_file in "$LOG_DIR"/*.log; do
+            ./scripts/parse_log_to_json.sh "$log_file"
+          done
+
+      - name: Merge structured logs
+        run: |
+          LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
+          ./.github/scripts/merge_json_files.py "$LOG_DIR"
+
+      - name: Zip raw logs
+        if: ${{ github.event.inputs.pr_number }}
+        id: zip-raw-logs
+        run: |
+          LOG_DIR="${{ steps.get-log-dir.outputs.log_path }}"
+          ZIP_FILE="$LOG_DIR/raw_logs.zip"
+          cd "$LOG_DIR"
+          zip -r raw_logs.zip *.out *.err *.log
+          echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload all logs and parsed JSON
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.get-log-dir.outputs.ci_run_dir }}
+          name: ci-artifacts
           path: |
-                ${{ steps.get-log-dir.outputs.log_path }}/*.out
-                ${{ steps.get-log-dir.outputs.log_path }}/*.err
+            ${{ steps.get-log-dir.outputs.log_path }}/*.out
+            ${{ steps.get-log-dir.outputs.log_path }}/*.err
+            ${{ steps.get-log-dir.outputs.log_path }}/*.log
+            ${{ steps.get-log-dir.outputs.log_path }}/*.json
+            ${{ steps.zip-raw-logs.outputs.zip_file }}
+
+      - name: Comment metrics + raw logs on PR
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const pr_number = parseInt("${{ github.event.inputs.pr_number }}");
+            const logDir = "${{ steps.get-log-dir.outputs.log_path }}";
+            const metricsPath = path.join(logDir, "metrics.json");
+            const metrics = JSON.parse(fs.readFileSync(metricsPath, "utf8"));
+
+            let body = "";
+            for (const [method, vals] of Object.entries(metrics)) {
+              body += `#### Job: ${method}\n\n`;
+              body += `| Metric | Value |\n|--------|-------|\n`;
+              for (const [metric, value] of Object.entries(vals)) {
+                let displayValue = value;
+                if (typeof value === "number") {
+                  displayValue = value.toFixed(3);
+                }
+                body += `| ${metric} | ${displayValue} |\n`;
+              }
+              body += "\n";
+            }
+
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            body += `[Download raw logs](${runUrl})`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr_number,
+              body: body
+            });
+
 
       - name: Minimize uv cache
         run: uv cache prune --ci

@@ -11,7 +11,12 @@ from tqdm import tqdm
 from tgm import DGBatch, DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import DeduplicationHook, HookManager, RecencyNeighborHook
+from tgm.hooks import (
+    DeduplicationHook,
+    EdgeEventsSeenNodesTrackHook,
+    HookManager,
+    RecencyNeighborHook,
+)
 from tgm.nn import DyGFormer, NodePredictor, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
@@ -166,7 +171,6 @@ def train(
     decoder.train()
     total_loss = 0
 
-    seen_nodes = set()  # Use set for tracking, no tensor in graph
     for batch in tqdm(loader):
         opt.zero_grad()
 
@@ -175,26 +179,16 @@ def train(
             z = encoder(batch, static_node_feat)  # [num_nodes, embed_dim]
 
         if y_true is not None:
-            # Determine which nodes to compute loss for
-            batch_nodes = batch.node_ids.cpu().numpy()
-            keep_mask = [i for i, nid in enumerate(batch_nodes) if nid in seen_nodes]
-
-            if len(keep_mask) == 0:
-                # First time all nodes are new, skip backward
-                seen_nodes.update(batch_nodes)
+            if len(batch.seen_nodes) == 0:
                 continue
 
-            train_idx = torch.tensor(keep_mask, device=z.device)
-            z_node = z[train_idx]
+            z_node = z[batch.seen_nodes]
 
             y_pred = decoder(z_node)
-            loss = F.cross_entropy(y_pred, y_true[train_idx])
+            loss = F.cross_entropy(y_pred, y_true[batch.batch_nodes_mask])
             loss.backward()
             opt.step()
             total_loss += float(loss)
-
-            # Update seen nodes
-            seen_nodes.update(batch_nodes)
 
     return total_loss
 
@@ -255,6 +249,7 @@ nbr_hook = RecencyNeighborHook(
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
+hm.register('train', EdgeEventsSeenNodesTrackHook(num_nodes))
 hm.register_shared(DeduplicationHook())
 hm.register_shared(nbr_hook)
 

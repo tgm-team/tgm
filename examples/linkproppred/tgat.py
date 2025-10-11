@@ -14,7 +14,7 @@ from tgm.constants import (
     RECIPE_TGB_LINK_PRED,
 )
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import RecencyNeighborHook, RecipeRegistry
+from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook, RecipeRegistry
 from tgm.nn import LinkPredictor, TemporalAttention, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything

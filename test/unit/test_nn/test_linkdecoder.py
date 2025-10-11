@@ -32,8 +32,7 @@ def test_output(edge_factory):
 
     assert not torch.isnan(out).any()
     assert len(decoder.model) == 9  # 5 layers + 4 ReLU
-    assert out.shape[0] == 200
-    assert out.shape[1] == 1
+    assert list(out.shape) == [200]
 
     # check the first layer
     assert decoder.model[0].in_features == 128 * 2  # concat 2 nodes embeddings

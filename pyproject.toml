@@ -1,6 +1,6 @@
 [project]
 name = "tgm-lib"
-version = "0.1.0a0"
+version = "0.1.0b0"
 description = "Efficient and Modular ML on Temporal Graphs"
 readme = "README.md"
 license = {text = "MIT"}
@@ -18,7 +18,7 @@ dependencies = [
 [dependency-groups]
 analytics = [
     "networkx>=3.2.1",
-    "py-tgb>=2.1.0",
+    "py-tgb>=2.2.0",
     "scipy>=1.15.2",
     "tqdm>=4.67.1",
 ]
@@ -29,7 +29,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "pytest>=8.3.3",
     "ruff==0.11.1",
-    "py-tgb>=2.1.0",
+    "py-tgb>=2.2.0",
     "pandas>=1.5.3",
     "pytest-xdist>=3.7.0",
     "pytest-benchmark>=5.1.0",
@@ -41,7 +41,7 @@ docs = [
 ]
 examples = [
     "pandas>=2.3.0",
-    "py-tgb>=2.1.0",
+    "py-tgb>=2.2.0",
     "torchmetrics>=1.7.0",
     "tqdm>=4.67.1",
 ]

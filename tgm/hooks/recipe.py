@@ -43,7 +43,8 @@ class RecipeRegistry:
             raise UndefinedRecipe(
                 f'Undefined or not yet registered recipe: {name}. Please select from {cls._recipes}'
             )
-        logger.info("Building recipe '%s' with kwargs=%s", name, kwargs)
+        str_kwargs = {k: str(v) for k, v in kwargs.items()}
+        logger.debug("Building recipe '%s' with kwargs=%s", name, str_kwargs)
         return cls._recipes[name](**kwargs)
 
 

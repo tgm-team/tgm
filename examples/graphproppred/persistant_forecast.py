@@ -130,7 +130,8 @@ def eval(
 
     assert torch.all(y_pred[1:] == y_true[: y_true.shape[0] - 1])
     metrics(y_pred, y_true, indexes=indexes)
-    return metrics.compute()
+    metrics_dict = {k: v.item() for k, v in metrics.compute().items()}
+    return metrics_dict
 
 
 seed_everything(args.seed)
