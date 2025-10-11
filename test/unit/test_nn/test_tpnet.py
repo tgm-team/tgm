@@ -1,6 +1,6 @@
 import torch
 
-from tgm.nn import TPNet
+from tgm.nn import RandomProjectionModule, TPNet
 
 
 def test_tpnet():
@@ -25,3 +25,33 @@ def test_tpnet():
     assert z_dst.shape == (B, edge_dim)
     assert not torch.isnan(z_src).any()
     assert not torch.isnan(z_dst).any()
+
+
+def test_random_prj_default():
+    N, L = 20, 2
+
+    rp = RandomProjectionModule(
+        num_nodes=N, num_layer=L, time_decay_weight=0.000001, beginning_time=0.0
+    )
+    src = torch.arange(0, 10)
+    dst = torch.arange(10, 20)
+    out = rp(src, dst)
+    assert out.shape == (10, (2 * L + 2) ** 2)
+    assert not torch.isnan(out).any()
+
+
+def test_random_prj_lightweight():
+    N, L = 20, 2
+
+    rp = RandomProjectionModule(
+        num_nodes=N,
+        num_layer=L,
+        time_decay_weight=0.000001,
+        beginning_time=0.0,
+        concat_src_dst=False,
+    )
+    src = torch.arange(0, 10)
+    dst = torch.arange(10, 20)
+    out = rp(src, dst)
+    assert out.shape == (10, (L + 1) ** 2)
+    assert not torch.isnan(out).any()
