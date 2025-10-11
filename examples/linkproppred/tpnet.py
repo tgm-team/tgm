@@ -55,6 +55,18 @@ parser.add_argument(
     default=10,
     help='the dim factor of random feature w.r.t. the node num',
 )
+parser.add_argument(
+    '--not-use-matrix',
+    default=False,
+    action='store_true',
+    help='if False, explicitly maintain the temporal walk matrices',
+)
+parser.add_argument(
+    '--not-concat-src-dst',
+    default=False,
+    action='store_true',
+    help='if True, Random projection avoids concat src and dst in computation',
+)
 parser.add_argument('--node-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument(
@@ -285,9 +297,11 @@ random_projection_module = RandomProjectionModule(
     num_layer=args.rp_num_layers,
     time_decay_weight=args.rp_time_decay_weight,
     beginning_time=train_dg.start_time,
+    use_matrix=not args.not_use_matrix,
     enforce_dim=args.enforce_dim,
     num_edges=train_dg.num_edges,
     dim_factor=args.rp_dim_factor,
+    concat_src_dst=not args.not_concat_src_dst,
     device=args.device,
 )
 
