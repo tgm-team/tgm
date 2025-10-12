@@ -135,6 +135,7 @@ class RandomProjectionModule(nn.Module):
                 random_projections, random_projections.transpose(1, 2)
             ).reshape(src.shape[0], -1)
         else:
+            # We thank the author, Xiaodong Lu, for suggestion on lightweight version of TPNet
             src_random_projections = self.get_random_projections(src)
             dst_random_projections = self.get_random_projections(dst)
             random_feature = torch.matmul(

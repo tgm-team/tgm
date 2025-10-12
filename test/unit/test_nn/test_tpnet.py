@@ -55,3 +55,79 @@ def test_random_prj_lightweight():
     out = rp(src, dst)
     assert out.shape == (10, (L + 1) ** 2)
     assert not torch.isnan(out).any()
+
+
+def test_random_prj_matrix_dim_factor():
+    N, L = 20, 2
+
+    rp = RandomProjectionModule(
+        num_nodes=N,
+        num_layer=L,
+        time_decay_weight=0.000001,
+        beginning_time=0.0,
+        use_matrix=False,
+        dim_factor=10,
+        num_edges=10,
+    )
+    src = torch.arange(0, 10)
+    dst = torch.arange(10, 20)
+    out = rp(src, dst)
+    assert out.shape == (10, (2 * L + 2) ** 2)
+    assert not torch.isnan(out).any()
+
+
+def test_random_prj_matrix_enforce_dim():
+    N, L = 20, 2
+
+    rp = RandomProjectionModule(
+        num_nodes=N,
+        num_layer=L,
+        time_decay_weight=0.000001,
+        beginning_time=0.0,
+        use_matrix=False,
+        enforce_dim=128,
+    )
+    src = torch.arange(0, 10)
+    dst = torch.arange(10, 20)
+    out = rp(src, dst)
+    assert out.shape == (10, (2 * L + 2) ** 2)
+    assert not torch.isnan(out).any()
+
+
+def test_random_prj_lightweight_dim_factor():
+    N, L = 20, 2
+
+    rp = RandomProjectionModule(
+        num_nodes=N,
+        num_layer=L,
+        time_decay_weight=0.000001,
+        beginning_time=0.0,
+        concat_src_dst=False,
+        use_matrix=False,
+        dim_factor=10,
+        num_edges=10,
+    )
+    src = torch.arange(0, 10)
+    dst = torch.arange(10, 20)
+    out = rp(src, dst)
+    assert out.shape == (10, (L + 1) ** 2)
+    assert not torch.isnan(out).any()
+
+
+def test_random_prj_lightweight_enforce_dim():
+    N, L = 20, 2
+
+    rp = RandomProjectionModule(
+        num_nodes=N,
+        num_layer=L,
+        time_decay_weight=0.000001,
+        beginning_time=0.0,
+        concat_src_dst=False,
+        use_matrix=False,
+        enforce_dim=128,
+    )
+    src = torch.arange(0, 10)
+    dst = torch.arange(10, 20)
+    out = rp(src, dst)
+    assert out.shape == (10, (L + 1) ** 2)
+    assert not torch.isnan(out).any()
