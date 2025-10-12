@@ -35,7 +35,7 @@ class NeighborSamplerHook(StatelessHook):
     """
 
     requires: Set[str] = set()
-    produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats'}
+    produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'seed_node_nbr_mask'}
 
     def __init__(
         self,
@@ -85,7 +85,7 @@ class NeighborSamplerHook(StatelessHook):
                 torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
             )
 
-        seed_nodes, seed_times = self._get_seed_tensors(batch)
+        seed_nodes, seed_times, seed_node_nbr_mask = self._get_seed_tensors(batch)
         if not seed_nodes.numel():
             logger.debug('No seed_nodes found, appending empty hop information')
             for _ in self.num_nbrs:
@@ -119,12 +119,17 @@ class NeighborSamplerHook(StatelessHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
+        batch.seed_node_nbr_mask = seed_node_nbr_mask  # type: ignore
         return batch
 
-    def _get_seed_tensors(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_seed_tensors(
+        self, batch: DGBatch
+    ) -> Tuple[torch.Tensor, torch.Tensor, dict]:
         device = batch.src.device
         seeds, times = [], []
+        seed_node_mask = dict()
 
+        offset = 0
         for node_attr, time_attr in zip(self._seed_nodes_keys, self._seed_times_keys):
             missing = [
                 attr for attr in (node_attr, time_attr) if not hasattr(batch, attr)
@@ -166,6 +171,11 @@ class NeighborSamplerHook(StatelessHook):
                             f'got values in range [{tensor.min().item()}, {tensor.max().item()}]'
                         )
                     seeds.append(seed.to(device))
+                    num_seed_nodes = tensor.shape[0]
+                    seed_node_mask[name] = torch.arange(offset, num_seed_nodes).to(
+                        device
+                    )
+                    offset += num_seed_nodes
                 elif name == time_attr:
                     if (tensor < 0).any():
                         raise ValueError(
@@ -178,12 +188,19 @@ class NeighborSamplerHook(StatelessHook):
         else:
             seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
             seed_times = torch.empty(0, dtype=torch.int64, device=device)
-        return seed_nodes, seed_times
+        return seed_nodes, seed_times, seed_node_mask
 
 
 class RecencyNeighborHook(StatefulHook):
     requires: Set[str] = set()
-    produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats'}
+    produces = {
+        'nids',
+        'nbr_nids',
+        'times',
+        'nbr_times',
+        'nbr_feats',
+        'seed_node_nbr_mask',
+    }
 
     """Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
@@ -282,7 +299,7 @@ class RecencyNeighborHook(StatefulHook):
                 torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
             )
 
-        seed_nodes, seed_times = self._get_seed_tensors(batch)
+        seed_nodes, seed_times, seed_node_mask = self._get_seed_tensors(batch)
         if not seed_nodes.numel():
             logger.debug('No seed_nodes found, appending empty hop information')
             for _ in self.num_nbrs:
@@ -310,15 +327,20 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_times.append(nbr_times)  # type: ignore
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
+        batch.seed_node_nbr_mask = seed_node_mask  # type: ignore
         if batch.src.numel():
             logger.debug('Updating circular buffers')
             self._update(batch)
         return batch
 
-    def _get_seed_tensors(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_seed_tensors(
+        self, batch: DGBatch
+    ) -> Tuple[torch.Tensor, torch.Tensor, dict]:
         device = batch.src.device
         seeds, times = [], []
+        seed_node_mask = dict()
 
+        offset = 0
         for node_attr, time_attr in zip(self._seed_nodes_keys, self._seed_times_keys):
             missing = [
                 attr for attr in (node_attr, time_attr) if not hasattr(batch, attr)
@@ -358,6 +380,11 @@ class RecencyNeighborHook(StatefulHook):
                             f'got values in range [{tensor.min().item()}, {tensor.max().item()}]'
                         )
                     seeds.append(seed.to(device))
+                    num_seed_nodes = tensor.shape[0]
+                    seed_node_mask[name] = torch.arange(offset, num_seed_nodes).to(
+                        device
+                    )
+                    offset += num_seed_nodes
                 elif name == time_attr:
                     if (tensor < 0).any():
                         raise ValueError(
@@ -370,7 +397,7 @@ class RecencyNeighborHook(StatefulHook):
         else:
             seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
             seed_times = torch.empty(0, dtype=torch.int64, device=device)
-        return seed_nodes, seed_times
+        return seed_nodes, seed_times, seed_node_mask
 
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int

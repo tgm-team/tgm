@@ -25,6 +25,7 @@ def test_hook_dependancies():
         'nbr_nids',
         'nbr_times',
         'nbr_feats',
+        'seed_node_nbr_mask',
     }
 
 
