@@ -535,3 +535,86 @@ class RecencyNeighborHook(StatefulHook):
                 (self._num_nodes, self._max_nbrs, self._edge_feats_dim)  # type: ignore
             )
             self._need_to_initialize_nbr_feats = False
+
+
+class NeighborCooccurrenceHook(StatelessHook):
+    requires = {'nbr_nids', 'nbr_idx_map'}
+    produces = {'neighbours_coocurence'}
+
+    def __init__(self, seed_nodes_pairs_keys: List[Tuple[str]]):
+        all_pairs = True
+        for nodes_pairs in seed_nodes_pairs_keys:
+            all_pairs &= len(nodes_pairs) == 2
+
+        if not all_pairs:
+            raise ValueError(
+                'Neighbour co-occurence is computed according to a pair of nodes'
+            )
+        self._seed_nodes_pairs_keys = seed_nodes_pairs_keys
+
+    def _count_nodes_freq(
+        self, src_nbrs: torch.Tensor, dst_nbrs: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        assert src_nbrs.ndim == 2 and src_nbrs.shape == dst_nbrs.shape
+
+        # cross occurrences count
+        cross_mask = src_nbrs.unsqueeze(dim=1) == dst_nbrs.unsqueeze(dim=-1)
+
+        # self occurrences count
+        src_mask = src_nbrs.unsqueeze(dim=1) == src_nbrs.unsqueeze(dim=-1)
+        dst_mask = dst_nbrs.unsqueeze(dim=1) == dst_nbrs.unsqueeze(dim=-1)
+
+        src_freq = torch.stack([src_mask.sum(1), cross_mask.sum(1)], dim=2).float()
+        dst_freq = torch.stack([dst_mask.sum(1), cross_mask.sum(2)], dim=2).float()
+
+        # Mask out PADDED_NODE_ID
+        src_freq[src_nbrs == PADDED_NODE_ID] = 0.0
+        dst_freq[dst_nbrs == PADDED_NODE_ID] = 0.0
+        return src_freq, dst_freq
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        device = batch.nbr_nids.device  # type: ignore
+        missing = []
+        for src, dst in self._seed_nodes_pairs_keys:  # type: ignore
+            if not hasattr(batch, src):
+                missing.append(src)
+            if not hasattr(batch, dst):
+                missing.append(dst)
+
+        if missing:
+            raise ValueError(f'Missing seed attributes {missing} on batch')
+
+        neighbours = batch.nbr_nids[0]  # type: ignore
+        all_pairs_coocurence = []
+        for src_key, dst_key in self._seed_nodes_pairs_keys:  # type: ignore
+            src = getattr(batch, src_key)
+            dst = getattr(batch, dst_key)
+
+            src.shape[0]
+            src_neighbours = neighbours[batch.nbr_idx_map[src_key]]  # type: ignore
+            dst_neighbours = neighbours[batch.nbr_idx_map[dst_key]]  # type: ignore
+
+            # include seed nodes are neighbors themselves
+            src_neighbours = torch.cat([src[:, None], src_neighbours], dim=1)
+            dst_neighbours = torch.cat([dst[:, None], dst_neighbours], dim=1)
+
+            if src.shape[0] != dst.shape[0]:
+                src = torch.repeat_interleave(
+                    src, repeats=dst.shape[0], dim=0
+                )  # This only works when (src,neg) is passed. If (neg,src) is passed. It will break the logic
+                dst = dst.repeat(src.shape[0])
+
+                src_neighbours = torch.repeat_interleave(
+                    src_neighbours, repeats=dst.shape[0], dim=0
+                )
+                dst_neighbours = dst_neighbours.repeat(src.shape[0], 1)
+            src_coocurence, dst_coocurence = self._count_nodes_freq(
+                src_neighbours, dst_neighbours
+            )
+            pair_coocurence = torch.stack([src_coocurence, dst_coocurence], dim=0)
+            all_pairs_coocurence.append(pair_coocurence)
+
+        batch.neighbours_coocurence = torch.stack(all_pairs_coocurence, dim=0).to(  # type: ignore
+            device
+        )
+        return batch
