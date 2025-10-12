@@ -172,9 +172,9 @@ class NeighborSamplerHook(StatelessHook):
                         )
                     seeds.append(seed.to(device))
                     num_seed_nodes = tensor.shape[0]
-                    seed_node_mask[name] = torch.arange(offset, num_seed_nodes).to(
-                        device
-                    )
+                    seed_node_mask[name] = torch.arange(
+                        offset, offset + num_seed_nodes
+                    ).to(device)
                     offset += num_seed_nodes
                 elif name == time_attr:
                     if (tensor < 0).any():
@@ -381,9 +381,9 @@ class RecencyNeighborHook(StatefulHook):
                         )
                     seeds.append(seed.to(device))
                     num_seed_nodes = tensor.shape[0]
-                    seed_node_mask[name] = torch.arange(offset, num_seed_nodes).to(
-                        device
-                    )
+                    seed_node_mask[name] = torch.arange(
+                        offset, offset + num_seed_nodes
+                    ).to(device)
                     offset += num_seed_nodes
                 elif name == time_attr:
                     if (tensor < 0).any():
