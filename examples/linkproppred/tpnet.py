@@ -223,26 +223,19 @@ def eval(
     for batch_num, batch in enumerate(tqdm(loader)):
         copy_batch = copy.deepcopy(batch)
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            copy_batch.src = batch.src[idx].unsqueeze(0)
-            copy_batch.dst = batch.dst[idx].unsqueeze(0)
-            copy_batch.time = batch.time[idx].unsqueeze(0)
+            idx = torch.tensor([idx], device=args.device)
+            copy_batch.src = batch.src[idx]
+            copy_batch.dst = batch.dst[idx]
+            copy_batch.time = batch.time[idx]
             copy_batch.neg = neg_batch
             neg_idx = (batch.neg == neg_batch[:, None]).nonzero(as_tuple=True)[1]
 
-            # A tensor of index of src, dst and negative nodes to retrieve neighbor information
-            all_idx = torch.cat(
-                [
-                    torch.Tensor([idx]).to(neg_batch.device),  # src idx
-                    torch.Tensor([idx + batch.src.shape[0]]).to(
-                        neg_batch.device
-                    ),  # dst idx
-                    neg_idx,
-                ],
-                dim=0,
-            ).long()
-            copy_batch.nbr_nids = [batch.nbr_nids[0][all_idx]]
-            copy_batch.nbr_times = [batch.nbr_times[0][all_idx]]
-            copy_batch.nbr_feats = [batch.nbr_feats[0][all_idx]]
+            # Update nbr map to only indices that are used
+            copy_batch.seed_node_nbr_mask['src'] = batch.seed_node_nbr_mask['src'][idx]
+            copy_batch.seed_node_nbr_mask['dst'] = batch.seed_node_nbr_mask['dst'][idx]
+            copy_batch.seed_node_nbr_mask['neg'] = batch.seed_node_nbr_mask['neg'][
+                neg_idx
+            ]
 
             pos_out, neg_out = model(copy_batch, static_node_feat)
             pos_out, neg_out = pos_out.sigmoid(), neg_out.sigmoid()
