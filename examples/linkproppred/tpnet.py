@@ -2,7 +2,6 @@ import argparse
 import copy
 import logging
 import os
-from distutils.util import strtobool
 from pathlib import Path
 from typing import Callable, Tuple
 
@@ -62,14 +61,14 @@ parser.add_argument(
 parser.add_argument(
     '--use-matrix',
     default=True,
-    type=strtobool,
-    help='if True, explicitly maintain the temporal walk matrices',
+    action=argparse.BooleanOptionalAction,
+    help='if no-use-matrix, wont explicitly maintain the temporal walk matrices',
 )
 parser.add_argument(
     '--concat-src-dst',
     default=True,
-    type=strtobool,
-    help='if False, Random projection avoids concat src and dst in computation',
+    action=argparse.BooleanOptionalAction,
+    help='if no-concat-src-dst, Random projection avoids concat src and dst in computation',
 )
 parser.add_argument('--node-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
