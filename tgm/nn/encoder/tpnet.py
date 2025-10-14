@@ -23,6 +23,9 @@ class RandomProjectionModule(nn.Module):
         num_edges (int): the number of edges
         dim_factor (int): the parameter to control the dimension of random projections. Specifically, the
                            dimension of the random projections is set to be dim_factor * log(2*edge_num)
+        concat_src_dst (bool): If true, `random_feature` will be computed from  the concatenation between `src` and `dst`
+                           by model design, this is True by default. To make the model scalable, this can be set
+                           to False; however, there will be performance trade-off.
         device (str): torch device
 
     *Note: For large-scale dataset, the authors suggested to set `use_matrix=False` and use number of edge and `dim_factor=10` to make it scalable.*
@@ -39,6 +42,7 @@ class RandomProjectionModule(nn.Module):
         enforce_dim: int | None = None,
         num_edges: int | None = None,
         dim_factor: int | None = None,
+        concat_src_dst: bool = True,
         device: str = 'cpu',
     ) -> None:
         super().__init__()
@@ -58,6 +62,7 @@ class RandomProjectionModule(nn.Module):
         self.use_matrix = use_matrix
         self.device = device
         self.scale = scale_random_projection
+        self.concat_src_dst = concat_src_dst
 
         self.beginning_time = nn.Parameter(
             torch.tensor(beginning_time), requires_grad=False
@@ -98,8 +103,10 @@ class RandomProjectionModule(nn.Module):
                             requires_grad=False,
                         )
                     )
-
-        self.out_dim = (2 * self.num_layer + 2) ** 2
+        if concat_src_dst:
+            self.out_dim = (2 * self.num_layer + 2) ** 2
+        else:
+            self.out_dim = (self.num_layer + 1) ** 2
         self.mlp = nn.Sequential(
             nn.Linear(self.out_dim, self.out_dim * 4),
             nn.ReLU(),
@@ -118,14 +125,22 @@ class RandomProjectionModule(nn.Module):
         Returns:
             H_pairwise : Pairwise feature
         """
-        src_random_projections = self.get_random_projections(src)
-        dst_random_projections = self.get_random_projections(dst)
-        random_projections = torch.cat(  # @TODO: This takes up a lot GPU memory, especially for TGB evaluation
-            [src_random_projections, dst_random_projections], dim=1
-        ).to(self.device)
-        random_feature = torch.matmul(
-            random_projections, random_projections.transpose(1, 2)
-        ).reshape(src.shape[0], -1)
+        if self.concat_src_dst:
+            src_random_projections = self.get_random_projections(src)
+            dst_random_projections = self.get_random_projections(dst)
+            random_projections = torch.cat(  #!This takes up a lot GPU memory. Considering set concat_src_dst to False
+                [src_random_projections, dst_random_projections], dim=1
+            ).to(self.device)
+            random_feature = torch.matmul(
+                random_projections, random_projections.transpose(1, 2)
+            ).reshape(src.shape[0], -1)
+        else:
+            # We thank the author, Xiaodong Lu, for suggestion on lightweight version of TPNet
+            src_random_projections = self.get_random_projections(src)
+            dst_random_projections = self.get_random_projections(dst)
+            random_feature = torch.matmul(
+                src_random_projections, dst_random_projections.transpose(1, 2)
+            ).reshape(src.shape[0], -1)
 
         if not self.scale:
             out = self.mlp(random_feature)
