@@ -62,7 +62,7 @@ parser.add_argument(
     '--use-matrix',
     default=True,
     action=argparse.BooleanOptionalAction,
-    help='if no-use-matrix, won't explicitly maintain the temporal walk matrices',
+    help='if no-use-matrix, will not explicitly maintain the temporal walk matrices',
 )
 parser.add_argument(
     '--concat-src-dst',
