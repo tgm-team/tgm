@@ -131,29 +131,33 @@ class TPNet_LinkPrediction(nn.Module):
         nbr_nids = batch.nbr_nids[0]
         nbr_times = batch.nbr_times[0]
         nbr_feats = batch.nbr_feats[0]
+        src_nbr_idx = batch.seed_node_nbr_mask['src']
+        dst_nbr_idx = batch.seed_node_nbr_mask['dst']
+        neg_nbr_idx = batch.seed_node_nbr_mask['neg']
         pos_batch_size = dst.shape[0]
         neg_batch_size = neg.shape[0]
 
         # positive edge
         edge_idx_pos = torch.stack((src, dst), dim=0)
+        pos_nbr_idx = torch.cat([src_nbr_idx, dst_nbr_idx])
         z_src_pos, z_dst_pos = self.encoder(
             static_node_feat,
             edge_idx_pos,
             time,
-            nbr_nids[: pos_batch_size * 2],
-            nbr_times[: pos_batch_size * 2],
-            nbr_feats[: pos_batch_size * 2],
+            nbr_nids[pos_nbr_idx],
+            nbr_times[pos_nbr_idx],
+            nbr_feats[pos_nbr_idx],
         )
         pos_out = self.decoder(z_src_pos, z_dst_pos)
 
         neg_nbr_nids = nbr_nids[
-            -neg_batch_size:
+            neg_nbr_idx
         ]  # @TODO: Assume that batch.neg doesn't have duplicated records
-        neg_nbr_times = nbr_times[-neg_batch_size:]
-        neg_nbr_feats = nbr_feats[-neg_batch_size:]
-        src_nbr_nids = nbr_nids[:pos_batch_size]
-        src_nbr_times = nbr_times[:pos_batch_size]
-        src_nbr_feats = nbr_feats[:pos_batch_size]
+        neg_nbr_times = nbr_times[neg_nbr_idx]
+        neg_nbr_feats = nbr_feats[neg_nbr_idx]
+        src_nbr_nids = nbr_nids[src_nbr_idx]
+        src_nbr_times = nbr_times[src_nbr_idx]
+        src_nbr_feats = nbr_feats[src_nbr_idx]
 
         if src.shape[0] != neg_batch_size:
             src = torch.repeat_interleave(src, repeats=neg_batch_size, dim=0)
@@ -172,9 +176,9 @@ class TPNet_LinkPrediction(nn.Module):
             neg_nbr_feats = neg_nbr_feats.repeat(pos_batch_size, 1, 1)
             neg = neg.repeat(pos_batch_size)
         else:
-            src_nbr_nids = nbr_nids[:pos_batch_size]
-            src_nbr_times = nbr_times[:pos_batch_size]
-            src_nbr_feats = nbr_feats[:pos_batch_size]
+            src_nbr_nids = nbr_nids[src_nbr_idx]
+            src_nbr_times = nbr_times[src_nbr_idx]
+            src_nbr_feats = nbr_feats[src_nbr_idx]
 
         edge_idx_neg = torch.stack((src, neg), dim=0)
 
@@ -231,26 +235,19 @@ def eval(
     for batch_num, batch in enumerate(tqdm(loader)):
         copy_batch = copy.deepcopy(batch)
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            copy_batch.src = batch.src[idx].unsqueeze(0)
-            copy_batch.dst = batch.dst[idx].unsqueeze(0)
-            copy_batch.time = batch.time[idx].unsqueeze(0)
+            idx = torch.tensor([idx], device=args.device)
+            copy_batch.src = batch.src[idx]
+            copy_batch.dst = batch.dst[idx]
+            copy_batch.time = batch.time[idx]
             copy_batch.neg = neg_batch
             neg_idx = (batch.neg == neg_batch[:, None]).nonzero(as_tuple=True)[1]
 
-            # A tensor of index of src, dst and negative nodes to retrieve neighbor information
-            all_idx = torch.cat(
-                [
-                    torch.Tensor([idx]).to(neg_batch.device),  # src idx
-                    torch.Tensor([idx + batch.src.shape[0]]).to(
-                        neg_batch.device
-                    ),  # dst idx
-                    neg_idx,
-                ],
-                dim=0,
-            ).long()
-            copy_batch.nbr_nids = [batch.nbr_nids[0][all_idx]]
-            copy_batch.nbr_times = [batch.nbr_times[0][all_idx]]
-            copy_batch.nbr_feats = [batch.nbr_feats[0][all_idx]]
+            # Update nbr map to only indices that are used
+            copy_batch.seed_node_nbr_mask['src'] = batch.seed_node_nbr_mask['src'][idx]
+            copy_batch.seed_node_nbr_mask['dst'] = batch.seed_node_nbr_mask['dst'][idx]
+            copy_batch.seed_node_nbr_mask['neg'] = batch.seed_node_nbr_mask['neg'][
+                neg_idx
+            ]
 
             pos_out, neg_out = model(copy_batch, static_node_feat)
             pos_out, neg_out = pos_out.sigmoid(), neg_out.sigmoid()
