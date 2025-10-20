@@ -565,7 +565,7 @@ class RecencyNeighborHook(StatefulHook):
 
 
 class NeighborCooccurrenceHook(StatelessHook):
-    requires = {'nbr_nids', 'nbr_idx_map'}
+    requires = {'nbr_nids', 'seed_node_nbr_mask'}
     produces = {'neighbours_coocurence'}
 
     def __init__(self, seed_nodes_pairs_keys: List[Tuple[str]]):
@@ -600,7 +600,7 @@ class NeighborCooccurrenceHook(StatelessHook):
         return src_freq, dst_freq
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        device = batch.nbr_nids.device  # type: ignore
+        device = batch.nbr_nids[0].device  # type: ignore
         missing = []
         for src, dst in self._seed_nodes_pairs_keys:  # type: ignore
             if not hasattr(batch, src):
@@ -617,15 +617,20 @@ class NeighborCooccurrenceHook(StatelessHook):
             src = getattr(batch, src_key)
             dst = getattr(batch, dst_key)
 
-            src.shape[0]
-            src_neighbours = neighbours[batch.nbr_idx_map[src_key]]  # type: ignore
-            dst_neighbours = neighbours[batch.nbr_idx_map[dst_key]]  # type: ignore
+            src_neighbours = neighbours[batch.seed_node_nbr_mask[src_key]]  # type: ignore
+            dst_neighbours = neighbours[batch.seed_node_nbr_mask[dst_key]]  # type: ignore
 
             # include seed nodes are neighbors themselves
             src_neighbours = torch.cat([src[:, None], src_neighbours], dim=1)
             dst_neighbours = torch.cat([dst[:, None], dst_neighbours], dim=1)
 
-            if src.shape[0] != dst.shape[0]:
+            if src.shape[0] != dst.shape[0] and 'neg' in [src_key, dst_key]:
+                # @TODO: This is to handle the case of src and dst (neg) shape mismatch. Can we have a hook to handle this?
+                if 'neg' == src_key:
+                    # Temporary swap src and dst to keep following logic remain unchanged
+                    src, dst = dst, src
+                    src_neighbours, dst_neighbours = dst_neighbours, src_neighbours
+
                 src = torch.repeat_interleave(
                     src, repeats=dst.shape[0], dim=0
                 )  # This only works when (src,neg) is passed. If (neg,src) is passed. It will break the logic
@@ -635,13 +640,22 @@ class NeighborCooccurrenceHook(StatelessHook):
                     src_neighbours, repeats=dst.shape[0], dim=0
                 )
                 dst_neighbours = dst_neighbours.repeat(src.shape[0], 1)
+
+                if 'neg' == src_key:
+                    # Swap them back
+                    src, dst = dst, src
+                    src_neighbours, dst_neighbours = dst_neighbours, src_neighbours
+            elif src.shape[0] != dst.shape[0]:
+                raise ValueError(
+                    f"Shapes of two seed nodes,{src_key} ({src.shape[0]}) and {dst_key} ({dst.shape[0]}), don't match."
+                )
+
             src_coocurence, dst_coocurence = self._count_nodes_freq(
                 src_neighbours, dst_neighbours
             )
             pair_coocurence = torch.stack([src_coocurence, dst_coocurence], dim=0)
             all_pairs_coocurence.append(pair_coocurence)
 
-        batch.neighbours_coocurence = torch.stack(all_pairs_coocurence, dim=0).to(  # type: ignore
-            device
-        )
+        batch.neighbours_coocurence = all_pairs_coocurence  # type: ignore
+
         return batch

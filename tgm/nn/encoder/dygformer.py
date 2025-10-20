@@ -53,21 +53,21 @@ class NeighborCooccurrenceEncoder(nn.Module):
 
     def forward(
         self,
-        src_neighbour_nodes_ids: torch.Tensor,
-        dst_neighbour_nodes_ids: torch.Tensor,
+        source_freq: torch.Tensor,
+        dst_freq: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""Forward pass. Encode neighbor co-occurrence (Section 4.1).
 
         Args:
-            src_neighbour_nodes_ids (Tensor): Padded list of source node's neighbour.
-            dst_neighbour_nodes_ids (Tensor): Padded list of destination node's neighbour.
+            source_freq (Tensor): Co-occurence neighbours count of src.
+            dst_freq (Tensor): Co-occurence neighbours count of dst.
 
         Returns:
             X (PyTorch Float Tensor): Neighbor co-occurrence features (`X^{t}_{*,C}`).
-        """
-        source_freq, dst_freq = self._count_nodes_freq(
-            src_neighbour_nodes_ids, dst_neighbour_nodes_ids
-        )
+        """  # @TODO: Update this description
+        # source_freq, dst_freq = self._count_nodes_freq(
+        #     src_neighbour_nodes_ids, dst_neighbour_nodes_ids
+        # )
         src_neighbors_co_occurrence_feat = self.neighbor_co_occurrence_encoder(
             source_freq.unsqueeze(dim=-1)
         ).sum(dim=2)
@@ -246,6 +246,7 @@ class DyGFormer(nn.Module):
         edge_index: torch.Tensor,
         edge_time: torch.Tensor,
         neighbours: torch.Tensor,
+        neighbours_coocurence: torch.Tensor,
         neighbours_time: torch.Tensor,
         neighbours_edge_feat: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -256,6 +257,7 @@ class DyGFormer(nn.Module):
             edge_index (PyTorch Tensor): Graph edge indices.
             edge_feat (PyTorch Tensor): Edge feature vector.
             neighbours (PyTorch Tensor): Neighbours of src and dst nodes from edge_index
+            neighbours_coocurence (PyTorch Tensor): Neighbours co-occurence between src and dst nodes
             neighbours_time (PyTorch Tensor): Interaction time of src/dst nodes and their neighbours
             neighbours_edge_feat (PyTorch Tensor): Features of edge between src/dst nodes and their neighbours
 
@@ -268,6 +270,10 @@ class DyGFormer(nn.Module):
         num_edge = src.shape[0]
         src_neighbours = neighbours[:num_edge]
         dst_neighbours = neighbours[num_edge : num_edge * 2]
+        src_coocurence, dst_coocurence = (
+            neighbours_coocurence[0],
+            neighbours_coocurence[1],
+        )
         src_neighbours_time = neighbours_time[:num_edge]
         dst_neighbours_time = neighbours_time[num_edge : num_edge * 2]
         src_neighbours_edge_feat = neighbours_edge_feat[:num_edge]
@@ -312,7 +318,7 @@ class DyGFormer(nn.Module):
         dst_neighbours_time_feats[(dst_neighbours == PADDED_NODE_ID)] = 0
 
         src_co_occurrence_feats, dst_co_occurrence_feats = self.co_occurrence_encoder(
-            src_neighbours, dst_neighbours
+            src_coocurence, dst_coocurence
         )
 
         # Get patches for each features of src and dst
