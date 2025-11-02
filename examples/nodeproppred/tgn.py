@@ -17,11 +17,7 @@ from tqdm import tqdm
 from tgm import DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import (
-    HookManager,
-    NodeEventTemporalSubgraphHook,
-    RecencyNeighborHook,
-)
+from tgm.hooks import HookManager, RecencyNeighborHook, TemporalSubgraphHook
 from tgm.nn import NodePredictor, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
@@ -385,7 +381,7 @@ nbr_hook = RecencyNeighborHook(
 
 hm = HookManager(keys=['train', 'val', 'test'])
 hm.register_shared(nbr_hook)
-hm.register_shared(NodeEventTemporalSubgraphHook())
+hm.register_shared(TemporalSubgraphHook(['node_ids'], ['node_times']))
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)

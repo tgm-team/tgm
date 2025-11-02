@@ -5,7 +5,7 @@ from .negatives import NegativeEdgeSamplerHook, TGBNegativeEdgeSamplerHook
 from .neighbors import (
     NeighborSamplerHook,
     RecencyNeighborHook,
-    NodeEventTemporalSubgraphHook,
+    TemporalSubgraphHook,
 )
 from .hook_manager import HookManager
 from .recipe import RecipeRegistry
