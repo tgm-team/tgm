@@ -12,11 +12,7 @@ from tqdm import tqdm
 from tgm import DGBatch, DGraph
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import (
-    NeighborCooccurrenceHook,
-    RecencyNeighborHook,
-    RecipeRegistry,
-)
+from tgm.hooks import RecencyNeighborHook, RecipeRegistry
 from tgm.nn import DyGFormer, LinkPredictor, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
@@ -128,7 +124,6 @@ class DyGFormer_LinkPrediction(nn.Module):
             edge_idx_pos,
             time,
             nbr_nids[pos_nbr_idx],
-            batch.neighbours_coocurence[0],
             nbr_times[pos_nbr_idx],
             nbr_feats[pos_nbr_idx],
         )
@@ -172,7 +167,6 @@ class DyGFormer_LinkPrediction(nn.Module):
             edge_idx_neg,
             time,
             torch.cat([src_nbr_nids, neg_nbr_nids], dim=0),
-            batch.neighbours_coocurence[1],
             torch.cat([src_nbr_times, neg_nbr_times], dim=0),
             torch.cat([src_nbr_feats, neg_nbr_feats], dim=0),
         )
@@ -275,12 +269,11 @@ hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
 hm.register_shared(nbr_hook)
-hm.register_shared(NeighborCooccurrenceHook([('src', 'dst'), ('src', 'neg')]))
 train_key, val_key, test_key = hm.keys
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
-test_loader = DGDataLoader(test_dg, 1, hook_manager=hm)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = DyGFormer_LinkPrediction(
     node_feat_dim=static_node_feat.shape[1],
