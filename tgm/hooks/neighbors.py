@@ -561,7 +561,7 @@ class NodeEventTemporalSubgraphHook(StatelessHook):
             batch.sg_time = batch.nbr_times[0].flatten()[mask]  # type: ignore
             batch.sg_edge_feats = batch.nbr_feats[0].flatten(0, -2).float()[mask]  # type: ignore
 
-            all_nids = torch.cat([batch.sg_src, batch.sg_dst])  # type: ignore
+            all_nids = torch.cat([src, batch.sg_dst])  # type: ignore
             batch.sg_unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
             batch.sg_global_to_local = lambda x: torch.searchsorted(  # type: ignore
                 batch.sg_unique_nids,  # type: ignore

@@ -270,7 +270,12 @@ def train(
         opt.zero_grad()
         y_labels = batch.dynamic_node_feats
         if y_labels is not None:
-            sg_edge_index = torch.stack([batch.sg_src, batch.sg_dst])
+            sg_edge_index = torch.stack(
+                [
+                    batch.sg_global_to_local(batch.sg_src),
+                    batch.sg_global_to_local(batch.sg_dst),
+                ]
+            )
             z, last_update = memory(batch.sg_unique_nids)
             z = encoder(
                 z, last_update, sg_edge_index, batch.sg_time, batch.sg_edge_feats
