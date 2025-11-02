@@ -324,7 +324,12 @@ def eval(
     for batch in tqdm(loader):
         y_labels = batch.dynamic_node_feats
         if y_labels is not None:
-            sg_edge_index = torch.stack([batch.sg_src, batch.sg_dst])
+            sg_edge_index = torch.stack(
+                [
+                    batch.sg_global_to_local(batch.sg_src),
+                    batch.sg_global_to_local(batch.sg_dst),
+                ]
+            )
 
             z, last_update = memory(batch.sg_unique_nids)
             z = encoder(
