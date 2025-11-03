@@ -14,7 +14,7 @@ from tgm.constants import (
     RECIPE_TGB_LINK_PRED,
 )
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import RecencyNeighborHook, RecipeRegistry
+from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook, RecipeRegistry
 from tgm.nn import LinkPredictor, TemporalAttention, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
@@ -215,6 +215,7 @@ else:
 
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
+        num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
         num_nbrs=args.n_nbrs,
         seed_nodes_keys=['src', 'dst', 'neg'],
         seed_times_keys=['time', 'time', 'neg_time'],

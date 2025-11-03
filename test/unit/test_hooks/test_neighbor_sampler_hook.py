@@ -35,21 +35,33 @@ def test_hook_reset_state():
 def test_bad_neighbor_sampler_init():
     with pytest.raises(ValueError):
         NeighborSamplerHook(
-            num_nbrs=[], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+            num_nodes=1, num_nbrs=[], seed_nodes_keys=['foo'], seed_times_keys=['bar']
         )
     with pytest.raises(ValueError):
         NeighborSamplerHook(
-            num_nbrs=[1, 0], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+            num_nodes=1, num_nbrs=[-1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        )
+
+    with pytest.raises(ValueError):
+        NeighborSamplerHook(
+            num_nodes=1,
+            num_nbrs=[1, 0],
+            seed_nodes_keys=['foo'],
+            seed_times_keys=['bar'],
         )
     with pytest.raises(ValueError):
         NeighborSamplerHook(
-            num_nbrs=[1], seed_nodes_keys=['foo', 'bar'], seed_times_keys=['foo']
+            num_nodes=1,
+            num_nbrs=[1],
+            seed_nodes_keys=['foo', 'bar'],
+            seed_times_keys=['foo'],
         )
 
 
 def test_sample_with_node_events_seeds(node_only_data):
     dg = DGraph(node_only_data)
     hook = NeighborSamplerHook(
+        num_nodes=dg.num_nodes,
         num_nbrs=[1],
         seed_nodes_keys=['node_ids'],
         seed_times_keys=['node_times'],
@@ -65,7 +77,7 @@ def test_sample_with_node_events_seeds(node_only_data):
 def test_bad_sample_with_non_existent_seeds(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
-        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        num_nodes=1, num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
     )
     batch = dg.materialize()
 
@@ -76,7 +88,7 @@ def test_bad_sample_with_non_existent_seeds(data):
 def test_sample_with_none_seeds(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
-        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        num_nodes=1, num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
     )
     batch = dg.materialize()
     batch.foo, batch.bar = None, None
@@ -88,7 +100,7 @@ def test_sample_with_none_seeds(data):
 def test_bad_sample_with_non_tensor_non_None_seeds(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
-        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        num_nodes=1, num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
     )
     batch = dg.materialize()
     batch.foo = 'should_be_1d_tensor'
@@ -101,7 +113,7 @@ def test_bad_sample_with_non_tensor_non_None_seeds(data):
 def test_bad_sample_with_non_1d_tensor_seeds(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
-        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        num_nodes=1, num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
     )
     batch = dg.materialize()
     batch.foo = torch.rand(2, 3)  # should be 1-d
@@ -114,7 +126,7 @@ def test_bad_sample_with_non_1d_tensor_seeds(data):
 def test_bad_sample_with_seeds_id_out_of_range(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
-        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        num_nodes=1, num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
     )
     batch = dg.materialize()
     batch.foo = torch.IntTensor([-1])  # should be positive
@@ -127,7 +139,7 @@ def test_bad_sample_with_seeds_id_out_of_range(data):
 def test_bad_sample_with_seeds_time_out_of_range(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
-        num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        num_nodes=1, num_nbrs=[1], seed_nodes_keys=['foo'], seed_times_keys=['bar']
     )
     batch = dg.materialize()
     batch.foo = torch.IntTensor([1])
@@ -140,6 +152,7 @@ def test_bad_sample_with_seeds_time_out_of_range(data):
 def test_neighbor_sampler_hook_link_pred(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
+        num_nodes=dg.num_nodes,
         num_nbrs=[2],
         seed_nodes_keys=['src', 'dst'],
         seed_times_keys=['time', 'time'],
@@ -160,6 +173,7 @@ def test_neighbor_sampler_hook_link_pred(data):
 def test_neighbor_sampler_hook_node_pred(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
+        num_nodes=dg.num_nodes,
         num_nbrs=[2],
         seed_nodes_keys=['src', 'dst'],
         seed_times_keys=['time', 'time'],
@@ -223,6 +237,7 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     n_nbrs = [3]  # 3 neighbor for each node
     uniform_hook = NeighborSamplerHook(
+        num_nodes=dg.num_nodes,
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
         seed_times_keys=['time', 'time'],
@@ -307,6 +322,7 @@ def test_init_basic_sampled_graph_2_hop(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     n_nbrs = [1, 1]  # 3 neighbor for each node
     uniform_hook = NeighborSamplerHook(
+        num_nodes=dg.num_nodes,
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
         seed_times_keys=['time', 'time'],
@@ -373,6 +389,7 @@ def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     n_nbrs = [3]  # 3 neighbor for each node
     uniform_hook = NeighborSamplerHook(
+        num_nodes=dg.num_nodes,
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
         seed_times_keys=['time', 'time'],
@@ -468,6 +485,7 @@ def test_no_edge_feat_data_neighbor_sampler(no_edge_feat_data):
     dg = DGraph(no_edge_feat_data)
     n_nbrs = [1]
     uniform_hook = NeighborSamplerHook(
+        num_nodes=dg.num_nodes,
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
         seed_times_keys=['time', 'time'],
@@ -509,6 +527,7 @@ def test_node_only_batch_recency_nbr_sampler(node_only_data):
     hm = HookManager(keys=['unit'])
     n_nbrs = [1]  # 1 neighbor for each node
     uniform_hook = NeighborSamplerHook(
+        num_nodes=dg.num_nodes,
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
         seed_times_keys=['time', 'time'],

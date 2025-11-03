@@ -25,7 +25,9 @@ class NodeSeedable:
         ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
     """
 
-    def __init__(self, seed_nodes_keys: List[str], seed_times_keys: List[str]):
+    def __init__(
+        self, seed_nodes_keys: List[str], seed_times_keys: List[str], num_nodes: int
+    ):
         if len(seed_nodes_keys) != len(seed_times_keys):
             raise ValueError(
                 f'len(seed_nodes_keys) ({len(seed_nodes_keys)}) '
@@ -33,6 +35,7 @@ class NodeSeedable:
                 f'seed_nodes_keys={seed_nodes_keys}, '
                 f'seed_times_keys={seed_times_keys}'
             )
+        self._num_nodes = num_nodes
         self._seed_nodes_keys = seed_nodes_keys
         self._seed_times_keys = seed_times_keys
         logger.debug(
@@ -78,8 +81,6 @@ class NodeSeedable:
                     raise ValueError(f'{name} must be 1-D, got shape {tensor.shape}')
 
                 # Bounds checks
-                # TODO: Infer self._num_nodes from underlying graph
-                self._num_nodes = float('inf')
                 if name == node_attr:
                     if (tensor < 0).any() or (tensor >= self._num_nodes).any():
                         raise ValueError(
@@ -106,6 +107,7 @@ class NeighborSamplerHook(StatelessHook, NodeSeedable):
     """Load data from DGraph using a memory based sampling function.
 
     Args:
+        num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
         directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
@@ -127,12 +129,13 @@ class NeighborSamplerHook(StatelessHook, NodeSeedable):
 
     def __init__(
         self,
+        num_nodes: int,
         num_nbrs: List[int],
         seed_nodes_keys: List[str],
         seed_times_keys: List[str],
         directed: bool = False,
     ) -> None:
-        NodeSeedable.__init__(self, seed_nodes_keys, seed_times_keys)
+        NodeSeedable.__init__(self, seed_nodes_keys, seed_times_keys, num_nodes)
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
@@ -229,13 +232,12 @@ class RecencyNeighborHook(StatefulHook, NodeSeedable):
         seed_times_keys: List[str],
         directed: bool = False,
     ) -> None:
-        NodeSeedable.__init__(self, seed_nodes_keys, seed_times_keys)
+        NodeSeedable.__init__(self, seed_nodes_keys, seed_times_keys, num_nodes)
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
 
-        self._num_nodes = num_nodes
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
         self._directed = directed
@@ -490,8 +492,10 @@ class TemporalSubgraphHook(StatelessHook, NodeSeedable):
         'sg_global_to_local',
     }
 
-    def __init__(self, seed_nodes_keys: List[str], seed_times_keys: List[str]):
-        NodeSeedable.__init__(self, seed_nodes_keys, seed_times_keys)
+    def __init__(
+        self, num_nodes: int, seed_nodes_keys: List[str], seed_times_keys: List[str]
+    ):
+        NodeSeedable.__init__(self, seed_nodes_keys, seed_times_keys, num_nodes)
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         seed_nodes, _ = self._get_seed_tensors(batch)

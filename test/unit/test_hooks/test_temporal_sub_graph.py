@@ -12,7 +12,7 @@ from tgm.hooks import HookManager, StatelessHook, TemporalSubgraphHook
 @pytest.fixture
 def dummy_data():
     # This is just to create a dummy instance of DGData to feed to DGLoader
-    edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
+    edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 20]])
     edge_timestamps = torch.LongTensor([1, 5, 20])
     edge_feats = torch.rand(3, 5)
     node_timestamps = torch.LongTensor([2, 3, 4])
@@ -64,12 +64,100 @@ class RecencyNeighborHookMockWithPaddedNode(StatelessHook):
         return batch
 
 
+def test_bad_subgraph_sampler_init():
+    with pytest.raises(ValueError):
+        TemporalSubgraphHook(
+            num_nodes=1, seed_nodes_keys=['foo', 'bar'], seed_times_keys=['foo']
+        )
+
+
+def test_bad_sample_with_non_existent_seeds(dummy_data):
+    dg = DGraph(dummy_data)
+    hook = TemporalSubgraphHook(
+        num_nodes=1, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+
+    with pytest.raises(ValueError):
+        _ = hook(dg, batch)
+
+
+def test_sample_with_none_seeds(dummy_data):
+    dg = DGraph(dummy_data)
+    hook = TemporalSubgraphHook(
+        num_nodes=1, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo, batch.bar = None, None
+
+    with pytest.warns(UserWarning):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_non_tensor_non_None_seeds(dummy_data):
+    dg = DGraph(dummy_data)
+    hook = TemporalSubgraphHook(
+        num_nodes=1, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = 'should_be_1d_tensor'
+    batch.bar = 'should_be_1d_tensor'
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_non_1d_tensor_seeds(dummy_data):
+    dg = DGraph(dummy_data)
+    hook = TemporalSubgraphHook(
+        num_nodes=1, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = torch.rand(2, 3)  # should be 1-d
+    batch.bar = torch.rand(2, 3)  # should be 1-d
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_seeds_id_out_of_range(dummy_data):
+    dg = DGraph(dummy_data)
+    hook = TemporalSubgraphHook(
+        num_nodes=1, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = torch.IntTensor([-1])  # should be positive
+    batch.bar = torch.LongTensor([1])
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
+def test_bad_sample_with_seeds_time_out_of_range(dummy_data):
+    dg = DGraph(dummy_data)
+    hook = TemporalSubgraphHook(
+        num_nodes=1, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+    )
+    batch = dg.materialize()
+    batch.foo = torch.IntTensor([1])
+    batch.bar = torch.LongTensor([-1])  # should be positive
+
+    with pytest.raises(ValueError):
+        batch = hook(dg, batch)
+
+
 def test_normal_temporal_subgraph(dummy_data):
     dg = DGraph(dummy_data)
 
     hm = HookManager(keys=['unit'])
     hm.register_shared(RecencyNeighborHookMock())
-    hm.register_shared(TemporalSubgraphHook(['node_ids'], ['node_times']))
+    hm.register_shared(
+        TemporalSubgraphHook(
+            num_nodes=dg.num_nodes,
+            seed_nodes_keys=['node_ids'],
+            seed_times_keys=['node_times'],
+        )
+    )
     loader = DGDataLoader(dg, hook_manager=hm)
     with hm.activate('unit'):
         batch_iter = iter(loader)
@@ -94,7 +182,13 @@ def test_normal_temporal_subgraph_with_padded_node(dummy_data):
 
     hm = HookManager(keys=['unit'])
     hm.register_shared(RecencyNeighborHookMockWithPaddedNode())
-    hm.register_shared(TemporalSubgraphHook(['node_ids'], ['node_times']))
+    hm.register_shared(
+        TemporalSubgraphHook(
+            num_nodes=dg.num_nodes,
+            seed_nodes_keys=['node_ids'],
+            seed_times_keys=['node_times'],
+        )
+    )
     loader = DGDataLoader(dg, hook_manager=hm)
     with hm.activate('unit'):
         batch_iter = iter(loader)
