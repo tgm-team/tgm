@@ -14,10 +14,100 @@ from tgm.util.logging import _get_logger
 logger = _get_logger(__name__)
 
 
-class NeighborSamplerHook(StatelessHook):
+class NodeSeedable:
+    """Base class for neighbour sampling hook from seed node.
+
+    Args:
+        seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
+        seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
+
+    Raises:
+        ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
+    """
+
+    def __init__(
+        self, seed_nodes_keys: List[str], seed_times_keys: List[str], num_nodes: int
+    ):
+        if len(seed_nodes_keys) != len(seed_times_keys):
+            raise ValueError(
+                f'len(seed_nodes_keys) ({len(seed_nodes_keys)}) '
+                f'!= len(seed_times_keys) ({len(seed_times_keys)})\n'
+                f'seed_nodes_keys={seed_nodes_keys}, '
+                f'seed_times_keys={seed_times_keys}'
+            )
+        self._num_nodes = num_nodes
+        self._seed_nodes_keys = seed_nodes_keys
+        self._seed_times_keys = seed_times_keys
+        logger.debug(
+            'Seed nodes keys: %s, Seed times keys: %s',
+            self._seed_nodes_keys,
+            self._seed_times_keys,
+        )
+        self._warned_seed_None = False
+
+    def _get_seed_tensors(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+        device = batch.src.device
+        seeds, times = [], []
+
+        for node_attr, time_attr in zip(self._seed_nodes_keys, self._seed_times_keys):
+            missing = [
+                attr for attr in (node_attr, time_attr) if not hasattr(batch, attr)
+            ]
+            if missing:
+                raise ValueError(f'Missing seed attributes {missing} on batch')
+
+            seed = getattr(batch, node_attr)
+            time = getattr(batch, time_attr)
+
+            for name, tensor in [(node_attr, seed), (time_attr, time)]:
+                # We recover from tensor = None, since the current batch could just
+                # be missing certain attributes (e.g. dynamic node events), but for
+                # non-Tensor and non-None attrs we explicitly raise
+                if tensor is None:
+                    logger.debug(
+                        'Seed attribute %s is None on this batch, skipping', name
+                    )
+                    if not self._warned_seed_None:
+                        warnings.warn(
+                            f'Seed attribute {name} is None on this batch, skipping this batch. '
+                            'Future occurrences will also be skipped but the warning will be suppressed',
+                            UserWarning,
+                        )
+                        self._warned_seed_None = True
+                    break
+                if not isinstance(tensor, torch.Tensor):
+                    raise ValueError(f'{name} must be a Tensor, got {type(tensor)}')
+                if tensor.ndim != 1:
+                    raise ValueError(f'{name} must be 1-D, got shape {tensor.shape}')
+
+                # Bounds checks
+                if name == node_attr:
+                    if (tensor < 0).any() or (tensor >= self._num_nodes).any():
+                        raise ValueError(
+                            f'Seed nodes in {name} must satisfy 0 <= x < {self._num_nodes}, '
+                            f'got values in range [{tensor.min().item()}, {tensor.max().item()}]'
+                        )
+                    seeds.append(seed.to(device))
+                elif name == time_attr:
+                    if (tensor < 0).any():
+                        raise ValueError(
+                            f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
+                        )
+                    times.append(time.to(device))
+
+        if seeds and times:
+            seed_nodes, seed_times = torch.cat(seeds), torch.cat(times)
+        else:
+            seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
+            seed_times = torch.empty(0, dtype=torch.int64, device=device)
+        return seed_nodes, seed_times
+
+
+class NeighborSamplerHook(StatelessHook, NodeSeedable):
     """Load data from DGraph using a memory based sampling function.
 
     Args:
+        num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
         directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
@@ -39,33 +129,19 @@ class NeighborSamplerHook(StatelessHook):
 
     def __init__(
         self,
+        num_nodes: int,
         num_nbrs: List[int],
         seed_nodes_keys: List[str],
         seed_times_keys: List[str],
         directed: bool = False,
     ) -> None:
+        NodeSeedable.__init__(self, seed_nodes_keys, seed_times_keys, num_nodes)
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
         self._num_nbrs = num_nbrs
         self._directed = directed
-
-        if len(seed_nodes_keys) != len(seed_times_keys):
-            raise ValueError(
-                f'len(seed_nodes_keys) ({len(seed_nodes_keys)}) '
-                f'!= len(seed_times_keys) ({len(seed_times_keys)})\n'
-                f'seed_nodes_keys={seed_nodes_keys}, '
-                f'seed_times_keys={seed_times_keys}'
-            )
-        self._seed_nodes_keys = seed_nodes_keys
-        self._seed_times_keys = seed_times_keys
-        logger.debug(
-            'Seed nodes keys: %s, Seed times keys: %s',
-            self._seed_nodes_keys,
-            self._seed_times_keys,
-        )
-        self._warned_seed_None = False
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -121,67 +197,8 @@ class NeighborSamplerHook(StatelessHook):
 
         return batch
 
-    def _get_seed_tensors(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        device = batch.src.device
-        seeds, times = [], []
 
-        for node_attr, time_attr in zip(self._seed_nodes_keys, self._seed_times_keys):
-            missing = [
-                attr for attr in (node_attr, time_attr) if not hasattr(batch, attr)
-            ]
-            if missing:
-                raise ValueError(f'Missing seed attributes {missing} on batch')
-
-            seed = getattr(batch, node_attr)
-            time = getattr(batch, time_attr)
-
-            for name, tensor in [(node_attr, seed), (time_attr, time)]:
-                # We recover from tensor = None, since the current batch could just
-                # be missing certain attributes (e.g. dynamic node events), but for
-                # non-Tensor and non-None attrs we explicitly raise
-                if tensor is None:
-                    logger.debug(
-                        'Seed attribute %s is None on this batch, skipping', name
-                    )
-                    if not self._warned_seed_None:
-                        warnings.warn(
-                            f'Seed attribute {name} is None on this batch, skipping this batch. '
-                            'Future occurrences will also be skipped but the warning will be suppressed',
-                            UserWarning,
-                        )
-                        self._warned_seed_None = True
-                    break
-                if not isinstance(tensor, torch.Tensor):
-                    raise ValueError(f'{name} must be a Tensor, got {type(tensor)}')
-                if tensor.ndim != 1:
-                    raise ValueError(f'{name} must be 1-D, got shape {tensor.shape}')
-
-                # Bounds checks
-                # TODO: Infer self._num_nodes from underlying graph
-                self._num_nodes = float('inf')
-                if name == node_attr:
-                    if (tensor < 0).any() or (tensor >= self._num_nodes).any():
-                        raise ValueError(
-                            f'Seed nodes in {name} must satisfy 0 <= x < {self._num_nodes}, '
-                            f'got values in range [{tensor.min().item()}, {tensor.max().item()}]'
-                        )
-                    seeds.append(seed.to(device))
-                elif name == time_attr:
-                    if (tensor < 0).any():
-                        raise ValueError(
-                            f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
-                        )
-                    times.append(time.to(device))
-
-        if seeds and times:
-            seed_nodes, seed_times = torch.cat(seeds), torch.cat(times)
-        else:
-            seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
-            seed_times = torch.empty(0, dtype=torch.int64, device=device)
-        return seed_nodes, seed_times
-
-
-class RecencyNeighborHook(StatefulHook):
+class RecencyNeighborHook(StatefulHook, NodeSeedable):
     requires: Set[str] = set()
     produces = {'nids', 'nbr_nids', 'times', 'nbr_times', 'nbr_feats'}
 
@@ -215,32 +232,16 @@ class RecencyNeighborHook(StatefulHook):
         seed_times_keys: List[str],
         directed: bool = False,
     ) -> None:
+        NodeSeedable.__init__(self, seed_nodes_keys, seed_times_keys, num_nodes)
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
 
-        self._num_nodes = num_nodes
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
         self._directed = directed
         self._device = torch.device('cpu')
-
-        if len(seed_nodes_keys) != len(seed_times_keys):
-            raise ValueError(
-                f'len(seed_nodes_keys) ({len(seed_nodes_keys)}) '
-                f'!= len(seed_times_keys) ({len(seed_times_keys)})\n'
-                f'seed_nodes_keys={seed_nodes_keys}, '
-                f'seed_times_keys={seed_times_keys}'
-            )
-        self._seed_nodes_keys = seed_nodes_keys
-        self._seed_times_keys = seed_times_keys
-        logger.debug(
-            'Seed nodes keys: %s, Seed times keys: %s',
-            self._seed_nodes_keys,
-            self._seed_times_keys,
-        )
-        self._warned_seed_None = False
 
         self._nbr_ids = torch.full(
             (num_nodes, self._max_nbrs), PADDED_NODE_ID, dtype=torch.int32
@@ -314,63 +315,6 @@ class RecencyNeighborHook(StatefulHook):
             logger.debug('Updating circular buffers')
             self._update(batch)
         return batch
-
-    def _get_seed_tensors(self, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
-        device = batch.src.device
-        seeds, times = [], []
-
-        for node_attr, time_attr in zip(self._seed_nodes_keys, self._seed_times_keys):
-            missing = [
-                attr for attr in (node_attr, time_attr) if not hasattr(batch, attr)
-            ]
-            if missing:
-                raise ValueError(f'Missing seed attributes {missing} on batch')
-
-            seed = getattr(batch, node_attr)
-            time = getattr(batch, time_attr)
-
-            for name, tensor in [(node_attr, seed), (time_attr, time)]:
-                # We recover from tensor = None, since the current batch could just
-                # be missing certain attributes (e.g. dynamic node events), but for
-                # non-Tensor and non-None attrs we explicitly raise
-                if tensor is None:
-                    logger.debug(
-                        'Seed attribute %s is None on this batch, skipping', name
-                    )
-                    if not self._warned_seed_None:
-                        warnings.warn(
-                            f'Seed attribute {name} is None on this batch, skipping this batch. '
-                            'Future occurrences will also be skipped but the warning will be suppressed',
-                            UserWarning,
-                        )
-                        self._warned_seed_None = True
-                    break
-                if not isinstance(tensor, torch.Tensor):
-                    raise ValueError(f'{name} must be a Tensor, got {type(tensor)}')
-                if tensor.ndim != 1:
-                    raise ValueError(f'{name} must be 1-D, got shape {tensor.shape}')
-
-                # Bounds checks
-                if name == node_attr:
-                    if (tensor < 0).any() or (tensor >= self._num_nodes).any():
-                        raise ValueError(
-                            f'Seed nodes in {name} must satisfy 0 <= x < {self._num_nodes}, '
-                            f'got values in range [{tensor.min().item()}, {tensor.max().item()}]'
-                        )
-                    seeds.append(seed.to(device))
-                elif name == time_attr:
-                    if (tensor < 0).any():
-                        raise ValueError(
-                            f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
-                        )
-                    times.append(time.to(device))
-
-        if seeds and times:
-            seed_nodes, seed_times = torch.cat(seeds), torch.cat(times)
-        else:
-            seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
-            seed_times = torch.empty(0, dtype=torch.int64, device=device)
-        return seed_nodes, seed_times
 
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
@@ -535,3 +479,46 @@ class RecencyNeighborHook(StatefulHook):
                 (self._num_nodes, self._max_nbrs, self._edge_feats_dim)  # type: ignore
             )
             self._need_to_initialize_nbr_feats = False
+
+
+class TemporalSubgraphHook(StatelessHook, NodeSeedable):
+    requires = {'nbr_nids', 'nbr_times', 'nbr_feats'}
+    produces = {
+        'sg_src',
+        'sg_dst',
+        'sg_time',
+        'sg_edge_feats',
+        'sg_unique_nids',
+        'sg_global_to_local',
+    }
+
+    def __init__(
+        self, num_nodes: int, seed_nodes_keys: List[str], seed_times_keys: List[str]
+    ):
+        NodeSeedable.__init__(self, seed_nodes_keys, seed_times_keys, num_nodes)
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        seed_nodes, _ = self._get_seed_tensors(batch)
+        if not seed_nodes.numel():
+            logger.debug('No seed_nodes found, appending empty hop information')
+            return batch
+
+        src = seed_nodes.flatten()
+        num_nbrs = len(batch.nbr_nids[0][0])  # type: ignore
+        dst = batch.nbr_nids[0].flatten()  # type: ignore
+
+        mask = dst != PADDED_NODE_ID
+        src = src.repeat_interleave(num_nbrs)
+        batch.sg_src = src[mask]  # type: ignore
+        batch.sg_dst = dst[mask]  # type: ignore
+        batch.sg_time = batch.nbr_times[0].flatten()[mask]  # type: ignore
+        batch.sg_edge_feats = batch.nbr_feats[0].flatten(0, -2).float()[mask]  # type: ignore
+
+        all_nids = torch.cat([src, batch.sg_dst])  # type: ignore
+        batch.sg_unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
+        batch.sg_global_to_local = lambda x: torch.searchsorted(  # type: ignore
+            batch.sg_unique_nids,  # type: ignore
+            x,
+        )
+
+        return batch

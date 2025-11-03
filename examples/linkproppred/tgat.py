@@ -215,6 +215,7 @@ else:
 
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
+        num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
         num_nbrs=args.n_nbrs,
         seed_nodes_keys=['src', 'dst', 'neg'],
         seed_times_keys=['time', 'time', 'neg_time'],
