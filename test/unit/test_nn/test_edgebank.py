@@ -48,6 +48,9 @@ def test_fixed_time_window(pos_prob):
     bank.update(torch.Tensor([7]), torch.Tensor([8]), torch.Tensor([7]))
     assert bank(torch.Tensor([7]), torch.Tensor([8])) == torch.Tensor([pos_prob])
     assert bank(torch.Tensor([4]), torch.Tensor([5])) == torch.Tensor([0])
+    assert (
+        not (torch.Tensor([4]), torch.Tensor([5])) in bank.memory
+    )  # The edge should be removed from the memory
 
 
 def test_bad_init_args():

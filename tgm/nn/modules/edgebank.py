@@ -1,4 +1,5 @@
-from typing import Any, Dict, Literal, Tuple
+import heapq
+from typing import Any, Dict, List, Literal, Tuple
 
 import torch
 
@@ -65,7 +66,16 @@ class EdgeBankPredictor:
         self._window_size = self._window_end - self._window_start
 
         self.memory: Dict[Tuple[int, int], int] = {}
+        self._time_edge: List[Tuple[int, Tuple[int, int]]] = []  # min heap
+
         self.update(src, dst, ts)
+
+    def _clean_up(self) -> None:
+        """Clean up edges that are out of window in memory."""
+        while self._time_edge and self._time_edge[0][0] < self._window_start:
+            ts, edge = heapq.heappop(self._time_edge)
+            if self.memory[edge] == ts:
+                self.memory.pop(edge)
 
     def update(self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor) -> None:
         """Update EdgeBank memory with a batch of edges.
@@ -82,9 +92,20 @@ class EdgeBankPredictor:
         self._check_input_data(src, dst, ts)
         self._window_end = torch.max(self._window_end, ts.max())
         self._window_start = self._window_end - self._window_size
+        # print("\nHere")
+
+        if (
+            not self._fixed_memory
+            and len(self._time_edge) > 0
+            and self._time_edge[0][0] < self._window_start
+        ):
+            self._clean_up()
+
         for src_, dst_, ts_ in zip(src, dst, ts):
             src_, dst_, ts_ = src_.item(), dst_.item(), ts_.item()
-            self.memory[(src_, dst_)] = ts_
+            if ts_ >= self._window_start:
+                self.memory[(src_, dst_)] = ts_
+                heapq.heappush(self._time_edge, (ts_, (src_, dst_)))
 
     def __call__(
         self, query_src: torch.Tensor, query_dst: torch.Tensor
