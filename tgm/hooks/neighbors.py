@@ -90,6 +90,7 @@ class NeighborSamplerHook(StatelessHook):
             logger.debug('No seed_nodes found, appending empty hop information')
             for _ in self.num_nbrs:
                 _append_empty_hop()
+            batch.seed_node_nbr_mask = seed_node_nbr_mask  # type: ignore
             return batch
 
         for hop, num_nbrs in enumerate(self.num_nbrs):
@@ -173,8 +174,8 @@ class NeighborSamplerHook(StatelessHook):
                     seeds.append(seed.to(device))
                     num_seed_nodes = tensor.shape[0]
                     seed_node_mask[name] = torch.arange(
-                        offset, offset + num_seed_nodes
-                    ).to(device)
+                        offset, offset + num_seed_nodes, device=device
+                    )
                     offset += num_seed_nodes
                 elif name == time_attr:
                     if (tensor < 0).any():

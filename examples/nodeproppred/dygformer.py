@@ -145,7 +145,6 @@ class DyGFormer_NodePrediction(nn.Module):
         src_nbr_idx = batch.seed_node_nbr_mask['src']
         dst_nbr_idx = batch.seed_node_nbr_mask['dst']
         edge_idx = torch.stack((src, dst), dim=0)
-        src.shape[0]
 
         src_dst_nbr_idx = torch.cat([src_nbr_idx, dst_nbr_idx])
         z_src, z_dst = self.encoder(
