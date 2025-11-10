@@ -16,7 +16,8 @@ from tgm import DGBatch, DGraph
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
-from tgm.nn import LinkPredictor, RandomProjectionModule, Time2Vec, TPNet
+from tgm.nn import LinkPredictor, Time2Vec, TPNet
+from tgm.nn.encoder.tpnet import RandomProjectionModule
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
