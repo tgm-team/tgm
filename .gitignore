@@ -164,3 +164,6 @@ submitit*
 
 # Benchmarks
 .benchmarks
+experiments/artifact/
+experiments/sbatch_scripts/
+.vscode/
