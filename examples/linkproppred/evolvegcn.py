@@ -11,10 +11,13 @@ from tqdm import tqdm
 from tgm import DGBatch, DGraph, TimeDeltaDG
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import RecipeRegistry
+from tgm.hooks import HookManager, NegativeEdgeSamplerHook, RecipeRegistry
 from tgm.nn import EvolveGCNH, EvolveGCNO, LinkPredictor
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
+
+torch.autograd.set_detect_anomaly(True)
+
 
 parser = argparse.ArgumentParser(
     description='EvolveGCN LinkPropPred Example',
@@ -97,48 +100,41 @@ class RecurrentGCN(torch.nn.Module):
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
 
         h = self.recurrent(node_feat, edge_index, edge_weight)
-        h = F.relu(h)
-        h = self.linear(h)
-        return h
+        z = F.relu(h)
+        z = self.linear(z)
+        return z
 
 
 @log_gpu
 @log_latency
 def train(
-    loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
     static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
-    conversion_rate: int,
 ) -> Tuple[float, torch.Tensor]:
     encoder.train()
     decoder.train()
     total_loss = 0
 
     snapshots_iterator = iter(snapshots_loader)
-    snapshot_batch = next(snapshots_iterator)
-    z = encoder(snapshot_batch, static_node_feats)
-
-    for batch in tqdm(loader):
+    prev_batch = next(snapshots_iterator)
+    opt.zero_grad()
+    for batch in tqdm(snapshots_loader):
+        # opt.zero_grad()
+        z = encoder(prev_batch, static_node_feats)
         pos_out = decoder(z[batch.src], z[batch.dst])
         neg_out = decoder(z[batch.src], z[batch.neg])
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
-        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
-        loss.backward(retain_graph=True)
-        opt.step()
-        total_loss += float(loss) / batch.src.shape[0]
-
-        # update the model if the prediction batch has moved to next snapshot.
-        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
-            opt.zero_grad()
-            try:
-                snapshot_batch = next(snapshots_iterator)
-                z = encoder(snapshot_batch, static_node_feats)
-            except StopIteration:
-                pass
+        loss = loss + F.binary_cross_entropy_with_logits(
+            neg_out, torch.zeros_like(neg_out)
+        )
+        total_loss += float(loss.item()) / batch.src.shape[0]
+        prev_batch = batch
+    loss.backward()
+    opt.step()
 
     return total_loss, z
 
@@ -216,8 +212,12 @@ train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
+
+shm = HookManager(keys=['train', 'val', 'test'])
+_, dst, _ = train_snapshots.edges
+shm.register('train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())))
 train_snapshots_loader = DGDataLoader(
-    train_snapshots, batch_unit=args.snapshot_time_gran
+    train_snapshots, batch_unit=args.snapshot_time_gran, hook_manager=shm
 )
 val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time_gran)
 test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran)
@@ -245,15 +245,14 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        loss, z = train(
-            train_loader,
-            train_snapshots_loader,
-            static_node_feats,
-            encoder,
-            decoder,
-            opt,
-            conversion_rate,
-        )
+        with shm.activate(train_key):
+            loss, z = train(
+                train_snapshots_loader,
+                static_node_feats,
+                encoder,
+                decoder,
+                opt,
+            )
 
     with hm.activate(val_key):
         val_mrr = eval(
