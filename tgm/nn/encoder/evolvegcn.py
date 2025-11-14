@@ -291,7 +291,7 @@ class EvolveGCNH(torch.nn.Module):
         Return types:
             * **X** *(PyTorch Float Tensor)* - Output matrix for all nodes.
         """
-        X_tilde = self.pooling_layer(X, edge_index)
+        X_tilde = self.pooling_layer(X, edge_index.to(torch.long))
         X_tilde = X_tilde[0][None, :, :]
         if self.weight is None:
             _, self.weight = self.recurrent_layer(X_tilde, self.initial_weight)

@@ -99,7 +99,7 @@ class RecurrentGCN(torch.nn.Module):
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
 
-        h = self.recurrent(node_feat, edge_index, edge_weight)
+        h = self.recurrent(node_feat.to(torch.float), edge_index, edge_weight)
         z = F.relu(h)
         z = self.linear(z)
         return z
