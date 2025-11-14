@@ -33,7 +33,7 @@ parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset na
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-parser.add_argument('--embed-dim', type=int, default=256, help='embedding dimension')
+parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
     '--node-dim', type=int, default=256, help='node feat dimension if not provided'
 )
