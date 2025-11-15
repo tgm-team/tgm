@@ -83,12 +83,6 @@ parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
-parser.add_argument(
-    '--time-gran',
-    type=str,
-    default=None,
-    help='raw time granularity for dataset',
-)
 
 parser.add_argument(
     '--max_sequence_length',
