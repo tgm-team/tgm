@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
+parser.add_argument('--dataset', type=str, default='tgbn-trade', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument(
@@ -82,6 +82,19 @@ parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+parser.add_argument(
+    '--time-gran',
+    type=str,
+    default=None,
+    help='raw time granularity for dataset',
+)
+
+parser.add_argument(
+    '--max_sequence_length',
+    type=int,
+    default=32,
+    help='maximal length of the input sequence of each node',
 )
 
 args = parser.parse_args()
