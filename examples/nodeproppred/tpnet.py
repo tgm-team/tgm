@@ -97,6 +97,12 @@ parser.add_argument(
     default='Y',
     help='raw time granularity for dataset',
 )
+parser.add_argument(
+    '--experiment_name',
+    type=str,
+    default='time_granularity_effect',
+    help='Name of experiment',
+)
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
@@ -285,7 +291,7 @@ if train_dg.static_node_feats is not None:
 else:
     static_node_feat = torch.randn(
         (test_dg.num_nodes, args.node_dim), device=args.device
-    )
+    ).to(args.device)
 
 evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
@@ -301,7 +307,7 @@ random_projection_module = RandomProjectionModule(
     dim_factor=args.rp_dim_factor,
     concat_src_dst=bool(args.concat_src_dst),
     device=args.device,
-)
+).to(args.device)
 
 encoder = TPNet_NodePrediction(
     node_feat_dim=static_node_feat.shape[1],
