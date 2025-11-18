@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
-from tgm.core import TGB_TIME_DELTAS, TimeDeltaDG
+from tgm.core import PYG_TEMPORAL_TIME_DELTA, TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.data.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.exceptions import (
     EmptyGraphError,
@@ -926,6 +926,7 @@ class DGData:
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
+            time_delta=PYG_TEMPORAL_TIME_DELTA,
         )
         logger.debug('Finished loading DGData from PyG-Temporal dataset')
         return data
