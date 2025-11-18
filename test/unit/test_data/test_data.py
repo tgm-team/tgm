@@ -1104,6 +1104,31 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
 
 
+@pytest.mark.skip('TODO')
+def test_from_pyg_temporal_static_graph_temporal_signal():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_from_pyg_temporal_dynamic_graph_temporal_signal():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_from_pyg_temporal_dynamic_graph_static_signal():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_from_pyg_temporal_hetero():
+    pass
+
+
+@pytest.mark.skip('TODO')
+def test_from_pyg_temporal_with_additional_feature_keys():
+    pass
+
+
 def test_discretize_reduce_op_bad():
     edge_index = torch.IntTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
     edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])

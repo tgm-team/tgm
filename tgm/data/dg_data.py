@@ -828,6 +828,108 @@ class DGData:
         logger.debug('Finished loading DGData from TGB dataset: %s', name)
         return data
 
+    @classmethod
+    def from_pyg_temporal(cls, signal: 'torch_geometric_temporal.signal') -> DGData:  # type: ignore
+        """Load a DGData from a PyG-Temporal dataset.
+
+        Args:
+            signal (torch_geometric_temporal.signal): PyG dataset signal.
+
+        Returns:
+            DGData: Dataset from PyG-Temporal signal object.
+
+        Raises:
+            ImportError: If the PyG-Temporal package is not resolved in the current python environment.
+
+        Notes:
+            - DynamicGraphTemporalSignal and StaticGraphTemporalSignal are supported.
+        """
+        logger.debug('Loading DGData from PyG-Temporal signal')
+        try:
+            from torch_geometric_temporal.signal import (
+                DynamicGraphTemporalSignal,
+                StaticGraphTemporalSignal,
+            )
+        except ImportError:
+            raise ImportError(
+                'PyG-Temporal required to load PyG-Temporal data, try `pip install torch-geometric-temporal`'
+            )
+
+        supported_signals = (DynamicGraphTemporalSignal, StaticGraphTemporalSignal)
+        if not isinstance(signal, supported_signals):
+            raise NotImplementedError(
+                f'PyG-Temporal conversion from signal type: {type(signal)} not supported'
+            )
+
+        if len(signal.additional_feature_keys):
+            logger.warning(
+                f'Pyg-Temporal signal has additional feature keys: {signal.additional_feature_keys} which are not currently supported. These attributes will be ignored'
+            )
+            warnings.warn(
+                f'Pyg-Temporal signal has additional feature keys: {signal.additional_feature_keys} which are not currently supported. These attributes will be ignored',
+                UserWarning,
+            )
+
+        # Node features and targets with shape (|node events|, V, D) and (|node events|, V)
+        # are concatenated to form dynamic node features of shape (|node events|, V, D + 1)
+        node_feats = torch.as_tensor(np.stack(signal.features), dtype=torch.float32)
+        node_targets = torch.as_tensor(np.stack(signal.targets), dtype=torch.float32)
+        dynamic_node_feats = torch.cat([node_feats, node_targets[..., None]], dim=-1)
+
+        # Flatten to a global node events array of size (|node events| * V, D+1) where
+        # timestamps enumerate the original graph signal snapshots
+        num_timestamps, V, _ = dynamic_node_feats.shape
+        dynamic_node_feats = dynamic_node_feats.reshape(num_timestamps * V, -1)
+        node_ids = torch.arange(V, dtype=torch.int32).repeat(num_timestamps)
+        node_timestamps = torch.arange(num_timestamps).repeat_interleave(V)
+
+        if isinstance(signal, DynamicGraphTemporalSignal):
+            # Concatenate edge events from each time step: list[(2, E_t)] -> (sum E_t, 2)
+            edge_index = torch.cat(
+                [
+                    torch.as_tensor(edges.T, dtype=torch.int32)
+                    for edges in signal.edge_indices
+                ],
+                dim=0,
+            )
+            edge_feats = torch.cat(
+                [
+                    torch.as_tensor(weights.T, dtype=torch.float32)
+                    for weights in signal.edge_weights
+                ],
+                dim=0,
+            ).unsqueeze(dim=-1)
+            edge_timestamps = torch.cat(
+                [
+                    torch.full((edges.shape[1],), t, dtype=torch.int64)
+                    for t, edges in enumerate(signal.edge_indices)
+                ]
+            )
+        elif isinstance(signal, StaticGraphTemporalSignal):
+            # All events occur at time = 0
+            edge_index = torch.as_tensor(signal.edge_index.T, dtype=torch.int32)
+            edge_feats = torch.as_tensor(signal.edge_weight, dtype=torch.float32)
+
+            # Duplicate the entire graph at every snapshot (every time signal changes)
+            # Note: repeating all edge events is quite memory-hungry
+            num_edges = edge_index.shape[0]
+            edge_index = edge_index.repeat(num_timestamps, 1)
+            edge_feats = edge_feats.unsqueeze(dim=-1).repeat(num_timestamps, 1)
+            edge_timestamps = torch.arange(num_timestamps).repeat_interleave(num_edges)
+        else:
+            raise ValueError(f'Unknown signal type: {type(signal)}')
+
+        data = cls.from_raw(
+            edge_timestamps=edge_timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+        )
+        logger.debug('Finished loading DGData from PyG-Temporal dataset')
+        return data
+
 
 def _log_tensor_args(**kwargs: Any) -> None:
     for name, value in kwargs.items():
