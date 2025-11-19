@@ -138,6 +138,8 @@ class TPNet_NodePrediction(nn.Module):
         self.z = torch.zeros(
             (num_nodes, output_dim), dtype=torch.float32, device=device
         )  # Maintain up-to-date node embeddings
+        
+        self.rp_module = random_projection_module.to(device)
 
     def _update_latest_node_embedding(
         self, batch: DGBatch, z_src: torch.Tensor, z_dst: torch.Tensor

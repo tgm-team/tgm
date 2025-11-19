@@ -204,8 +204,7 @@ class RandomProjectionModule(nn.Module):
         """
         random_projections = []
         for i in range(self.num_layer + 1):
-            proj = self.random_projections[i].to(node_ids.device)
-            random_projections.append(proj[node_ids])
+            random_projections.append(self.random_projections[i][node_ids])
         return torch.stack(random_projections, dim=1).to(self.device)
 
     def reset_random_projections(
