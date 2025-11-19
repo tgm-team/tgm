@@ -1110,16 +1110,6 @@ def test_from_pyg_temporal_static_graph_temporal_signal():
 
 
 @pytest.mark.skip('TODO')
-def test_from_pyg_temporal_dynamic_graph_temporal_signal():
-    pass
-
-
-@pytest.mark.skip('TODO')
-def test_from_pyg_temporal_dynamic_graph_static_signal():
-    pass
-
-
-@pytest.mark.skip('TODO')
 def test_from_pyg_temporal_hetero():
     pass
 

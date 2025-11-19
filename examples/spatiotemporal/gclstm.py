@@ -24,7 +24,7 @@ parser.add_argument(
     type=str,
     default='chickenpox',
     help='Dataset name',
-    choices=['chickenpox', 'encovid', 'metr_la', 'pems_bay'],
+    choices=['chickenpox', 'metr_la', 'pems_bay'],
 )
 parser.add_argument('--bsize', type=int, default=64, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
@@ -55,7 +55,7 @@ class RecurrentGCN(torch.nn.Module):
         c: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         edge_index = self._get_cached_edge_index(batch)
-        edge_weight = batch.edge_feats if False else None
+        edge_weight = batch.edge_feats
 
         B, N, _ = node_feat.shape
         node_feat = node_feat.reshape(B * N, -1)
@@ -121,8 +121,8 @@ def eval(
 
     for batch in tqdm(loader):
         node_feats, y_true = (
-            batch.dynamic_node_feats[..., :-1],
-            batch.dynamic_node_feats[..., -1],
+            batch.dynamic_node_feats[..., :-1, :],
+            batch.dynamic_node_feats[..., -1, :],
         )
 
         out_seq = []

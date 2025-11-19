@@ -838,14 +838,10 @@ class DGData:
 
         Raises:
             ImportError: If the PyG-Temporal package is not resolved in the current python environment.
-
-        Notes:
-            - DynamicGraphTemporalSignal and StaticGraphTemporalSignal are supported.
         """
         logger.debug('Loading DGData from PyG-Temporal signal')
         try:
             from torch_geometric_temporal.signal import (
-                DynamicGraphTemporalSignal,
                 StaticGraphTemporalSignal,
             )
         except ImportError:
@@ -853,7 +849,7 @@ class DGData:
                 'PyG-Temporal required to load PyG-Temporal data, try `pip install torch-geometric-temporal`'
             )
 
-        supported_signals = (DynamicGraphTemporalSignal, StaticGraphTemporalSignal)
+        supported_signals = (StaticGraphTemporalSignal,)
         if not isinstance(signal, supported_signals):
             raise NotImplementedError(
                 f'PyG-Temporal conversion from signal type: {type(signal)} not supported'
@@ -867,86 +863,39 @@ class DGData:
             logger.warning(msg)
             warnings.warn(msg, UserWarning)
 
-        def _ensure_targets_1d(node_targets: torch.Tensor) -> torch.Tensor:
-            if node_targets.ndim == 4:
-                msg = (
-                    f'Received targets with shape {node_targets.shape}. '
-                    'TGM only supports 1D target signals; using [:, :, 0, :].'
-                )
-                logger.warning(msg)
-                warnings.warn(msg, UserWarning)
-                return node_targets[:, :, 0, :]
-            return node_targets
-
-        def _coalesce_feats_targets(
-            node_feats: torch.Tensor, node_targets: torch.Tensor
-        ) -> torch.Tensor:
-            if node_feats.ndim == 4:
-                T, V, D, lag = node_feats.shape
-                if node_targets.shape != (T, V, lag):
-                    raise NotImplementedError(
-                        f'node_feats shape {node_feats.shape} incompatible with '
-                        f'targets {node_targets.shape}; cannot coalesce.'
-                    )
-                node_targets = node_targets.unsqueeze(dim=2)
-            else:
-                node_feats = node_feats.unsqueeze(-1)  # (T, V, D, 1)
-                node_targets = node_targets[..., None, None]  # (T, V, 1, 1)
-            return torch.cat([node_feats, node_targets], dim=2)
-
-        def _load_edge_events(
-            signal: 'torch_geometric_temporal.signal',  # type: ignore
-            T: int,
-        ) -> Tuple[torch.Tensor, ...]:
-            if isinstance(signal, DynamicGraphTemporalSignal):
-                # each edges is (2, E_t)
-                edge_index = torch.cat(
-                    [torch.tensor(e.T, dtype=torch.int32) for e in signal.edge_indices],
-                    dim=0,
-                )
-                edge_feats = torch.cat(
-                    [
-                        torch.tensor(w.T, dtype=torch.float32)
-                        for w in signal.edge_weights
-                    ],
-                    dim=0,
-                ).unsqueeze(-1)
-                edge_timestamps = torch.cat(
-                    [
-                        torch.full((e.shape[1],), t, dtype=torch.int64)
-                        for t, e in enumerate(signal.edge_indices)
-                    ]
-                )
-                return edge_index, edge_feats, edge_timestamps
-
-            # StaticGraphTemporalSignal
-            edge_index = torch.tensor(signal.edge_index.T, dtype=torch.int32)
-            edge_feats = torch.tensor(
-                signal.edge_weight, dtype=torch.float32
-            ).unsqueeze(-1)
-
-            # repeat whole graph over all T snapshots
-            num_edges = edge_index.shape[0]
-            edge_index = edge_index.repeat(T, 1)
-            edge_feats = edge_feats.repeat(T, 1)
-            edge_timestamps = torch.arange(T).repeat_interleave(num_edges)
-            return edge_index, edge_feats, edge_timestamps
-
         node_feats = torch.tensor(np.stack(signal.features), dtype=torch.float32)
         node_targets = torch.tensor(np.stack(signal.targets), dtype=torch.float32)
-        node_targets = _ensure_targets_1d(node_targets)
 
-        dynamic_node_feats = _coalesce_feats_targets(node_feats, node_targets)
+        if node_targets.ndim == 4:
+            msg = (
+                f'Received targets with shape {node_targets.shape}. '
+                'TGM only supports 1D target signals; using [:, :, 0, :].'
+            )
+            logger.warning(msg)
+            warnings.warn(msg, UserWarning)
+            node_targets = node_targets[:, :, 0, :]
+
+        if node_feats.ndim == 4:
+            T, V, D, lag = node_feats.shape
+            if node_targets.shape != (T, V, lag):
+                raise NotImplementedError(
+                    f'node_feats shape {node_feats.shape} incompatible with '
+                    f'targets {node_targets.shape}; cannot coalesce.'
+                )
+            node_targets = node_targets.unsqueeze(dim=2)
+        else:
+            node_feats = node_feats.unsqueeze(-1)  # (T, V, D, 1)
+            node_targets = node_targets[..., None, None]  # (T, V, 1, 1)
+
+        dynamic_node_feats = torch.cat([node_feats, node_targets], dim=2)
+
         T, V = dynamic_node_feats.shape[:2]
+        node_ids = torch.full(size=(T,), fill_value=V, dtype=torch.int32)
+        node_timestamps = torch.arange(T)
 
         edge_index = torch.tensor(signal.edge_index.T, dtype=torch.int32)
         edge_feats = torch.tensor(signal.edge_weight, dtype=torch.float32).unsqueeze(-1)
-        edge_timestamps = torch.full(
-            size=(len(edge_index),), fill_value=0, dtype=torch.int64
-        )
-
-        node_ids = torch.full(size=(T,), fill_value=V, dtype=torch.int32)
-        node_timestamps = torch.arange(T)
+        edge_timestamps = torch.zeros(len(edge_index), dtype=torch.int64)
 
         data = cls.from_raw(
             edge_timestamps=edge_timestamps,
