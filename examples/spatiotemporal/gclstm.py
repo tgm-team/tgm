@@ -45,6 +45,8 @@ class RecurrentGCN(torch.nn.Module):
         self.recurrent = GCLSTM(in_channels=node_dim, out_channels=embed_dim, K=K)
         self.linear = nn.Linear(embed_dim, 1)
 
+        self.cached_edge_index = None
+
     def forward(
         self,
         batch: DGBatch,
@@ -52,13 +54,21 @@ class RecurrentGCN(torch.nn.Module):
         h: torch.Tensor | None = None,
         c: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
-        edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
+        edge_index = self._get_cached_edge_index(batch)
+        edge_weight = batch.edge_feats if False else None
 
+        B, N, _ = node_feat.shape
+        node_feat = node_feat.reshape(B * N, -1)
         h_0, c_0 = self.recurrent(node_feat, edge_index, edge_weight, h, c)
         z = F.relu(h_0)
         z = self.linear(z)
+        z = z.reshape(B, N, -1)
         return z, h_0, c_0
+
+    def _get_cached_edge_index(self, batch: DGBatch) -> torch.Tensor:
+        if self.cached_edge_index is None:
+            self.cached_edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        return self.cached_edge_index
 
 
 def masked_mae_loss(y_pred, y_true):
@@ -79,15 +89,15 @@ def train(
         opt.zero_grad()
 
         node_feats, y_true = (
-            batch.dynamic_node_feats[..., :-1],
-            batch.dynamic_node_feats[..., -1],
+            batch.dynamic_node_feats[..., :-1, :],
+            batch.dynamic_node_feats[..., -1, :],
         )
 
         out_seq = []
-        for t in range(node_feats.shape[1]):
-            out_t, h_0, c_0 = encoder(batch, node_feats[:, t, :], h_0, c_0)
+        for t in range(node_feats.shape[-1]):
+            out_t, h_0, c_0 = encoder(batch, node_feats[:, :, :, t], h_0, c_0)
             out_seq.append(out_t)
-        y_pred = torch.cat(out_seq, dim=1)
+        y_pred = torch.cat(out_seq, dim=-1)
 
         # TODO: Need to normalize with mean/std signal
         loss = masked_mae_loss(y_pred, y_true)
@@ -116,10 +126,10 @@ def eval(
         )
 
         out_seq = []
-        for t in range(node_feats.shape[2]):
-            out_t, h_0, c_0 = encoder(batch, node_feats[:, t, :], h_0, c_0)
+        for t in range(node_feats.shape[-1]):
+            out_t, h_0, c_0 = encoder(batch, node_feats[:, :, :, t], h_0, c_0)
             out_seq.append(out_t)
-        y_pred = torch.cat(out_seq, dim=1)
+        y_pred = torch.cat(out_seq, dim=-1)
         mae = masked_mae_loss(y_pred, y_true)
         maes.append(float(mae))
 
@@ -160,7 +170,7 @@ test_loader = DGDataLoader(
 )
 
 # Dynamic node features are concatenating of node signals and 1-dim target
-node_dim = train_dg.dynamic_node_feats_dim[-1] - 1
+node_dim = train_dg.dynamic_node_feats_dim[1] - 1
 encoder = RecurrentGCN(node_dim=node_dim, embed_dim=args.embed_dim).to(args.device)
 opt = torch.optim.Adam(encoder.parameters(), lr=float(args.lr))
 

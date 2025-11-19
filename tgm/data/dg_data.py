@@ -16,7 +16,6 @@ from tgm.constants import PADDED_NODE_ID
 from tgm.core import PYG_TEMPORAL_TIME_DELTA, TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.data.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.exceptions import (
-    EmptyGraphError,
     EventOrderedConversionError,
     InvalidDiscretizationError,
     InvalidNodeIDError,
@@ -147,8 +146,6 @@ class DGData:
         self.edge_index = _maybe_cast_integral_tensor(self.edge_index, 'edge_index')
 
         num_edges = self.edge_index.shape[0]
-        if num_edges == 0:
-            raise EmptyGraphError('TGM does not support graphs without edge events')
 
         # Validate edge event idx
         _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
@@ -215,7 +212,9 @@ class DGData:
                 )
 
         # Validate static node features
-        num_nodes = torch.max(self.edge_index).item() + 1  # 0-indexed
+        num_nodes = (
+            torch.max(self.edge_index).item() + 1 if self.edge_index.numel() else 1
+        )
         if self.node_ids is not None:
             num_nodes = max(num_nodes, torch.max(self.node_ids).item() + 1)  # 0-indexed
 
@@ -940,13 +939,14 @@ class DGData:
         dynamic_node_feats = _coalesce_feats_targets(node_feats, node_targets)
         T, V = dynamic_node_feats.shape[:2]
 
-        # flatten (T, V, lag, D+1) → (T*V, lag, D+1)
-        dynamic_node_feats = dynamic_node_feats.reshape(
-            -1, *dynamic_node_feats.shape[2:]
+        edge_index = torch.tensor(signal.edge_index.T, dtype=torch.int32)
+        edge_feats = torch.tensor(signal.edge_weight, dtype=torch.float32).unsqueeze(-1)
+        edge_timestamps = torch.full(
+            size=(len(edge_index),), fill_value=0, dtype=torch.int64
         )
-        node_ids = torch.arange(V, dtype=torch.int32).repeat(T)
-        node_timestamps = torch.arange(T).repeat_interleave(V)
-        edge_index, edge_feats, edge_timestamps = _load_edge_events(signal, T)
+
+        node_ids = torch.full(size=(T,), fill_value=V, dtype=torch.int32)
+        node_timestamps = torch.arange(T)
 
         data = cls.from_raw(
             edge_timestamps=edge_timestamps,
