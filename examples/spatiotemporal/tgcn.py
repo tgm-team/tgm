@@ -10,12 +10,12 @@ from tqdm import tqdm
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData, DGDataLoader, TemporalRatioSplit
-from tgm.nn import GCLSTM
+from tgm.nn import TGCN
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='GC-LSTM SpatioTemporal Regression Example',
+    description='TGCN SpatioTemporal Regression Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -40,9 +40,9 @@ enable_logging(log_file_path=args.log_file_path)
 
 
 class RecurrentGCN(torch.nn.Module):
-    def __init__(self, node_dim: int, embed_dim: int, K: int = 1) -> None:
+    def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
-        self.recurrent = GCLSTM(in_channels=node_dim, out_channels=embed_dim, K=K)
+        self.recurrent = TGCN(in_channels=node_dim, out_channels=embed_dim)
         self.linear = nn.Linear(embed_dim, 1)
 
     def forward(
@@ -50,15 +50,14 @@ class RecurrentGCN(torch.nn.Module):
         batch: DGBatch,
         node_feat: torch.tensor,
         h: torch.Tensor | None = None,
-        c: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         edge_index = torch.stack([batch.src, batch.dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
 
-        h_0, c_0 = self.recurrent(node_feat, edge_index, edge_weight, h, c)
+        h_0 = self.recurrent(node_feat, edge_index, edge_weight, h)
         z = F.relu(h_0)
         z = self.linear(z)
-        return z, h_0, c_0
+        return z, h_0
 
 
 def masked_mae_loss(y_pred, y_true):
@@ -71,9 +70,9 @@ def masked_mae_loss(y_pred, y_true):
 @log_latency
 def train(
     loader: DGDataLoader, encoder: nn.Module, opt: torch.optim.Optimizer
-) -> Tuple[float, torch.Tensor, torch.Tensor]:
+) -> Tuple[float, torch.Tensor]:
     encoder.train()
-    total_loss, h_0, c_0 = 0, None, None
+    total_loss, h_0 = 0, None
 
     for batch in tqdm(loader):
         opt.zero_grad()
@@ -85,7 +84,7 @@ def train(
 
         out_seq = []
         for t in range(node_feats.shape[1]):
-            out_t, h_0, c_0 = encoder(batch, node_feats[:, t, :], h_0, c_0)
+            out_t, h_0 = encoder(batch, node_feats[:, t, :], h_0)
             out_seq.append(out_t)
         y_pred = torch.cat(out_seq, dim=1)
 
@@ -95,17 +94,15 @@ def train(
         opt.step()
         total_loss += float(loss)
 
-        h_0, c_0 = h_0.detach(), c_0.detach()
+        h_0 = h_0.detach()
 
-    return total_loss, h_0, c_0
+    return total_loss, h_0
 
 
 @log_gpu
 @log_latency
 @torch.no_grad()
-def eval(
-    loader: DGDataLoader, h_0: torch.Tensor, c_0: torch.Tensor, encoder: nn.Module
-) -> float:
+def eval(loader: DGDataLoader, h_0: torch.Tensor, encoder: nn.Module) -> float:
     encoder.eval()
     maes = []
 
@@ -117,7 +114,7 @@ def eval(
 
         out_seq = []
         for t in range(node_feats.shape[2]):
-            out_t, h_0, c_0 = encoder(batch, node_feats[:, t, :], h_0, c_0)
+            out_t, h_0 = encoder(batch, node_feats[:, t, :], h_0)
             out_seq.append(out_t)
         y_pred = torch.cat(out_seq, dim=1)
         mae = masked_mae_loss(y_pred, y_true)
@@ -165,10 +162,10 @@ encoder = RecurrentGCN(node_dim=node_dim, embed_dim=args.embed_dim).to(args.devi
 opt = torch.optim.Adam(encoder.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
-    loss, h_0, c_0 = train(train_loader, encoder, opt)
-    val_mae = eval(val_loader, h_0, c_0, encoder)
+    loss, h_0 = train(train_loader, encoder, opt)
+    val_mae = eval(val_loader, h_0, encoder)
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation MAE', val_mae, epoch=epoch)
 
-mae = eval(test_loader, h_0, c_0, encoder)
+mae = eval(test_loader, h_0, encoder)
 log_metric(f'Test MAE', mae, epoch=epoch)
