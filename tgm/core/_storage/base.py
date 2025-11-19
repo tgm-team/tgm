@@ -61,7 +61,7 @@ class DGStorageBase(ABC):
         """Return static node features of the entire graph."""
 
     @abstractmethod
-    def get_dynamic_node_feats_dim(self) -> Optional[int]:
+    def get_dynamic_node_feats_dim(self) -> Optional[Tuple[int]]:
         """Return dimension of dynamic node features, if any."""
 
     @abstractmethod

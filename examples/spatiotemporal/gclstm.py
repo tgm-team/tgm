@@ -1,6 +1,7 @@
 import argparse
 from typing import Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -25,13 +26,11 @@ parser.add_argument(
     help='Dataset name',
     choices=['chickenpox', 'encovid', 'metr_la', 'pems_bay'],
 )
+parser.add_argument('--bsize', type=int, default=64, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
-parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--embed-dim', type=int, default=32, help='embedding dimension')
-parser.add_argument(
-    '--node-dim', type=int, default=256, help='node feat dimension if not provided'
-)
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
@@ -62,27 +61,43 @@ class RecurrentGCN(torch.nn.Module):
         return z, h_0, c_0
 
 
+def masked_mae_loss(y_pred, y_true):
+    mask = y_true != 0
+    loss = torch.abs(y_pred[mask] - y_true[mask])
+    return loss.mean() if loss.numel() else torch.tensor(0.0, device=y_pred.device)
+
+
 @log_gpu
 @log_latency
 def train(
     loader: DGDataLoader, encoder: nn.Module, opt: torch.optim.Optimizer
 ) -> Tuple[float, torch.Tensor, torch.Tensor]:
     encoder.train()
-    opt.zero_grad()
-    loss, h_0, c_0 = 0, None, None
+    total_loss, h_0, c_0 = 0, None, None
 
     for batch in tqdm(loader):
-        node_feats, y = (
-            batch.dynamic_node_feats[:, :-1],
-            batch.dynamic_node_feats[:, -1],
-        )
-        y_pred, h_0, c_0 = encoder(batch, node_feats, h_0, c_0)
-        loss += F.mse_loss(y_pred, y)
+        opt.zero_grad()
 
-    loss /= len(loader)
-    loss.backward()
-    opt.step()
-    return float(loss), h_0, c_0
+        node_feats, y_true = (
+            batch.dynamic_node_feats[..., :-1],
+            batch.dynamic_node_feats[..., -1],
+        )
+
+        out_seq = []
+        for t in range(node_feats.shape[1]):
+            out_t, h_0, c_0 = encoder(batch, node_feats[:, t, :], h_0, c_0)
+            out_seq.append(out_t)
+        y_pred = torch.cat(out_seq, dim=1)
+
+        # TODO: Need to normalize with mean/std signal
+        loss = masked_mae_loss(y_pred, y_true)
+        loss.backward()
+        opt.step()
+        total_loss += float(loss)
+
+        h_0, c_0 = h_0.detach(), c_0.detach()
+
+    return total_loss, h_0, c_0
 
 
 @log_gpu
@@ -92,18 +107,23 @@ def eval(
     loader: DGDataLoader, h_0: torch.Tensor, c_0: torch.Tensor, encoder: nn.Module
 ) -> float:
     encoder.eval()
-    loss = 0
+    maes = []
 
     for batch in tqdm(loader):
-        node_feats, y = (
-            batch.dynamic_node_feats[:, :-1],
-            batch.dynamic_node_feats[:, -1],
+        node_feats, y_true = (
+            batch.dynamic_node_feats[..., :-1],
+            batch.dynamic_node_feats[..., -1],
         )
-        y_pred, h_0, c_0 = encoder(batch, node_feats, h_0, c_0)
-        loss += F.mse_loss(y_pred, y)
 
-    loss /= len(loader)
-    return float(loss)
+        out_seq = []
+        for t in range(node_feats.shape[1]):
+            out_t, h_0, c_0 = encoder(batch, node_feats[:, t, :], h_0, c_0)
+            out_seq.append(out_t)
+        y_pred = torch.cat(out_seq, dim=1)
+        mae = masked_mae_loss(y_pred, y_true)
+        maes.append(float(mae))
+
+    return np.mean(maes)
 
 
 seed_everything(args.seed)
@@ -122,23 +142,33 @@ else:
     raise ValueError(f'Unknown PyG-Temporal dataset: {args.dataset}')
 
 data = DGData.from_pyg_temporal(signal)
-split = TemporalRatioSplit(train_ratio=0.2, val_ratio=0.0, test_ratio=0.8)
-train_data, test_data = split.apply(data)
+split = TemporalRatioSplit(train_ratio=0.7, val_ratio=0.1, test_ratio=0.2)
+train_data, val_data, test_data = split.apply(data)
 
 train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-train_loader = DGDataLoader(train_dg, batch_unit=train_dg.time_delta.unit)
-test_loader = DGDataLoader(test_dg, batch_unit=train_dg.time_delta.unit)
+train_loader = DGDataLoader(
+    train_dg, batch_unit=train_dg.time_delta.unit, batch_size=args.bsize, drop_last=True
+)
+val_loader = DGDataLoader(
+    val_dg, batch_unit=val_dg.time_delta.unit, batch_size=args.bsize, drop_last=True
+)
+test_loader = DGDataLoader(
+    test_dg, batch_unit=train_dg.time_delta.unit, batch_size=args.bsize, drop_last=True
+)
 
 # Dynamic node features are concatenating of node signals and 1-dim target
-node_dim = train_dg.dynamic_node_feats_dim - 1
+node_dim = train_dg.dynamic_node_feats_dim[-1] - 1
 encoder = RecurrentGCN(node_dim=node_dim, embed_dim=args.embed_dim).to(args.device)
 opt = torch.optim.Adam(encoder.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
     loss, h_0, c_0 = train(train_loader, encoder, opt)
+    val_mae = eval(val_loader, h_0, c_0, encoder)
     log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation MAE', val_mae, epoch=epoch)
 
-mse = eval(test_loader, h_0, c_0, encoder)
-log_metric(f'Test MSE', mse, epoch=epoch)
+mae = eval(test_loader, h_0, c_0, encoder)
+log_metric(f'Test MAE', mae, epoch=epoch)
