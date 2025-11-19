@@ -4,6 +4,7 @@ from typing import Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch_geometric_temporal.dataset
 from tqdm import tqdm
 
@@ -54,8 +55,8 @@ class RecurrentGCN(torch.nn.Module):
         edge_index = self._get_cached_edge_index(batch)
         edge_weight = batch.edge_feats
 
-        B, N, F = node_feat.shape
-        node_feat = node_feat.reshape(B * N, F)
+        B, N, _ = node_feat.shape
+        node_feat = node_feat.reshape(B * N, -1)
         h_0 = self.recurrent(node_feat, edge_index, edge_weight, h)
         z = F.relu(h_0)
         z = self.linear(z).reshape(B, N, -1)
