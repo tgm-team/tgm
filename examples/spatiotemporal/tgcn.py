@@ -4,7 +4,6 @@ from typing import Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch_geometric_temporal.dataset
 from tqdm import tqdm
 
@@ -22,7 +21,7 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument(
     '--dataset',
     type=str,
-    default='chickenpox',
+    default='metr_la',
     help='Dataset name',
     choices=['chickenpox', 'metr_la', 'pems_bay'],
 )
@@ -44,7 +43,6 @@ class RecurrentGCN(torch.nn.Module):
         super().__init__()
         self.recurrent = TGCN(in_channels=node_dim, out_channels=embed_dim)
         self.linear = nn.Linear(embed_dim, 1)
-
         self.cached_edge_index = None
 
     def forward(
@@ -56,12 +54,11 @@ class RecurrentGCN(torch.nn.Module):
         edge_index = self._get_cached_edge_index(batch)
         edge_weight = batch.edge_feats
 
-        B, N, _ = node_feat.shape
-        node_feat = node_feat.reshape(B * N, -1)
+        B, N, F = node_feat.shape
+        node_feat = node_feat.reshape(B * N, F)
         h_0 = self.recurrent(node_feat, edge_index, edge_weight, h)
         z = F.relu(h_0)
-        z = self.linear(z)
-        z = z.reshape(B, N, -1)
+        z = self.linear(z).reshape(B, N, -1)
         return z, h_0
 
     def _get_cached_edge_index(self, batch: DGBatch) -> torch.Tensor:
