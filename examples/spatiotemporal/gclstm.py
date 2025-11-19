@@ -18,7 +18,13 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument('--dataset', type=str, default='chickenpox', help='Dataset name')
+parser.add_argument(
+    '--dataset',
+    type=str,
+    default='chickenpox',
+    help='Dataset name',
+    choices=['chickenpox', 'encovid', 'metr_la', 'pems_bay'],
+)
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
@@ -104,22 +110,9 @@ seed_everything(args.seed)
 
 pyg_temporal_loaders = {
     'chickenpox': lambda: torch_geometric_temporal.dataset.ChickenpoxDatasetLoader(),
-    'advection-diffusion': lambda: torch_geometric_temporal.dataset.AdvectionDiffusionDatasetLoader(),
     'encovid': lambda: torch_geometric_temporal.dataset.EnglandCovidDatasetLoader(),
     'metr_la': lambda: torch_geometric_temporal.dataset.METRLADatasetLoader(),
-    'montevideo_bus': lambda: torch_geometric_temporal.dataset.MontevideoBusDatasetLoader(),
-    'mtm': lambda: torch_geometric_temporal.dataset.MTMDatasetLoader(),
-    'pedalme': lambda: torch_geometric_temporal.dataset.PedalMeDatasetLoader(),
-    'pems': lambda: torch_geometric_temporal.dataset.PemsDatasetLoader(),
-    'pemsAllLA': lambda: torch_geometric_temporal.dataset.PemsAllLADatasetLoader(),
     'pems_bay': lambda: torch_geometric_temporal.dataset.PemsBayDatasetLoader(),
-    'si_diffusion': lambda: torch_geometric_temporal.dataset.SIDiffusionDatasetLoader(),
-    'twitter_tennis': lambda: torch_geometric_temporal.dataset.TwitterTennisDatasetLoader(),
-    'wave_equation': lambda: torch_geometric_temporal.dataset.WaveEquationDatasetLoader(),
-    'wikimath': lambda: torch_geometric_temporal.dataset.WikiMathsDatasetLoader(),
-    'windmilllarge': lambda: torch_geometric_temporal.dataset.WindmillOutputLargeDatasetLoader(),
-    'windmillmedium': lambda: torch_geometric_temporal.dataset.WindmillOutputMediumDatasetLoader(),
-    'windmillsmall': lambda: torch_geometric_temporal.dataset.WindmillOutputSmallDatasetLoader(),
 }
 
 # Load dataset

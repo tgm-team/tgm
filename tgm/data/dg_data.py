@@ -870,18 +870,77 @@ class DGData:
                 UserWarning,
             )
 
-        # Node features and targets with shape (|node events|, V, D) and (|node events|, V)
-        # are concatenated to form dynamic node features of shape (|node events|, V, D + 1)
+        """
+        For PyG Temporal signals with temporal lags, we expect
+        the following signal shapes:
+            features: (|events|, V, D, num_timesteps_in)
+            targets: (|events, V, 1, num_timesteps_out)
+
+        1) We will only support the current (default) configurations where
+            num_timesteps_in == num_timesteps_out to enable coalescing into dynamic_node_feats
+
+        2) We only support 1d regression targets since having multi-dimensional targets
+            requires some additional infrastructure to disambiguiate the feature/target axes.
+            Specifically, if target is a 1d signal, we can stack the features/targets
+            along axes 2 into a (D + 1)-dim signal, and later extract the targets as index [-1].
+            Conversely, if we had higher-dimensional targets, we'd need to store additional
+            meta-data to tell us where this feature/target axes split occurs.
+
+            Note:
+                - 'metra_la' already slices the targets as a 1d signal:
+                    https://github.com/benedekrozemberczki/pytorch_geometric_temporal/blob/adefe44265ad8faf239fd6cf3b59b95ca3ee60aa/torch_geometric_temporal/dataset/metr_la.py#L118j)
+
+        3) Some signals do not have time-lag components (e.g. chickenpox). In this case
+            we expect the following shapes:
+                features: (|events|, V, D)
+                targets: (|events, V, 1)
+
+            We follow the same principle and slice out a 1-d target signal in case it is
+            higher dimensional (don't see such datasets at the moment anyway).
+
+        4) Note, this is orthogonal to the notion of a graph topology. PyG-Temporal
+            has Static/Dynamic graphs with Dynamic signals. In the case of static topology
+            we natively replicate the edge index at every snapshot. Removing this redundant
+            memory usage is out of scope for now.
+        """
         node_feats = torch.as_tensor(np.stack(signal.features), dtype=torch.float32)
         node_targets = torch.as_tensor(np.stack(signal.targets), dtype=torch.float32)
-        dynamic_node_feats = torch.cat([node_feats, node_targets[..., None]], dim=-1)
 
-        # Flatten to a global node events array of size (|node events| * V, D+1) where
-        # timestamps enumerate the original graph signal snapshots
-        num_timestamps, V, _ = dynamic_node_feats.shape
-        dynamic_node_feats = dynamic_node_feats.reshape(num_timestamps * V, -1)
-        node_ids = torch.arange(V, dtype=torch.int32).repeat(num_timestamps)
-        node_timestamps = torch.arange(num_timestamps).repeat_interleave(V)
+        if node_targets.ndim == 4:  # (T, V, D_target, num_timestamps_out)
+            logger.warning(
+                f'Received targets of shape (T, V, D_target, num_timestamps_out) = {node_targets.shape}, '
+                f'TGM does not currently support multi-dimensional signal targets, using targets[:, :, 0, :]'
+            )
+            warnings.warn(
+                f'Received targets of shape (T, V, D_target, num_timestamps_out) = {node_targets.shape}, '
+                f'TGM does not currently support multi-dimensional signal targets, using targets[:, :, 0, :]',
+                UserWarning,
+            )
+            node_targets = node_targets[:, :, 0, :]
+
+        has_timestamp_lag_dim = node_feats.ndim == 4
+        if has_timestamp_lag_dim:
+            node_feats = node_feats.permute(0, 1, 3, 2)  # (T, V, num_timestamps, D)
+            if node_feats.shape[:-1] != node_targets.shape:
+                raise NotImplementedError(
+                    f'Got node feats shape {node_feats.shape} and target shape {node_targets.shape} '
+                    'which cannot easily be coalesced into dynamic_node_feats, '
+                    'these shapes are not yet supported by TGM'
+                )
+            # (T_feat, V_feat, lag, D + 1)
+            dynamic_node_feats = torch.cat(
+                [node_feats, node_targets[..., None]], dim=-1
+            )
+        else:
+            # (T_feat, V_feat, 1, D + 1)
+            dynamic_node_feats = torch.cat(
+                [node_feats, node_targets[..., None]], dim=-1
+            ).unsqueeze(dim=2)
+
+        T, V = dynamic_node_feats.shape[:2]
+        dynamic_node_feats = dynamic_node_feats.reshape(T * V, -1)
+        node_ids = torch.arange(V, dtype=torch.int32).repeat(T)
+        node_timestamps = torch.arange(T).repeat_interleave(V)
 
         if isinstance(signal, DynamicGraphTemporalSignal):
             # Concatenate edge events from each time step: list[(2, E_t)] -> (sum E_t, 2)
@@ -913,9 +972,9 @@ class DGData:
             # Duplicate the entire graph at every snapshot (every time signal changes)
             # Note: repeating all edge events is quite memory-hungry
             num_edges = edge_index.shape[0]
-            edge_index = edge_index.repeat(num_timestamps, 1)
-            edge_feats = edge_feats.unsqueeze(dim=-1).repeat(num_timestamps, 1)
-            edge_timestamps = torch.arange(num_timestamps).repeat_interleave(num_edges)
+            edge_index = edge_index.repeat(T, 1)
+            edge_feats = edge_feats.unsqueeze(dim=-1).repeat(T, 1)
+            edge_timestamps = torch.arange(T).repeat_interleave(num_edges)
         else:
             raise ValueError(f'Unknown signal type: {type(signal)}')
 
