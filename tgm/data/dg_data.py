@@ -882,21 +882,18 @@ class DGData:
         def _coalesce_feats_targets(
             node_feats: torch.Tensor, node_targets: torch.Tensor
         ) -> torch.Tensor:
-            # Return dynamic_node_feats of shape (T, V, lag, D + 1).
-
-            # case (T, V, D, lag): need to permute to (T, V, lag, D)
-            has_lag = node_feats.ndim == 4
-            if has_lag:
-                node_feats_perm = node_feats.permute(0, 1, 3, 2)
-                if node_feats_perm.shape[:-1] != node_targets.shape:
+            if node_feats.ndim == 4:
+                T, V, D, lag = node_feats.shape
+                if node_targets.shape != (T, V, lag):
                     raise NotImplementedError(
-                        f'node_feats shape {node_feats_perm.shape} incompatible with '
+                        f'node_feats shape {node_feats.shape} incompatible with '
                         f'targets {node_targets.shape}; cannot coalesce.'
                     )
-                return torch.cat([node_feats_perm, node_targets[..., None]], dim=-1)
-
-            # case no lag (create lag=1)
-            return torch.cat([node_feats, node_targets[..., None]], dim=-1).unsqueeze(2)
+                node_targets = node_targets.unsqueeze(dim=2)
+            else:
+                node_feats = node_feats.unsqueeze(-1)  # (T, V, D, 1)
+                node_targets = node_targets[..., None, None]  # (T, V, 1, 1)
+            return torch.cat([node_feats, node_targets], dim=2)
 
         def _load_edge_events(
             signal: 'torch_geometric_temporal.signal',  # type: ignore

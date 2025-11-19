@@ -77,14 +77,12 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        node_feats, y_true = (
-            batch.dynamic_node_feats[..., :-1],
-            batch.dynamic_node_feats[..., -1],
-        )
+        node_feats = batch.dynamic_node_feats[:, :-1, :]
+        y_true = batch.dynamic_node_feats[:, -1, :]
 
         out_seq = []
-        for t in range(node_feats.shape[1]):
-            out_t, h_0 = encoder(batch, node_feats[:, t, :], h_0)
+        for t in range(node_feats.shape[-1]):
+            out_t, h_0 = encoder(batch, node_feats[..., t], h_0)
             out_seq.append(out_t)
         y_pred = torch.cat(out_seq, dim=1)
 
@@ -157,7 +155,7 @@ test_loader = DGDataLoader(
 )
 
 # Dynamic node features are concatenating of node signals and 1-dim target
-node_dim = train_dg.dynamic_node_feats_dim[-1] - 1
+node_dim = train_dg.dynamic_node_feats_dim[-2] - 1
 encoder = RecurrentGCN(node_dim=node_dim, embed_dim=args.embed_dim).to(args.device)
 opt = torch.optim.Adam(encoder.parameters(), lr=float(args.lr))
 
