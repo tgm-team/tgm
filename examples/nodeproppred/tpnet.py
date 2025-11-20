@@ -1,6 +1,8 @@
 import argparse
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Dict
+import os
 
+import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
@@ -103,6 +105,23 @@ parser.add_argument(
     default='time_granularity_effect',
     help='Name of experiment',
 )
+
+MODEL_NAME = 'TGCN'
+EXPERIMENTS_ARTIFACT = 'experiments/artifact'
+
+def save_results(experiment_id: str, results: Dict, intermediate_path: str = ''):
+    partial_path = f'{EXPERIMENTS_ARTIFACT}/results/{intermediate_path}'
+    if not os.path.exists(partial_path):
+        os.makedirs(partial_path)
+
+    result_path = f'{partial_path}/{experiment_id}.csv'
+    if not os.path.exists(result_path):
+        result_df = pd.DataFrame(columns=results.keys())
+    else:
+        result_df = pd.read_csv(result_path)
+
+    result_df = result_df._append(results, ignore_index=True)
+    result_df.to_csv(result_path, index=False)
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
@@ -340,6 +359,12 @@ for epoch in range(1, args.epochs + 1):
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
+    save_results(
+        f'{args.dataset}_{args.snapshot_time_gran}_{MODEL_NAME}_{args.seed}',
+        {'epoch': epoch, 'val_ndcg': val_ndcg, 'loss': loss},
+        f'epoch_log/{args.experiment_name}',
+    )
+
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
         encoder.rp_module.reset_random_projections()
@@ -348,3 +373,17 @@ for epoch in range(1, args.epochs + 1):
 with hm.activate('test'):
     test_ndcg = eval(test_loader, encoder, decoder, evaluator, static_node_feat)
 log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
+
+# ==
+save_results(
+    f'{args.dataset}',
+    {
+        'dataset': args.dataset,
+        'snapshot_time_gran': args.snapshot_time_gran,
+        'model': MODEL_NAME,
+        'seed': args.seed,
+        'test_mrr': test_ndcg,
+    },
+    args.experiment_name,
+)
+# ==
