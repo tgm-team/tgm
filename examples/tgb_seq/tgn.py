@@ -434,9 +434,11 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
+num_nodes = max(train_dg.num_nodes, val_dg.num_nodes, test_dg.num_nodes)
+
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
-    num_nodes=max(train_dg.num_nodes, val_dg.num_nodes, test_dg.num_nodes),
+    num_nodes=num_nodes,
     seed_nodes_keys=['src', 'dst', 'neg'],
     seed_times_keys=['time', 'time', 'neg_time'],
 )
@@ -483,17 +485,17 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
-    break
     with hm.activate('train'):
         loss = train(train_loader, memory, encoder, decoder, opt)
+    continue
+exit(0)
+# with hm.activate('val'):
+#    val_mrr = eval(val_loader, memory, encoder, decoder, evaluator)
+# log_metric('Loss', loss, epoch=epoch)
+# log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
-    with hm.activate('val'):
-        val_mrr = eval(val_loader, memory, encoder, decoder, evaluator)
-    log_metric('Loss', loss, epoch=epoch)
-    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
-
-    if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
-        hm.reset_state()
+# if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
+#    hm.reset_state()
 
 
 with hm.activate('test'):

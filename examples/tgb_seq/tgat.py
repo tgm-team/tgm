@@ -148,7 +148,9 @@ def train(
     decoder.train()
     total_loss = 0
 
-    for batch in tqdm(loader):
+    for i, batch in enumerate(tqdm(loader)):
+        if i < 2961:
+            continue
         opt.zero_grad()
 
         z = encoder(batch, static_node_feats)
@@ -179,7 +181,7 @@ def eval(
     decoder.eval()
     y_pred_pos, y_pred_neg = [], []
 
-    for batch in tqdm(loader):
+    for i, batch in tqdm(loader):
         z = encoder(batch, static_node_feats)
         id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
         for idx, neg_batch in enumerate(batch.neg_batch_list):
@@ -257,10 +259,12 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
+num_nodes = max(train_dg.num_nodes, val_dg.num_nodes, test_dg.num_nodes)
+
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
 else:
-    static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
+    static_node_feats = torch.zeros((num_nodes, 1), device=args.device)
 
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
@@ -271,7 +275,7 @@ if args.sampling == 'uniform':
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
-        num_nodes=max(train_dg.num_nodes, val_dg.num_nodes, test_dg.num_nodes),
+        num_nodes=num_nodes,
         seed_nodes_keys=['src', 'dst', 'neg'],
         seed_times_keys=['time', 'time', 'neg_time'],
     )
@@ -314,14 +318,16 @@ opt = torch.optim.Adam(
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         loss = train(train_loader, static_node_feats, encoder, decoder, opt)
+    continue
+exit(0)
 
-    with hm.activate('val'):
-        val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
-    log_metric('Loss', loss, epoch=epoch)
-    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
+# with hm.activate('val'):
+#    val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
+# log_metric('Loss', loss, epoch=epoch)
+# log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
-    if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
-        hm.reset_state()
+# if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
+#    hm.reset_state()
 
 with hm.activate('test'):
     test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
