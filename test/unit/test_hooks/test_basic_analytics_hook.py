@@ -1,0 +1,89 @@
+import pytest
+import torch
+
+from tgm import DGraph
+from tgm.data import DGData
+from tgm.hooks import BasicBatchAnalyticsHook
+
+
+@pytest.fixture
+def dg():
+    edge_index = torch.IntTensor(
+        [
+            [1, 2],
+            [1, 2],
+            [2, 3],
+        ]
+    )
+    edge_timestamps = torch.IntTensor([1, 1, 2])
+
+    node_timestamps = torch.IntTensor([5, 5, 6])
+    node_ids = torch.IntTensor([2, 2, 3])
+    dynamic_node_feats = torch.rand(3, 3)
+
+    data = DGData.from_raw(
+        edge_timestamps=edge_timestamps,
+        edge_index=edge_index,
+        node_timestamps=node_timestamps,
+        node_ids=node_ids,
+        dynamic_node_feats=dynamic_node_feats,
+    )
+    return DGraph(data)
+
+
+def test_hook_dependancies():
+    hook = BasicBatchAnalyticsHook()
+    assert hook.requires == set()
+    assert hook.produces == {
+        'num_edge_events',
+        'num_node_events',
+        'num_timestamps',
+        'num_unique_nodes',
+        'avg_degree',
+        'num_repeated_events',
+    }
+
+
+def test_hook_reset_state():
+    assert BasicBatchAnalyticsHook.has_state is False
+
+
+def test_basic_analytics_num_events_and_timestamps(dg):
+    hook = BasicBatchAnalyticsHook()
+    batch = dg.materialize()
+    processed_batch = hook(dg, batch)
+
+    # assert batch.node_ids is not None
+
+    # edge and node events
+    assert processed_batch.num_edge_events == 3
+    assert processed_batch.num_node_events == 3
+
+    # timestamps (edge + node)
+    assert processed_batch.num_timestamps == 6
+
+
+def test_basic_analytics_unique_nodes_and_degree(dg):
+    hook = BasicBatchAnalyticsHook()
+    batch = dg.materialize()
+    processed_batch = hook(dg, batch)
+
+    # unique nodes = {1, 2, 3}
+    assert processed_batch.num_unique_nodes == 3
+
+    # avg degree:
+    # edges: (1,2), (2,3), (1,2)
+    # degree: node1=2, node2=3, node3=1 -> avg=2.0
+    assert processed_batch.avg_degree == pytest.approx(2.0)
+
+
+def test_basic_analytics_repeated_events(dg):
+    hook = BasicBatchAnalyticsHook()
+    batch = dg.materialize()
+    processed_batch = hook(dg, batch)
+
+    # repeated events:
+    # repeated edge: (1,2,1) → appears twice → 1 duplicate
+    # repeated node: (2,5)   → appears twice → 1 duplicate
+    # total = 2
+    assert processed_batch.num_repeated_events == 2
