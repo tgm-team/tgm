@@ -360,7 +360,7 @@ for epoch in range(1, args.epochs + 1):
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
     save_results(
-        f'{args.dataset}_{args.snapshot_time_gran}_{MODEL_NAME}_{args.seed}',
+        f'{args.dataset}_{MODEL_NAME}_{args.seed}',
         {'epoch': epoch, 'val_ndcg': val_ndcg, 'loss': loss},
         f'epoch_log/{args.experiment_name}',
     )
@@ -379,7 +379,6 @@ save_results(
     f'{args.dataset}',
     {
         'dataset': args.dataset,
-        'snapshot_time_gran': args.snapshot_time_gran,
         'model': MODEL_NAME,
         'seed': args.seed,
         'test_mrr': test_ndcg,
