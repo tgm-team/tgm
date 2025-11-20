@@ -436,7 +436,7 @@ test_dg = DGraph(test_data, device=args.device)
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
-    num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+    num_nodes=max(train_dg.num_nodes, val_dg.num_nodes, test_dg.num_nodes),
     seed_nodes_keys=['src', 'dst', 'neg'],
     seed_times_keys=['time', 'time', 'neg_time'],
 )
