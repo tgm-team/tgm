@@ -11,11 +11,7 @@ logger = _get_logger(__name__)
 
 
 class BasicBatchAnalyticsHook(StatelessHook):
-    """Compute simple batch-level statistics.
-
-    This is a refactor of the example hook from
-    `examples/analytics/basic_stats.py` into an official package module.
-    """
+    """Compute simple batch-level statistics."""
 
     requires: Set[str] = set()
 
