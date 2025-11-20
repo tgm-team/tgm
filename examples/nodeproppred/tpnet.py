@@ -106,7 +106,7 @@ parser.add_argument(
     help='Name of experiment',
 )
 
-MODEL_NAME = 'TGCN'
+MODEL_NAME = 'TPNet'
 EXPERIMENTS_ARTIFACT = 'experiments/artifact'
 
 def save_results(experiment_id: str, results: Dict, intermediate_path: str = ''):
