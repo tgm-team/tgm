@@ -222,7 +222,9 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
         batch_size = len(batch.src)
 
         if self.split == 'test':
-            batch.neg_batch_list = self.negs[self.neg_idx : self.neg_idx + batch_size]
+            batch.neg_batch_list = self.negs[
+                self.neg_idx : self.neg_idx + batch_size
+            ].to(dg.device)
             batch.neg = torch.unique(torch.cat(batch.neg_batch_list))
             self.neg_idx += batch_size
 
