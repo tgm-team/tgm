@@ -388,7 +388,9 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
             from tgb_seq.LinkPred.dataloader import TGBSeqLoader
 
             self.negs = list(
-                torch.from_numpy(TGBSeqLoader(dataset_name, root='./').negative_samples)
+                torch.from_numpy(
+                    TGBSeqLoader(dataset_name, root='./').negative_samples
+                ).to(dgraph.device)
             )
             self.neg_idx = 0
         else:

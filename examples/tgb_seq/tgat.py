@@ -211,7 +211,9 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
             from tgb_seq.LinkPred.dataloader import TGBSeqLoader
 
             self.negs = list(
-                torch.from_numpy(TGBSeqLoader(dataset_name, root='./').negative_samples)
+                torch.from_numpy(
+                    TGBSeqLoader(dataset_name, root='./').negative_samples
+                ).to(dgraph.device)
             )
             self.neg_idx = 0
         else:
@@ -222,9 +224,7 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
         batch_size = len(batch.src)
 
         if self.split == 'test':
-            batch.neg_batch_list = self.negs[
-                self.neg_idx : self.neg_idx + batch_size
-            ].to(dg.device)
+            batch.neg_batch_list = self.negs[self.neg_idx : self.neg_idx + batch_size]
             batch.neg = torch.unique(torch.cat(batch.neg_batch_list))
             self.neg_idx += batch_size
 
