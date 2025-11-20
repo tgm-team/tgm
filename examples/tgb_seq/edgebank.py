@@ -62,7 +62,7 @@ def eval(
 
 
 class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
-    produces = {'neg'}
+    produces = {'neg', 'neg_time'}
 
     def __init__(self, dataset_name: str, split_mode: str, dgraph: DGraph) -> None:
         self.split = split_mode
@@ -91,6 +91,7 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
             batch.neg = torch.randint(  # type: ignore
                 self.low, self.high, size, dtype=torch.int32, device=dg.device
             )
+        batch.neg_time = batch.time.clone()
         return batch
 
 
