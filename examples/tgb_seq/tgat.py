@@ -180,13 +180,10 @@ def eval(
     y_pred_pos, y_pred_neg = [], []
 
     for batch in tqdm(loader):
-        negs_per_pos = len(batch.neg)
-
         z = encoder(batch, static_node_feats)
         id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
-
-        for idx in range(negs_per_pos):
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), batch.neg[idx]])
+        for idx, neg_batch in enumerate(batch.neg_batch_list):
+            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.src[idx].repeat(len(dst_ids))
 
             src_idx = torch.tensor([id_map[n.item()] for n in src_ids], device=z.device)
@@ -203,7 +200,7 @@ def eval(
 
 
 class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
-    produces = {'neg', 'neg_time'}
+    produces = {'neg', 'neg_time', 'neg_batch_list'}
 
     def __init__(self, dataset_name: str, split_mode: str, dgraph: DGraph) -> None:
         self.split = split_mode
@@ -213,8 +210,8 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
             # TGB-SEQ precomputed negative destination only for test split.
             from tgb_seq.LinkPred.dataloader import TGBSeqLoader
 
-            self.negs = torch.from_numpy(
-                TGBSeqLoader(dataset_name, root='./').negative_samples
+            self.negs = list(
+                torch.from_numpy(TGBSeqLoader(dataset_name, root='./').negative_samples)
             )
             self.neg_idx = 0
         else:
@@ -225,14 +222,26 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
         batch_size = len(batch.src)
 
         if self.split == 'test':
-            batch.neg = self.negs[self.neg_idx : self.neg_idx + batch_size]
+            batch.neg_batch_list = self.negs[self.neg_idx : self.neg_idx + batch_size]
+            batch.neg = torch.unique(torch.cat(batch.neg_batch_list))
             self.neg_idx += batch_size
+
+            # Use generator to local constrain rng for reproducibility
+            gen = torch.Generator(device=dg.device)
+            gen.manual_seed(0)
+            batch.neg_time = torch.randint(  # type: ignore
+                int(batch.time.min().item()),
+                int(batch.time.max().item()) + 1,
+                (batch.neg.size(0),),  # type: ignore
+                device=dg.device,
+                generator=gen,
+            )
         else:
             size = (self.num_negs, batch.dst.size(0))
             batch.neg = torch.randint(  # type: ignore
                 self.low, self.high, size, dtype=torch.int32, device=dg.device
             )
-        batch.neg_time = batch.time.clone()
+            batch.neg_time = batch.time.clone()
         return batch
 
 
