@@ -148,9 +148,7 @@ def train(
     decoder.train()
     total_loss = 0
 
-    for i, batch in enumerate(tqdm(loader)):
-        if i < 2961:
-            continue
+    for batch in tqdm(loader):
         opt.zero_grad()
 
         z = encoder(batch, static_node_feats)
