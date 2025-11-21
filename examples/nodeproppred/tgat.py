@@ -4,17 +4,20 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tgb.linkproppred.evaluate import Evaluator
+from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGraph
 from tgm.constants import (
     METRIC_TGB_NODEPROPPRED,
     PADDED_NODE_ID,
-    RECIPE_TGB_LINK_PRED,
 )
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook, RecipeRegistry, HookManager
+from tgm.hooks import (
+    NeighborSamplerHook,
+    RecencyNeighborHook,
+    HookManager,
+)
 from tgm.nn import NodePredictor, TemporalAttention, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
@@ -48,11 +51,14 @@ parser.add_argument(
     help='sampling strategy',
 )
 parser.add_argument(
+    '--time-gran',
+    type=str,
+    default=None,
+    help='raw time granularity for dataset',
+)
+parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
-
-args = parser.parse_args()
-enable_logging(log_file_path=args.log_file_path)
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
@@ -151,18 +157,16 @@ def train(
 
     for batch in tqdm(loader):
         opt.zero_grad()
+        y_labels = batch.dynamic_node_feats
+        if y_labels is not None:
+            z = encoder(batch, static_node_feats)
+            y_pred = decoder(z)
 
-        z = encoder(batch, static_node_feats)
-        z_src, z_dst, z_neg = torch.chunk(z, 3)
+            loss = F.cross_entropy(y_pred, y_labels)
+            loss.backward()
+            opt.step()
+            total_loss += float(loss)
 
-        pos_out = decoder(z_src, z_dst)
-        neg_out = decoder(z_src, z_neg)
-
-        loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
-        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
-        loss.backward()
-        opt.step()
-        total_loss += float(loss)
     return total_loss
 
 
@@ -181,21 +185,13 @@ def eval(
     perf_list = []
 
     for batch in tqdm(loader):
-        z = encoder(batch, static_node_feats)
-        id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
-        for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src_ids = batch.src[idx].repeat(len(dst_ids))
-
-            src_idx = torch.tensor([id_map[n.item()] for n in src_ids], device=z.device)
-            dst_idx = torch.tensor([id_map[n.item()] for n in dst_ids], device=z.device)
-            z_src = z[src_idx]
-            z_dst = z[dst_idx]
-            y_pred = decoder(z_src, z_dst).sigmoid()
-
+        y_labels = batch.dynamic_node_feats
+        if y_labels is not None:
+            z = encoder(batch, static_node_feats)
+            y_pred = decoder(z)
             input_dict = {
-                'y_pred_pos': y_pred[0],
-                'y_pred_neg': y_pred[1:],
+                'y_true': y_labels,
+                'y_pred': y_pred,
                 'eval_metric': [METRIC_TGB_NODEPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
@@ -204,7 +200,6 @@ def eval(
 
 
 seed_everything(args.seed)
-
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data, device=args.device)
@@ -222,29 +217,29 @@ else:
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
         num_nbrs=args.n_nbrs,
-        seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['time', 'time', 'neg_time'],
+        seed_nodes_keys=['node_ids'],
+        seed_times_keys=['node_times'],
     )
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-        seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['time', 'time', 'neg_time'],
+        seed_nodes_keys=['node_ids'],
+        seed_times_keys=['node_times'],
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
 
 
-hm = RecipeRegistry.build(
-    RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
-)
-train_key, val_key, test_key = hm.keys
+hm = HookManager(keys=['train', 'val', 'test'])
 hm.register_shared(nbr_hook)
+train_key, val_key, test_key = hm.keys
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
+
+num_classes = train_dg.dynamic_node_feats_dim
 
 encoder = TGAT(
     node_dim=static_node_feats.shape[1],
