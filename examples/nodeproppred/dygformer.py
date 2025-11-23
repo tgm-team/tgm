@@ -142,16 +142,18 @@ class DyGFormer_NodePrediction(nn.Module):
         nbr_nids = batch.nbr_nids[0]
         nbr_times = batch.nbr_times[0]
         nbr_feats = batch.nbr_feats[0]
+        src_nbr_idx = batch.seed_node_nbr_mask['src']
+        dst_nbr_idx = batch.seed_node_nbr_mask['dst']
         edge_idx = torch.stack((src, dst), dim=0)
-        batch_size = src.shape[0]
 
+        src_dst_nbr_idx = torch.cat([src_nbr_idx, dst_nbr_idx])
         z_src, z_dst = self.encoder(
             static_node_feat,
             edge_idx,
             batch.time,
-            nbr_nids[: batch_size * 2],
-            nbr_times[: batch_size * 2],
-            nbr_feats[: batch_size * 2],
+            nbr_nids[src_dst_nbr_idx],
+            nbr_times[src_dst_nbr_idx],
+            nbr_feats[src_dst_nbr_idx],
         )
         self._update_latest_node_embedding(batch, z_src, z_dst)
 
