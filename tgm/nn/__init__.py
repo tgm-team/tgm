@@ -5,7 +5,7 @@ from .encoder import (
     GCLSTM,
     RandomProjectionModule,
     EvolveGCNO,
-    EvolveGCNH,
+    # EvolveGCNH,
 )
 from .decoder import GraphPredictor, NodePredictor, LinkPredictor
 from .modules import Time2Vec, TemporalAttention, EdgeBankPredictor, MLPMixer
@@ -16,7 +16,7 @@ __all__ = [
     'EdgeBankPredictor',
     'GCLSTM',
     'EvolveGCNO',
-    'EvolveGCNH',
+    # 'EvolveGCNH',
     'GraphPredictor',
     'LinkPredictor',
     'MLPMixer',
