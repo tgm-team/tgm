@@ -109,6 +109,68 @@ class RecurrentGCN(torch.nn.Module):
         return z
 
 
+# @log_gpu
+# @log_latency
+# def train(
+#     loader: DGDataLoader,
+#     snapshots_loader: DGDataLoader,
+#     static_node_feats: torch.Tensor,
+#     encoder: nn.Module,
+#     decoder: nn.Module,
+#     opt: torch.optim.Optimizer,
+#     conversion_rate: int,
+#     dst_min: int,
+#     dst_max: int,
+# ):
+#     opt.zero_grad()
+#     encoder.train()
+#     decoder.train()
+#     total_loss = 0
+#     all_snapshots = []
+#     h = None
+#     for batch in snapshots_loader:
+#         all_snapshots.append(torch.stack([batch.src, batch.dst], dim=0))
+
+#     for i in tqdm(range(len(all_snapshots))):
+#         if i == 0:  # first snapshot, feed the current snapshot
+#             cur_index = all_snapshots[0].long()
+#             encoder.recurrent.weight = None
+#             h = encoder(cur_index, static_node_feats)
+#         else:  # subsequent snapshot, feed the previous snapshot
+#             prev_index = all_snapshots[i - 1]
+#             h = encoder(prev_index, static_node_feats)
+
+#         pos_index = all_snapshots[i]
+#         pos_index = pos_index.long()
+
+#         neg_dst = torch.randint(
+#             dst_min,
+#             dst_max,
+#             (pos_index.shape[1],),
+#             dtype=torch.long,
+#             device=args.device,
+#         )
+
+#         pos_out = decoder(h[pos_index[0]], h[pos_index[1]])
+#         neg_out = decoder(h[pos_index[0]], h[neg_dst])
+
+#         total_loss += F.binary_cross_entropy_with_logits(
+#             pos_out, torch.ones_like(pos_out)
+#         )
+#         total_loss += F.binary_cross_entropy_with_logits(
+#             neg_out, torch.zeros_like(neg_out)
+#         )
+
+#     total_loss.backward()
+#     opt.step()
+
+#     # cutoff the graph of the hidden state between epochs
+#     encoder.recurrent.weight = encoder.recurrent.weight.detach()
+#     loss = float(total_loss.item()) / len(all_snapshots)
+#     h = h.detach()
+#     return loss, h
+
+
 @log_gpu
 @log_latency
 def train(
@@ -122,25 +184,27 @@ def train(
     dst_min: int,
     dst_max: int,
 ):
-    opt.zero_grad()
     encoder.train()
     decoder.train()
     total_loss = 0
+    prev_index = 0
+    h = None
     all_snapshots = []
-    h = None 
+    loss = 0
     for batch in snapshots_loader:
         all_snapshots.append(torch.stack([batch.src, batch.dst], dim=0))
 
     for i in tqdm(range(len(all_snapshots))):
+        opt.zero_grad()
         if i == 0:  # first snapshot, feed the current snapshot
+            encoder.recurrent.weight = None
             cur_index = all_snapshots[0].long()
             h = encoder(cur_index, static_node_feats)
         else:  # subsequent snapshot, feed the previous snapshot
             prev_index = all_snapshots[i - 1]
             h = encoder(prev_index, static_node_feats)
-
-        pos_index = all_snapshots[i]
-        pos_index = pos_index.long()
+        h = h.detach()
+        pos_index = all_snapshots[i].long().detach()
 
         neg_dst = torch.randint(
             dst_min,
@@ -153,74 +217,16 @@ def train(
         pos_out = decoder(h[pos_index[0]], h[pos_index[1]])
         neg_out = decoder(h[pos_index[0]], h[neg_dst])
 
-        total_loss += F.binary_cross_entropy_with_logits(
-            pos_out, torch.ones_like(pos_out)
-        )
-        total_loss += F.binary_cross_entropy_with_logits(
-            neg_out, torch.zeros_like(neg_out)
-        )
+        loss += F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
+        loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
+        loss.backward()
+        opt.step()
+        total_loss += float(loss.item()) / pos_index.shape[1]
+        loss = 0
 
-    total_loss.backward()
-    opt.step()
-
-    # cutoff the graph of the hidden state between epochs
     encoder.recurrent.weight = encoder.recurrent.weight.detach()
-    loss = float(total_loss.item()) / len(all_snapshots)
     h = h.detach()
-    return loss, h
-
-
-# @log_gpu
-# @log_latency
-# def train(
-#     loader: DGDataLoader,
-#     snapshots_loader: DGDataLoader,
-#     static_node_feats: torch.Tensor,
-#     encoder: nn.Module,
-#     decoder: nn.Module,
-#     opt: torch.optim.Optimizer,
-#     conversion_rate: int,
-# ):
-#     encoder.train()
-#     decoder.train()
-#     total_loss = 0
-#     prev_index = 0
-
-#     all_snapshots = []
-#     for batch in snapshots_loader:
-#         all_snapshots.append(torch.stack([batch.src, batch.dst], dim=0))
-
-#     for i in range(len(all_snapshots)):
-#         opt.zero_grad()
-#         if (i == 0): #first snapshot, feed the current snapshot
-#             cur_index = all_snapshots[0].long()
-#             cur_index = cur_index.long()
-#             h = encoder(cur_index, static_node_feats)
-#         else: #subsequent snapshot, feed the previous snapshot
-#             prev_index = all_snapshots[i-1]
-#             h = encoder(prev_index, static_node_feats)
-
-#         pos_index = all_snapshots[i]
-#         pos_index = pos_index.long()
-
-#         neg_dst = torch.randint(
-#                 0,
-#                 9227,
-#                 (pos_index.shape[1],),
-#                 dtype=torch.long,
-#                 device=args.device,
-#         )
-
-#         pos_out = decoder(h[pos_index[0]], h[pos_index[1]])
-#         neg_out = decoder(h[pos_index[0]], h[neg_dst])
-
-#         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
-#         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
-#         loss.backward(retain_graph=True)
-#         opt.step()
-#         total_loss += float(loss) / pos_index.shape[1]
-
-#     return total_loss, h
+    return total_loss, h
 
 
 """
