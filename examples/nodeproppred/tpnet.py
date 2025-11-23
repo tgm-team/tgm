@@ -1,8 +1,6 @@
 import argparse
-from typing import Callable, Tuple, Dict
-import os
+from typing import Callable, Tuple
 
-import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
@@ -106,23 +104,6 @@ parser.add_argument(
     help='Name of experiment',
 )
 
-MODEL_NAME = 'TPNet'
-EXPERIMENTS_ARTIFACT = 'experiments/artifact'
-
-def save_results(experiment_id: str, results: Dict, intermediate_path: str = ''):
-    partial_path = f'{EXPERIMENTS_ARTIFACT}/results/{intermediate_path}'
-    if not os.path.exists(partial_path):
-        os.makedirs(partial_path)
-
-    result_path = f'{partial_path}/{experiment_id}.csv'
-    if not os.path.exists(result_path):
-        result_df = pd.DataFrame(columns=results.keys())
-    else:
-        result_df = pd.read_csv(result_path)
-
-    result_df = result_df._append(results, ignore_index=True)
-    result_df.to_csv(result_path, index=False)
-
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
@@ -157,7 +138,7 @@ class TPNet_NodePrediction(nn.Module):
         self.z = torch.zeros(
             (num_nodes, output_dim), dtype=torch.float32, device=device
         )  # Maintain up-to-date node embeddings
-        
+
         self.rp_module = random_projection_module.to(device)
 
     def _update_latest_node_embedding(
