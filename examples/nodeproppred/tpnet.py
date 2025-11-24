@@ -340,12 +340,6 @@ for epoch in range(1, args.epochs + 1):
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
-    save_results(
-        f'{args.dataset}_{MODEL_NAME}_{args.seed}',
-        {'epoch': epoch, 'val_ndcg': val_ndcg, 'loss': loss},
-        f'epoch_log/{args.experiment_name}',
-    )
-
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
         encoder.rp_module.reset_random_projections()
@@ -354,16 +348,3 @@ for epoch in range(1, args.epochs + 1):
 with hm.activate('test'):
     test_ndcg = eval(test_loader, encoder, decoder, evaluator, static_node_feat)
 log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
-
-# ==
-save_results(
-    f'{args.dataset}',
-    {
-        'dataset': args.dataset,
-        'model': MODEL_NAME,
-        'seed': args.seed,
-        'test_mrr': test_ndcg,
-    },
-    args.experiment_name,
-)
-# ==
