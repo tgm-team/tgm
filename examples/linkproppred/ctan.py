@@ -33,6 +33,7 @@ parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset na
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
+parser.add_argument('--n-layers', type=int, default=2, help='number of GNN layers')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--n-nbrs',
@@ -67,11 +68,9 @@ class LastAggregator(torch.nn.Module):
 
 
 class SimpleMemory(torch.nn.Module):
-    def __init__(
-        self, num_nodes: int, memory_dim: int, aggregator_module: Callable
-    ) -> None:
+    def __init__(self, num_nodes: int, memory_dim: int, aggr_module: Callable) -> None:
         super().__init__()
-        self.aggr_module = aggregator_module
+        self.aggr_module = aggr_module
         self.register_buffer('memory', torch.zeros(num_nodes, memory_dim))
         self.register_buffer('last_update', torch.zeros(num_nodes, dtype=torch.long))
         self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
@@ -314,7 +313,6 @@ nbr_hook = RecencyNeighborHook(
     seed_times_keys=['time', 'time', 'neg_time'],
 )
 
-
 hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
@@ -328,17 +326,17 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 memory = SimpleMemory(
     num_nodes=test_dg.num_nodes,
     memory_dim=args.memory_dim,
-    aggregator_module=LastAggregator(),
+    aggr_module=LastAggregator(),
 ).to(args.device)
 encoder = CTAN(
     edge_dim=train_dg.edge_feats_dim,
     memory_dim=args.memory_dim,
     time_dim=args.time_dim,
     node_dim=static_node_feats.shape[1],
+    num_iters=args.n_layers,
     mean_delta_t=mean_delta_t,
     std_delta_t=std_delta_t,
 ).to(args.device)
-
 decoder = LinkPredictor(node_dim=args.memory_dim, hidden_dim=args.memory_dim).to(
     args.device
 )
@@ -352,7 +350,7 @@ for epoch in range(1, args.epochs + 1):
         loss = train(train_loader, static_node_feats, memory, encoder, decoder, opt)
 
     log_metric('Loss', loss, epoch=epoch)
-    if epoch % 20 == 1:
+    if epoch % 10 == 1:
         with hm.activate(val_key):
             val_mrr = eval(
                 val_loader, static_node_feats, memory, encoder, decoder, evaluator
