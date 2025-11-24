@@ -32,7 +32,7 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=1000, help='number of epochs')
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
@@ -40,12 +40,12 @@ parser.add_argument(
     '--n-nbrs',
     type=int,
     nargs='+',
-    default=[20, 20],
+    default=[32],
     help='num sampled nbrs at each hop',
 )
-parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed-dim', type=int, default=172, help='attention dimension')
-parser.add_argument('--memory-dim', type=int, default=100, help='memory dimension')
+parser.add_argument('--time-dim', type=int, default=256, help='time encoding dimension')
+parser.add_argument('--embed-dim', type=int, default=256, help='attention dimension')
+parser.add_argument('--memory-dim', type=int, default=256, help='memory dimension')
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
@@ -110,7 +110,7 @@ class CTAN(nn.Module):
         memory_dim: int,
         time_dim: int,
         node_dim: int = 0,
-        num_iters: int = 1,
+        num_iters: int = 3,
     ):
         super().__init__()
         self.time_enc = TimeEncoder(time_dim)
@@ -326,12 +326,13 @@ for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
         loss = train(train_loader, static_node_feats, memory, encoder, decoder, opt)
 
-    with hm.activate(val_key):
-        val_mrr = eval(
-            val_loader, static_node_feats, memory, encoder, decoder, evaluator
-        )
     log_metric('Loss', loss, epoch=epoch)
-    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
+    if epoch % 10 == 1:
+        with hm.activate(val_key):
+            val_mrr = eval(
+                val_loader, static_node_feats, memory, encoder, decoder, evaluator
+            )
+        log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
