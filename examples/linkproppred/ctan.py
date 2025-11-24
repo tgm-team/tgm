@@ -32,10 +32,8 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=1000, help='number of epochs')
-parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
-parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
-parser.add_argument('--n-heads', type=int, default=2, help='number of attention heads')
+parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
+parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--n-nbrs',
     type=int,
@@ -110,7 +108,7 @@ class CTAN(nn.Module):
         memory_dim: int,
         time_dim: int,
         node_dim: int = 0,
-        num_iters: int = 3,
+        num_iters: int = 1,
     ):
         super().__init__()
         self.time_enc = TimeEncoder(time_dim)
@@ -128,9 +126,9 @@ class CTAN(nn.Module):
 
     def forward(self, x, last_update, edge_index, t, msg):
         x = self.enc_x(x)
-        rel_t = last_update[edge_index[0]] - t
+        rel_t = (last_update[edge_index[0]] - t).abs()
         rel_t_enc = self.time_enc(rel_t.to(x.dtype))
-        edge_attr = torch.cat([rel_t_enc, msg], dim=-1)
+        edge_attr = torch.cat([msg, rel_t_enc], dim=-1)
         return self.aconv(x, edge_index, edge_attr)
 
 
@@ -327,7 +325,7 @@ for epoch in range(1, args.epochs + 1):
         loss = train(train_loader, static_node_feats, memory, encoder, decoder, opt)
 
     log_metric('Loss', loss, epoch=epoch)
-    if epoch % 10 == 1:
+    if epoch % 20 == 1:
         with hm.activate(val_key):
             val_mrr = eval(
                 val_loader, static_node_feats, memory, encoder, decoder, evaluator
