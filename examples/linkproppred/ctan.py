@@ -1,5 +1,5 @@
 import argparse
-from typing import Callable
+from typing import Callable, Tuple
 
 import numpy as np
 import torch
@@ -109,8 +109,12 @@ class CTAN(nn.Module):
         time_dim: int,
         node_dim: int = 0,
         num_iters: int = 1,
+        mean_delta_t: float = 0.0,
+        std_delta_t: float = 1.0,
     ):
         super().__init__()
+        self.mean_delta_t = mean_delta_t
+        self.std_delta_t = std_delta_t
         self.time_enc = TimeEncoder(time_dim)
         self.enc_x = nn.Linear(memory_dim + node_dim, memory_dim)
 
@@ -125,11 +129,11 @@ class CTAN(nn.Module):
         self.enc_x.reset_parameters()
 
     def forward(self, x, last_update, edge_index, t, msg):
-        x = self.enc_x(x)
         rel_t = (last_update[edge_index[0]] - t).abs()
-        rel_t_enc = self.time_enc(rel_t.to(x.dtype))
-        edge_attr = torch.cat([msg, rel_t_enc], dim=-1)
-        return self.aconv(x, edge_index, edge_attr)
+        rel_t = ((rel_t - self.mean_delta_t) / self.std_delta_t).to(x.dtype)
+        enc_x = self.enc_x(x)
+        edge_attr = torch.cat([msg, self.time_enc(rel_t)], dim=-1)
+        return self.aconv(enc_x, edge_index, edge_attr)
 
 
 @log_gpu
@@ -278,6 +282,26 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
+
+def compute_delta_t_stats(train_dg: DGraph) -> Tuple[float, float]:
+    last_timestamp = {}
+    delta_times = []
+
+    for src, dst, t in zip(*train_dg.edges):
+        src, dst, t = src.item(), dst.item(), t.item()
+
+        dt_src = t - last_timestamp.get(src, train_dg.start_time)
+        dt_dst = t - last_timestamp.get(dst, train_dg.start_time)
+        delta_times.extend([dt_src, dt_dst])
+
+        last_timestamp[src] = t
+        last_timestamp[dst] = t
+
+    return np.mean(delta_times), np.std(delta_times)
+
+
+mean_delta_t, std_delta_t = compute_delta_t_stats(train_dg)
+
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
 else:
@@ -311,7 +335,10 @@ encoder = CTAN(
     memory_dim=args.memory_dim,
     time_dim=args.time_dim,
     node_dim=static_node_feats.shape[1],
+    mean_delta_t=mean_delta_t,
+    std_delta_t=std_delta_t,
 ).to(args.device)
+
 decoder = LinkPredictor(node_dim=args.memory_dim, hidden_dim=args.memory_dim).to(
     args.device
 )
