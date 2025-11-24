@@ -37,10 +37,11 @@ def test_hook_dependancies():
     assert hook.produces == {
         'num_edge_events',
         'num_node_events',
-        'num_timestamps',
+        'num_unique_timestamps',
         'num_unique_nodes',
         'avg_degree',
-        'num_repeated_events',
+        'num_repeated_edge_events',
+        'num_repeated_node_events',
     }
 
 
@@ -59,8 +60,8 @@ def test_basic_analytics_num_events_and_timestamps(dg):
     assert processed_batch.num_edge_events == 3
     assert processed_batch.num_node_events == 3
 
-    # timestamps (edge + node)
-    assert processed_batch.num_timestamps == 6
+    # timestamps
+    assert processed_batch.num_unique_timestamps == 4
 
 
 def test_basic_analytics_unique_nodes_and_degree(dg):
@@ -86,4 +87,5 @@ def test_basic_analytics_repeated_events(dg):
     # repeated edge: (1,2,1) → appears twice → 1 duplicate
     # repeated node: (2,5)   → appears twice → 1 duplicate
     # total = 2
-    assert processed_batch.num_repeated_events == 2
+    assert processed_batch.num_repeated_edge_events == 1
+    assert processed_batch.num_repeated_node_events == 1
