@@ -350,6 +350,8 @@ encoder = CTAN(
     num_iters=args.n_layers,
     mean_delta_t=mean_delta_t,
     std_delta_t=std_delta_t,
+    epsilon=args.epsilon,
+    gamma=args.gamma,
 ).to(args.device)
 decoder = LinkPredictor(
     node_dim=args.memory_dim, hidden_dim=args.memory_dim, merge_op='sum'
