@@ -68,11 +68,16 @@ class LastAggregator(torch.nn.Module):
 
 
 class SimpleMemory(torch.nn.Module):
-    def __init__(self, num_nodes: int, memory_dim: int, aggr_module: Callable) -> None:
+    def __init__(
+        self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
+    ) -> None:
         super().__init__()
         self.aggr_module = aggr_module
+        self.init_time = init_time
         self.register_buffer('memory', torch.zeros(num_nodes, memory_dim))
-        self.register_buffer('last_update', torch.zeros(num_nodes, dtype=torch.long))
+        self.register_buffer(
+            'last_update', torch.full(num_nodes, init_time, dtype=torch.long)
+        )
         self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
 
     def update_state(self, src, pos_dst, t, src_emb: Tensor, pos_dst_emb: Tensor):
@@ -91,7 +96,7 @@ class SimpleMemory(torch.nn.Module):
 
     def reset_state(self):
         self.memory.zero_()
-        self.last_update.zero_()
+        self.last_update.fill_(self.init_time)
 
     def detach(self):
         self.memory.detach_()
@@ -327,6 +332,7 @@ memory = SimpleMemory(
     num_nodes=test_dg.num_nodes,
     memory_dim=args.memory_dim,
     aggr_module=LastAggregator(),
+    init_time=train_dg.start_time,
 ).to(args.device)
 encoder = CTAN(
     edge_dim=train_dg.edge_feats_dim,
@@ -337,9 +343,9 @@ encoder = CTAN(
     mean_delta_t=mean_delta_t,
     std_delta_t=std_delta_t,
 ).to(args.device)
-decoder = LinkPredictor(node_dim=args.memory_dim, hidden_dim=args.memory_dim).to(
-    args.device
-)
+decoder = LinkPredictor(
+    node_dim=args.memory_dim, hidden_dim=args.memory_dim, merge_op='sum'
+).to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,
