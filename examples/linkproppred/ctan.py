@@ -34,6 +34,10 @@ parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
 parser.add_argument('--n-layers', type=int, default=2, help='number of GNN layers')
+parser.add_argument(
+    '--epsilon', type=float, default=1.0, help='discretization step size'
+)
+parser.add_argument('--gamma', type=float, default=0.1, help='diffusion strength')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--n-nbrs',
@@ -113,6 +117,8 @@ class CTAN(nn.Module):
         time_dim: int,
         node_dim: int = 0,
         num_iters: int = 1,
+        epsilon: float = 1.0,
+        gamma: float = 0.1,
         mean_delta_t: float = 0.0,
         std_delta_t: float = 1.0,
     ):
@@ -125,7 +131,9 @@ class CTAN(nn.Module):
         phi = TransformerConv(
             memory_dim, memory_dim, edge_dim=edge_dim + time_dim, root_weight=False
         )
-        self.aconv = AntiSymmetricConv(memory_dim, phi, num_iters=num_iters)
+        self.aconv = AntiSymmetricConv(
+            memory_dim, phi, num_iters=num_iters, epsilon=epsilon, gamma=gamma
+        )
 
     def reset_parameters(self):
         self.time_enc.reset_parameters()
