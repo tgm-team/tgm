@@ -80,7 +80,7 @@ class SimpleMemory(torch.nn.Module):
         self.init_time = init_time
         self.register_buffer('memory', torch.zeros(num_nodes, memory_dim))
         self.register_buffer(
-            'last_update', torch.full(num_nodes, init_time, dtype=torch.long)
+            'last_update', torch.full((num_nodes,), init_time, dtype=torch.long)
         )
         self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
 
