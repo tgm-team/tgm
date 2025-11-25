@@ -33,7 +33,7 @@ parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset na
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
-parser.add_argument('--n-layers', type=int, default=2, help='number of GNN layers')
+parser.add_argument('--n-layers', type=int, default=1, help='number of GNN layers')
 parser.add_argument(
     '--epsilon', type=float, default=1.0, help='discretization step size'
 )
