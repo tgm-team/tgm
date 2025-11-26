@@ -24,7 +24,7 @@ parser.add_argument(
     type=str,
     default='metr_la',
     help='Dataset name',
-    choices=['chickenpox', 'metr_la', 'pems_bay'],
+    choices=['metr_la', 'pems_bay'],
 )
 parser.add_argument('--bsize', type=int, default=64, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
@@ -145,14 +145,22 @@ def eval(
 seed_everything(args.seed)
 
 pyg_temporal_loaders = {
-    'chickenpox': lambda: torch_geometric_temporal.dataset.ChickenpoxDatasetLoader(),
-    'metr_la': lambda: torch_geometric_temporal.dataset.METRLADatasetLoader(),
-    'pems_bay': lambda: torch_geometric_temporal.dataset.PemsBayDatasetLoader(),
+    'metr_la': lambda index: torch_geometric_temporal.dataset.METRLADatasetLoader(
+        index=index
+    ),
+    'pems_bay': lambda index: torch_geometric_temporal.dataset.PemsBayDatasetLoader(
+        index=index
+    ),
 }
 
 # Load dataset
 if args.dataset in pyg_temporal_loaders:
-    signal = pyg_temporal_loaders[args.dataset]().get_dataset()
+    # TODO: Hide behind IO if we want to natively support this
+    signal = pyg_temporal_loaders[args.dataset](index=False).get_dataset()
+    _, _, _, _, _, means, stds = pyg_temporal_loaders[args.dataset](
+        index=True
+    ).get_index_dataset()
+    means, stds = means[0], stds[0]  # Predicting 1d signal
 else:
     raise ValueError(f'Unknown PyG-Temporal dataset: {args.dataset}')
 
@@ -181,10 +189,10 @@ encoder = RecurrentGCN(node_dim=node_dim, embed_dim=args.embed_dim).to(args.devi
 opt = torch.optim.Adam(encoder.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
-    loss, h_0, c_0 = train(train_loader, encoder, opt)
-    val_mae = eval(val_loader, h_0, c_0, encoder)
+    loss, h_0, c_0 = train(train_loader, encoder, opt, means, stds)
+    val_mae = eval(val_loader, h_0, c_0, encoder, means, stds)
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation MAE', val_mae, epoch=epoch)
 
-mae = eval(test_loader, h_0, c_0, encoder)
+mae = eval(test_loader, h_0, c_0, encoder, means, stds)
 log_metric(f'Test MAE', mae, epoch=epoch)

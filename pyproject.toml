@@ -10,6 +10,7 @@ authors = [
     { name = "Shenyang Huang", email = "shenyang.huang@mail.mcgill.ca" },
 ]
 dependencies = [
+    "dask>=2025.11.0",
     "numpy>=2.2.6",
     "torch>=2.5.1",
     "torch-geometric>=2.6.1",
