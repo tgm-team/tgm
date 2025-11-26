@@ -78,7 +78,11 @@ def masked_mae_loss(y_pred, y_true):
 @log_gpu
 @log_latency
 def train(
-    loader: DGDataLoader, encoder: nn.Module, opt: torch.optim.Optimizer
+    loader: DGDataLoader,
+    encoder: nn.Module,
+    opt: torch.optim.Optimizer,
+    mean: torch.Tensor,
+    std: torch.Tensor,
 ) -> Tuple[float, torch.Tensor, torch.Tensor]:
     encoder.train()
     total_loss, h_0, c_0 = 0, None, None
@@ -97,8 +101,7 @@ def train(
             out_seq.append(out_t)
         y_pred = torch.cat(out_seq, dim=-1)
 
-        # TODO: Need to normalize with mean/std signal
-        loss = masked_mae_loss(y_pred, y_true)
+        loss = masked_mae_loss((y_pred * std) + mean, (y_true * std) + mean)
         loss.backward()
         opt.step()
         total_loss += float(loss)
@@ -112,7 +115,12 @@ def train(
 @log_latency
 @torch.no_grad()
 def eval(
-    loader: DGDataLoader, h_0: torch.Tensor, c_0: torch.Tensor, encoder: nn.Module
+    loader: DGDataLoader,
+    h_0: torch.Tensor,
+    c_0: torch.Tensor,
+    encoder: nn.Module,
+    mean: torch.Tensor,
+    std: torch.Tensor,
 ) -> float:
     encoder.eval()
     maes = []
@@ -128,7 +136,7 @@ def eval(
             out_t, h_0, c_0 = encoder(batch, node_feats[:, :, :, t], h_0, c_0)
             out_seq.append(out_t)
         y_pred = torch.cat(out_seq, dim=-1)
-        mae = masked_mae_loss(y_pred, y_true)
+        mae = masked_mae_loss((y_pred * std) + mean, (y_true * std) + mean)
         maes.append(float(mae))
 
     return np.mean(maes)
@@ -149,6 +157,7 @@ else:
     raise ValueError(f'Unknown PyG-Temporal dataset: {args.dataset}')
 
 data = DGData.from_pyg_temporal(signal)
+
 split = TemporalRatioSplit(train_ratio=0.7, val_ratio=0.1, test_ratio=0.2)
 train_data, val_data, test_data = split.apply(data)
 
