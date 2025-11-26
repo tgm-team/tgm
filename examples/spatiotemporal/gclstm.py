@@ -71,8 +71,8 @@ class RecurrentGCN(torch.nn.Module):
 
 def masked_mae_loss(y_pred, y_true):
     mask = y_true != 0
-    loss = torch.abs(y_pred[mask] - y_true[mask])
-    return loss.mean() if loss.numel() else torch.tensor(0.0, device=y_pred.device)
+    diff = torch.abs(y_pred - y_true) * mask.float()
+    return diff.sum() / (mask.sum() + 1e-6)
 
 
 @log_gpu
