@@ -145,7 +145,9 @@ class CTAN(nn.Module):
         rel_t = ((rel_t - self.mean_delta_t) / self.std_delta_t).to(x.dtype)
         enc_x = self.enc_x(x)
         edge_attr = torch.cat([msg, self.time_enc(rel_t)], dim=-1)
-        return self.aconv(enc_x, edge_index, edge_attr)
+        z = self.aconv(enc_x, edge_index, edge_attr)
+        z = torch.tanh(z)
+        return z
 
 
 @log_gpu
