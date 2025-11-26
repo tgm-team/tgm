@@ -160,7 +160,7 @@ if args.dataset in pyg_temporal_loaders:
     _, _, _, _, _, means, stds = pyg_temporal_loaders[args.dataset](
         index=True
     ).get_index_dataset()
-    means, stds = means[0], stds[0]  # Predicting 1d signal
+    means, stds = means[0].item(), stds[0].item()  # Predicting 1d signal
 else:
     raise ValueError(f'Unknown PyG-Temporal dataset: {args.dataset}')
 
