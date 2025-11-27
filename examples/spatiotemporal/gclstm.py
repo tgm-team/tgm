@@ -60,7 +60,7 @@ class RecurrentGCN(torch.nn.Module):
         node_feat = node_feat.reshape(B * N, -1)
         h_0, c_0 = self.recurrent(node_feat, edge_index, edge_weight, h, c)
         z = F.relu(h_0)
-        z = self.linear(z).reshape(B, N, -1)
+        z = self.linear(z)
         return z, h_0, c_0
 
     def _get_cached_edge_index(self, batch: DGBatch) -> torch.Tensor:
@@ -71,10 +71,8 @@ class RecurrentGCN(torch.nn.Module):
 
 def masked_mae_loss(y_pred, y_true):
     mask = (y_true != 0).float()
-    mask /= mask.mean()
-    loss = torch.abs(y_pred - y_true) * mask
-    loss[loss != loss] = 0
-    return loss.mean()
+    diff = torch.abs(y_pred - y_true) * mask
+    return diff.sum() / (mask.sum() + 1e-6)
 
 
 @log_gpu
@@ -102,6 +100,7 @@ def train(
             out_t, h_0, c_0 = encoder(batch, node_feats[:, :, :, t], h_0, c_0)
             out_seq.append(out_t)
         y_pred = torch.cat(out_seq, dim=-1)
+        y_true = torch.swapaxes(y_true, 1, 2).reshape(-1, y_pred.shape[-1])
 
         loss = masked_mae_loss((y_pred * std) + mean, (y_true * std) + mean)
         loss.backward()
@@ -138,6 +137,8 @@ def eval(
             out_t, h_0, c_0 = encoder(batch, node_feats[:, :, :, t], h_0, c_0)
             out_seq.append(out_t)
         y_pred = torch.cat(out_seq, dim=-1)
+        y_true = torch.swapaxes(y_true, 1, 2).reshape(-1, y_pred.shape[-1])
+
         mae = masked_mae_loss((y_pred * std) + mean, (y_true * std) + mean)
         maes.append(float(mae))
 
