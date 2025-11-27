@@ -127,3 +127,6 @@ TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
     'tgbn-reddit': TimeDeltaDG('s'),
     'tgbn-token': TimeDeltaDG('s'),
 }
+
+# Need (an arbitrary) non-ordered unit to enable snapshot iteration
+PYG_TEMPORAL_TIME_DELTA: Final[TimeDeltaDG] = TimeDeltaDG('s')

@@ -110,7 +110,7 @@ class TGCN(torch.nn.Module):
         self, X: torch.Tensor, H: torch.Tensor | None
     ) -> torch.Tensor:
         if H is None:
-            H = zeros(X.shape[0], self.out_channels).to(X.device)
+            H = zeros(X.shape[0], X.shape[1], self.out_channels).to(X.device)
         return H
 
     def _calculate_update_gate(
@@ -120,7 +120,7 @@ class TGCN(torch.nn.Module):
         edge_weight: torch.Tensor | None,
         H: torch.Tensor,
     ) -> torch.Tensor:
-        U = torch.cat([self.conv_u(X, edge_index, edge_weight), H], 1)
+        U = torch.cat([self.conv_u(X, edge_index, edge_weight), H], 2)
         U = self.linear_u(U)
         U = torch.sigmoid(U)
         return U
@@ -132,7 +132,7 @@ class TGCN(torch.nn.Module):
         edge_weight: torch.Tensor | None,
         H: torch.Tensor,
     ) -> torch.Tensor:
-        R = torch.cat([self.conv_r(X, edge_index, edge_weight), H], 1)
+        R = torch.cat([self.conv_r(X, edge_index, edge_weight), H], 2)
         R = self.linear_r(R)
         R = torch.sigmoid(R)
         return R
@@ -145,7 +145,7 @@ class TGCN(torch.nn.Module):
         H: torch.Tensor | None,
         R: torch.Tensor,
     ) -> torch.Tensor:
-        C = torch.cat([self.conv_c(X, edge_index, edge_weight), H * R], 1)
+        C = torch.cat([self.conv_c(X, edge_index, edge_weight), H * R], 2)
         C = self.linear_c(C)
         C = torch.tanh(C)
         return C
