@@ -1,0 +1,4 @@
+dataset,snapshot_time_gran,model,seed,test_auc,test_ap,best_epoch
+tgbl-review,D,PF,720,0.455734372138977,0.3978081941604614,0
+tgbl-review,D,PF,721,0.455734372138977,0.3978081941604614,0
+tgbl-review,D,PF,722,0.4567404091358185,0.3981848955154419,0
