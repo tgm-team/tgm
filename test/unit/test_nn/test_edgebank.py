@@ -71,7 +71,7 @@ def test_complete_eviction_fixed_time_window():
     assert bank.window_end == 6
     assert bank.window_ratio == WINDOW_RATIO
 
-    # Update with edge in the very far future. Evict all existing interations
+    # Update with edge in the very far future. Evict all existing interactions
     bank.update(torch.Tensor([7]), torch.Tensor([8]), torch.Tensor([100000000]))
     for s, d in zip(src, dst):
         assert not (s.item(), d.item()) in bank.memory
