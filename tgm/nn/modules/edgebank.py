@@ -1,7 +1,21 @@
-import heapq
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
 import torch
+
+
+class _Event:
+    def __init__(
+        self,
+        edge: Tuple[int, int],
+        ts: int,
+        left: Optional['_Event'] = None,
+        right: Optional['_Event'] = None,
+    ) -> None:
+        """A node of a simple bidirectional linked list with 2 pointers."""
+        self.edge = edge
+        self.ts = ts
+        self.left = left
+        self.right = right
 
 
 class EdgeBankPredictor:
@@ -66,16 +80,21 @@ class EdgeBankPredictor:
         self._window_size = self._window_end - self._window_start
 
         self.memory: Dict[Tuple[int, int], int] = {}
-        self._time_edge: List[Tuple[int, Tuple[int, int]]] = []  # min heap
+        # maintain bidirectional linked list with 2 pointers
+        self._head: Optional[_Event] = None
+        self._tail: Optional[_Event] = None
 
         self.update(src, dst, ts)
 
     def _clean_up(self) -> None:
         """Clean up edges that are out of window in memory."""
-        while self._time_edge and self._time_edge[0][0] < self._window_start:
-            ts, edge = heapq.heappop(self._time_edge)
-            if self.memory[edge] == ts:
-                self.memory.pop(edge)
+        while self._head and self._head.ts < self._window_start:
+            curr_event = self._head
+            if self.memory[curr_event.edge] == curr_event.ts:
+                self.memory.pop(curr_event.edge)
+            self._head = curr_event.right
+            if self._head == None:
+                self._tail = None
 
     def update(self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor) -> None:
         """Update EdgeBank memory with a batch of edges.
@@ -92,12 +111,12 @@ class EdgeBankPredictor:
         self._check_input_data(src, dst, ts)
         self._window_end = torch.max(self._window_end, ts.max())
         self._window_start = self._window_end - self._window_size
-        # print("\nHere")
 
         if (
-            not self._fixed_memory
-            and len(self._time_edge) > 0
-            and self._time_edge[0][0] < self._window_start
+            self._fixed_memory
+            and self._head is not None
+            and self._tail is not None
+            and self._head.ts < self._window_start
         ):
             self._clean_up()
 
@@ -105,7 +124,21 @@ class EdgeBankPredictor:
             src_, dst_, ts_ = src_.item(), dst_.item(), ts_.item()
             if ts_ >= self._window_start:
                 self.memory[(src_, dst_)] = ts_
-                heapq.heappush(self._time_edge, (ts_, (src_, dst_)))
+                if self._head == self._tail == None:
+                    self._head = self._tail = _Event((src_, dst_), ts_, None, None)
+                if self._head is not None and self._tail is not None:
+                    new_event = _Event((src_, dst_), ts_, left=None, right=None)
+                    curr: _Event | None = self._tail
+
+                    while curr is not None and ts_ < curr.ts:
+                        curr = curr.left
+                    if curr == None:
+                        new_event.right = self._head
+                        self._head = new_event
+                    else:
+                        new_event.left = curr
+                        self._tail.right = new_event
+                        self._tail = new_event
 
     def __call__(
         self, query_src: torch.Tensor, query_dst: torch.Tensor
