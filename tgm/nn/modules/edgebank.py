@@ -126,9 +126,10 @@ class EdgeBankPredictor:
                 self.memory[(src_, dst_)] = ts_
                 if self._head == self._tail == None:
                     self._head = self._tail = _Event((src_, dst_), ts_, None, None)
-                if self._head is not None and self._tail is not None:
+                elif self._head is not None and self._tail is not None:
                     new_event = _Event((src_, dst_), ts_, left=None, right=None)
                     curr: _Event | None = self._tail
+                    curr = self._tail
 
                     while curr is not None and ts_ < curr.ts:
                         curr = curr.left
