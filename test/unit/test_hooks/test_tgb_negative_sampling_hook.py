@@ -50,7 +50,7 @@ def test_negative_edge_sampler(MockNegSampler, data):
     mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
     MockNegSampler.return_value = mock_sampler
 
-    hook = TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
+    hook = TGBNegativeEdgeSamplerHook(dataset_name='tgbl-foo', split_mode='val')
     batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
     assert torch.is_tensor(batch.neg)
@@ -59,7 +59,7 @@ def test_negative_edge_sampler(MockNegSampler, data):
     assert batch.neg_time.shape == batch.neg.shape
 
 
-@patch('tgb.utils.info.DATA_VERSION_DICT', {'foo': 1})
+@patch('tgb.utils.info.DATA_VERSION_DICT', {'tgbl-foo': 1})
 @patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
 def test_negative_edge_sampler_with_version_info(MockNegSampler, data):
     dg = DGraph(data)
@@ -68,7 +68,7 @@ def test_negative_edge_sampler_with_version_info(MockNegSampler, data):
     mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
     MockNegSampler.return_value = mock_sampler
 
-    hook = TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
+    hook = TGBNegativeEdgeSamplerHook(dataset_name='tgbl-foo', split_mode='val')
     batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
     assert torch.is_tensor(batch.neg)
@@ -83,10 +83,10 @@ def test_negative_edge_sampler_throws_value_error(MockNegSampler, data):
     mock_sampler = Mock()
     mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
     mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
-    mock_sampler.query_batch.side_effect = ValueError('foo')
+    mock_sampler.query_batch.side_effect = ValueError('tgbl-foo')
     MockNegSampler.return_value = mock_sampler
 
-    hook = TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
+    hook = TGBNegativeEdgeSamplerHook(dataset_name='tgbl-foo', split_mode='val')
 
     with pytest.raises(ValueError, match='`pip install --upgrade py-tgb`'):
         hook(dg, dg.materialize())
@@ -118,7 +118,8 @@ def test_node_only_batch_negative_edge_sampler(MockNegSampler, node_only_data):
 
     hm = HookManager(keys=['val', 'test'])
     hm.register(
-        'val', hook=TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
+        'val',
+        hook=TGBNegativeEdgeSamplerHook(dataset_name='tgbl-foo', split_mode='val'),
     )
     loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
     with hm.activate('val'):

@@ -726,7 +726,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
     mock_sampler.query_batch.return_value = neg_batch_list
     MockNegSampler.return_value = mock_sampler
 
-    tgb_hook = TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
+    tgb_hook = TGBNegativeEdgeSamplerHook(dataset_name='tgbl-foo', split_mode='val')
 
     n_nbrs = [1, 1]  # 1 neighbor for each node
     recency_hook = RecencyNeighborHook(
