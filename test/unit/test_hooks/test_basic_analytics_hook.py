@@ -89,3 +89,29 @@ def test_basic_analytics_repeated_events(dg):
     # total = 2
     assert processed_batch.num_repeated_edge_events == 1
     assert processed_batch.num_repeated_node_events == 1
+
+
+def test_basic_analytics_empty_edges_and_nodes(dg):
+    hook = BasicBatchAnalyticsHook()
+    batch = dg.materialize()
+
+    # Force edges and nodes to be "present but empty"
+    batch.src = torch.empty(0, dtype=batch.src.dtype)
+    batch.dst = torch.empty(0, dtype=batch.dst.dtype)
+    batch.time = torch.empty(0, dtype=batch.time.dtype)
+    batch.node_ids = torch.empty(0, dtype=batch.node_ids.dtype)
+    batch.node_times = torch.empty(0, dtype=batch.node_times.dtype)
+
+    processed_batch = hook(dg, batch)
+
+    # _compute_unique_nodes: node_tensors is empty -> returns 0
+    assert processed_batch.num_unique_nodes == 0
+
+    # _compute_avg_degree: src.numel() == 0 -> 0.0
+    assert processed_batch.avg_degree == 0.0
+
+    # _count_repeated_edge_events: src.numel() == 0 -> 0
+    assert processed_batch.num_repeated_edge_events == 0
+
+    # _count_repeated_node_events: node_ids.numel() == 0 -> 0
+    assert processed_batch.num_repeated_node_events == 0
