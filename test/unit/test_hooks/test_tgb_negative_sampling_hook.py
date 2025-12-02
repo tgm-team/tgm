@@ -37,6 +37,11 @@ def test_bad_tgb_negative_edge_sampler_init():
         TGBNegativeEdgeSamplerHook(dataset_name='tgbl-wiki', split_mode='invalid_mode')
 
 
+def test_attempt_init_tgb_negative_edge_sampler_on_tgbn_dataset():
+    with pytest.raises(ValueError):
+        TGBNegativeEdgeSamplerHook(dataset_name='tgbn-trade', split_mode='val')
+
+
 @patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
 def test_negative_edge_sampler(MockNegSampler, data):
     dg = DGraph(data)
