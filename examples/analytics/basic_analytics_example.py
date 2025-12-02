@@ -2,13 +2,14 @@ import argparse
 import logging
 from pathlib import Path
 
+import numpy as np
 from tqdm import tqdm
 
 from tgm import DGraph
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager
 from tgm.hooks.basic_analytics import BasicBatchAnalyticsHook
-from tgm.util.logging import enable_logging
+from tgm.util.logging import enable_logging, log_latency, log_metrics_dict
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -30,9 +31,9 @@ seed_everything(args.seed)
 
 dg = DGraph(DGData.from_tgb(args.dataset))
 
-for bsize in args.bsize:
-    logger.info(f'===== Running BasicBatchAnalyticsHook with batch size {bsize} =====')
 
+@log_latency
+def run_basic_analytics(dg: DGraph, bsize: int) -> tuple[dict, int, list]:
     analytics_hook = BasicBatchAnalyticsHook()
     hm = HookManager(keys=['basic'])
     hm.register('basic', analytics_hook)
@@ -48,7 +49,7 @@ for bsize in args.bsize:
     num_repeated_edge_events = []
     num_repeated_node_events = []
 
-    for batch in tqdm(loader, desc=f'Computing stats (bsize={bsize})'):
+    for batch in tqdm(loader):
         num_edge_events.append(batch.num_edge_events)
         num_node_events.append(batch.num_node_events)
         num_unique_timestamps.append(batch.num_unique_timestamps)
@@ -57,25 +58,21 @@ for bsize in args.bsize:
         num_repeated_edge_events.append(batch.num_repeated_edge_events)
         num_repeated_node_events.append(batch.num_repeated_node_events)
 
-    logger.info(f'Batch size {bsize}: processed {len(num_edge_events)} batches')
+    # Prepare mean metrics
+    metrics = {
+        'num_edge_events': np.mean(num_edge_events),
+        'num_node_events': np.mean(num_node_events),
+        'num_unique_timestamps': np.mean(num_unique_timestamps),
+        'avg_degree': np.mean(avg_degree),
+        'num_unique_nodes': np.mean(num_unique_nodes),
+        'num_repeated_edge_events': np.mean(num_repeated_edge_events),
+        'num_repeated_node_events': np.mean(num_repeated_node_events),
+    }
 
-    batch_idx = 0
-    threshold = 10
-    for b_idx in range(len(num_edge_events)):
-        # take the first batch that have more than 0 num_node_events
-        if num_node_events[b_idx] > threshold and num_edge_events[b_idx] > threshold:
-            logger.info(f'First batch with > {threshold} node and edge events: {b_idx}')
-            batch_idx = b_idx
-            break
+    return metrics, bsize, num_edge_events
 
-    # Logging results
-    logger.info(f'Example stats for batch {batch_idx}:')
-    logger.info(f'  num_edge_events: {num_edge_events[batch_idx]}')
-    logger.info(f'  num_node_events: {num_node_events[batch_idx]}')
-    logger.info(f'  num_unique_timestamps: {num_unique_timestamps[batch_idx]}')
-    logger.info(f'  avg_degree: {avg_degree[batch_idx]}')
-    logger.info(f'  unique nodes: {num_unique_nodes[batch_idx]}')
-    logger.info(f'  repeated edges: {num_repeated_edge_events[batch_idx]}')
-    logger.info(f'  repeated nodes: {num_repeated_node_events[batch_idx]}')
 
-logger.info('Finished computing analytics for all batch sizes.')
+for bsize in args.bsize:
+    metrics, bsize, num_edge_events = run_basic_analytics(dg, bsize)
+    logger.info(f'Mean stats across {len(num_edge_events)} batches (bsize={bsize}):')
+    log_metrics_dict(metrics_dict=metrics, logger=logger)
