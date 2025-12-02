@@ -75,6 +75,12 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
                 f'TGB required for {self.__class__.__name__}, try `pip install py-tgb`'
             )
 
+        if not dataset_name.startswith('tgbl-'):
+            raise ValueError(
+                'TGBNegativeEdgeSamplerHook should only be registered for '
+                f'"tgbl-xxx" datasets, but got: {dataset_name}'
+            )
+
         neg_sampler = NegativeEdgeSampler(dataset_name=dataset_name)
 
         # Load evaluation sets
