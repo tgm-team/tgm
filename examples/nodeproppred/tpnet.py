@@ -17,98 +17,129 @@ from tgm.hooks import (
     HookManager,
     RecencyNeighborHook,
 )
-from tgm.nn import DyGFormer, NodePredictor, Time2Vec
+from tgm.nn import NodePredictor, RandomProjectionModule, Time2Vec, TPNet
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='DyGFormers NodePropPred Example',
+    description='TPNet NodePropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbn-trade', help='Dataset name')
+parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+parser.add_argument(
+    '--num-neighbors',
+    type=int,
+    default=32,
+    help='number of recency temporal neighbors of each node',
+)
+parser.add_argument(
+    '--rp-num-layers',
+    type=int,
+    default=2,
+    help='the number of layer of random projection module',
+)
+parser.add_argument(
+    '--rp-time-decay-weight',
+    type=float,
+    default=0.000001,
+    help='the first weight of the time decay',
+)
+parser.add_argument(
+    '--enforce-dim',
+    type=int,
+    default=None,
+    help='enforced dimension of random projections',
+)
+parser.add_argument(
+    '--rp-dim-factor',
+    type=int,
+    default=10,
+    help='the dim factor of random feature w.r.t. the node num',
+)
+parser.add_argument(
+    '--use-matrix',
+    default=True,
+    action=argparse.BooleanOptionalAction,
+    help='if no-use-matrix, will not explicitly maintain the temporal walk matrices',
+)
+parser.add_argument(
+    '--concat-src-dst',
+    default=True,
+    action=argparse.BooleanOptionalAction,
+    help='if no-concat-src-dst, Random projection avoids concat src and dst in computation',
+)
+parser.add_argument('--node-dim', type=int, default=128, help='embedding dimension')
+parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
+parser.add_argument(
+    '--embed-dim', type=int, default=172, help='node representation dimension'
+)
+parser.add_argument('--num-layers', type=int, default=2, help='number of model layers')
+parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+parser.add_argument(
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+)
+
 parser.add_argument(
     '--max_sequence_length',
     type=int,
     default=32,
     help='maximal length of the input sequence of each node',
 )
-parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
-parser.add_argument('--time_dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed_dim', type=int, default=172, help='attention dimension')
-parser.add_argument('--node_dim', type=int, default=128, help='embedding dimension')
-parser.add_argument(
-    '--channel-embedding-dim',
-    type=int,
-    default=50,
-    help='dimension of each channel embedding',
-)
-parser.add_argument('--patch-size', type=int, default=1, help='patch size')
-parser.add_argument('--num_layers', type=int, default=2, help='number of model layers')
-parser.add_argument(
-    '--num_heads', type=int, default=2, help='number of heads used in attention layer'
-)
-parser.add_argument(
-    '--num-channels',
-    type=int,
-    default=4,
-    help='number of channels used in attention layer',
-)
+
 parser.add_argument(
     '--time-gran',
     type=str,
     default='Y',
     help='raw time granularity for dataset',
 )
-parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument(
-    '--log-file-path', type=str, default=None, help='Optional path to write logs'
+    '--experiment_name',
+    type=str,
+    default='time_granularity_effect',
+    help='Name of experiment',
 )
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
-class DyGFormer_NodePrediction(nn.Module):
+class TPNet_NodePrediction(nn.Module):
     def __init__(
         self,
-        num_nodes: int,
         node_feat_dim: int,
         edge_feat_dim: int,
         time_feat_dim: int,
-        channel_embedding_dim: int,
-        output_dim: int = 172,
-        patch_size: int = 1,
-        num_layers: int = 2,
-        num_heads: int = 2,
-        dropout: float = 0.1,
-        max_input_sequence_length: int = 512,
-        num_channels: int = 4,
-        time_encoder: Callable[..., nn.Module] = Time2Vec,
+        output_dim: int,
+        dropout: float,
+        num_layers: int,
+        num_neighbors: int,
+        random_projection_module: RandomProjectionModule | None = None,
         device: str = 'cpu',
+        time_encoder: Callable[..., nn.Module] = Time2Vec,
     ) -> None:
         super().__init__()
-        self.encoder = DyGFormer(
-            node_feat_dim,
-            edge_feat_dim,
-            time_feat_dim,
-            channel_embedding_dim,
-            output_dim,
-            patch_size,
-            num_layers,
-            num_heads,
-            dropout,
-            max_input_sequence_length,
-            num_channels,
-            time_encoder,
-            device,
+        self.encoder = TPNet(
+            node_feat_dim=node_feat_dim,
+            edge_feat_dim=edge_feat_dim,
+            time_feat_dim=time_feat_dim,
+            output_dim=output_dim,
+            dropout=dropout,
+            num_layers=num_layers,
+            num_neighbors=num_neighbors,
+            random_projections=random_projection_module,
+            device=device,
+            time_encoder=time_encoder,
         )
         self.z = torch.zeros(
             (num_nodes, output_dim), dtype=torch.float32, device=device
         )  # Maintain up-to-date node embeddings
+
+        self.rp_module = random_projection_module.to(device)
 
     def _update_latest_node_embedding(
         self, batch: DGBatch, z_src: torch.Tensor, z_dst: torch.Tensor
@@ -142,18 +173,16 @@ class DyGFormer_NodePrediction(nn.Module):
         nbr_nids = batch.nbr_nids[0]
         nbr_times = batch.nbr_times[0]
         nbr_feats = batch.nbr_feats[0]
-        src_nbr_idx = batch.seed_node_nbr_mask['src']
-        dst_nbr_idx = batch.seed_node_nbr_mask['dst']
         edge_idx = torch.stack((src, dst), dim=0)
+        batch_size = src.shape[0]
 
-        src_dst_nbr_idx = torch.cat([src_nbr_idx, dst_nbr_idx])
         z_src, z_dst = self.encoder(
             static_node_feat,
             edge_idx,
             batch.time,
-            nbr_nids[src_dst_nbr_idx],
-            nbr_times[src_dst_nbr_idx],
-            nbr_feats[src_dst_nbr_idx],
+            nbr_nids[: batch_size * 2],
+            nbr_times[: batch_size * 2],
+            nbr_feats[: batch_size * 2],
         )
         self._update_latest_node_embedding(batch, z_src, z_dst)
 
@@ -244,7 +273,7 @@ val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
 nbr_hook = RecencyNeighborHook(
-    num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
+    num_nbrs=[args.num_neighbors],  # Keep 1 slot for seed node itself
     num_nodes=num_nodes,
     seed_nodes_keys=['src', 'dst'],
     seed_times_keys=['time', 'time'],
@@ -264,26 +293,36 @@ if train_dg.static_node_feats is not None:
 else:
     static_node_feat = torch.randn(
         (test_dg.num_nodes, args.node_dim), device=args.device
-    )
+    ).to(args.device)
 
 evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
 
-encoder = DyGFormer_NodePrediction(
-    num_nodes=num_nodes,
-    node_feat_dim=static_node_feat.shape[1],
-    edge_feat_dim=edge_feats_dim,
-    time_feat_dim=args.time_dim,
-    channel_embedding_dim=args.channel_embedding_dim,
-    output_dim=args.embed_dim,
-    max_input_sequence_length=args.max_sequence_length,
-    dropout=args.dropout,
-    num_heads=args.num_heads,
-    num_channels=args.num_channels,
-    num_layers=args.num_layers,
+random_projection_module = RandomProjectionModule(
+    num_nodes=test_dg.num_nodes,
+    num_layer=args.rp_num_layers,
+    time_decay_weight=args.rp_time_decay_weight,
+    beginning_time=train_dg.start_time,
+    use_matrix=bool(args.use_matrix),
+    enforce_dim=args.enforce_dim,
+    num_edges=train_dg.num_edges,
+    dim_factor=args.rp_dim_factor,
+    concat_src_dst=bool(args.concat_src_dst),
     device=args.device,
-    patch_size=args.patch_size,
 ).to(args.device)
+
+encoder = TPNet_NodePrediction(
+    node_feat_dim=static_node_feat.shape[1],
+    edge_feat_dim=train_dg.edge_feats_dim,
+    time_feat_dim=args.time_dim,
+    output_dim=args.embed_dim,
+    dropout=args.dropout,
+    num_layers=args.num_layers,
+    num_neighbors=args.num_neighbors,
+    random_projection_module=random_projection_module,
+    device=args.device,
+    time_encoder=Time2Vec,
+)
 
 decoder = NodePredictor(
     in_dim=args.embed_dim, out_dim=num_classes, hidden_dim=args.embed_dim
@@ -303,6 +342,8 @@ for epoch in range(1, args.epochs + 1):
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
+        encoder.rp_module.reset_random_projections()
+
 
 with hm.activate('test'):
     test_ndcg = eval(test_loader, encoder, decoder, evaluator, static_node_feat)
