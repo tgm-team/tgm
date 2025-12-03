@@ -1,13 +1,6 @@
 import argparse
+from typing import Tuple
 
-# ==
-import copy
-import time
-from typing import Dict, Tuple
-import os
-
-
-import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
@@ -16,13 +9,12 @@ from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGraph, TimeDeltaDG
-from tgm.data import DGData, DGDataLoader
-from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook, RecipeRegistry
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
-from tgm.nn.encoder import TGCN
+from tgm.data import DGData, DGDataLoader
+from tgm.hooks import RecipeRegistry
+from tgm.nn import TGCN, LinkPredictor
+from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
-
-# ==
 
 parser = argparse.ArgumentParser(
     description='TGCN LinkPropPred Example',
@@ -44,75 +36,13 @@ parser.add_argument(
     default='h',
     help='time granularity to operate on for snapshots',
 )
-# ==
 parser.add_argument(
-    '--patience',
-    type=int,
-    default=50,
-    help='patience hyper-parameters for early stopping',
-)
-parser.add_argument(
-    '--experiment_name',
-    type=str,
-    default='time_granularity_effect',
-    help='Name of experiment',
+    '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
 
-MODEL_NAME = 'TGCN'
-EXPERIMENTS_ARTIFACT = 'experiments/artifact'
-# ==
+args = parser.parse_args()
+enable_logging(log_file_path=args.log_file_path)
 
-
-class EarlyStopping:
-    def __init__(
-        self, higher_is_better: bool = True, patience: int = 50, tolerance: float = 0.05
-    ):
-        self.higher_is_better = higher_is_better
-        self.patience = self.init_patience = patience
-        self.tolerance = tolerance
-
-        self.best_epoch = -1
-        self.best_performance = float('-inf') if higher_is_better else float('inf')
-
-    def __call__(self, epoch: int, performance: float) -> Tuple[bool, bool]:
-        assert epoch > self.best_epoch
-        is_best_epoch = False
-
-        if self.higher_is_better:
-            if performance > self.best_performance:
-                self.patience = self.init_patience
-                is_best_epoch = True
-                self.best_epoch = epoch
-                self.best_performance = performance
-
-            elif self.best_epoch - performance > self.tolerance:
-                self.patience -= 1
-        else:
-            if performance < self.best_performance:
-                self.patience = self.init_patience
-                is_best_epoch = True
-                self.best_epoch = epoch
-                self.best_performance = performance
-
-            elif performance - self.best_epoch > self.tolerance:
-                self.patience -= 1
-
-        return is_best_epoch, self.patience <= 0
-
-
-def save_results(experiment_id: str, results: Dict, intermediate_path: str = ''):
-    partial_path = f'{EXPERIMENTS_ARTIFACT}/results/{intermediate_path}'
-    if not os.path.exists(partial_path):
-        os.makedirs(partial_path)
-
-    result_path = f'{partial_path}/{experiment_id}.csv'
-    if not os.path.exists(result_path):
-        result_df = pd.DataFrame(columns=results.keys())
-    else:
-        result_df = pd.read_csv(result_path)
-
-    result_df = result_df._append(results, ignore_index=True)
-    result_df.to_csv(result_path, index=False)
 
 class RecurrentGCN(torch.nn.Module):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
@@ -135,18 +65,8 @@ class RecurrentGCN(torch.nn.Module):
         return z, h_0
 
 
-class LinkPredictor(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(2 * dim, dim)
-        self.fc2 = nn.Linear(dim, 1)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        h = self.fc1(torch.cat([z_src, z_dst], dim=1))
-        h = h.relu()
-        return self.fc2(h).sigmoid().view(-1)
-
-
+@log_gpu
+@log_latency
 def train(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
@@ -189,6 +109,8 @@ def train(
     return total_loss, z, h_0
 
 
+@log_gpu
+@log_latency
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
@@ -233,15 +155,14 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
-evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
+
+evaluator = Evaluator(name=args.dataset)
 
 snapshot_td = TimeDeltaDG(args.snapshot_time_gran)
 conversion_rate = int(snapshot_td.convert(train_dg.time_delta))
@@ -259,18 +180,21 @@ _, dst, _ = train_dg.edges
 hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
-registered_keys = hm.keys
-train_key, val_key, test_key = registered_keys
+train_key, val_key, test_key = hm.keys
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 train_snapshots_loader = DGDataLoader(
-    train_snapshots, batch_unit=args.snapshot_time_gran,on_empty='raise'
+    train_snapshots, batch_unit=args.snapshot_time_gran, on_empty='raise'
 )
-val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time_gran,on_empty='raise')
-test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran,on_empty='raise')
+val_snapshots_loader = DGDataLoader(
+    val_snapshots, batch_unit=args.snapshot_time_gran, on_empty='raise'
+)
+test_snapshots_loader = DGDataLoader(
+    test_snapshots, batch_unit=args.snapshot_time_gran, on_empty='raise'
+)
 
 if train_dg.static_node_feats is not None:
     static_node_feats = train_dg.static_node_feats
@@ -287,19 +211,8 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
-# ==
-early_stopping = EarlyStopping(patience=args.patience)
-best_model_state = {
-    'encoder': encoder.state_dict(),
-    'decoder': decoder.state_dict(),
-    'z': None,
-    'h_0': None,
-}
-# ==
-
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        start_time = time.perf_counter()
         loss, z, h_0 = train(
             train_loader,
             train_snapshots_loader,
@@ -309,8 +222,6 @@ for epoch in range(1, args.epochs + 1):
             opt,
             conversion_rate,
         )
-        end_time = time.perf_counter()
-        latency = end_time - start_time
 
     with hm.activate(val_key):
         val_mrr = eval(
@@ -324,34 +235,9 @@ for epoch in range(1, args.epochs + 1):
             evaluator,
             conversion_rate,
         )
-    print(
-        f'Epoch={epoch:02d} Latency={latency:.4f} Loss={loss:.4f} Validation {METRIC_TGB_LINKPROPPRED}={val_mrr:.4f}'
-    )
-    # ==
-    save_results(
-        f'{args.dataset}_{args.snapshot_time_gran}_{MODEL_NAME}_{args.seed}',
-        {'epoch': epoch, 'val_mrr': val_mrr, 'loss': loss, 'latency': latency},
-        f'epoch_log/{args.experiment_name}',
-    )
+    log_metric('Loss', loss, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
-    best_epoch_flag, early_stop_flag = early_stopping(epoch, val_mrr)
-    if early_stop_flag:
-        print(f'Early stopping at epoch :{epoch}')
-        break
-
-    if best_epoch_flag:
-        best_model_state['encoder'] = copy.deepcopy(encoder.state_dict())
-        best_model_state['decoder'] = copy.deepcopy(decoder.state_dict())
-        best_model_state['z'] = copy.deepcopy(z)
-        best_model_state['h_0'] = copy.deepcopy(h_0)
-    # ==
-
-# ==
-encoder.load_state_dict(best_model_state['encoder'])
-decoder.load_state_dict(best_model_state['decoder'])
-z = best_model_state['z']
-h_0 = best_model_state['h_0']
-# ==
 with hm.activate(test_key):
     test_mrr = eval(
         test_loader,
@@ -364,18 +250,4 @@ with hm.activate(test_key):
         evaluator,
         conversion_rate,
     )
-    print(f'Test {METRIC_TGB_LINKPROPPRED}={test_mrr:.4f}')
-# ==
-save_results(
-    f'{args.dataset}',
-    {
-        'dataset': args.dataset,
-        'snapshot_time_gran': args.snapshot_time_gran,
-        'model': MODEL_NAME,
-        'seed': args.seed,
-        'test_mrr': test_mrr,
-        'best_epoch': early_stopping.best_epoch,
-    },
-    args.experiment_name,
-)
-# ==
+log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

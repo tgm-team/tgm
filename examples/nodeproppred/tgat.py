@@ -8,16 +8,9 @@ from tgb.nodeproppred.evaluate import Evaluator
 from tqdm import tqdm
 
 from tgm import DGBatch, DGraph
-from tgm.constants import (
-    METRIC_TGB_NODEPROPPRED,
-    PADDED_NODE_ID,
-)
+from tgm.constants import METRIC_TGB_NODEPROPPRED, PADDED_NODE_ID
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import (
-    NeighborSamplerHook,
-    RecencyNeighborHook,
-    HookManager,
-)
+from tgm.hooks import HookManager, NeighborSamplerHook, RecencyNeighborHook
 from tgm.nn import NodePredictor, TemporalAttention, Time2Vec
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
@@ -49,12 +42,6 @@ parser.add_argument(
     default='recency',
     choices=['uniform', 'recency'],
     help='sampling strategy',
-)
-parser.add_argument(
-    '--time-gran',
-    type=str,
-    default=None,
-    help='raw time granularity for dataset',
 )
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
