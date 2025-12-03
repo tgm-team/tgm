@@ -47,3 +47,24 @@ python "$ROOT_DIR/examples/graphproppred/tgcn.py" \
     --epochs 5"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize('dataset', ['tgbl-wiki'])
+@pytest.mark.slurm(
+    resources=[
+        '--partition=main',
+        '--cpus-per-task=2',
+        '--mem=8G',
+        '--time=0:15:00',
+        '--gres=gpu:a100l:1',
+    ]
+)
+def test_tgcn_nodeprop_pred(slurm_job_runner, dataset):
+    cmd = f"""
+python "$ROOT_DIR/examples/linkproppred/tgcn.py" \
+    --dataset {dataset} \
+    --device cuda \
+    --epochs 5"""
+    state = slurm_job_runner(cmd)
+    assert state == 'COMPLETED'
