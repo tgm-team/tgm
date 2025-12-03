@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import List, Set, Tuple
+from typing import List, Tuple
 
 import torch
 
@@ -34,7 +34,7 @@ class NeighborSamplerHook(StatelessHook):
         ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
     """
 
-    requires: Set[str] = set()
+    requires = {'src', 'dst', 'time'}
     produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'seed_node_nbr_mask'}
 
     def __init__(
@@ -193,7 +193,7 @@ class NeighborSamplerHook(StatelessHook):
 
 
 class RecencyNeighborHook(StatefulHook):
-    requires: Set[str] = set()
+    requires = {'src', 'dst', 'time'}
     produces = {
         'nids',
         'nbr_nids',
