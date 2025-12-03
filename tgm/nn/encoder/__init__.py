@@ -3,6 +3,8 @@ from .tpnet import TPNet, RandomProjectionModule
 from .tgcn import TGCN
 from .gclstm import GCLSTM
 
+from .evolvegcn import EvolveGCNO, EvolveGCNH
+
 __all__ = [
     'DyGFormer',
     'GCLSTM',
@@ -10,4 +12,6 @@ __all__ = [
     'RandomProjectionModule',
     'TGCN',
     'TPNet',
+    'EvolveGCNO',
+    'EvolveGCNH',
 ]
