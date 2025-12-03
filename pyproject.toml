@@ -3,14 +3,14 @@ name = "tgm-lib"
 version = "0.1.0b0"
 description = "Efficient and Modular ML on Temporal Graphs"
 readme = "README.md"
-license = { text = "MIT" }
+license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    { name = "Jacob Chmura", email = "jacobpaul.chmura@gmail.com" },
-    { name = "Shenyang Huang", email = "shenyang.huang@mail.mcgill.ca" },
+    {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
+    {name="Shenyang Huang", email="shenyang.huang@mail.mcgill.ca"},
 ]
 dependencies = [
-    "tgb-seq",
+    "numpy>=2.2.6",
     "torch>=2.5.1",
     "torch-geometric>=2.6.1",
 ]
@@ -18,6 +18,7 @@ dependencies = [
 [dependency-groups]
 analytics = [
     "networkx>=3.2.1",
+    "py-tgb>=2.2.0",
     "scipy>=1.15.2",
     "tqdm>=4.67.1",
 ]
@@ -28,10 +29,10 @@ dev = [
     "pytest-cov>=6.0.0",
     "pytest>=8.3.3",
     "ruff==0.11.1",
+    "py-tgb>=2.2.0",
     "pandas>=1.5.3",
     "pytest-xdist>=3.7.0",
     "pytest-benchmark>=5.1.0",
-    "tgb-seq",
 ]
 docs = [
     "mkdocs-material>=9.6.9",
@@ -40,6 +41,7 @@ docs = [
 ]
 examples = [
     "pandas>=2.3.0",
+    "py-tgb>=2.2.0",
     "torchmetrics>=1.7.0",
     "tqdm>=4.67.1",
 ]
@@ -79,17 +81,17 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = [
-    "D", # pydocstyle
+    "D",  # pydocstyle
 ]
 ignore = [
-    "D100", # Ignore "Missing docstring in public module"
-    "D101", # Ignore "Missing docstring in public class"
-    "D102", # Ignore "Missing docstring in public method"
-    "D103", # Ignore "Missing docstring in public function"
-    "D104", # Ignore "Missing docstring in public package"
-    "D105", # Ignore "Missing docstring in magic method"
-    "D107", # Ignore "Missing docstring in __init__"
-    "D205", # Ignore "blank line required between summary line and description"
+    "D100",  # Ignore "Missing docstring in public module"
+    "D101",  # Ignore "Missing docstring in public class"
+    "D102",  # Ignore "Missing docstring in public method"
+    "D103",  # Ignore "Missing docstring in public function"
+    "D104",  # Ignore "Missing docstring in public package"
+    "D105",  # Ignore "Missing docstring in magic method"
+    "D107",  # Ignore "Missing docstring in __init__"
+    "D205",  # Ignore "blank line required between summary line and description"
 ]
 
 [tool.ruff.format]
