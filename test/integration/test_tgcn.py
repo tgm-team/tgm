@@ -60,7 +60,7 @@ python "$ROOT_DIR/examples/graphproppred/tgcn.py" \
         '--gres=gpu:a100l:1',
     ]
 )
-def test_tgcn_nodeprop_pred(slurm_job_runner, dataset):
+def test_tgcn_linkproppred(slurm_job_runner, dataset):
     cmd = f"""
 python "$ROOT_DIR/examples/linkproppred/tgcn.py" \
     --dataset {dataset} \
