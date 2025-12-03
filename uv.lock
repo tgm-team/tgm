@@ -1645,7 +1645,6 @@ version = "0.1.0b0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
-    { name = "py-tgb" },
     { name = "torch" },
     { name = "torch-geometric" },
 ]
@@ -1662,6 +1661,7 @@ dev = [
     { name = "mypy" },
     { name = "pandas" },
     { name = "pre-commit" },
+    { name = "py-tgb" },
     { name = "pytest" },
     { name = "pytest-benchmark" },
     { name = "pytest-cov" },
@@ -1683,7 +1683,6 @@ examples = [
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=2.2.6" },
-    { name = "py-tgb", specifier = ">=2.2.0" },
     { name = "torch", specifier = ">=2.5.1" },
     { name = "torch-geometric", specifier = ">=2.6.1" },
 ]
@@ -1700,6 +1699,7 @@ dev = [
     { name = "mypy", specifier = ">=1.13.0" },
     { name = "pandas", specifier = ">=1.5.3" },
     { name = "pre-commit", specifier = ">=4.0.1" },
+    { name = "py-tgb", specifier = ">=2.2.0" },
     { name = "pytest", specifier = ">=8.3.3" },
     { name = "pytest-benchmark", specifier = ">=5.1.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
