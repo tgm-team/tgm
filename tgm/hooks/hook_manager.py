@@ -229,7 +229,15 @@ class HookManager:
 
         # Before producing a valid hook ordering, we need to ensure
         # that all the required attributes are produced by *some* hook.
-        all_produced = set().union(*(h.produces for h in hooks))
+        # Note, we assume that the edge index and node event attributes are *always*
+        # present in the materialized batch (no hook explicitly produces them, but they
+        # are marked as *required*). This could still lead to runtime issues if a batch
+        # does not have, e.g. node events but they are marked as required by a registered hook.
+        # We cannot guard against this here since determining whether or not a batch has
+        # edge/node events can only be inferred during data loading.
+        all_produced = set(['src', 'dst', 'time', 'node_times', 'node_ids']).union(
+            *(h.produces for h in hooks)
+        )
         missing = set()
         for h in hooks:
             missing |= h.requires - all_produced

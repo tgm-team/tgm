@@ -19,7 +19,7 @@ def data():
 
 
 def test_hook_dependancies():
-    assert NeighborSamplerHook.requires == set()
+    assert NeighborSamplerHook.requires == {'src', 'dst', 'time'}
     assert NeighborSamplerHook.produces == {
         'nids',
         'nbr_nids',
