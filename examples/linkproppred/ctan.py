@@ -10,6 +10,8 @@ from torch import Tensor
 from torch_geometric.nn import AntiSymmetricConv, TransformerConv
 from torch_geometric.nn.models.tgn import TimeEncoder
 from torch_geometric.utils import scatter
+from torch_geometric.nn.inits import zeros, ones
+from torch_scatter import scatter_max
 from tqdm import tqdm
 
 from tgm import DGraph
@@ -20,7 +22,6 @@ from tgm.constants import (
 )
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
-from tgm.nn import LinkPredictor
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -28,11 +29,11 @@ parser = argparse.ArgumentParser(
     description='CTAN LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument('--seed', type=int, default=0, help='random seed to use')
+parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=80, help='number of epochs')
+parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
 parser.add_argument('--n-layers', type=int, default=3, help='number of GNN layers')
 parser.add_argument(
     '--epsilon', type=float, default=0.5, help='discretization step size'
@@ -57,11 +58,6 @@ args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
-from torch_geometric.nn.inits import zeros, ones
-from torch_geometric.utils import scatter
-from torch_scatter import scatter_max
-
-
 class SimpleMemory(torch.nn.Module):
     def __init__(
         self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
@@ -74,8 +70,9 @@ class SimpleMemory(torch.nn.Module):
         self.aggr_module = aggr_module
 
         self.register_buffer('memory', torch.zeros(num_nodes, memory_dim))
-        last_update = torch.ones(self.num_nodes, dtype=torch.long) * init_time
-        self.register_buffer('last_update', last_update)
+        self.register_buffer(
+            'last_update', torch.ones(self.num_nodes, dtype=torch.long) * init_time
+        )
         self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
 
     def update_state(self, src, pos_dst, t, src_emb, pos_dst_emb):
@@ -123,7 +120,7 @@ class TGBLinkPredictor(torch.nn.Module):
     def forward(self, z_src, z_dst):
         h = self.lin_src(z_src) + self.lin_dst(z_dst)
         h = h.relu()
-        return self.lin_final(h)
+        return self.lin_final(h).view(-1)
 
 
 class CTAN(torch.nn.Module):
@@ -132,7 +129,7 @@ class CTAN(torch.nn.Module):
         edge_dim: int,
         memory_dim: int,
         time_dim: int,
-        node_dim: int = 0,
+        node_dim: int,
         num_iters: int = 1,
         mean_delta_t: float = 0.0,
         std_delta_t: float = 1.0,
@@ -151,18 +148,6 @@ class CTAN(torch.nn.Module):
         self.aconv = AntiSymmetricConv(
             memory_dim, phi, num_iters=num_iters, epsilon=epsilon, gamma=gamma
         )
-
-    # def forward(self, batch, n_id, msg, t, edge_index, id_mapper, memory, decoder):
-    # z, last_update = memory(n_id)
-    # z = torch.cat((z, batch.x[n_id]), dim=-1)
-    # z = self.forward(z, last_update, edge_index, t, msg)
-
-    # src, dst, n_neg = batch.src, batch.dst, batch.n_neg
-    # out = decoder(z[id_mapper[src]], z[id_mapper[dst]])
-    # pos_out, neg_out = out[:-n_neg], out[-n_neg:]
-    # z_src = z[id_mapper[src[:-n_neg]]]
-    # z_dst = z[id_mapper[dst[:-n_neg]]]
-    # return pos_out, neg_out, z_src, z_dst
 
     def forward(self, x, last_update, edge_index, t, msg):
         rel_t = (last_update[edge_index[0]] - t).abs()
