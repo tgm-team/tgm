@@ -28,14 +28,14 @@ parser = argparse.ArgumentParser(
     description='CTAN LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
+parser.add_argument('--seed', type=int, default=0, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
-parser.add_argument('--n-layers', type=int, default=1, help='number of GNN layers')
+parser.add_argument('--epochs', type=int, default=80, help='number of epochs')
+parser.add_argument('--n-layers', type=int, default=3, help='number of GNN layers')
 parser.add_argument(
-    '--epsilon', type=float, default=1.0, help='discretization step size'
+    '--epsilon', type=float, default=0.5, help='discretization step size'
 )
 parser.add_argument('--gamma', type=float, default=0.1, help='diffusion strength')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
@@ -57,34 +57,83 @@ args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
-class LastAggregator(torch.nn.Module):
-    def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
-        out = msg.new_zeros((dim_size, msg.size(-1)))
+# class LastAggregator(torch.nn.Module):
+#    def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
+#        out = msg.new_zeros((dim_size, msg.size(-1)))
+#
+#        if index.numel() > 0:
+#            scores = torch.full((dim_size, t.size(0)), float('-inf'), device=t.device)
+#            scores[index, torch.arange(t.size(0), device=t.device)] = t.float()
+#            argmax = scores.argmax(dim=1)
+#            valid = scores.max(dim=1).values > float('-inf')
+#            out[valid] = msg[argmax[valid]]
+#
+#        return out
+#
+#
+# class SimpleMemory(torch.nn.Module):
+#    def __init__(
+#        self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
+#    ) -> None:
+#        super().__init__()
+#        self.aggr_module = aggr_module
+#        self.init_time = init_time
+#        self.register_buffer('memory', torch.zeros(num_nodes, memory_dim))
+#        self.register_buffer(
+#            'last_update', torch.full((num_nodes,), init_time, dtype=torch.long)
+#        )
+#        self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
+#
+#    def update_state(self, src, pos_dst, t, src_emb: Tensor, pos_dst_emb: Tensor):
+#        idx = torch.cat([src, pos_dst], dim=0)
+#        _idx = idx.unique()
+#        self._assoc[_idx] = torch.arange(_idx.size(0), device=_idx.device)
+#
+#        t = torch.cat([t, t], dim=0)
+#        last_update = scatter(t, self._assoc[idx], 0, _idx.size(0), reduce='max')
+#
+#        emb = torch.cat([src_emb, pos_dst_emb], dim=0)
+#        aggr = self.aggr_module(emb, self._assoc[idx], t, _idx.size(0))
+#
+#        self.last_update[_idx] = last_update
+#        self.memory[_idx] = aggr.detach()
+#
+#    def reset_state(self):
+#        self.memory.zero_()
+#        self.last_update.fill_(self.init_time)
+#
+#    def detach(self):
+#        self.memory.detach_()
+#
+#    def forward(self, n_id):
+#        return self.memory[n_id], self.last_update[n_id]
 
-        if index.numel() > 0:
-            scores = torch.full((dim_size, t.size(0)), float('-inf'), device=t.device)
-            scores[index, torch.arange(t.size(0), device=t.device)] = t.float()
-            argmax = scores.argmax(dim=1)
-            valid = scores.max(dim=1).values > float('-inf')
-            out[valid] = msg[argmax[valid]]
-
-        return out
+from torch_geometric.nn.inits import zeros, ones
+from torch_geometric.utils import scatter
+from torch_scatter import scatter_max
 
 
 class SimpleMemory(torch.nn.Module):
     def __init__(
-        self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
+        self,
+        num_nodes: int,
+        memory_dim: int,
+        aggr_module: Callable,
+        init_time: int = 0,
     ) -> None:
         super().__init__()
-        self.aggr_module = aggr_module
+
+        self.num_nodes = num_nodes
+        self.memory_dim = memory_dim
         self.init_time = init_time
+        self.aggr_module = aggr_module
+
         self.register_buffer('memory', torch.zeros(num_nodes, memory_dim))
-        self.register_buffer(
-            'last_update', torch.full((num_nodes,), init_time, dtype=torch.long)
-        )
+        last_update = torch.ones(self.num_nodes, dtype=torch.long) * init_time
+        self.register_buffer('last_update', last_update)
         self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
 
-    def update_state(self, src, pos_dst, t, src_emb: Tensor, pos_dst_emb: Tensor):
+    def update_state(self, src, pos_dst, t, src_emb, pos_dst_emb):
         idx = torch.cat([src, pos_dst], dim=0)
         _idx = idx.unique()
         self._assoc[_idx] = torch.arange(_idx.size(0), device=_idx.device)
@@ -99,14 +148,25 @@ class SimpleMemory(torch.nn.Module):
         self.memory[_idx] = aggr.detach()
 
     def reset_state(self):
-        self.memory.zero_()
-        self.last_update.fill_(self.init_time)
+        zeros(self.memory)
+        ones(self.last_update)
+        self.last_update *= self.init_time
 
     def detach(self):
+        """Detaches the memory from gradient computation."""
         self.memory.detach_()
 
     def forward(self, n_id):
         return self.memory[n_id], self.last_update[n_id]
+
+
+class LastAggregator(torch.nn.Module):
+    def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
+        _, argmax = scatter_max(t, index, dim=0, dim_size=dim_size)
+        out = msg.new_zeros((dim_size, msg.size(-1)))
+        mask = argmax < msg.size(0)  # Filter items with at least one entry.
+        out[mask] = msg[argmax[mask]]
+        return out
 
 
 class CTAN(nn.Module):
