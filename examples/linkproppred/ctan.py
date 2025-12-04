@@ -113,7 +113,7 @@ class LastAggregator(torch.nn.Module):
         return out
 
 
-class TGBLinkPredictor(torch.nn.Module:
+class TGBLinkPredictor(torch.nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.lin_src = torch.nn.Linear(in_channels, in_channels)
@@ -129,74 +129,49 @@ class TGBLinkPredictor(torch.nn.Module:
 class CTAN(torch.nn.Module):
     def __init__(
         self,
-        num_nodes: int,
         edge_dim: int,
         memory_dim: int,
         time_dim: int,
         node_dim: int = 0,
         num_iters: int = 1,
-        epsilon: float = 0.1,
-        gamma: float = 0.1,
         mean_delta_t: float = 0.0,
         std_delta_t: float = 1.0,
-        init_time: int = 0,
+        epsilon: float = 0.1,
+        gamma: float = 0.1,
     ):
-        super().__init()
-        self.memory = SimpleMemory(
-            num_nodes,
-            memory_dim,
-            aggregator_module=LastAggregator(),
-            init_time=init_time,
-        )
+        super().__init__()
         self.mean_delta_t = mean_delta_t
         self.std_delta_t = std_delta_t
-        self.out_channels = memory_dim
-        self.enc_x = torch.nn.Linear(memory_dim + node_dim, memory_dim)
+        self.time_enc = TimeEncoder(time_dim)
+        self.enc_x = nn.Linear(memory_dim + node_dim, memory_dim)
 
         phi = TransformerConv(
             memory_dim, memory_dim, edge_dim=edge_dim + time_dim, root_weight=False
         )
-        self.aconv = AntiSymmetricConv(memory_dim, phi, num_iters, epsilon, gamma)
-        self.time_enc = TimeEncoder(time_dim)
-        self.decoder = TGBLinkPredictor(memory_dim)
+        self.aconv = AntiSymmetricConv(
+            memory_dim, phi, num_iters=num_iters, epsilon=epsilon, gamma=gamma
+        )
 
-    def reset_parameters(self):
-        self.time_enc.reset_parameters()
-        self.aconv.reset_parameters()
-        self.enc_x.reset_parameters()
-        self.decoder.reset_parameters()
+    # def forward(self, batch, n_id, msg, t, edge_index, id_mapper, memory, decoder):
+    # z, last_update = memory(n_id)
+    # z = torch.cat((z, batch.x[n_id]), dim=-1)
+    # z = self.forward(z, last_update, edge_index, t, msg)
 
-    def zero_grad_memory(self):
-        self.memory.zero_grad_memory()
+    # src, dst, n_neg = batch.src, batch.dst, batch.n_neg
+    # out = decoder(z[id_mapper[src]], z[id_mapper[dst]])
+    # pos_out, neg_out = out[:-n_neg], out[-n_neg:]
+    # z_src = z[id_mapper[src[:-n_neg]]]
+    # z_dst = z[id_mapper[dst[:-n_neg]]]
+    # return pos_out, neg_out, z_src, z_dst
 
-    def reset_memory(self):
-        self.memory.reset_state()
-
-    def detach_memory(self):
-        self.memory.detach()
-
-    def update(self, src, pos_dst, t, msg, src_emb, pos_dst_emb):
-        self.memory.update_state(src, pos_dst, t, src_emb, pos_dst_emb)
-
-    def forward(self, batch, n_id, msg, t, edge_index, id_mapper):
-        src, dst = batch.src, batch.dst
-        n_neg = batch.n_neg
-
-        z, last_update = self.memory(n_id)
-        z = torch.cat((z, batch.x[n_id]), dim=-1)
-
+    def forward(self, x, last_update, edge_index, t, msg):
         rel_t = (last_update[edge_index[0]] - t).abs()
         rel_t = ((rel_t - self.mean_delta_t) / self.std_delta_t).to(x.dtype)
-        enc_x = self.enc_x(z)
+        enc_x = self.enc_x(x)
         edge_attr = torch.cat([msg, self.time_enc(rel_t)], dim=-1)
         z = self.aconv(enc_x, edge_index, edge_attr=edge_attr)
         z = torch.tanh(z)
-
-        out = self.decoder(z[id_mapper[src]], z[id_mapper[dst]])
-        pos_out, neg_out = out[:-n_neg], out[-n_neg:]
-        z_src = z[id_mapper[src[:-n_neg]]]
-        z_dst = z[id_mapper[dst[:-n_neg]]]
-        return pos_out, neg_out, z_src, z_dst
+        return z
 
 
 @log_gpu
@@ -404,9 +379,7 @@ encoder = CTAN(
     epsilon=args.epsilon,
     gamma=args.gamma,
 ).to(args.device)
-decoder = LinkPredictor(
-    node_dim=args.memory_dim, hidden_dim=args.memory_dim, merge_op='sum'
-).to(args.device)
+decoder = TGBLinkPredictor(args.memory_dim).to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,
