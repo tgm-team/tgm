@@ -113,6 +113,19 @@ class LastAggregator(torch.nn.Module):
         return out
 
 
+class TGBLinkPredictor(torch.nn.Module:
+    def __init__(self, in_channels):
+        super().__init__()
+        self.lin_src = torch.nn.Linear(in_channels, in_channels)
+        self.lin_dst = torch.nn.Linear(in_channels, in_channels)
+        self.lin_final = torch.nn.Linear(in_channels, 1)
+
+    def forward(self, z_src, z_dst):
+        h = self.lin_src(z_src) + self.lin_dst(z_dst)
+        h = h.relu()
+        return self.lin_final(h)
+
+
 class CTAN(torch.nn.Module):
     def __init__(
         self,
@@ -138,7 +151,7 @@ class CTAN(torch.nn.Module):
         self.mean_delta_t = mean_delta_t
         self.std_delta_t = std_delta_t
         self.out_channels = memory_dim
-        self.enc_x = torch.nn.Lienar(memory_dim + node_dim, memory_dim)
+        self.enc_x = torch.nn.Linear(memory_dim + node_dim, memory_dim)
 
         phi = TransformerConv(
             memory_dim, memory_dim, edge_dim=edge_dim + time_dim, root_weight=False
