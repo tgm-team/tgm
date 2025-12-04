@@ -57,57 +57,6 @@ args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
-# class LastAggregator(torch.nn.Module):
-#    def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
-#        out = msg.new_zeros((dim_size, msg.size(-1)))
-#
-#        if index.numel() > 0:
-#            scores = torch.full((dim_size, t.size(0)), float('-inf'), device=t.device)
-#            scores[index, torch.arange(t.size(0), device=t.device)] = t.float()
-#            argmax = scores.argmax(dim=1)
-#            valid = scores.max(dim=1).values > float('-inf')
-#            out[valid] = msg[argmax[valid]]
-#
-#        return out
-#
-#
-# class SimpleMemory(torch.nn.Module):
-#    def __init__(
-#        self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
-#    ) -> None:
-#        super().__init__()
-#        self.aggr_module = aggr_module
-#        self.init_time = init_time
-#        self.register_buffer('memory', torch.zeros(num_nodes, memory_dim))
-#        self.register_buffer(
-#            'last_update', torch.full((num_nodes,), init_time, dtype=torch.long)
-#        )
-#        self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
-#
-#    def update_state(self, src, pos_dst, t, src_emb: Tensor, pos_dst_emb: Tensor):
-#        idx = torch.cat([src, pos_dst], dim=0)
-#        _idx = idx.unique()
-#        self._assoc[_idx] = torch.arange(_idx.size(0), device=_idx.device)
-#
-#        t = torch.cat([t, t], dim=0)
-#        last_update = scatter(t, self._assoc[idx], 0, _idx.size(0), reduce='max')
-#
-#        emb = torch.cat([src_emb, pos_dst_emb], dim=0)
-#        aggr = self.aggr_module(emb, self._assoc[idx], t, _idx.size(0))
-#
-#        self.last_update[_idx] = last_update
-#        self.memory[_idx] = aggr.detach()
-#
-#    def reset_state(self):
-#        self.memory.zero_()
-#        self.last_update.fill_(self.init_time)
-#
-#    def detach(self):
-#        self.memory.detach_()
-#
-#    def forward(self, n_id):
-#        return self.memory[n_id], self.last_update[n_id]
-
 from torch_geometric.nn.inits import zeros, ones
 from torch_geometric.utils import scatter
 from torch_scatter import scatter_max
@@ -115,11 +64,7 @@ from torch_scatter import scatter_max
 
 class SimpleMemory(torch.nn.Module):
     def __init__(
-        self,
-        num_nodes: int,
-        memory_dim: int,
-        aggr_module: Callable,
-        init_time: int = 0,
+        self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
     ) -> None:
         super().__init__()
 
@@ -153,7 +98,6 @@ class SimpleMemory(torch.nn.Module):
         self.last_update *= self.init_time
 
     def detach(self):
-        """Detaches the memory from gradient computation."""
         self.memory.detach_()
 
     def forward(self, n_id):
@@ -169,45 +113,77 @@ class LastAggregator(torch.nn.Module):
         return out
 
 
-class CTAN(nn.Module):
+class CTAN(torch.nn.Module):
     def __init__(
         self,
+        num_nodes: int,
         edge_dim: int,
         memory_dim: int,
         time_dim: int,
         node_dim: int = 0,
         num_iters: int = 1,
-        epsilon: float = 1.0,
+        epsilon: float = 0.1,
         gamma: float = 0.1,
         mean_delta_t: float = 0.0,
         std_delta_t: float = 1.0,
+        init_time: int = 0,
     ):
-        super().__init__()
+        super().__init()
+        self.memory = SimpleMemory(
+            num_nodes,
+            memory_dim,
+            aggregator_module=LastAggregator(),
+            init_time=init_time,
+        )
         self.mean_delta_t = mean_delta_t
         self.std_delta_t = std_delta_t
-        self.time_enc = TimeEncoder(time_dim)
-        self.enc_x = nn.Linear(memory_dim + node_dim, memory_dim)
+        self.out_channels = memory_dim
+        self.enc_x = torch.nn.Lienar(memory_dim + node_dim, memory_dim)
 
         phi = TransformerConv(
             memory_dim, memory_dim, edge_dim=edge_dim + time_dim, root_weight=False
         )
-        self.aconv = AntiSymmetricConv(
-            memory_dim, phi, num_iters=num_iters, epsilon=epsilon, gamma=gamma
-        )
+        self.aconv = AntiSymmetricConv(memory_dim, phi, num_iters, epsilon, gamma)
+        self.time_enc = TimeEncoder(time_dim)
+        self.decoder = TGBLinkPredictor(memory_dim)
 
     def reset_parameters(self):
         self.time_enc.reset_parameters()
         self.aconv.reset_parameters()
         self.enc_x.reset_parameters()
+        self.decoder.reset_parameters()
 
-    def forward(self, x, last_update, edge_index, t, msg):
+    def zero_grad_memory(self):
+        self.memory.zero_grad_memory()
+
+    def reset_memory(self):
+        self.memory.reset_state()
+
+    def detach_memory(self):
+        self.memory.detach()
+
+    def update(self, src, pos_dst, t, msg, src_emb, pos_dst_emb):
+        self.memory.update_state(src, pos_dst, t, src_emb, pos_dst_emb)
+
+    def forward(self, batch, n_id, msg, t, edge_index, id_mapper):
+        src, dst = batch.src, batch.dst
+        n_neg = batch.n_neg
+
+        z, last_update = self.memory(n_id)
+        z = torch.cat((z, batch.x[n_id]), dim=-1)
+
         rel_t = (last_update[edge_index[0]] - t).abs()
         rel_t = ((rel_t - self.mean_delta_t) / self.std_delta_t).to(x.dtype)
-        enc_x = self.enc_x(x)
+        enc_x = self.enc_x(z)
         edge_attr = torch.cat([msg, self.time_enc(rel_t)], dim=-1)
-        z = self.aconv(enc_x, edge_index, edge_attr)
+        z = self.aconv(enc_x, edge_index, edge_attr=edge_attr)
         z = torch.tanh(z)
-        return z
+
+        out = self.decoder(z[id_mapper[src]], z[id_mapper[dst]])
+        pos_out, neg_out = out[:-n_neg], out[-n_neg:]
+        z_src = z[id_mapper[src[:-n_neg]]]
+        z_dst = z[id_mapper[dst[:-n_neg]]]
+        return pos_out, neg_out, z_src, z_dst
 
 
 @log_gpu
