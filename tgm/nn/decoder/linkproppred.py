@@ -9,14 +9,8 @@ def cat_merge(z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
     return torch.cat([z_src, z_dst], dim=1)
 
 
-def sum_merge(z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-    r"""Sum merging operation."""
-    return z_src + z_dst
-
-
 MERGE_OP = {
     'concat': cat_merge,
-    'sum': sum_merge,
 }
 
 
