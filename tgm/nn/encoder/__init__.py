@@ -2,6 +2,13 @@ from .dygformer import DyGFormer
 from .tpnet import TPNet, RandomProjectionModule
 from .tgcn import TGCN
 from .gclstm import GCLSTM
+from .tgn import (
+    GraphAttentionEmbedding,
+    LastAggregator,
+    MeanAggregator,
+    IdentityMessage,
+    TGNMemory,
+)
 
 __all__ = [
     'DyGFormer',
@@ -10,4 +17,9 @@ __all__ = [
     'RandomProjectionModule',
     'TGCN',
     'TPNet',
+    'GraphAttentionEmbedding',
+    'LastAggregator',
+    'MeanAggregator',
+    'IdentityMessage',
+    'TGNMemory',
 ]

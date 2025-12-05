@@ -1,6 +1,7 @@
 import torch
 
-from tgm.nn import RandomProjectionModule, TPNet
+from tgm.nn import TPNet
+from tgm.nn.encoder.tpnet import RandomProjectionModule
 
 
 def test_tpnet():
