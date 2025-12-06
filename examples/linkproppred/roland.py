@@ -1,6 +1,4 @@
 import argparse
-
-# ==
 import time
 from typing import List, Tuple
 
@@ -66,7 +64,6 @@ class RecurrentGCN(torch.nn.Module):
     ) -> None:
         super().__init__()
         self.recurrent = ROLAND(input_channel, nhid, num_nodes, dropout, update, tau)
-        self.linear = nn.Linear(nhid, nhid)
 
     def forward(
         self,
@@ -116,8 +113,8 @@ def train(
         num_previous_edges=prev_num_edge,
         num_current_edges=curr_num_edge,
     )
-    for i in range(len(z)):
-        z[i] = z[i].detach()
+
+    z[0], z[1] = z[0].detach(), z[1].detach()
 
     for batch in tqdm(loader):
         opt.zero_grad()
@@ -144,8 +141,7 @@ def train(
                     num_current_edges=curr_num_edge,
                 )
                 last_embeddings = z
-                for i in range(len(z)):
-                    z[i] = z[i].detach()
+                z[0], z[1] = z[0].detach(), z[1].detach()
             except StopIteration:
                 pass
 
@@ -272,12 +268,8 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     last_embeddings = [
-        torch.Tensor(
-            [[0 for _ in range(args.embed_dim)] for _ in range(test_dg.num_nodes)]
-        ).to(args.device),
-        torch.Tensor(
-            [[0 for _ in range(args.embed_dim)] for _ in range(test_dg.num_nodes)]
-        ).to(args.device),
+        torch.zeros(test_dg.num_nodes, args.embed_dim, device=args.device),
+        torch.zeros(test_dg.num_nodes, args.embed_dim, device=args.device),
     ]
     with hm.activate(train_key):
         start_time = time.perf_counter()
