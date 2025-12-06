@@ -2,6 +2,10 @@ from typing import Any, Dict, Literal, Optional, Tuple
 
 import torch
 
+from tgm.util.logging import _get_logger
+
+logger = _get_logger(__name__)
+
 
 class _Event:
     def __init__(
@@ -84,6 +88,10 @@ class EdgeBankPredictor:
         self._head: Optional[_Event] = None
         self._tail: Optional[_Event] = None
 
+        logger.warning(
+            'EdgeBank will be slow if events are added/updated out of order.'
+        )
+
         self.update(src, dst, ts)
 
     def _clean_up(self) -> None:
@@ -129,17 +137,25 @@ class EdgeBankPredictor:
                 elif self._head is not None and self._tail is not None:
                     new_event = _Event((src_, dst_), ts_, left=None, right=None)
                     curr: _Event | None = self._tail
-                    curr = self._tail
 
+                    # This while loop should never run assuming events added in time-ascending order.
+                    # When events added out of order, time complexity would be O(n)
                     while curr is not None and ts_ < curr.ts:
                         curr = curr.left
+
                     if curr == None:
                         new_event.right = self._head
+                        if self._head is not None:
+                            self._head.left = new_event
                         self._head = new_event
                     else:
                         new_event.left = curr
-                        self._tail.right = new_event
-                        self._tail = new_event
+                        new_event.right = curr.right  # type: ignore[union-attr]
+                        if curr.right is not None:  # type: ignore[union-attr]
+                            curr.right.left = new_event  # type: ignore[union-attr]
+                        curr.right = new_event  # type: ignore[union-attr]
+                        if curr == self._tail:
+                            self._tail = new_event
 
     def __call__(
         self, query_src: torch.Tensor, query_dst: torch.Tensor

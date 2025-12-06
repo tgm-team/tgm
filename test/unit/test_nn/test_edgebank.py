@@ -130,7 +130,7 @@ def test_out_of_order_update_fixed():
     assert bank.window_end == 4
     assert bank.window_ratio == WINDOW_RATIO
 
-    expected_edge_order = [(1.0, 1.0), (4.0, 5.0), (2.0, 3.0)]
+    expected_edge_order = [(4.0, 5.0), (1.0, 1.0), (2.0, 3.0)]
     expected_ts = [3, 3, 4]
     assert bank._head is not None and bank._tail is not None
     curr = bank._head
@@ -140,8 +140,16 @@ def test_out_of_order_update_fixed():
         assert curr.ts == expected_ts[count]
         count += 1
         curr = curr.right
-
     assert count == 3
+
+    curr = bank._tail
+    count = 3
+    while curr is not None:
+        count -= 1
+        assert curr.edge == expected_edge_order[count]
+        assert curr.ts == expected_ts[count]
+        curr = curr.left
+    assert count == 0
 
 
 def test_out_of_order_construct_unlimited():
