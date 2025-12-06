@@ -31,3 +31,5 @@ def test_roland(update):
     assert embeddings[1].shape == (B, Z)
     assert not torch.isnan(embeddings[0]).any()
     assert not torch.isnan(embeddings[1]).any()
+
+    roland.reset_parameters()
