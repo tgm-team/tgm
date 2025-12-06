@@ -1,4 +1,4 @@
-from .encoder import DyGFormer, TPNet, TGCN, GCLSTM, RandomProjectionModule
+from .encoder import DyGFormer, TPNet, TGCN, GCLSTM, RandomProjectionModule, ROLAND
 from .decoder import GraphPredictor, NodePredictor, LinkPredictor
 from .modules import Time2Vec, TemporalAttention, EdgeBankPredictor, MLPMixer
 
