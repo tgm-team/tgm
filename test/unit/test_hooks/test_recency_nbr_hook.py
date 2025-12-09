@@ -49,7 +49,7 @@ def basic_sample_graph():
 
 
 def test_hook_dependancies():
-    assert RecencyNeighborHook.requires == set()
+    assert RecencyNeighborHook.requires == {'src', 'dst', 'time'}
     assert RecencyNeighborHook.produces == {
         'nids',
         'nbr_nids',

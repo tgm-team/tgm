@@ -16,7 +16,7 @@ def dg():
 
 
 def test_hook_dependancies():
-    assert DeduplicationHook.requires == set()
+    assert DeduplicationHook.requires == {'src', 'dst'}
     assert DeduplicationHook.produces == {'unique_nids', 'global_to_local'}
 
 
