@@ -13,10 +13,9 @@ import torch
 from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
-from tgm.core import TGB_TIME_DELTAS, TimeDeltaDG
+from tgm.core import PYG_TEMPORAL_TIME_DELTA, TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.data.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.exceptions import (
-    EmptyGraphError,
     EventOrderedConversionError,
     InvalidDiscretizationError,
     InvalidNodeIDError,
@@ -147,8 +146,6 @@ class DGData:
         self.edge_index = _maybe_cast_integral_tensor(self.edge_index, 'edge_index')
 
         num_edges = self.edge_index.shape[0]
-        if num_edges == 0:
-            raise EmptyGraphError('TGM does not support graphs without edge events')
 
         # Validate edge event idx
         _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
@@ -203,10 +200,9 @@ class DGData:
             # Validate dynamic node features (could be None)
             if self.dynamic_node_feats is not None:
                 _assert_is_tensor(self.dynamic_node_feats, 'dynamic_node_feats')
-                if (
-                    self.dynamic_node_feats.ndim != 2
-                    or self.dynamic_node_feats.shape[0] != num_node_events
-                ):
+
+                # TODO: Consider enabling higher dimensional features
+                if self.dynamic_node_feats.shape[0] != num_node_events:
                     raise ValueError(
                         'dynamic_node_feats must have shape [num_node_events, D_node_dynamic], '
                         f'got {num_node_events} node events and shape {self.dynamic_node_feats.shape}'
@@ -216,7 +212,9 @@ class DGData:
                 )
 
         # Validate static node features
-        num_nodes = torch.max(self.edge_index).item() + 1  # 0-indexed
+        num_nodes = (
+            torch.max(self.edge_index).item() + 1 if self.edge_index.numel() else 1
+        )
         if self.node_ids is not None:
             num_nodes = max(num_nodes, torch.max(self.node_ids).item() + 1)  # 0-indexed
 
@@ -826,6 +824,89 @@ class DGData:
 
         data._split_strategy = TGBSplit(split_bounds)
         logger.debug('Finished loading DGData from TGB dataset: %s', name)
+        return data
+
+    @classmethod
+    def from_pyg_temporal(cls, signal: 'torch_geometric_temporal.signal') -> DGData:  # type: ignore
+        """Load a DGData from a PyG-Temporal dataset.
+
+        Args:
+            signal (torch_geometric_temporal.signal): PyG dataset signal.
+
+        Returns:
+            DGData: Dataset from PyG-Temporal signal object.
+
+        Raises:
+            ImportError: If the PyG-Temporal package is not resolved in the current python environment.
+        """
+        logger.debug('Loading DGData from PyG-Temporal signal')
+        try:
+            from torch_geometric_temporal.signal import (
+                StaticGraphTemporalSignal,
+            )
+        except ImportError:
+            raise ImportError(
+                'PyG-Temporal required to load PyG-Temporal data, try `pip install torch-geometric-temporal`'
+            )
+
+        supported_signals = (StaticGraphTemporalSignal,)
+        if not isinstance(signal, supported_signals):
+            raise NotImplementedError(
+                f'PyG-Temporal conversion from signal type: {type(signal)} not supported'
+            )
+
+        if getattr(signal, 'additional_feature_keys', []):
+            msg = (
+                f'PyG-Temporal signal has unsupported additional feature keys: '
+                f'{signal.additional_feature_keys}. They will be ignored.'
+            )
+            logger.warning(msg)
+            warnings.warn(msg, UserWarning)
+
+        node_feats = torch.tensor(np.stack(signal.features), dtype=torch.float32)
+        node_targets = torch.tensor(np.stack(signal.targets), dtype=torch.float32)
+
+        if node_targets.ndim == 4:
+            msg = (
+                f'Received targets with shape {node_targets.shape}. '
+                'TGM only supports 1D target signals; using [:, :, 0, :].'
+            )
+            logger.warning(msg)
+            warnings.warn(msg, UserWarning)
+            node_targets = node_targets[:, :, 0, :]
+
+        if node_feats.ndim == 4:
+            T, V, D, lag = node_feats.shape
+            if node_targets.shape != (T, V, lag):
+                raise NotImplementedError(
+                    f'node_feats shape {node_feats.shape} incompatible with '
+                    f'targets {node_targets.shape}; cannot coalesce.'
+                )
+            node_targets = node_targets.unsqueeze(dim=2)
+        else:
+            node_feats = node_feats.unsqueeze(-1)  # (T, V, D, 1)
+            node_targets = node_targets[..., None, None]  # (T, V, 1, 1)
+
+        dynamic_node_feats = torch.cat([node_feats, node_targets], dim=2)
+
+        T, V = dynamic_node_feats.shape[:2]
+        node_ids = torch.full(size=(T,), fill_value=V, dtype=torch.int32)
+        node_timestamps = torch.arange(T)
+
+        edge_index = torch.tensor(signal.edge_index.T, dtype=torch.int32)
+        edge_feats = torch.tensor(signal.edge_weight, dtype=torch.float32).unsqueeze(-1)
+        edge_timestamps = torch.zeros(len(edge_index), dtype=torch.int64)
+
+        data = cls.from_raw(
+            edge_timestamps=edge_timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            node_timestamps=node_timestamps,
+            node_ids=node_ids,
+            dynamic_node_feats=dynamic_node_feats,
+            time_delta=PYG_TEMPORAL_TIME_DELTA,
+        )
+        logger.debug('Finished loading DGData from PyG-Temporal dataset')
         return data
 
 

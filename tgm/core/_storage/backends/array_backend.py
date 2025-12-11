@@ -178,9 +178,8 @@ class DGStorageArrayBackend(DGStorageBase):
             max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
 
         max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
-        node_feats_dim = self.get_dynamic_node_feats_dim()
-        shape = (max_time + 1, max_node_id + 1, node_feats_dim)
-        return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
+        shape = (max_time + 1, max_node_id + 1, *self.get_dynamic_node_feats_dim())  # type: ignore
+        return torch.sparse_coo_tensor(indices, values, shape)
 
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.edge_feats is None:
@@ -200,10 +199,10 @@ class DGStorageArrayBackend(DGStorageBase):
             return None
         return self._data.static_node_feats.shape[1]
 
-    def get_dynamic_node_feats_dim(self) -> Optional[int]:
+    def get_dynamic_node_feats_dim(self) -> Optional[Tuple[int]]:
         if self._data.dynamic_node_feats is None:
             return None
-        return self._data.dynamic_node_feats.shape[1]
+        return tuple(self._data.dynamic_node_feats.shape[1:])
 
     def get_edge_feats_dim(self) -> Optional[int]:
         if self._data.edge_feats is None:

@@ -123,7 +123,6 @@ class TemporalSplit(SplitStrategy):
                     pretty_number_format(start),
                     pretty_number_format(end),
                 )
-                continue
 
             node_mask = None
             if node_times is not None:

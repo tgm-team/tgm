@@ -273,7 +273,7 @@ class DGraph:
         return self._storage.get_static_node_feats_dim()
 
     @cached_property
-    def dynamic_node_feats_dim(self) -> Optional[int]:
+    def dynamic_node_feats_dim(self) -> Optional[Tuple[int]]:
         """Dynamic Node feature dimension or None if not Node features on the Graph."""
         return self._storage.get_dynamic_node_feats_dim()
 
