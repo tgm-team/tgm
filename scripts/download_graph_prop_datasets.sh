@@ -5,8 +5,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR/.."
 cd "$PROJECT_ROOT"
 
-declare -A DATASETS_URLS
-DATASETS_URLS[tokens_data]="https://raw.githubusercontent.com/Jacob-Chmura/mint-datasets/master/fetch.sh"
+
+DATASETS=("tokens_data")
+
+get_dataset_url() {
+    case "$1" in
+        tokens_data)
+            echo "https://raw.githubusercontent.com/Jacob-Chmura/mint-datasets/master/fetch.sh"
+            ;;
+        *)
+            ;;  # return empty for unknown dataset
+    esac
+}
 
 print_usage() {
     echo "Usage: $0 DATA_ROOT"
@@ -36,16 +46,48 @@ parse_args() {
 
 download_dataset() {
     local dataset="$1"
-    local url="${DATASETS_URLS[$dataset]}"
+    local url="$(get_dataset_url "$dataset")"
+
+    if [ -z "$url" ]; then
+        echo "Error: unknown dataset: '$dataset'" >&2
+        exit 1
+    fi
 
     echo "Downloading dataset: $dataset from $url"
     curl -LsSf $url | bash
+}
+
+
+realpath_compat() {
+    local path="$1"
+    if command -v realpath >/dev/null 2>&1; then
+        # realpath exists, use it if the path exists
+        if [ -e "$path" ] || [ -L "$path" ]; then
+            realpath "$path"
+            return
+        fi
+    fi
+    # fallback: absolute path using pwd
+    # https://apple.stackexchange.com/questions/450035/is-the-unix-realpath-command-distributed-with-macos-ventura
+    echo "$PWD/$path"
 }
 
 move_dataset_to_data_root() {
     local dataset="$1"
     local dest_dir="$DATA_ROOT/$dataset"
     local src_dir="$dataset"
+
+    local abs_src=$(realpath_compat "$src_dir")
+    local abs_dest=$(realpath_compat "$dest_dir")
+    if [ "$abs_src" = "$abs_dest" ]; then
+        echo "Source and destination are the same ($abs_src), skipping move."
+        return
+    fi
+
+    if [ "$src_dir" = "$dest_dir" ]; then
+        echo "Source and destination are the same ($src_dir), skipping move."
+        return
+    fi
 
     if [ -d "$dest_dir" ]; then
         echo "Dataset $dataset already exists at $dest_dir, skipping move."
@@ -59,7 +101,7 @@ move_dataset_to_data_root() {
 main() {
     parse_args "$@"
 
-    for dataset in "${!DATASETS_URLS[@]}"; do
+    for dataset in "${DATASETS[@]}"; do
         if [ -d "$DATA_ROOT/$dataset" ]; then
             echo "Dataset $dataset already present in $DATA_ROOT, skipping download."
         else
