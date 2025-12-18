@@ -28,14 +28,15 @@ class NodeAnalyticsHook(StatefulHook):
         node_stats (Dict[int, Dict[str, float]]): Dictionary mapping node_id to statistics:
             - degree: Number of edges connected to the node in the current batch.
             - activity: Fraction of batches in which the node has appeared.
-            - engagement: Average number of distinct neighbors per appearance.
             - new_neighbors: Number of new neighbors encountered in the current batch.
             - lifetime: Time since the node was first seen.
             - time_since_last_seen: Time since the node was last seen.
             - appearances: Total number of times the node has appeared.
         edge_stats (Dict): Batch-level edge statistics:
+            - node_novelty: Fraction of tracked nodes in the batch that are appearing for the first time.
             - edge_novelty: Fraction of new edges in the batch, that is not seen in previous batches.
             - edge_density: Edges this batch / possible edges based on unique nodes
+            - new_node_count: Number of tracked nodes in the batch that are appearing for the first time.
             - new_edge_count: Number of new edges in the batch, that is not seen in previous batches.
 
     Raises:
@@ -43,7 +44,7 @@ class NodeAnalyticsHook(StatefulHook):
     """
 
     requires: Set[str] = set()
-    produces = {'node_stats', 'edge_stats'}
+    produces = {'node_stats', 'node_macro_stats', 'edge_stats'}
 
     def __init__(
         self,
@@ -79,6 +80,9 @@ class NodeAnalyticsHook(StatefulHook):
         # Edge tracking
         self._seen_edges: Set[tuple] = set()
 
+        # Node tracking
+        self._seen_nodes: Set[int] = set()
+
     def _compute_node_degrees(self, batch: DGBatch, nodes: Tensor) -> Dict[int, int]:
         """Compute degree for each node in the given set."""
         if batch.src is None or batch.dst is None:
@@ -98,16 +102,18 @@ class NodeAnalyticsHook(StatefulHook):
         self, batch: DGBatch, nodes: Tensor
     ) -> Dict[int, Set[int]]:
         """Get all neighbors for each node in this batch."""
-        neighbors: Dict[int, Set[int]] = {int(n): set() for n in nodes.tolist()}
+        # to set
+        nodes_set = set(int(n.item()) for n in nodes)
+        neighbors: Dict[int, Set[int]] = {int(n): set() for n in nodes_set}
 
         if batch.src is None or batch.dst is None:
             return neighbors
 
         for src, dst in zip(batch.src, batch.dst):
-            if src in neighbors:
-                neighbors[src].add(dst)
-            if dst in neighbors:
-                neighbors[dst].add(src)
+            if src.item() in nodes_set:
+                neighbors[src.item()].add(dst.item())
+            if dst.item() in nodes_set:
+                neighbors[dst.item()].add(src.item())
 
         return neighbors
 
@@ -123,6 +129,32 @@ class NodeAnalyticsHook(StatefulHook):
             max_node_time = batch.node_times.max().item()
 
         return max(max_edge_time, max_node_time)
+
+    def _compute_node_statistics(self, batch: DGBatch) -> Dict[str, float]:
+        """Compute node-level statistics for the batch."""
+        node_stats = {
+            'node_novelty': 0.0,
+            'new_node_count': 0,
+        }
+
+        if batch.node_ids is None or batch.node_ids.numel() == 0:
+            return node_stats
+
+        new_nodes = 0
+        for node in batch.node_ids:
+            node_id = int(node.item())
+            if node_id not in self._first_seen:
+                new_nodes += 1
+                self._seen_nodes.add(node_id)
+
+            node_stats['new_node_count'] = new_nodes
+            node_stats['node_novelty'] = (
+                new_nodes / batch.node_ids.numel()
+                if batch.node_ids.numel() > 0
+                else 0.0
+            )
+
+        return node_stats
 
     def _compute_edge_statistics(self, batch: DGBatch) -> Dict[str, float]:
         """Compute edge-level statistics for the batch."""
@@ -187,8 +219,11 @@ class NodeAnalyticsHook(StatefulHook):
 
         # No nodes in batch, return empty stats
         if not all_batch_nodes:
+            node_batch_stats = self._compute_node_statistics(batch)
+            edge_batch_stats = self._compute_edge_statistics(batch)
             batch.node_stats = {}  # type: ignore[attr-defined]
-            batch.edge_stats = self._compute_edge_statistics(batch)  # type: ignore[attr-defined]
+            batch.node_stats_big = node_batch_stats  # type: ignore[attr-defined]
+            batch.edge_stats = {**edge_batch_stats}  # type: ignore[attr-defined]
             return batch
 
         batch_nodes = torch.cat(all_batch_nodes, dim=0).unique()
@@ -225,17 +260,14 @@ class NodeAnalyticsHook(StatefulHook):
             # Update all neighbors
             self._all_neighbors[node].update(current_neighbors)
 
-            # Compute engagement as average distinct neighbors per appearance
-            total_neighbors = len(self._all_neighbors[node])
-            engagement = total_neighbors / self._appearances[node]
-
             # Compile statistics
             stats = {
                 'degree': degree,
                 'activity': self._appearances[node] / self._total_batches,
-                'engagement': engagement,
                 'new_neighbors': len(new_neighbors),
-                'lifetime': current_time - self._first_seen[node],
+                'lifetime': prev_seen - self._first_seen[node]
+                if prev_seen is not None
+                else 0.0,
                 'time_since_last_seen': (
                     current_time - prev_seen if prev_seen is not None else 0.0
                 ),
@@ -252,23 +284,20 @@ class NodeAnalyticsHook(StatefulHook):
                 stats = {
                     'degree': 0,
                     'activity': self._appearances.get(node, 0) / self._total_batches,
-                    'engagement': (
-                        len(self._all_neighbors[node]) / self._appearances[node]
-                        if self._appearances.get(node, 0) > 0
-                        else 0.0
-                    ),
                     'new_neighbors': 0,
-                    'lifetime': current_time - self._first_seen[node],
+                    'lifetime': self._last_seen[node] - self._first_seen[node],
                     'time_since_last_seen': current_time - self._last_seen[node],
                     'appearances': self._appearances.get(node, 0),
                 }
 
                 node_stats[node] = stats
 
-        # Compute edge statistics
-        edge_stats = self._compute_edge_statistics(batch)
+        # Compute batch-level statistics
+        node_batch_stats = self._compute_node_statistics(batch)
+        edge_batch_stats = self._compute_edge_statistics(batch)
 
         batch.node_stats = node_stats  # type: ignore[attr-defined]
-        batch.edge_stats = edge_stats  # type: ignore[attr-defined]
+        batch.node_macro_stats = node_batch_stats  # type: ignore[attr-defined]
+        batch.edge_stats = edge_batch_stats  # type: ignore[attr-defined]
 
         return batch

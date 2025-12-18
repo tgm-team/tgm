@@ -49,7 +49,7 @@ def get_most_frequent_nodes(dg: DGraph, n: int) -> torch.Tensor:
     unique_nodes, counts = torch.unique(edge_nodes, return_counts=True)
 
     # Sort by frequency
-    sorted_indices = torch.argsort(counts, descending=True)
+    sorted_indices = torch.argsort(counts, descending=False)
     top_n_nodes = unique_nodes[sorted_indices[:n]]
 
     return top_n_nodes
@@ -80,6 +80,7 @@ def run_node_analytics(
 
     # Collect statistics over time
     batch_stats = []
+    node_novelty_history = []
     edge_novelty_history = []
     edge_density_history = []
 
@@ -92,30 +93,37 @@ def run_node_analytics(
                 'edge_stats': dict(batch.edge_stats),
             }
         )
+        node_novelty_history.append(batch.node_macro_stats['node_novelty'])
 
         edge_novelty_history.append(batch.edge_stats['edge_novelty'])
         edge_density_history.append(batch.edge_stats['edge_density'])
 
-    # Compute aggregate statistics
-    aggregate_stats = {
+    # Compute Edge statistics
+    edge_stats = {
         'avg_edge_novelty': np.mean(edge_novelty_history),
         'avg_edge_density': np.mean(edge_density_history),
         'total_batches': len(batch_stats),
     }
 
-    return aggregate_stats, batch_stats
+    node_macro_stats = {
+        'avg_node_novelty': np.mean(node_novelty_history),
+    }
+
+    return edge_stats, node_macro_stats, batch_stats
 
 
 # Run the analytics
-aggregate_stats, batch_stats = run_node_analytics(
+edge_stats, node_macro_stats, batch_stats = run_node_analytics(
     dg, args.bsize, tracked_nodes, args.alpha
 )
 
 # Log aggregate statistics
+logger.info(f'\n\nEdge Statistics (bsize={args.bsize}, tracked={args.num_tracked}):')
+log_metrics_dict(metrics_dict=edge_stats, logger=logger)
 logger.info(
-    f'\n\nAggregate Statistics (bsize={args.bsize}, tracked={args.num_tracked}):'
+    f'\nNode Macro Statistics (bsize={args.bsize}, tracked={args.num_tracked}):'
 )
-log_metrics_dict(metrics_dict=aggregate_stats, logger=logger)
+log_metrics_dict(metrics_dict=node_macro_stats, logger=logger)
 
 # Log detailed statistics for each tracked node (final batch)
 logger.info('\n\nFinal Node Statistics:')
@@ -127,8 +135,10 @@ for node_id, stats in sorted(final_batch['node_stats'].items()):
 # Log statistics evolution for the first tracked node
 first_tracked_node = int(tracked_nodes[0].item())
 logger.info(f'\n\nStatistics Evolution for Node {first_tracked_node}:')
-logger.info('Batch | Activity | Degree | Degree_EMA | Engagement | New_Neighbors')
-logger.info('-' * 75)
+logger.info(
+    'Batch | Activity | Degree | New_Neighbors | Lifetime | Time_Since_Last_Seen'
+)
+logger.info('-' * 90)
 
 for batch_info in batch_stats[:: max(1, len(batch_stats) // 20)]:  # Sample 20 batches
     if first_tracked_node in batch_info['node_stats']:
@@ -137,9 +147,9 @@ for batch_info in batch_stats[:: max(1, len(batch_stats) // 20)]:  # Sample 20 b
             f'{batch_info["batch_idx"]:5d} | '
             f'{stats["activity"]:8.4f} | '
             f'{stats["degree"]:6d} | '
-            f'{stats.get("degree_ema", 0):10.4f} | '
-            f'{stats["engagement"]:10.4f} | '
-            f'{stats["new_neighbors"]:13d}'
+            f'{stats["new_neighbors"]:13d} | '
+            f'{stats["lifetime"]:8.2f} | '
+            f'{stats["time_since_last_seen"]:20.2f}'
         )
 
 logger.info('\nDone!')
