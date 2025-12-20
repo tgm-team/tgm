@@ -15,7 +15,7 @@ from tgm.constants import (
 )
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
-from tgm.nn import LinkPredictor, TGNMemory
+from tgm.nn import NCNPredictor, TGNMemory
 from tgm.nn.encoder.tgn import (
     GraphAttentionEmbedding,
     IdentityMessage,
@@ -103,8 +103,12 @@ def train(
         inv_src = batch.global_to_local(batch.src)
         inv_dst = batch.global_to_local(batch.dst)
         inv_neg = batch.global_to_local(batch.neg)
-        pos_out = decoder(z[inv_src], z[inv_dst])
-        neg_out = decoder(z[inv_src], z[inv_neg])
+        inv_edge_idx_pos = torch.stack([inv_src, inv_dst], dim=0).long()
+        inv_edge_idx_neg = torch.stack([inv_src, inv_neg], dim=0).long()
+        time_info = (last_update, batch.time)
+
+        pos_out = decoder(z, nbr_edge_index, inv_edge_idx_pos, time_info=time_info)
+        neg_out = decoder(z, nbr_edge_index, inv_edge_idx_neg, time_info=time_info)
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
@@ -171,7 +175,19 @@ def eval(
 
             inv_src = batch.global_to_local(src_ids)
             inv_dst = batch.global_to_local(dst_ids)
-            y_pred = decoder(z[inv_src], z[inv_dst]).sigmoid()
+            inv_edge_idx = torch.stack([inv_src, inv_dst], dim=0)
+            time_info = (
+                last_update,
+                batch.time.repeat(len(inv_src)),
+            )  # We can move this outside of the inner loop
+
+            y_pred = decoder(
+                z[inv_src],
+                z[inv_dst],
+                nbr_edge_index,
+                inv_edge_idx,
+                time_info=time_info,
+            ).sigmoid()
 
             input_dict = {
                 'y_pred_pos': y_pred[0],
@@ -227,9 +243,9 @@ encoder = GraphAttentionEmbedding(
     msg_dim=test_dg.edge_feats_dim,
     time_enc=memory.time_enc,
 ).to(args.device)
-decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
-    args.device
-)
+decoder = NCNPredictor(
+    in_channels=args.embed_dim, hidden_dim=args.embed_dim, out_channels=1
+).to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,
