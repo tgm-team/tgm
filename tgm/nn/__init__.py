@@ -1,5 +1,5 @@
 from .encoder import DyGFormer, TPNet, TGCN, GCLSTM, TGNMemory
-from .decoder import GraphPredictor, NodePredictor, LinkPredictor
+from .decoder import GraphPredictor, NodePredictor, LinkPredictor, NCNPredictor
 from .modules import Time2Vec, TemporalAttention, EdgeBankPredictor, MLPMixer
 
 
@@ -16,4 +16,5 @@ __all__ = [
     'TemporalAttention',
     'Time2Vec',
     'TGNMemory',
+    'NCNPredictor',
 ]
