@@ -39,15 +39,6 @@ init_decays = { # from original code
 decay = init_decays.get(args.dataset, 0.5)
 
 @log_latency
-def train(
-    loader: DGDataLoader,
-    model: PopTrackPredictor,
-    decay: float,
-):
-    for batch in tqdm(loader):
-        model.update(batch.src, batch.dst, batch.time, decay=decay)
-
-@log_latency
 def eval(
     loader: DGDataLoader,
     model: PopTrackPredictor,
@@ -98,8 +89,6 @@ model = PopTrackPredictor(
     k=args.k, 
     pos_prob=args.pos_prob,
 )
-
-train(train_loader, model, decay)
 
 with hm.activate('val'):
     val_mrr = eval(val_loader, model, evaluator)

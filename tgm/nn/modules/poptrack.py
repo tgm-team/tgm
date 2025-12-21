@@ -34,17 +34,22 @@ class PopTrackPredictor:
                 in memory. Defaults to ``1.0``.
 
         Raises:  
+            ValueError: If ``k`` is nonpositive. 
             TypeError: If ``src``, ``dst``, or ``ts`` are not all ``torch.Tensor``.
             ValueError: If ``src``, ``dst``, and ``ts`` do not have the same length,
                 or if they are empty.
 
         Note: the predictions are not conditional on the source.
         """
+        if 0 >= k:
+            raise ValueError(f'K must be positive')
+
         self._check_input_data(src, dst, ts)
         self.popularity = np.zeros(num_nodes)
         self.k = k 
         self.top_k = np.zeros(k)
         self.pos_prob = pos_prob
+        self.update(src, dst, ts)
 
     def update(self, 
                src: torch.Tensor, 
