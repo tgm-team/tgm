@@ -28,11 +28,9 @@ class PopTrackPredictor:
             src (torch.Tensor): Source node IDs of edges used for initialization.
             dst (torch.Tensor): Destination node IDs of edges used for initialization.
             ts (torch.Tensor): Timestamps of edges used for initialization.
-            k (int): Number of popular nodes to retrieve from, 
-            PopTrack defaults to a 3-way based analysis: 
-            - 50
-            - 100 
-            - 200 
+            k (int, optional): Number of popular nodes to retrieve from.
+            pos_prob (float, optional): The probability assigned to edges present
+                in memory. Defaults to ``1.0``.
 
         Raises:  
             TypeError: If ``src``, ``dst``, or ``ts`` are not all ``torch.Tensor``.
@@ -58,6 +56,7 @@ class PopTrackPredictor:
             src (torch.Tensor): Source node IDs of the edges.
             dst (torch.Tensor): Destination node IDs of the edges.
             ts (torch.Tensor): Timestamps of the edges.
+            decay (float, optional): Decay for popularity. 
 
         Raises:
             TypeError: If inputs are not ``torch.Tensor``.
