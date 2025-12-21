@@ -20,15 +20,8 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
-parser.add_argument('--window-ratio', type=float, default=0.15, help='Window ratio')
+parser.add_argument('--k', type=int, default=200, help='Number of nodes to consider in top popularity ranking')
 parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
-parser.add_argument(
-    '--memory-mode',
-    type=str,
-    default='unlimited',
-    choices=['unlimited', 'fixed'],
-    help='Memory mode',
-)
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
@@ -36,13 +29,23 @@ parser.add_argument(
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
+init_decays = { # from original code
+    'tgbl-wiki': 0.36,
+    'tgbl-coin': 0.93,
+    'tgbl-review': 0.997,
+    'tgbl-comment': 0.94,
+}
+
+decay = init_decays.get(args.dataset, 0.5)
+
 @log_latency
 def train(
     loader: DGDataLoader,
     model: PopTrackPredictor,
+    decay: float,
 ):
     for batch in tqdm(loader):
-        model.update(batch.src, batch.dst, batch.time)
+        model.update(batch.src, batch.dst, batch.time, decay=decay)
 
 @log_latency
 def eval(
@@ -70,7 +73,6 @@ def eval(
 
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
-k = 100
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data)
@@ -93,15 +95,16 @@ model = PopTrackPredictor(
     train_data.dst,
     train_data.time,
     num_nodes, 
-    k, 
+    k=args.k, 
+    pos_prob=args.pos_prob,
 )
 
-train(train_loader, model)
+train(train_loader, model, decay)
 
 with hm.activate('val'):
     val_mrr = eval(val_loader, model, evaluator)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr)
-
+    
 with hm.activate('test'):
     test_mrr = eval(test_loader, model, evaluator)
     log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr)

@@ -94,7 +94,8 @@ class PopTrackPredictor:
         src_list = query_src.tolist()
         dst_list = query_dst.tolist()
         for i, (_, d) in enumerate(zip(src_list, dst_list)):
-            pred[i] = self.popularity[d]
+            if d in self.top_k: 
+                pred[i] = self.popularity[d]
         return pred
 
     def _check_input_data(
