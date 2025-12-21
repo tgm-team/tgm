@@ -20,7 +20,12 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
-parser.add_argument('--k', type=int, default=200, help='Number of nodes to consider in top popularity ranking')
+parser.add_argument(
+    '--k',
+    type=int,
+    default=200,
+    help='Number of nodes to consider in top popularity ranking',
+)
 parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
@@ -29,14 +34,15 @@ parser.add_argument(
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
-init_decays = { # from original code
+init_decays = {  # from original code's parameter search
     'tgbl-wiki': 0.36,
     'tgbl-coin': 0.93,
     'tgbl-review': 0.997,
     'tgbl-comment': 0.94,
 }
 
-decay = init_decays.get(args.dataset, 0.5)
+decay = init_decays.get(args.dataset, 0.9)
+
 
 @log_latency
 def eval(
@@ -57,7 +63,7 @@ def eval(
                 'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
-        model.update(batch.src, batch.dst, batch.time)
+        model.update(batch.src, batch.dst, batch.time, decay)
 
     return float(np.mean(perf_list))
 
@@ -85,15 +91,16 @@ model = PopTrackPredictor(
     train_data.src,
     train_data.dst,
     train_data.time,
-    num_nodes, 
-    k=args.k, 
+    num_nodes,
+    k=args.k,
     pos_prob=args.pos_prob,
+    decay=decay,
 )
 
 with hm.activate('val'):
     val_mrr = eval(val_loader, model, evaluator)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr)
-    
+
 with hm.activate('test'):
     test_mrr = eval(test_loader, model, evaluator)
     log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr)
