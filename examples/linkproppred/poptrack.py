@@ -23,7 +23,7 @@ parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument(
     '--k',
     type=int,
-    default=200,
+    default=50,
     help='Number of nodes to consider in top popularity ranking',
 )
 parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
