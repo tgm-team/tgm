@@ -3,6 +3,7 @@ import torch
 
 from tgm.nn import PopTrackPredictor
 
+
 @pytest.mark.parametrize('decay', [0.7, 1.0])
 def test_poptrack_update(decay):
     src = torch.tensor([0, 1])
@@ -11,7 +12,9 @@ def test_poptrack_update(decay):
 
     model = PopTrackPredictor(src, dst, ts, num_nodes=4, k=2, decay=decay)
 
-    assert torch.allclose(model(torch.tensor([1]), torch.tensor([1])), torch.tensor([0.0]))
+    assert torch.allclose(
+        model(torch.tensor([1]), torch.tensor([1])), torch.tensor([0.0])
+    )
 
     model.update(
         torch.tensor([1]),
@@ -20,7 +23,9 @@ def test_poptrack_update(decay):
         decay=decay,
     )
 
-    assert torch.allclose(model(torch.tensor([1]), torch.tensor([1])), torch.tensor([decay]))
+    assert torch.allclose(
+        model(torch.tensor([1]), torch.tensor([1])), torch.tensor([decay])
+    )
 
 
 def test_init_valid_input():
@@ -34,11 +39,13 @@ def test_init_valid_input():
     assert model.popularity.shape == (4,)
     assert model.k == 2
     assert len(model.top_k) == 2
-    
+
 
 def test_bad_init_args():
     with pytest.raises(ValueError):
-        PopTrackPredictor(torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), num_nodes=2)
+        PopTrackPredictor(
+            torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), num_nodes=2
+        )
 
     with pytest.raises(TypeError):
         PopTrackPredictor(1, 2, 3, num_nodes=2)
@@ -54,7 +61,7 @@ def test_bad_init_args():
 
     with pytest.raises(ValueError):
         PopTrackPredictor(src, dst, ts, num_nodes=4, decay=2)
-    
+
     with pytest.raises(ValueError):
         PopTrackPredictor(src, dst, ts, num_nodes=0)
 

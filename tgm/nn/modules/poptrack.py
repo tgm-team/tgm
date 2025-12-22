@@ -45,13 +45,13 @@ class PopTrackPredictor:
         if 0 >= k:
             raise ValueError('K must be positive')
 
-        if decay < 0 or decay > 1: 
+        if decay < 0 or decay > 1:
             raise ValueError('Decay must be in (0,1]')
 
         if num_nodes < (len(src) + len(dst)):
             raise ValueError('``num_nodes`` must be set to the total number of nodes.')
 
-        if k > num_nodes: 
+        if k > num_nodes:
             k = num_nodes
 
         self._check_input_data(src, dst, ts)
