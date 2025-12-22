@@ -9,7 +9,7 @@ from tgm import DGraph
 from tgm.constants import METRIC_TGB_LINKPROPPRED
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, TGBNegativeEdgeSamplerHook
-from tgm.nn import EdgeBankPredictor, PopTrackPredictor, tCoMemPredictor
+from tgm.nn import EdgeBankPredictor, tCoMemPredictor
 from tgm.util.logging import enable_logging, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -21,7 +21,7 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--window-ratio', type=float, default=0.15, help='Window ratio (EdgeBank, t-CoMem)')
-parser.add_argument('--k', type=int, default=200, help='Number of nodes to consider in top popularity ranking (PopTrack)')
+parser.add_argument('--k', type=int, default=50, help='Number of nodes to consider in top popularity ranking (PopTrack)')
 parser.add_argument('--co-occur', type=float, default=0.8, help='Co-occurrence weight (t-CoMem)')
 parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
 parser.add_argument(
