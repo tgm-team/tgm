@@ -57,7 +57,7 @@ class PopTrackPredictor:
         self._check_input_data(src, dst, ts)
         self.popularity = torch.zeros(num_nodes)
         self.k = k
-        self.top_k: np.ndarray = np.zeros(self.k, dtype=int)
+        self.top_k: torch.Tensor = torch.zeros(self.k)
         self.update(src, dst, ts, decay)
 
     def update(
