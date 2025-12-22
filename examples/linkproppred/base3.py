@@ -20,9 +20,24 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
-parser.add_argument('--window-ratio', type=float, default=0.15, help='Window ratio (EdgeBank, t-CoMem)')
-parser.add_argument('--k', type=int, default=50, help='Number of nodes to consider in top popularity ranking (PopTrack)')
-parser.add_argument('--co-occur', type=float, default=0.8, help='Co-occurrence weight (t-CoMem)')
+parser.add_argument(
+    '--window-ratio', 
+    type=float, 
+    default=0.15, 
+    help='Window ratio (EdgeBank, t-CoMem)'
+)
+parser.add_argument(
+    '--k',
+    type=int,
+    default=50,
+    help='Number of nodes to consider in top popularity ranking (t-CoMem)',
+)
+parser.add_argument(
+    '--co-occur', 
+    type=float, 
+    default=0.8, 
+    help='Co-occurrence weight (t-CoMem)'
+)
 parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
 parser.add_argument(
     '--memory-mode',
@@ -37,8 +52,15 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-decay = 0.9
 
+init_decays = {  # from poptrack's original code's parameter search
+    'tgbl-wiki': 0.36,
+    'tgbl-coin': 0.93,
+    'tgbl-review': 0.997,
+    'tgbl-comment': 0.94,
+}
+
+decay = init_decays.get(args.dataset, 0.9)
 
 @log_latency
 def eval(
@@ -64,8 +86,8 @@ def eval(
                 'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
+        
         edgebank_model.update(batch.src, batch.dst, batch.time)
-        #poptrack_model.update(batch.src, batch.dst, batch.time)
         tcomem_model.update(batch.src, batch.dst, batch.time, decay=decay)
 
     return float(np.mean(perf_list))

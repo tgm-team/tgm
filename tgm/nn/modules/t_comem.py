@@ -45,6 +45,10 @@ class tCoMemPredictor:
         """
         if not 0 < window_ratio <= 1.0:
             raise ValueError(f'Window ratio must be in (0, 1]')
+        
+        if 0 >= k:
+            raise ValueError(f'K must be positive')
+        
         self._check_input_data(src, dst, ts)
         
         self._window_ratio = window_ratio
@@ -69,18 +73,16 @@ class tCoMemPredictor:
         )
 
         self.recent_len = torch.zeros(
-            self.num_nodes, dtype=torch.long, device=self.device
+            self.num_nodes
         )
 
         self.recent_pos = torch.zeros(
-            self.num_nodes, dtype=torch.long, device=self.device
+            self.num_nodes
         )
 
         self.node_to_co_occurrence: DefaultDict[int, Dict[int, int]] = defaultdict(dict)  
-        self.popularity = torch.zeros(
-            self.num_nodes, dtype=torch.float32, device=self.device
-        )
-        self.top_k = torch.zeros(self.k, dtype=torch.long, device=self.device)
+        self.popularity = torch.zeros(num_nodes)
+        self.top_k: np.ndarray = np.zeros(self.k, dtype=int)
         self.co_occurrence_weight = co_occurrence_weight
 
         self.update(src, dst, ts, decay=decay)
@@ -103,21 +105,11 @@ class tCoMemPredictor:
         """
         self._check_input_data(src, dst, ts)
 
-        src = src.to(self.device)
-        dst = dst.to(self.device)
-        ts = ts.to(self.device)
-
         self._window_end = torch.max(self._window_end, ts.max())
         self._window_start = self._window_end - self._window_size
 
-        src_np = src.cpu().numpy()
-        dst_np = dst.cpu().numpy()
-        ts_np = ts.cpu().numpy()
-
-        for s_i, d_i, t_i in zip(src_np, dst_np, ts_np):
-            s = int(s_i)
-            d = int(d_i)
-            t = float(t_i)
+        for s, d, t in zip(src, dst, ts): 
+            s, d, t = int(s.item()), d.item(), t.item()
 
             pos = int(self.recent_pos[s].item())
             self.recent_ts[s, pos] = t
@@ -125,18 +117,11 @@ class tCoMemPredictor:
             self.recent_pos[s] = (pos + 1) % self.k
             if self.recent_len[s] < self.k:
                 self.recent_len[s] += 1
-
-        one_vec = torch.ones_like(dst, dtype=self.popularity.dtype, device=self.device)
-        self.popularity.index_add_(0, dst, one_vec)
-
-        self.popularity.mul_(decay)
-
-        for s_i, d_i in zip(src_np, dst_np):
-            s = int(s_i)
-            d = int(d_i)
             self.node_to_co_occurrence[s][d] = self.node_to_co_occurrence[s].get(d, 0) + 1
             self.node_to_co_occurrence[d][s] = self.node_to_co_occurrence[d].get(s, 0) + 1
 
+        self.popularity.index_add_(0, dst, torch.ones_like(dst, dtype=self.popularity.dtype))
+        self.popularity *= decay
         k_eff = min(self.k, self.num_nodes)
         self.top_k = torch.topk(self.popularity, k_eff).indices
 
@@ -158,62 +143,51 @@ class tCoMemPredictor:
                   its probability is ``...``.
                 - Otherwise, the probability is ``0.0``.
         """
-        if query_src.numel() == 0:
-            return torch.empty_like(query_src, dtype=torch.float32)
-
-        query_src = query_src.to(self.device)
-        query_dst = query_dst.to(self.device)
-
-        pred = torch.zeros_like(query_src, dtype=torch.float32, device=self.device)
+        pred = torch.zeros_like(query_src) #, dtype=torch.float32, device=self.device)
 
         unique_src, inv = torch.unique(query_src, return_inverse=True)
         base_scores = torch.zeros(
-            unique_src.size(0), dtype=torch.float32, device=self.device
+            unique_src.size(0)#, dtype=torch.float32, device=self.device
         )
 
         window_start = self._window_start
         window_end = self._window_end
         window_size = self._window_size
 
-        if window_size.item() == 0.0:
-            window_size = torch.tensor(1.0, device=self.device)
-
-        for idx, s in enumerate(unique_src.tolist()):
+        for idx, s in enumerate(unique_src):
+            s = int(s.item())
             length = int(self.recent_len[s].item())
+            
             if length == 0:
                 continue
 
-            ts_vec = self.recent_ts[s, :length]  # (L,)
-            nbr_vec = self.recent_dst[s, :length].long()  # (L,)
+            ts_vec = self.recent_ts[s, :length] 
+            nbr_vec = self.recent_dst[s, :length].long() 
 
             mask = (ts_vec >= window_start) & (ts_vec <= window_end)
-            if mask.any():
-                ts_valid = ts_vec[mask]
-                nbr_valid = nbr_vec[mask]
+            if not mask.any(): 
+                continue 
 
-                decay_vals = torch.exp(-(window_end - ts_valid) / window_size)
-                pop_vals = self.popularity[nbr_valid]
+            ts_valid = ts_vec[mask]
+            nbr_valid = nbr_vec[mask]
+            
+            decay_vals = torch.exp(-(window_end - ts_valid) / window_size)
+            pop_vals = self.popularity[nbr_valid]
+            score_recent = (decay_vals * pop_vals).sum()
+            base_scores[idx] = score_recent
 
-                score_recent = (decay_vals * pop_vals).sum()
-                base_scores[idx] = score_recent
-
-        recent_scores = base_scores[inv]  # (num_edges,)
+        recent_scores = base_scores[inv]  
+        pred = recent_scores.clone()
         
-        src_list = query_src.tolist()
-        dst_list = query_dst.tolist()
-
-        for i, (s, d) in enumerate(zip(src_list, dst_list)):
-            score = float(recent_scores[i].item())
-
+        for i, (s, d) in enumerate(zip(query_src, query_dst)): #src_list, dst_list)):
+            s = s.item()
+            d = d.item()
             c = self.node_to_co_occurrence.get(s, {}).get(d, 0)
-            if c > 0:
-                score += self.co_occurrence_weight * (c / (1.0 + c))
 
-            if score > 0.0:
-                pred[i] = score / (1.0 + score)
-            else:
-                pred[i] = 0.0
+            if c:
+                pred[i] += self.co_occurrence_weight * (c / (1 + c))
 
+        pred = torch.where(pred > 0, pred / (1 + pred), 0.0)
         return pred
     
     @property
