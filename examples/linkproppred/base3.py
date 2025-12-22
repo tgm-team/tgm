@@ -53,15 +53,6 @@ parser.add_argument(
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
-init_decays = {  # from poptrack's original code's parameter search
-    'tgbl-wiki': 0.36,
-    'tgbl-coin': 0.93,
-    'tgbl-review': 0.997,
-    'tgbl-comment': 0.94,
-}
-
-decay = init_decays.get(args.dataset, 0.9)
-
 @log_latency
 def eval(
     loader: DGDataLoader,
@@ -88,7 +79,7 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
         
         edgebank_model.update(batch.src, batch.dst, batch.time)
-        tcomem_model.update(batch.src, batch.dst, batch.time, decay=decay)
+        tcomem_model.update(batch.src, batch.dst, batch.time) 
 
     return float(np.mean(perf_list))
 
@@ -128,7 +119,6 @@ tcomem_model = tCoMemPredictor(
     k=args.k, 
     window_ratio=args.window_ratio,
     co_occurrence_weight=args.co_occur,
-    decay=decay,
 )
 
 

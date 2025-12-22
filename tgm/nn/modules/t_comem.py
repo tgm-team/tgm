@@ -2,6 +2,7 @@ from typing import Any, Dict, Literal, Tuple, Deque, DefaultDict
 from collections import defaultdict, deque
 import torch
 import numpy as np
+import math
 
 class tCoMemPredictor:
     def __init__(
@@ -13,7 +14,6 @@ class tCoMemPredictor:
         k: int = 50,
         window_ratio: float = 0.15,
         co_occurrence_weight: float = 0.8, 
-        decay: float = 0.9,
     ) -> None:
         """t-CoMem link predictor with fixed or unlimited memory.
 
@@ -34,9 +34,7 @@ class tCoMemPredictor:
                 Must be in ``(0, 1]``. Defaults to ``0.15``.
             co_occurrence_weight (float, optional): Weighting parameter for co-occurrence. 
                 Must be in ``(0, 1]``. Defaults to ``0.8``.
-            decay (float, optional): temporal decay parameter. 
-                Must be in ``(0, 1]``. Defaults to ``0.9``. 
-
+            
         Raises:
             TypeError: If ``src``, ``dst``, or ``ts`` are not all ``torch.Tensor``.
             ValueError: If ``src``, ``dst``, and ``ts`` do not have the same length,
@@ -85,13 +83,13 @@ class tCoMemPredictor:
         self.top_k: np.ndarray = np.zeros(self.k, dtype=int)
         self.co_occurrence_weight = co_occurrence_weight
 
-        self.update(src, dst, ts, decay=decay)
+        self.update(src, dst, ts) 
 
     def update(self, 
                src: torch.Tensor, 
                dst: torch.Tensor, 
                ts: torch.Tensor, 
-               decay: float) -> None:
+            ) -> None:
         """Update EdgeBank memory with a batch of edges.
 
         Args:
@@ -121,7 +119,6 @@ class tCoMemPredictor:
             self.node_to_co_occurrence[d][s] = self.node_to_co_occurrence[d].get(s, 0) + 1
 
         self.popularity.index_add_(0, dst, torch.ones_like(dst, dtype=self.popularity.dtype))
-        self.popularity *= decay
         k_eff = min(self.k, self.num_nodes)
         self.top_k = torch.topk(self.popularity, k_eff).indices
 
@@ -172,7 +169,7 @@ class tCoMemPredictor:
             nbr_valid = nbr_vec[mask]
             
             decay_vals = torch.exp(-(window_end - ts_valid) / window_size)
-            pop_vals = self.popularity[nbr_valid]
+            pop_vals = torch.sigmoid(self.popularity[nbr_valid])
             score_recent = (decay_vals * pop_vals).sum()
             base_scores[idx] = score_recent
 
