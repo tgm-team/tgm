@@ -11,8 +11,7 @@ class PopTrackPredictor:
         dst: torch.Tensor,
         ts: torch.Tensor,
         num_nodes: int,
-        k: int = 100,
-        pos_prob: float = 1.0,
+        k: int = 50,
         decay: float = 0.9,
     ) -> None:
         """PopTrack Predictor.
@@ -31,8 +30,6 @@ class PopTrackPredictor:
             ts (torch.Tensor): Timestamps of edges used for initialization.
             num_nodes (int): The total number of nodes.
             k (int, optional): Number of popular nodes to retrieve from.
-            pos_prob (float, optional): The probability assigned to edges present
-                in memory. Defaults to ``1.0``.
             decay (float, optional): temporal decay parameter.
                 Must be in ``(0, 1]``. Defaults to ``0.9``.
 
@@ -48,12 +45,9 @@ class PopTrackPredictor:
             raise ValueError(f'K must be positive')
 
         self._check_input_data(src, dst, ts)
-
-        self.popularity = np.zeros(num_nodes)
+        self.popularity = torch.zeros(num_nodes)
         self.k = k
         self.top_k: np.ndarray = np.zeros(self.k, dtype=int)
-        self.pos_prob = pos_prob
-
         self.update(src, dst, ts, decay)
 
     def update(
@@ -72,12 +66,9 @@ class PopTrackPredictor:
             ValueError: If input tensors do not have the same length, or are empty.
         """
         self._check_input_data(src, dst, ts)
-        for dst_ in dst:
-            dst_ = dst_.item()
-            self.popularity[dst_] += 1
+        self.popularity.index_add_(0, dst, torch.ones_like(dst, dtype=self.popularity.dtype))
         self.popularity *= decay
-        top_k_idx = np.argpartition(self.popularity, -self.k)[-self.k :]
-        top_k_idx = top_k_idx[np.argsort(self.popularity[top_k_idx])[::-1]]
+        top_k_idx, values = torch.topk(self.popularity,self.k,largest=True)
         self.top_k = top_k_idx
 
     def __call__(
@@ -95,12 +86,8 @@ class PopTrackPredictor:
                     its destination node (= original implementation)
                 - Otherwise, the probability is ``0.0``.
         """
-        pred = torch.zeros_like(query_src)
-        src_list = query_src.tolist()
-        dst_list = query_dst.tolist()
-        for i, (_, d) in enumerate(zip(src_list, dst_list)):
-            # if d in self.top_k:
-            pred[i] = self.popularity[d]
+        pred = self.popularity[query_dst]
+        #sigmoid? 
         return pred
 
     def _check_input_data(

@@ -26,7 +26,6 @@ parser.add_argument(
     default=50,
     help='Number of nodes to consider in top popularity ranking',
 )
-parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
@@ -42,7 +41,6 @@ init_decays = {  # from original code's parameter search
 }
 
 decay = init_decays.get(args.dataset, 0.9)
-
 
 @log_latency
 def eval(
@@ -83,7 +81,6 @@ hm = HookManager(keys=['val', 'test'])
 hm.register('val', TGBNegativeEdgeSamplerHook(args.dataset, split_mode='val'))
 hm.register('test', TGBNegativeEdgeSamplerHook(args.dataset, split_mode='test'))
 
-train_loader = DGDataLoader(train_dg, args.bsize)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
@@ -93,7 +90,6 @@ model = PopTrackPredictor(
     train_data.time,
     num_nodes,
     k=args.k,
-    pos_prob=args.pos_prob,
     decay=decay,
 )
 
