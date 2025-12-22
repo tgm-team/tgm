@@ -39,7 +39,8 @@ class PopTrackPredictor:
             ValueError: If ``src``, ``dst``, and ``ts`` do not have the same length,
                 or if they are empty.
 
-        Note: the predictions are not conditional on the source.
+        Note:
+            - The predictions are not conditional on the source.
         """
         if 0 >= k:
             raise ValueError(f'K must be positive')
@@ -66,9 +67,11 @@ class PopTrackPredictor:
             ValueError: If input tensors do not have the same length, or are empty.
         """
         self._check_input_data(src, dst, ts)
-        self.popularity.index_add_(0, dst, torch.ones_like(dst, dtype=self.popularity.dtype))
+        self.popularity.index_add_(
+            0, dst, torch.ones_like(dst, dtype=self.popularity.dtype)
+        )
         self.popularity *= decay
-        top_k_idx, values = torch.topk(self.popularity,self.k,largest=True)
+        top_k_idx, values = torch.topk(self.popularity, self.k, largest=True)
         self.top_k = top_k_idx
 
     def __call__(
@@ -87,7 +90,6 @@ class PopTrackPredictor:
                 - Otherwise, the probability is ``0.0``.
         """
         pred = self.popularity[query_dst]
-        #sigmoid? 
         return pred
 
     def _check_input_data(
