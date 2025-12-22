@@ -33,7 +33,15 @@ parser.add_argument(
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
-init_decays = {  # from original code's parameter search
+# Note:
+# - The original paper uses grid search on the ``decay`` parameter,
+#   allowing PopTrack to adapt to different datasets.
+#   To keep examples simple & coherent in the TGM suite, we implement
+#   PopTrack's core, but leave such parameter search out.
+#   We however use the findings in the original paper's parameter search
+#   as initial decays for some known datasets, as seen below.
+
+init_decays = {
     'tgbl-wiki': 0.36,
     'tgbl-coin': 0.93,
     'tgbl-review': 0.997,
@@ -41,6 +49,7 @@ init_decays = {  # from original code's parameter search
 }
 
 decay = init_decays.get(args.dataset, 0.9)
+
 
 @log_latency
 def eval(
