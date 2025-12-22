@@ -27,7 +27,7 @@ class tCoMemPredictor:
             src (torch.Tensor): Source node IDs of edges used for initialization.
             dst (torch.Tensor): Destination node IDs of edges used for initialization.
             ts (torch.Tensor): Timestamps of edges used for initialization.
-            num_nodes (int): 
+            num_nodes (int): Total number of nodes in the dataset.
             k (int, optional): threshold for popularity effect. Defaults to 50.
             window_ratio (float, optional): Ratio of the sliding window length to
                 the total observed time span (only used if ``memory_mode='fixed'``).
@@ -50,16 +50,39 @@ class tCoMemPredictor:
         self._window_ratio = window_ratio
         self._window_start, self._window_end = ts.min(), ts.max()
         self._window_size = self._window_end - self._window_start
-        
-        self.device = src.device
 
-        self.node_to_recent_dests: DefaultDict[int, Deque[Tuple[float, int]]] = defaultdict(lambda: deque(maxlen=k))
-        self.node_to_co_occurrence: DefaultDict[int, Dict[int, int]] = defaultdict(dict)  
-        self.popularity = np.zeros(num_nodes)
+        self.device = src.device
+        self.num_nodes = num_nodes
         self.k = k 
-        self.top_k: np.ndarray = np.zeros(self.k, dtype=int)
+
+        self.recent_ts = torch.full(
+            (self.num_nodes, self.k),
+            fill_value=-float("inf"),
+            dtype=torch.float32,
+            device=self.device,
+        )
+        self.recent_dst = torch.full(
+            (self.num_nodes, self.k),
+            fill_value=-1,
+            dtype=torch.long,
+            device=self.device,
+        )
+
+        self.recent_len = torch.zeros(
+            self.num_nodes, dtype=torch.long, device=self.device
+        )
+
+        self.recent_pos = torch.zeros(
+            self.num_nodes, dtype=torch.long, device=self.device
+        )
+
+        self.node_to_co_occurrence: DefaultDict[int, Dict[int, int]] = defaultdict(dict)  
+        self.popularity = torch.zeros(
+            self.num_nodes, dtype=torch.float32, device=self.device
+        )
+        self.top_k = torch.zeros(self.k, dtype=torch.long, device=self.device)
         self.co_occurrence_weight = co_occurrence_weight
-        
+
         self.update(src, dst, ts, decay=decay)
 
     def update(self, 
@@ -79,20 +102,43 @@ class tCoMemPredictor:
             ValueError: If input tensors do not have the same length, or are empty.
         """
         self._check_input_data(src, dst, ts)
+
+        src = src.to(self.device)
+        dst = dst.to(self.device)
+        ts = ts.to(self.device)
+
         self._window_end = torch.max(self._window_end, ts.max())
         self._window_start = self._window_end - self._window_size
-        
-        for src_, dst_, ts_ in zip(src, dst, ts):
-            src_, dst_, ts_ = int(src_.item()), int(dst_.item()), float(ts_.item())
-            self.node_to_recent_dests[src_].append((ts_, dst_))
-            self.node_to_co_occurrence[src_][dst_] = self.node_to_co_occurrence[src_].get(dst_, 0) + 1
-            self.node_to_co_occurrence[dst_][src_] = self.node_to_co_occurrence[dst_].get(src_, 0) + 1
-            self.popularity[dst_] += 1
 
-        self.popularity *= decay
-        top_k_idx = np.argpartition(self.popularity, -self.k)[-self.k:]
-        top_k_idx = top_k_idx[np.argsort(self.popularity[top_k_idx])[::-1]]
-        self.top_k = top_k_idx
+        src_np = src.cpu().numpy()
+        dst_np = dst.cpu().numpy()
+        ts_np = ts.cpu().numpy()
+
+        for s_i, d_i, t_i in zip(src_np, dst_np, ts_np):
+            s = int(s_i)
+            d = int(d_i)
+            t = float(t_i)
+
+            pos = int(self.recent_pos[s].item())
+            self.recent_ts[s, pos] = t
+            self.recent_dst[s, pos] = d
+            self.recent_pos[s] = (pos + 1) % self.k
+            if self.recent_len[s] < self.k:
+                self.recent_len[s] += 1
+
+        one_vec = torch.ones_like(dst, dtype=self.popularity.dtype, device=self.device)
+        self.popularity.index_add_(0, dst, one_vec)
+
+        self.popularity.mul_(decay)
+
+        for s_i, d_i in zip(src_np, dst_np):
+            s = int(s_i)
+            d = int(d_i)
+            self.node_to_co_occurrence[s][d] = self.node_to_co_occurrence[s].get(d, 0) + 1
+            self.node_to_co_occurrence[d][s] = self.node_to_co_occurrence[d].get(s, 0) + 1
+
+        k_eff = min(self.k, self.num_nodes)
+        self.top_k = torch.topk(self.popularity, k_eff).indices
 
 
     def __call__(
@@ -112,28 +158,63 @@ class tCoMemPredictor:
                   its probability is ``...``.
                 - Otherwise, the probability is ``0.0``.
         """
-        pred = torch.zeros_like(query_src)
+        if query_src.numel() == 0:
+            return torch.empty_like(query_src, dtype=torch.float32)
+
+        query_src = query_src.to(self.device)
+        query_dst = query_dst.to(self.device)
+
+        pred = torch.zeros_like(query_src, dtype=torch.float32, device=self.device)
+
+        unique_src, inv = torch.unique(query_src, return_inverse=True)
+        base_scores = torch.zeros(
+            unique_src.size(0), dtype=torch.float32, device=self.device
+        )
+
+        window_start = self._window_start
+        window_end = self._window_end
+        window_size = self._window_size
+
+        if window_size.item() == 0.0:
+            window_size = torch.tensor(1.0, device=self.device)
+
+        for idx, s in enumerate(unique_src.tolist()):
+            length = int(self.recent_len[s].item())
+            if length == 0:
+                continue
+
+            ts_vec = self.recent_ts[s, :length]  # (L,)
+            nbr_vec = self.recent_dst[s, :length].long()  # (L,)
+
+            mask = (ts_vec >= window_start) & (ts_vec <= window_end)
+            if mask.any():
+                ts_valid = ts_vec[mask]
+                nbr_valid = nbr_vec[mask]
+
+                decay_vals = torch.exp(-(window_end - ts_valid) / window_size)
+                pop_vals = self.popularity[nbr_valid]
+
+                score_recent = (decay_vals * pop_vals).sum()
+                base_scores[idx] = score_recent
+
+        recent_scores = base_scores[inv]  # (num_edges,)
+        
         src_list = query_src.tolist()
         dst_list = query_dst.tolist()
-        recent: Deque[Tuple[float, int]] = self.node_to_recent_dests.get(int(query_src), deque())
-        for i, (s, d) in enumerate(zip(src_list, dst_list)):
-            recent = self.node_to_recent_dests.get(s, deque())
-            score = 0.0
-            if recent:
-                for ts, nbr in recent:
-                    if ts < self.window_start or ts > self.window_end:
-                        continue
 
-                    decay = torch.exp(-(self._window_end - ts) / self._window_size)
-                    score += decay * self.popularity[nbr]
-            
+        for i, (s, d) in enumerate(zip(src_list, dst_list)):
+            score = float(recent_scores[i].item())
+
             c = self.node_to_co_occurrence.get(s, {}).get(d, 0)
             if c > 0:
-                score += self.co_occurrence_weight * (c / (1 + c))
+                score += self.co_occurrence_weight * (c / (1.0 + c))
 
-            pred[i] = score / (1 + score) if score > 0 else 0.0
+            if score > 0.0:
+                pred[i] = score / (1.0 + score)
+            else:
+                pred[i] = 0.0
 
-        return pred  
+        return pred
     
     @property
     def window_start(self) -> int | float:
