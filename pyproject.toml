@@ -33,6 +33,7 @@ dev = [
     "pandas>=1.5.3",
     "pytest-xdist>=3.7.0",
     "pytest-benchmark>=5.1.0",
+    "tgb-seq>=0.1.2",
 ]
 docs = [
     "mkdocs-material>=9.6.9",

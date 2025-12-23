@@ -1806,6 +1806,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
     { name = "ruff" },
+    { name = "tgb-seq" },
 ]
 docs = [
     { name = "mkdocs" },
@@ -1845,6 +1846,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.0.0" },
     { name = "pytest-xdist", specifier = ">=3.7.0" },
     { name = "ruff", specifier = "==0.11.1" },
+    { name = "tgb-seq", specifier = ">=0.1.2" },
 ]
 docs = [
     { name = "mkdocs", specifier = ">=1.6.1" },

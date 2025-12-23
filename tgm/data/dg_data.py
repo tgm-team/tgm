@@ -844,6 +844,7 @@ class DGData:
 
         Notes:
             - The split strategy of a TGB-SEQ dataset cannot be modified.
+            - If a data root location is not specified, we default store location to './data'.
         """
         logger.debug('Loading DGData from TGB-SEQ dataset: %s', name)
         try:
@@ -853,7 +854,9 @@ class DGData:
                 'TGB-SEQ required to load TGB data, try `pip install tgb-seq`'
             )
 
-        data = TGBSeqLoader(name, **kwargs)
+        if 'root' not in kwargs:
+            kwargs['root'] = './data'
+        data = TGBSeqLoader(name=name, **kwargs)
 
         # IDs are downcast to int32, and features to float32 preventing any runtime warnings.
         # This is safe for all TGB datasets.
