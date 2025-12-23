@@ -182,8 +182,7 @@ def eval(
             )  # We can move this outside of the inner loop
 
             y_pred = decoder(
-                z[inv_src],
-                z[inv_dst],
+                z,
                 nbr_edge_index,
                 inv_edge_idx,
                 time_info=time_info,

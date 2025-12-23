@@ -7,6 +7,8 @@ from tgm.util.logging import _get_logger
 logger = _get_logger(__name__)
 
 try:
+    import torch_sparse  # noqa: F401
+
     HAS_TORCH_SPARSE = True
     logger.warning('Torch sparse is available. Use original implementation.')
 except ImportError:
