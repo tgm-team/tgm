@@ -4,6 +4,7 @@
 ::: tgm.nn.encoder.tpnet
 ::: tgm.nn.encoder.gclstm
 ::: tgm.nn.encoder.tgcn
+::: tgm.nn.encoder.roland
 
 ## Decoders
 

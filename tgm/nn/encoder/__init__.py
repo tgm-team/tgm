@@ -9,6 +9,8 @@ from .tgn import (
     IdentityMessage,
     TGNMemory,
 )
+from .roland import ROLAND
+
 
 __all__ = [
     'DyGFormer',
@@ -22,4 +24,5 @@ __all__ = [
     'MeanAggregator',
     'IdentityMessage',
     'TGNMemory',
+    'ROLAND',
 ]

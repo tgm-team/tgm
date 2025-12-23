@@ -56,6 +56,7 @@ def test_hook_dependancies():
         'nbr_times',
         'nbr_feats',
         'times',
+        'seed_node_nbr_mask',
     }
 
 
@@ -280,6 +281,7 @@ def _nbrs_2_np(batch: DGBatch) -> List[np.ndarray]:
     assert hasattr(batch, 'nbr_nids')
     assert hasattr(batch, 'nbr_times')
     assert hasattr(batch, 'nbr_feats')
+    assert hasattr(batch, 'seed_node_nbr_mask')
 
     nids = np.array(batch.nids)
     nbr_nids = np.array(batch.nbr_nids)
@@ -724,7 +726,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
     mock_sampler.query_batch.return_value = neg_batch_list
     MockNegSampler.return_value = mock_sampler
 
-    tgb_hook = TGBNegativeEdgeSamplerHook(dataset_name='foo', split_mode='val')
+    tgb_hook = TGBNegativeEdgeSamplerHook(dataset_name='tgbl-foo', split_mode='val')
 
     n_nbrs = [1, 1]  # 1 neighbor for each node
     recency_hook = RecencyNeighborHook(
@@ -921,3 +923,29 @@ def test_node_only_batch_recency_nbr_sampler(node_only_data):
         torch.testing.assert_close(
             batch_2.nbr_feats[0], torch.empty((0, 1), dtype=torch.float32)
         )
+
+
+def test_hook_nbr_mask(basic_sample_graph):
+    dg = DGraph(basic_sample_graph)
+    n_nbrs = [1]  # 1 neighbor for each node
+    recency_hook = RecencyNeighborHook(
+        num_nbrs=n_nbrs,
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['src', 'dst'],
+        seed_times_keys=['time', 'time'],
+    )
+    hm = HookManager(keys=['unit'])
+    hm.register('unit', recency_hook)
+    hm.set_active_hooks('unit')
+    loader = DGDataLoader(dg, hook_manager=hm, batch_size=1)
+
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    nbr_mask = batch_1.seed_node_nbr_mask
+    assert 'src' in nbr_mask
+    assert 'dst' in nbr_mask
+    assert nbr_mask['src'].shape[0] == 1
+    assert nbr_mask['dst'].shape[0] == 1
+
+    assert nbr_mask['src'] == np.array([0])
+    assert nbr_mask['dst'] == np.array([1])

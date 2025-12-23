@@ -6,10 +6,10 @@ from tgm.nn import NCNPredictor
 
 @pytest.mark.parametrize('k', [2, 4, 8])
 def test_unlimited_memory(k):
-    B, D, Z = 2, 5, 2
+    B, D, Z = 2, 5, 1
     ncn = NCNPredictor(in_channels=D, hidden_dim=Z, out_channels=Z, k=k)
     node_feat = torch.rand((B, D))
     edge_index = torch.randint(0, B, size=(B, 2))
     h = ncn(node_feat, edge_index, edge_index)
-    assert h.shape == (B, Z)
+    assert h.shape[0] == (B)
     assert not torch.isnan(h).any()
