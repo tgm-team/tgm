@@ -172,7 +172,6 @@ def eval(
             inv_src = batch.global_to_local(src_ids)
             inv_dst = batch.global_to_local(dst_ids)
             y_pred = decoder(z[inv_src], z[inv_dst]).sigmoid()
-            print(y_pred.shape)
 
             input_dict = {
                 'y_pred_pos': y_pred[0],
