@@ -22,6 +22,10 @@ analytics = [
     "scipy>=1.15.2",
     "tqdm>=4.67.1",
 ]
+llm = [
+    "outlines>=1.2.0",
+    "transformers>=4.36.2",
+]
 dev = [
     "isort>=5.13.2",
     "mypy>=1.13.0",

@@ -1,11 +1,15 @@
 import argparse
 import logging
-
+from pydantic import BaseModel
 import numpy as np
-from outlines import generate, models
+import torch
+import outlines
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
-from transformers import AutoTokenizer
+import json
+
 
 from tgm import DGraph
 from tgm.constants import PADDED_NODE_ID, RECIPE_TGB_LINK_PRED
@@ -13,11 +17,21 @@ from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
 from tgm.util.logging import enable_logging, log_metric
 from tgm.util.seed import seed_everything
+from tgm.constants import METRIC_TGB_LINKPROPPRED
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def predict_link(query_dst: torch.Tensor, llm_dst: int) -> torch.Tensor:
+    return (query_dst == llm_dst).float()
+
+class Step(BaseModel):
+    explanation: str
+    output: str
+
+class TGAnswer(BaseModel):
+    destination_node: int
 
 def make_user_prompt(src, ts, nbr_nids=None, nbr_times=None):
     if nbr_nids is not None and len(nbr_nids) > 0:
@@ -43,19 +57,11 @@ def make_user_prompt(src, ts, nbr_nids=None, nbr_times=None):
     return user_prompt
 
 
-def make_system_prompt(cot=False):
+def make_system_prompt():
     system_prompt = (
         f'You are an expert temporal graph learning agent. Your task is to predict the next interaction (i.e. Destination Node) given the `Source Node` and `Timestamp`.\n\n'
         f'Description of the temporal graph is provided below, where each line is a tuple of (`Source Node`, `Destination Node`, `Timestamp`).\n\nTEMPORAL GRAPH:\n'
     )
-    # Note: background_rows logic from reasoning_main.py is omitted for simplicity unless requested,
-    # relying on nbr_tracker (RecencyHook) context as the primary context.
-    # If the user wants specific background rows (random history), we'd need another mechanism.
-    # The prompt implies NbrHook provides "past interactions".
-
-    if cot:
-        system_prompt += "Let's think step by step about the problem.\n"
-
     return system_prompt
 
 
@@ -64,32 +70,17 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
     parser.add_argument(
-        '--bsize', type=int, default=1, help='batch size (recommend 1 for LLM gen)'
+        '--bsize', type=int, default=200, help='batch size (default 200 for TGB)'
     )
     parser.add_argument('--device', type=str, default='cuda', help='torch device')
     parser.add_argument(
         '--model',
         type=str,
-        default='Qwen/Qwen1.5-0.5B-Chat',
+        default='Qwen/Qwen3-1.7B',
         help='Full huggingface model path',
     )
     parser.add_argument(
         '--n-nbrs', type=int, default=10, help='num sampled nbrs (recency)'
-    )
-    parser.add_argument(
-        '--cot', action='store_true', default=False, help='use chain of thought'
-    )
-    parser.add_argument(
-        '--full_test',
-        action='store_true',
-        default=False,
-        help='Run on full test set (slow)',
-    )
-    parser.add_argument(
-        '--test_samples',
-        type=int,
-        default=10,
-        help='Number of samples to run if not full_test',
     )
     parser.add_argument('--log-file-path', type=str, default=None)
 
@@ -156,30 +147,13 @@ def main():
     # Prepare Model
     logger.info(f'Loading Model {args.model}...')
     try:
-        model = models.transformers(args.model, device=args.device)
+        model = AutoModelForCausalLM.from_pretrained(args.model).to(args.device)
         tokenizer = AutoTokenizer.from_pretrained(args.model)
+        model = outlines.from_transformers(model, tokenizer)
+        
     except Exception as e:
         logger.error(f'Failed to load model: {e}')
         return
-
-    # We need to construct a generator.
-    # For simple generation:
-    # generator = generate.text(model)
-    # But reasoning_main.py uses structured output? behavior not fully visible in chunk.
-    # "output = generator(prompt, seed=seed); dst_id = int(output.destination_node)"
-    # This implies a structured generation (JSON).
-
-    # Let's define the schema for the output
-    schema = """
-    {
-        "properties": {
-            "destination_node": {"type": "integer"}
-        },
-        "required": ["destination_node"]
-    }
-    """
-    # Or use Pydantic if available, but string schema is safer for copy-paste.
-    generator = generate.json(model, schema)
 
     evaluator = Evaluator(name=args.dataset)
     perf_list = []
@@ -199,12 +173,14 @@ def main():
     val_loader = DGDataLoader(val_dg, batch_size=200, hook_manager=hm)
 
     with hm.activate(train_key):
-        for batch in tqdm(train_loader, desc='Warmup Train'):
+        for batch in train_loader:
             pass  # Hook automatically updates state
+        print ("setting neighbor states for training set")
 
     with hm.activate(val_key):
-        for batch in tqdm(val_loader, desc='Warmup Val'):
+        for batch in val_loader:
             pass
+        print ("setting neighbor states for validation set")
 
     # INFERENCE ON TEST
     test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
@@ -235,15 +211,12 @@ def main():
 
             # Iterate through batch
             for i in range(len(srcs)):
-                if not args.full_test and count >= args.test_samples:
-                    break
-
                 src = srcs[i]
                 ts = times[i]
                 current_nbr_nids = nbr_nids_batch[i]
                 current_nbr_times = nbr_times_batch[i]
 
-                system_prompt = make_system_prompt(cot=args.cot)
+                system_prompt = make_system_prompt()
                 user_prompt = make_user_prompt(
                     src, ts, current_nbr_nids, current_nbr_times
                 )
@@ -258,55 +231,30 @@ def main():
                     messages, tokenize=False, add_generation_prompt=True
                 )
 
-                # Generate
                 try:
-                    output = generator(prompt, seed=args.seed)
-                    pred_dst = int(output['destination_node'])
+                    output = model(
+                            prompt,
+                            TGAnswer,
+                        )
+                    data = json.loads(output)
+                    pred_dst = int(data['destination_node'])
+                    query_dst = torch.cat([batch.dst[i].unsqueeze(0), batch.neg_batch_list[i]])
+                    y_pred = predict_link(query_dst, pred_dst)
 
-                    # Evaluate
-                    # TGB Evaluator expects:
-                    # input_dict = {
-                    #     'y_pred_pos': scalar or score?,
-                    #     'y_pred_neg': ...
-                    # }
-                    # Wait, MRR evaluator usually expects scores for all nodes or ranking?
-                    # TGB LinkPropPredDataset evaluator: "MRR"
-                    # Usually MRR requires ranking the true destination against negatives.
-                    # BUT `reasoning_main.py` seems to produce a SINGLE prediction (Generative).
-                    # "dst_id = int(output.destination_node)"
-                    # How does TGB evaluate a single scalar prediction against MRR?
-                    # Actually standard TGB MRR requires scores.
-                    # Checking reasoning_main.py... "metric = dataset.eval_metric" -> "evaluator.eval(input_dict)"
-                    # Maybe reasoning_main checks if pred_dst == true_dst?
-                    # The chunk in reasoning_main.py ended before showing evaluation logic fully.
-                    # It just had `perf_list.append(...)` in `tgat.py`, but `reasoning_main` logic wasn't fully visible.
-
-                    # If the user wants to implement "reasoning_main.py", I should follow what it does.
-                    # If it's doing generative link prediction, maybe it calculates Exact Match or Hits@1?
-                    # TGB standard is MRR.
-                    # If we only output one node, we can't really compute MRR in the standard way (ranking 1000s of nodes).
-                    # Unless we treat the predicted node as Rank 1 and everything else as Rank N?
-                    # Let's assume for now we just log the prediction and the ground truth.
-
-                    # For the purpose of this script, let's just use Hits@1 equivalent:
-                    # 1.0 if pred_dst == true_dst else 0.0
-
-                    true_dst = batch.dst[i].item() if batch.dst is not None else None
-                    if true_dst is not None:
-                        hit = 1.0 if pred_dst == true_dst else 0.0
-                        perf_list.append(hit)
-
+                    input_dict = {
+                        'y_pred_pos': y_pred[0],
+                        'y_pred_neg': y_pred[1:],
+                        'eval_metric': [METRIC_TGB_LINKPROPPRED],
+                    }
+                    perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
                 except Exception as e:
                     logger.error(f'Generation failed: {e}')
-
+                    perf_list.append(0.0)
                 count += 1
 
-            if not args.full_test and count >= args.test_samples:
-                break
-
     score = np.mean(perf_list) if perf_list else 0.0
-    logger.info(f'Test Score (Hits@1 equivalent): {score}')
-    log_metric('Hits@1', score)
+    logger.info(f'Test Score (MRR): {score}')
+    log_metric('MRR', score)
 
 
 if __name__ == '__main__':
