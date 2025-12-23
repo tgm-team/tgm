@@ -32,6 +32,10 @@ parser.add_argument(
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
+parser.add_argument(
+    '--data_root', type=str, default='./data', help='Path to store TGB_SEQ datasets'
+)
+
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
@@ -64,34 +68,44 @@ def eval(
 class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
     produces = {'neg', 'neg_time'}
 
-    def __init__(self, dataset_name: str, split_mode: str, dgraph: DGraph) -> None:
-        self.split = split_mode
-        self.num_negs = 100  # TGB-SEQ hardcodes 100 negatives per positive link
+    def __init__(
+        self, dataset_name: str, split_mode: str, dgraph: DGraph, root: str = './data'
+    ) -> None:
+        # TGB-SEQ precomputed negative destination only for test split.
+        self.has_precomputed_negatives = split_mode == 'test'
 
-        if self.split == 'test':
-            # TGB-SEQ precomputed negative destination only for test split.
+        if self.has_precomputed_negatives:
+            # TODO: It would be better if we didn't need to load the dataset from disc
+            # a second time here, just to access the negatives. This would require
+            # copying the internal TGB_SEQ data download logic which seems fragile and
+            # in opposition to the expected public API.
             from tgb_seq.LinkPred.dataloader import TGBSeqLoader
 
             self.negs = torch.from_numpy(
-                TGBSeqLoader(dataset_name, root='./').negative_samples
+                TGBSeqLoader(dataset_name, root=root).negative_samples
             )
             self.neg_idx = 0
         else:
+            # Fallback to random negative sampler on train/val splits
             _, dst, _ = dgraph.edges
             self.low, self.high = int(dst.min()), int(dst.max())
+            self.num_negs = 100  # TGB-SEQ hardcodes 100 negatives per positive link
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch_size = len(batch.src)
 
-        if self.split == 'test':
-            batch.neg = self.negs[self.neg_idx : self.neg_idx + batch_size]
+        if self.has_precomputed_negatives:
+            batch.neg = self.negs[self.neg_idx : self.neg_idx + batch_size]  # type: ignore
             self.neg_idx += batch_size
         else:
-            size = (self.num_negs, batch.dst.size(0))
+            size = (self.num_negs, batch_size)
             batch.neg = torch.randint(  # type: ignore
                 self.low, self.high, size, dtype=torch.int32, device=dg.device
             )
-        batch.neg_time = batch.time.clone()
+
+        # TODO: decide whether to keep this (similar to random negative sampler), or sample
+        # negative time stamps (similar to TGB negative sampler)
+        batch.neg_time = batch.time.clone()  # type: ignore
         return batch
 
 
@@ -99,7 +113,7 @@ seed_everything(args.seed)
 evaluator = Evaluator()
 
 train_data, val_data, test_data = DGData.from_tgb_seq(
-    args.dataset, root='./data'
+    args.dataset, root=args.data_root
 ).split()
 train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
@@ -110,11 +124,16 @@ low, high = int(dst.min()), int(dst.max())
 
 hm = HookManager(keys=['val', 'test'])
 hm.register(
-    'val', TGBSEQ_NegativeEdgeSamplerHook(args.dataset, split_mode='val', dgraph=val_dg)
+    'val',
+    TGBSEQ_NegativeEdgeSamplerHook(
+        args.dataset, split_mode='val', dgraph=val_dg, root=args.data_root
+    ),
 )
 hm.register(
     'test',
-    TGBSEQ_NegativeEdgeSamplerHook(args.dataset, split_mode='test', dgraph=test_dg),
+    TGBSEQ_NegativeEdgeSamplerHook(
+        args.dataset, split_mode='test', dgraph=test_dg, root=args.data_root
+    ),
 )
 
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm, drop_last=True)
