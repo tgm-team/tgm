@@ -23,7 +23,7 @@ analytics = [
     "tqdm>=4.67.1",
 ]
 llm = [
-    "outlines>=1.2.0",
+    "outlines>=1.2.9",
     "transformers>=4.36.2",
 ]
 dev = [
