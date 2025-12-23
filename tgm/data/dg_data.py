@@ -866,11 +866,8 @@ class DGData:
         )
 
         timestamps = torch.from_numpy(data.node_interact_times).to(torch.int64)
-        if data.edge_features is None:
-            edge_feats = torch.rand(
-                (len(edge_index), 1), dtype=torch.float32
-            )  # TODO: We should natively support data without edge feats
-        else:
+        edge_feats = None
+        if data.edge_features is not None:
             edge_feats = torch.from_numpy(data.edge_features).to(torch.float32)
 
         # Read static node features if they exist
