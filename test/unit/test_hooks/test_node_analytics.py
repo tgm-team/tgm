@@ -22,11 +22,11 @@ def simple_dgraph():
 def test_node_analytics_hook_initialization():
     """Test that NodeAnalyticsHook initializes correctly."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeAnalyticsHook(
+        tracked_nodes=tracked_nodes, num_nodes=tracked_nodes.numel()
+    )
 
-    assert hook.tracked_nodes.numel() == 3
-    assert hook.num_nodes == 5
-    assert hook.alpha == 0.3
+    assert hook.num_nodes == 3
 
 
 def test_node_analytics_hook_initialization_errors():
@@ -34,13 +34,7 @@ def test_node_analytics_hook_initialization_errors():
     tracked_nodes = torch.tensor([0, 1, 2])
 
     with pytest.raises(ValueError, match='num_nodes must be positive'):
-        NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=0)
-
-    with pytest.raises(ValueError, match='alpha must be in range'):
-        NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5, alpha=0.0)
-
-    with pytest.raises(ValueError, match='alpha must be in range'):
-        NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5, alpha=1.5)
+        NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=-1)
 
 
 def test_node_analytics_hook_basic_stats(simple_dgraph):
@@ -348,14 +342,6 @@ def test_node_analytics_hook_repeated_edges(simple_dgraph):
     # Should have 0 new edges since we've seen them before
     assert batch2.edge_stats['new_edge_count'] == 0
     assert batch2.edge_stats['edge_novelty'] == 0.0
-
-
-def test_node_analytics_hook_custom_alpha():
-    """Test that custom alpha parameter is set correctly."""
-    tracked_nodes = torch.tensor([0, 1])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5, alpha=0.7)
-
-    assert hook.alpha == 0.7
 
 
 def test_node_analytics_hook_nodes_not_in_batch_stats(simple_dgraph):

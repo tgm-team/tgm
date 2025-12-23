@@ -23,7 +23,6 @@ parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument(
     '--num-tracked', type=int, default=1, help='Number of nodes to track'
 )
-parser.add_argument('--alpha', type=float, default=0.3, help='EMA smoothing factor')
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
@@ -63,13 +62,11 @@ logger.info(
 
 @log_latency
 def run_node_analytics(
-    dg: DGraph, bsize: int, tracked_nodes: torch.Tensor, alpha: float
+    dg: DGraph, bsize: int, tracked_nodes: torch.Tensor
 ) -> tuple[dict, list]:
     """Run node analytics hook and collect statistics."""
     node_analytics_hook = NodeAnalyticsHook(
-        tracked_nodes=tracked_nodes,
-        num_nodes=dg.num_nodes,
-        alpha=alpha,
+        tracked_nodes=tracked_nodes, num_nodes=dg.num_nodes
     )
 
     hm = HookManager(keys=['node_analytics'])
@@ -114,7 +111,7 @@ def run_node_analytics(
 
 # Run the analytics
 edge_stats, node_macro_stats, batch_stats = run_node_analytics(
-    dg, args.bsize, tracked_nodes, args.alpha
+    dg, args.bsize, tracked_nodes
 )
 
 # Log aggregate statistics

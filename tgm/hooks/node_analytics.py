@@ -19,10 +19,7 @@ class NodeAnalyticsHook(StatefulHook):
 
     Args:
         tracked_nodes (Tensor): 1D tensor of node IDs to track statistics for.
-        num_nodes (int): Total number of nodes in the graph.
         compute_moving_avg (bool): If True, compute exponential moving averages.
-        alpha (float): Smoothing factor for exponential moving average (0 < alpha <= 1).
-            Larger values give more weight to recent observations.
 
     Produces:
         node_stats (Dict[int, Dict[str, float]]): Dictionary mapping node_id to statistics:
@@ -32,15 +29,13 @@ class NodeAnalyticsHook(StatefulHook):
             - lifetime: Time since the node was first seen.
             - time_since_last_seen: Time since the node was last seen.
             - appearances: Total number of times the node has appeared.
-        edge_stats (Dict): Batch-level edge statistics:
+        node_macro_stats (Dict): Batch-level node statistics:
             - node_novelty: Fraction of tracked nodes in the batch that are appearing for the first time.
+            - new_node_count: Number of tracked nodes in the batch that are appearing for the first time.
+        edge_stats (Dict): Batch-level edge statistics:
             - edge_novelty: Fraction of new edges in the batch, that is not seen in previous batches.
             - edge_density: Edges this batch / possible edges based on unique nodes
-            - new_node_count: Number of tracked nodes in the batch that are appearing for the first time.
             - new_edge_count: Number of new edges in the batch, that is not seen in previous batches.
-
-    Raises:
-        ValueError: If num_nodes is not positive or alpha is out of range.
     """
 
     requires: Set[str] = set()
@@ -50,16 +45,11 @@ class NodeAnalyticsHook(StatefulHook):
         self,
         tracked_nodes: Tensor,
         num_nodes: int,
-        alpha: float = 0.3,
     ) -> None:
         if num_nodes <= 0:
             raise ValueError('num_nodes must be positive')
-        if not 0 < alpha <= 1:
-            raise ValueError('alpha must be in range (0, 1]')
-
         self.tracked_nodes = tracked_nodes.unique()
         self.num_nodes = num_nodes
-        self.alpha = alpha
 
         # Create a mask for fast lookup of tracked nodes
         self._tracked_mask = torch.zeros(num_nodes, dtype=torch.bool)
