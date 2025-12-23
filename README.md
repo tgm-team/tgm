@@ -39,7 +39,7 @@ To request a method for prioritization, please [open an issue](https://github.co
 
 | Status      | Methods                                                                                         |
 | ----------- | ----------------------------------------------------------------------------------------------- |
-| Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8] |
+| Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8], ROLAND [^13], PopTrack [^14] |
 | Planned     | TNCN[^9], DyGMamba[^10], NAT[^11]                                                               |
 
 ## Installation
@@ -225,3 +225,7 @@ We welcome contributions. If you encounter problems or would like to propose a n
 [^10]: [DyGMamba: Efficiently Modeling Long-Term Temporal Dependency on Continuous-Time Dynamic Graphs with State Space Models](https://arxiv.org/abs/2408.04713)
 
 [^11]: [Neighborhood-aware Scalable Temporal Network Representation Learning](https://arxiv.org/abs/2209.01084)
+
+[^13]: [ROLAND: Graph Learning Framework for Dynamic Graphs](https://arxiv.org/pdf/2208.07239)
+
+[^14]: [Temporal Graph Models Fail to Capture Global Temporal Dynamics](https://openreview.net/pdf?id=9kLDrE5rsW)
