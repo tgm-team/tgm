@@ -24,11 +24,11 @@ class NodeAnalyticsHook(StatefulHook):
     Produces:
         node_stats (Dict[int, Dict[str, float]]): Dictionary mapping node_id to statistics:
             - degree: Number of edges connected to the node in the current batch.
-            - activity: Fraction of batches in which the node has appeared.
+            - activity: Fraction of unique timesteps in which the node has appeared.
             - new_neighbors: Number of new neighbors in which the node encountered in the current batch.
             - lifetime: Time since the node was first seen.
             - time_since_last_seen: Time since the node was last seen.
-            - appearances: Total number of times the node has appeared.
+            - appearances: Total number of unique timesteps the node has appeared in.
         node_macro_stats (Dict): Batch-level node statistics:
             - node_novelty: Fraction of tracked nodes in the batch that are appearing for the first time.
             - new_node_count: Number of tracked nodes in the batch that are appearing for the first time.
@@ -58,8 +58,11 @@ class NodeAnalyticsHook(StatefulHook):
         # State dictionaries for each tracked node
         self._first_seen: Dict[int, float] = {}
         self._last_seen: Dict[int, float] = {}
-        self._appearances: Dict[int, int] = {}
-        self._total_batches = 0
+        self._appearances: Dict[int, int] = {}  # Count of unique timesteps per node
+        self._total_timesteps: Set[float] = set()  # Track all unique timesteps seen
+        self._node_timesteps: Dict[int, Set[float]] = {  # Track timesteps per node
+            int(node): set() for node in self.tracked_nodes.tolist()
+        }
 
         # Neighbor tracking
         self._all_neighbors: Dict[int, Set[int]] = {
@@ -186,17 +189,26 @@ class NodeAnalyticsHook(StatefulHook):
         self._first_seen.clear()
         self._last_seen.clear()
         self._appearances.clear()
-        self._total_batches = 0
+        self._total_timesteps.clear()
+        self._node_timesteps = {
+            int(node): set() for node in self.tracked_nodes.tolist()
+        }
         self._all_neighbors = {int(node): set() for node in self.tracked_nodes.tolist()}
         self._engagement_sum.clear()
         self._seen_edges.clear()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         """Compute node-centric statistics for tracked nodes in the batch."""
-        self._total_batches += 1
-
         # Get current timestamp
         current_time = self._get_batch_timestamp(batch)
+
+        # Track unique timesteps in this batch
+        if batch.time is not None and batch.time.numel() > 0:
+            for t in batch.time:
+                self._total_timesteps.add(float(t.item()))
+        if batch.node_times is not None and batch.node_times.numel() > 0:
+            for t in batch.node_times:
+                self._total_timesteps.add(float(t.item()))
 
         # Find which tracked nodes appear in this batch
         all_batch_nodes = []
@@ -234,10 +246,27 @@ class NodeAnalyticsHook(StatefulHook):
             if node not in self._first_seen:
                 self._first_seen[node] = current_time
 
-            prev_seen = self._last_seen.get(node, None)
+            self._last_seen.get(node, None)
             self._last_seen[node] = current_time
 
-            self._appearances[node] = self._appearances.get(node, 0) + 1
+            # Track unique timesteps for this node
+            node_timesteps_in_batch = set()
+            if batch.src is not None and batch.time is not None:
+                for i, src in enumerate(batch.src):
+                    if int(src.item()) == node:
+                        node_timesteps_in_batch.add(float(batch.time[i].item()))
+            if batch.dst is not None and batch.time is not None:
+                for i, dst in enumerate(batch.dst):
+                    if int(dst.item()) == node:
+                        node_timesteps_in_batch.add(float(batch.time[i].item()))
+            if batch.node_ids is not None and batch.node_times is not None:
+                for i, nid in enumerate(batch.node_ids):
+                    if int(nid.item()) == node:
+                        node_timesteps_in_batch.add(float(batch.node_times[i].item()))
+
+            # Add new timesteps to node's timestep set
+            self._node_timesteps[node].update(node_timesteps_in_batch)
+            self._appearances[node] = len(self._node_timesteps[node])
 
             # Degree statistics
             degree = node_degrees[node]
@@ -251,16 +280,15 @@ class NodeAnalyticsHook(StatefulHook):
             self._all_neighbors[node].update(current_neighbors)
 
             # Compile statistics
+            total_timesteps = len(self._total_timesteps) if self._total_timesteps else 1
             stats = {
                 'degree': degree,
-                'activity': self._appearances[node] / self._total_batches,
+                'activity': self._appearances[node] / total_timesteps,
                 'new_neighbors': len(new_neighbors),
-                'lifetime': prev_seen - self._first_seen[node]
-                if prev_seen is not None
+                'lifetime': current_time - self._first_seen[node]
+                if self._first_seen[node] is not None
                 else 0.0,
-                'time_since_last_seen': (
-                    current_time - prev_seen if prev_seen is not None else 0.0
-                ),
+                'time_since_last_seen': 0.0,
                 'appearances': self._appearances[node],
             }
 
@@ -271,9 +299,12 @@ class NodeAnalyticsHook(StatefulHook):
             node = int(node_tensor.item())
             if node not in node_stats and node in self._last_seen:
                 # Node has been seen before but not in this batch
+                total_timesteps = (
+                    len(self._total_timesteps) if self._total_timesteps else 1
+                )
                 stats = {
                     'degree': 0,
-                    'activity': self._appearances.get(node, 0) / self._total_batches,
+                    'activity': self._appearances.get(node, 0) / total_timesteps,
                     'new_neighbors': 0,
                     'lifetime': self._last_seen[node] - self._first_seen[node],
                     'time_since_last_seen': current_time - self._last_seen[node],

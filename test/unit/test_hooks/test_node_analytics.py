@@ -22,11 +22,9 @@ def simple_dgraph():
 def test_node_analytics_hook_initialization():
     """Test that NodeAnalyticsHook initializes correctly."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(
-        tracked_nodes=tracked_nodes, num_nodes=tracked_nodes.numel()
-    )
+    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
-    assert hook.num_nodes == 3
+    assert hook.num_nodes == 5
 
 
 def test_node_analytics_hook_initialization_errors():
@@ -71,7 +69,6 @@ def test_node_analytics_hook_degree_computation(simple_dgraph):
     """Test degree computation."""
     tracked_nodes = torch.tensor([0, 1, 2])
     hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
-
     # First batch has edges: (0->1), (0->2)
     # Node 0 has degree 2 (2 outgoing)
     # Node 1 has degree 1 (1 incoming)
@@ -161,7 +158,7 @@ def test_node_analytics_hook_reset_state(simple_dgraph):
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
     batch1 = hook(simple_dgraph, batch1)
 
-    assert len(batch1.node_stats) > 0
+    assert batch1.node_stats[0]['appearances'] == 1
 
     # Reset state
     hook.reset_state()
@@ -178,7 +175,6 @@ def test_node_analytics_hook_empty_batch(simple_dgraph):
     """Test behavior with empty batch."""
     tracked_nodes = torch.tensor([0, 1])
     hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
-
     # Create an empty batch
     empty_batch = DGBatch(
         src=torch.tensor([], dtype=torch.int32),
@@ -205,7 +201,8 @@ def test_node_analytics_hook_unique_tracked_nodes():
 
 def test_node_analytics_hook_produces_and_requires():
     """Test that hook declares correct produces and requires sets."""
-    hook = NodeAnalyticsHook(tracked_nodes=torch.tensor([0]), num_nodes=5)
+    tracked_nodes = torch.tensor([0])
+    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     assert hook.requires == set()
     assert hook.produces == {'node_stats', 'node_macro_stats', 'edge_stats'}
@@ -238,7 +235,7 @@ def test_node_analytics_hook_edge_density(simple_dgraph):
 
     assert 'edge_density' in batch1.edge_stats
     # Edge density should be between 0 and 1
-    assert 0 <= batch1.edge_stats['edge_density'] <= 1
+    assert 0 < batch1.edge_stats['edge_density'] < 1
 
 
 def test_node_analytics_hook_lifetime_tracking(simple_dgraph):
@@ -256,15 +253,13 @@ def test_node_analytics_hook_lifetime_tracking(simple_dgraph):
     # Process third batch with higher timestamp
     batch3 = simple_dgraph.slice_events(4, 6).materialize()
     batch3 = hook(simple_dgraph, batch3)
-
     # Lifetime should be positive if node appeared
-    if 0 in batch3.node_stats:
-        assert batch3.node_stats[0]['lifetime'] >= 0
+    assert batch3.node_stats[0]['lifetime'] > 0
 
 
 def test_node_analytics_hook_time_since_last_seen(simple_dgraph):
     """Test time_since_last_seen tracking."""
-    tracked_nodes = torch.tensor([0, 1])
+    tracked_nodes = torch.tensor([2])
     hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Process first batch
@@ -272,7 +267,7 @@ def test_node_analytics_hook_time_since_last_seen(simple_dgraph):
     batch1 = hook(simple_dgraph, batch1)
 
     # First appearance - time_since_last_seen should be 0
-    assert batch1.node_stats[0]['time_since_last_seen'] == 0.0
+    assert batch1.node_stats[2]['time_since_last_seen'] == 0.0
 
     # Skip a batch
     batch2 = simple_dgraph.slice_events(2, 4).materialize()
@@ -283,8 +278,7 @@ def test_node_analytics_hook_time_since_last_seen(simple_dgraph):
     batch3 = hook(simple_dgraph, batch3)
 
     # Check that time_since_last_seen is tracked
-    if 0 in batch3.node_stats:
-        assert 'time_since_last_seen' in batch3.node_stats[0]
+    assert batch3.node_stats[2]['time_since_last_seen'] > 0.0
 
 
 def test_node_analytics_hook_untracked_nodes_ignored(simple_dgraph):
@@ -320,6 +314,7 @@ def test_node_analytics_hook_batch_with_only_nodes(simple_dgraph):
 
     # Should handle node-only batch
     assert hasattr(result, 'node_stats')
+    assert hasattr(result, 'node_macro_stats')
     assert hasattr(result, 'edge_stats')
 
 
@@ -333,7 +328,7 @@ def test_node_analytics_hook_repeated_edges(simple_dgraph):
     batch1 = hook(simple_dgraph, batch1)
 
     # Get new edge count
-    batch1.edge_stats['new_edge_count']
+    assert batch1.edge_stats['new_edge_count'] > 0
 
     # Process same batch again
     batch2 = simple_dgraph.slice_events(0, 2).materialize()
@@ -406,13 +401,11 @@ def test_node_analytics_hook_multiple_batches_neighbor_accumulation(simple_dgrap
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
     batch1 = hook(simple_dgraph, batch1)
 
-    batch1.node_stats[0]['new_neighbors']
+    assert batch1.node_stats[0]['new_neighbors'] > 0
 
     # Later batch: node 0 connects to node 3
     batch4 = simple_dgraph.slice_events(6, 8).materialize()
     batch4 = hook(simple_dgraph, batch4)
 
     # Should have new neighbor(s) since it's a different connection
-    if 0 in batch4.node_stats:
-        # Node 0 in batch4 should show new neighbors
-        assert 'new_neighbors' in batch4.node_stats[0]
+    assert batch4.node_stats[0]['new_neighbors'] > 0
