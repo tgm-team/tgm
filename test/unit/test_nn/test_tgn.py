@@ -35,6 +35,7 @@ def test_tgn_last_aggre():
     z, last_update = memory(torch.unique(edge_index))
     z = encoder(z, last_update, edge_index, edge_time, edge_feat)
     memory.detach()
+    memory.reset_parameters()
 
     assert z.shape == (B, Z)
     assert not torch.isnan(z).any()
