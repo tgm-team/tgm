@@ -74,6 +74,8 @@ def test_tgn_mean_aggre():
     encoder.train()
     z, last_update = memory(torch.unique(edge_index))
     z = encoder(z, last_update, edge_index, edge_time, edge_feat)
+    memory.update_state(edge_index[0], edge_index[1], edge_time, edge_feat.float())
+
     memory.detach()
 
     assert z.shape == (B, Z)
@@ -83,6 +85,7 @@ def test_tgn_mean_aggre():
     encoder.eval()
     z, last_update = memory(torch.unique(edge_index))
     z = encoder(z, last_update, edge_index, edge_time, edge_feat)
+    memory.update_state(edge_index[0], edge_index[1], edge_time, edge_feat.float())
     memory.detach()
 
     assert z.shape == (B, Z)
