@@ -28,7 +28,7 @@ class NodeAnalyticsHook(StatefulHook):
         node_stats (Dict[int, Dict[str, float]]): Dictionary mapping node_id to statistics:
             - degree: Number of edges connected to the node in the current batch.
             - activity: Fraction of batches in which the node has appeared.
-            - new_neighbors: Number of new neighbors encountered in the current batch.
+            - new_neighbors: Number of new neighbors in which the node encountered in the current batch.
             - lifetime: Time since the node was first seen.
             - time_since_last_seen: Time since the node was last seen.
             - appearances: Total number of times the node has appeared.
@@ -170,7 +170,7 @@ class NodeAnalyticsHook(StatefulHook):
         # Count new edges
         new_edges = 0
         for src, dst in zip(batch.src, batch.dst):
-            edge_tuple = (src, dst)
+            edge_tuple = (int(src.item()), int(dst.item()))
             if edge_tuple not in self._seen_edges:
                 new_edges += 1
                 self._seen_edges.add(edge_tuple)
@@ -222,7 +222,7 @@ class NodeAnalyticsHook(StatefulHook):
             node_batch_stats = self._compute_node_statistics(batch)
             edge_batch_stats = self._compute_edge_statistics(batch)
             batch.node_stats = {}  # type: ignore[attr-defined]
-            batch.node_stats_big = node_batch_stats  # type: ignore[attr-defined]
+            batch.node_macro_stats = node_batch_stats  # type: ignore[attr-defined]
             batch.edge_stats = {**edge_batch_stats}  # type: ignore[attr-defined]
             return batch
 
