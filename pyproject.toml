@@ -42,6 +42,7 @@ docs = [
 examples = [
     "pandas>=2.3.0",
     "py-tgb>=2.2.0",
+    "tgb-seq>=0.1.2",
     "torchmetrics>=1.7.0",
     "tqdm>=4.67.1",
 ]
