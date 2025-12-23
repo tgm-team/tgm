@@ -70,7 +70,7 @@ def eval(
                 'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
-        model.update(batch.src, batch.dst, batch.time, decay)
+        model.update(batch.src, batch.dst, batch.time)
 
     return float(np.mean(perf_list))
 
@@ -82,7 +82,7 @@ train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
-num_nodes = train_dg.num_nodes + val_dg.num_nodes + test_dg.num_nodes
+num_nodes = test_dg.num_nodes
 
 train_data = train_dg.materialize(materialize_features=False)
 

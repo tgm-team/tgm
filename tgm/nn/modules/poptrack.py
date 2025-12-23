@@ -20,9 +20,8 @@ class PopTrackPredictor:
 
         This predictor implements the PopTrack baseline for dynamic link prediction,
         introduced in `https://openreview.net/pdf?id=9kLDrE5rsW`.
-        It caches the k most popular nodes, and predicts the probability of a link
-        reoccurring based on whether the queried edge leads to one of these k-most
-        popular nodes.
+        It predicts the probability of a link reoccurring based on
+        the popularity score of the queried edge's destination.
 
         Args:
             src (torch.Tensor): Source node IDs of edges used for initialization.
@@ -45,31 +44,28 @@ class PopTrackPredictor:
         if 0 >= k:
             raise ValueError('K must be positive')
 
-        if decay < 0 or decay > 1:
+        if decay <= 0 or decay > 1:
             raise ValueError('Decay must be in (0,1]')
 
-        if num_nodes < (len(src) + len(dst)):
+        if num_nodes <= 0:
             raise ValueError('``num_nodes`` must be set to the total number of nodes.')
 
         if k > num_nodes:
-            k = num_nodes
+            raise ValueError('``k`` must be smaller than ``num_nodes``.')
 
         self._check_input_data(src, dst, ts)
         self.popularity = torch.zeros(num_nodes)
         self.k = k
-        self.top_k: torch.Tensor = torch.zeros(self.k)
-        self.update(src, dst, ts, decay)
+        self.decay = decay
+        self.update(src, dst, ts)
 
-    def update(
-        self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor, decay: float = 0.9
-    ) -> None:
+    def update(self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor) -> None:
         """Update PopTrack cache with a batch of edges.
 
         Args:
             src (torch.Tensor): Source node IDs of the edges.
             dst (torch.Tensor): Destination node IDs of the edges.
             ts (torch.Tensor): Timestamps of the edges.
-            decay (float, optional): Decay for popularity.
 
         Raises:
             TypeError: If inputs are not ``torch.Tensor``.
@@ -79,9 +75,7 @@ class PopTrackPredictor:
         self.popularity.index_add_(
             0, dst, torch.ones_like(dst, dtype=self.popularity.dtype)
         )
-        self.popularity *= decay
-        top_k_idx, values = torch.topk(self.popularity, self.k, largest=True)
-        self.top_k = top_k_idx
+        self.popularity *= self.decay
 
     def __call__(
         self, query_src: torch.Tensor, query_dst: torch.Tensor

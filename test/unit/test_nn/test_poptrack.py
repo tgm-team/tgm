@@ -20,7 +20,6 @@ def test_poptrack_update(decay):
         torch.tensor([1]),
         torch.tensor([1]),
         torch.tensor([7.0]),
-        decay=decay,
     )
 
     assert torch.allclose(
@@ -38,7 +37,6 @@ def test_init_valid_input():
     assert isinstance(model.popularity, torch.Tensor)
     assert model.popularity.shape == (4,)
     assert model.k == 2
-    assert len(model.top_k) == 2
 
 
 def test_bad_init_args():
@@ -48,13 +46,16 @@ def test_bad_init_args():
         )
 
     with pytest.raises(TypeError):
-        PopTrackPredictor('1', '2', '3', num_nodes=2)
+        PopTrackPredictor('1', '2', '3', num_nodes=2, k=1)
 
     src = torch.tensor([0, 1])
     dst = torch.tensor([2, 3])
     ts = torch.tensor([1, 2])
     with pytest.raises(ValueError):
         PopTrackPredictor(src, dst, ts, num_nodes=4, k=-5)
+
+    with pytest.raises(ValueError):
+        PopTrackPredictor(src, dst, ts, num_nodes=4, k=10)
 
     with pytest.raises(ValueError):
         PopTrackPredictor(src, dst, ts, num_nodes=4, decay=-0.5)
@@ -70,7 +71,7 @@ def test_bad_update_args():
     src = torch.tensor([0, 1])
     dst = torch.tensor([2, 3])
     ts = torch.tensor([1, 2])
-    model = PopTrackPredictor(src, dst, ts, num_nodes=4)
+    model = PopTrackPredictor(src, dst, ts, num_nodes=4, k=2)
 
     with pytest.raises(ValueError):
         model.update(torch.Tensor([]), torch.Tensor([]), torch.Tensor([1]))
