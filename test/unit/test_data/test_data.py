@@ -1032,11 +1032,6 @@ def tgb_seq_dataset_factory():
         mock_dataset.src_node_ids = sources
         mock_dataset.dst_node_ids = destinations
         mock_dataset.node_interact_times = timestamps
-        mock_dataset.full_data = {
-            'sources': sources,
-            'destinations': destinations,
-            'timestamps': timestamps,
-        }
 
         if split == 'all':
             num_nodes = 1 + max(np.max(sources), np.max(destinations))
