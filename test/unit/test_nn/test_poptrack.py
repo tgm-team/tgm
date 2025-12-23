@@ -48,7 +48,7 @@ def test_bad_init_args():
         )
 
     with pytest.raises(TypeError):
-        PopTrackPredictor(1, 2, 3, num_nodes=2)
+        PopTrackPredictor('1', '2', '3', num_nodes=2)
 
     src = torch.tensor([0, 1])
     dst = torch.tensor([2, 3])
