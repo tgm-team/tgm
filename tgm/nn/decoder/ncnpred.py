@@ -393,7 +393,7 @@ else:
                         (edge_index, torch.stack([edge_index[1], edge_index[0]])),
                         dim=-1,
                     ),
-                    torch.ones(edge_index.shape[1] * 2),
+                    torch.ones(edge_index.shape[1] * 2, device=x.device),
                     size=(id_num, id_num),
                 )
                 .coalesce()
@@ -606,4 +606,4 @@ else:
             xs.relu()
             xs = self.xsmlp(xs)
 
-            return xs
+            return xs.view(-1)
