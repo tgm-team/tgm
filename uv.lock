@@ -2415,7 +2415,7 @@ examples = [
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
 llm = [
-    { name = "outlines", specifier = ">=1.2.0" },
+    { name = "outlines", specifier = ">=1.2.9" },
     { name = "transformers", specifier = ">=4.36.2" },
 ]
 

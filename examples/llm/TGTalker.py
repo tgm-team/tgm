@@ -1,37 +1,43 @@
 import argparse
+import json
 import logging
-from pydantic import BaseModel
-import numpy as np
-import torch
-import outlines
-from transformers import AutoTokenizer, AutoModelForCausalLM
 
+import numpy as np
+import outlines
+import torch
+from pydantic import BaseModel
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
-import json
-
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from tgm import DGraph
-from tgm.constants import PADDED_NODE_ID, RECIPE_TGB_LINK_PRED
+from tgm.constants import (
+    METRIC_TGB_LINKPROPPRED,
+    PADDED_NODE_ID,
+    RECIPE_TGB_LINK_PRED,
+)
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
 from tgm.util.logging import enable_logging, log_metric
 from tgm.util.seed import seed_everything
-from tgm.constants import METRIC_TGB_LINKPROPPRED
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def predict_link(query_dst: torch.Tensor, llm_dst: int) -> torch.Tensor:
     return (query_dst == llm_dst).float()
+
 
 class Step(BaseModel):
     explanation: str
     output: str
 
+
 class TGAnswer(BaseModel):
     destination_node: int
+
 
 def make_user_prompt(src, ts, nbr_nids=None, nbr_times=None):
     if nbr_nids is not None and len(nbr_nids) > 0:
@@ -150,7 +156,7 @@ def main():
         model = AutoModelForCausalLM.from_pretrained(args.model).to(args.device)
         tokenizer = AutoTokenizer.from_pretrained(args.model)
         model = outlines.from_transformers(model, tokenizer)
-        
+
     except Exception as e:
         logger.error(f'Failed to load model: {e}')
         return
@@ -175,12 +181,12 @@ def main():
     with hm.activate(train_key):
         for batch in train_loader:
             pass  # Hook automatically updates state
-        print ("setting neighbor states for training set")
+        print('setting neighbor states for training set')
 
     with hm.activate(val_key):
         for batch in val_loader:
             pass
-        print ("setting neighbor states for validation set")
+        print('setting neighbor states for validation set')
 
     # INFERENCE ON TEST
     test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
@@ -233,12 +239,14 @@ def main():
 
                 try:
                     output = model(
-                            prompt,
-                            TGAnswer,
-                        )
+                        prompt,
+                        TGAnswer,
+                    )
                     data = json.loads(output)
                     pred_dst = int(data['destination_node'])
-                    query_dst = torch.cat([batch.dst[i].unsqueeze(0), batch.neg_batch_list[i]])
+                    query_dst = torch.cat(
+                        [batch.dst[i].unsqueeze(0), batch.neg_batch_list[i]]
+                    )
                     y_pred = predict_link(query_dst, pred_dst)
 
                     input_dict = {
@@ -246,7 +254,9 @@ def main():
                         'y_pred_neg': y_pred[1:],
                         'eval_metric': [METRIC_TGB_LINKPROPPRED],
                     }
-                    perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
+                    perf_list.append(
+                        evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED]
+                    )
                 except Exception as e:
                     logger.error(f'Generation failed: {e}')
                     perf_list.append(0.0)
