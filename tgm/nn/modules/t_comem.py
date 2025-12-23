@@ -80,7 +80,7 @@ class tCoMemPredictor:
 
         self.node_to_co_occurrence: DefaultDict[int, Dict[int, int]] = defaultdict(dict)  
         self.popularity = torch.zeros(num_nodes)
-        self.top_k: np.ndarray = np.zeros(self.k, dtype=int)
+        self.top_k: torch.Tensor = torch.zeros(k) # np.ndarray = np.zeros(self.k, dtype=int)
         self.co_occurrence_weight = co_occurrence_weight
 
         self.update(src, dst, ts) 
