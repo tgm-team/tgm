@@ -21,7 +21,7 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbn-trade', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument(
-    '--num-tracked', type=int, default=5, help='Number of nodes to track'
+    '--num-tracked', type=int, default=1, help='Number of nodes to track'
 )
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
@@ -48,7 +48,7 @@ def get_most_frequent_nodes(dg: DGraph, n: int) -> torch.Tensor:
     unique_nodes, counts = torch.unique(edge_nodes, return_counts=True)
 
     # Sort by frequency
-    sorted_indices = torch.argsort(counts, descending=False)
+    sorted_indices = torch.argsort(counts, descending=True)
     top_n_nodes = unique_nodes[sorted_indices[:n]]
 
     return top_n_nodes
