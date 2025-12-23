@@ -326,7 +326,7 @@ if HAS_TORCH_SPARSE:
             xs.relu()
             xs = self.xsmlp(xs)
 
-            return xs
+            return xs.view(-1)
 
 else:
 
