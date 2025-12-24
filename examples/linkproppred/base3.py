@@ -21,10 +21,7 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument(
-    '--window-ratio', 
-    type=float, 
-    default=0.15, 
-    help='Window ratio (EdgeBank, t-CoMem)'
+    '--window-ratio', type=float, default=0.15, help='Window ratio (EdgeBank, t-CoMem)'
 )
 parser.add_argument(
     '--k',
@@ -33,25 +30,16 @@ parser.add_argument(
     help='Number of nodes to consider in top popularity ranking (t-CoMem)',
 )
 parser.add_argument(
-    '--co-occur', 
-    type=float, 
-    default=0.8, 
-    help='Co-occurrence weight (t-CoMem)'
+    '--co-occur', type=float, default=0.8, help='Co-occurrence weight (t-CoMem)'
 )
 parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
-parser.add_argument(
-    '--memory-mode',
-    type=str,
-    default='unlimited',
-    choices=['unlimited', 'fixed'],
-    help='Memory mode (EdgeBank)',
-)
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
+
 
 @log_latency
 def eval(
@@ -69,7 +57,7 @@ def eval(
             eb_pred = edgebank_model(query_src, query_dst)
             tc_pred = tcomem_model(query_src, query_dst)
 
-            y_pred = (eb_pred + tc_pred) / 2 
+            y_pred = (eb_pred + tc_pred) / 2
 
             input_dict = {
                 'y_pred_pos': y_pred[0],
@@ -77,9 +65,9 @@ def eval(
                 'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
-        
+
         edgebank_model.update(batch.src, batch.dst, batch.time)
-        tcomem_model.update(batch.src, batch.dst, batch.time) 
+        tcomem_model.update(batch.src, batch.dst, batch.time)
 
     return float(np.mean(perf_list))
 
@@ -91,7 +79,7 @@ train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
-num_nodes = train_dg.num_nodes + val_dg.num_nodes + test_dg.num_nodes
+num_nodes = test_dg.num_nodes
 
 train_data = train_dg.materialize(materialize_features=False)
 
@@ -106,7 +94,7 @@ edgebank_model = EdgeBankPredictor(
     train_data.src,
     train_data.dst,
     train_data.time,
-    memory_mode=args.memory_mode,
+    memory_mode='fixed',
     window_ratio=args.window_ratio,
     pos_prob=args.pos_prob,
 )
@@ -115,8 +103,8 @@ tcomem_model = tCoMemPredictor(
     train_data.src,
     train_data.dst,
     train_data.time,
-    num_nodes=num_nodes, 
-    k=args.k, 
+    num_nodes=num_nodes,
+    k=args.k,
     window_ratio=args.window_ratio,
     co_occurrence_weight=args.co_occur,
 )
