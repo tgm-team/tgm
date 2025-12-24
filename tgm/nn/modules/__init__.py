@@ -4,4 +4,10 @@ from .edgebank import EdgeBankPredictor
 from .t_comem import tCoMemPredictor
 from .mlp_mixer import MLPMixer
 
-__all__ = ['Time2Vec', 'TemporalAttention', 'EdgeBankPredictor', 'MLPMixer', 'tCoMemPredictor']
+__all__ = [
+    'Time2Vec',
+    'TemporalAttention',
+    'EdgeBankPredictor',
+    'MLPMixer',
+    'tCoMemPredictor',
+]
