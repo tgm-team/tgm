@@ -11,7 +11,6 @@ authors = [
 ]
 dependencies = [
     "numpy>=2.2.6",
-    "torch>=2.5.1",
     "torch-geometric>=2.6.1",
 ]
 
@@ -52,6 +51,9 @@ requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
 [project.optional-dependencies]
+cpu = [
+    "torch==2.5.1",
+]
 cu121 = [
     "pyg-lib>=0.4.0",
     "torch==2.5.1",
@@ -76,6 +78,7 @@ cu124 = [
 [tool.uv]
 conflicts = [
   [
+    {extra = "cpu"},
     {extra = "cu121"},
     {extra = "cu124"},
   ]
@@ -91,6 +94,7 @@ no-build-isolation-package = [
 
 [tool.uv.sources]
 torch = [
+  { index = "indexcpu",   extra = "cpu"   },
   { index = "indexcu121", extra = "cu121" },
   { index = "indexcu124", extra = "cu124" },
 ]
@@ -143,6 +147,11 @@ explicit = true
 name = "indexpygcu121"
 url = "https://data.pyg.org/whl/torch-2.5.0+cu121.html"
 format = "flat"
+explicit = true
+
+[[tool.uv.index]]
+name = "indexcpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.pip]
