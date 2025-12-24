@@ -3,6 +3,7 @@ from .attention import TemporalAttention
 from .edgebank import EdgeBankPredictor
 from .t_comem import tCoMemPredictor
 from .mlp_mixer import MLPMixer
+from .poptrack import PopTrackPredictor
 
 __all__ = [
     'Time2Vec',
@@ -10,4 +11,5 @@ __all__ = [
     'EdgeBankPredictor',
     'MLPMixer',
     'tCoMemPredictor',
+    'PopTrackPredictor',
 ]
