@@ -25,14 +25,26 @@ from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='TGN LinkPropPred Example',
+    description='TNCN LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
+parser.add_argument(
+    '--use-torch-sparse',
+    default=False,
+    action=argparse.BooleanOptionalAction,
+    help='if use-torch-sparse is used, use NCN with torch-sparse. Otherwise, use torch',
+)
 parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
+parser.add_argument(
+    '--k',
+    type=int,
+    default=2,
+    help='k-th hop common neighbour (CN) embedding extraction (select from 2/4/8)',
+)
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
@@ -243,7 +255,11 @@ encoder = GraphAttentionEmbedding(
     time_enc=memory.time_enc,
 ).to(args.device)
 decoder = NCNPredictor(
-    in_channels=args.embed_dim, hidden_dim=args.embed_dim, out_channels=1
+    in_channels=args.embed_dim,
+    hidden_dim=args.embed_dim,
+    out_channels=1,
+    k=args.k,
+    use_torch_sparse=args.use_torch_sparse,
 ).to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),

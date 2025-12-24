@@ -8,9 +8,16 @@ from tgm.nn import NCNPredictor
 
 
 @pytest.mark.parametrize('k', [2, 4, 8])
-def test_ncn(k):
+@pytest.mark.parametrize('with_torch_sparse', [True, False])
+def test_ncn(k, with_torch_sparse):
     B, D, Z = 2, 5, 1
-    ncn = NCNPredictor(in_channels=D, hidden_dim=Z, out_channels=Z, k=k)
+    ncn = NCNPredictor(
+        in_channels=D,
+        hidden_dim=Z,
+        out_channels=Z,
+        k=k,
+        use_torch_sparse=with_torch_sparse,
+    )
     node_feat = torch.rand((B, D))
     edge_index = torch.randint(0, B, size=(B, 2))
     h = ncn(node_feat, edge_index, edge_index)
