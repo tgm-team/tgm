@@ -37,3 +37,7 @@ class EmptyBatchError(TGMError):
 
 class UndefinedRecipe(TGMError):
     """Raised when attempting to construct a recipe that is not defined/registered."""
+
+
+class DependencyError(TGMError):
+    """Raised when attempting to use an optional library without installing it."""

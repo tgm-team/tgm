@@ -11,6 +11,7 @@
 ::: tgm.nn.decoder.graphproppred
 ::: tgm.nn.decoder.linkproppred
 ::: tgm.nn.decoder.nodeproppred
+::: tgm.nn.decoder.ncnpred
 
 ## Modules
 

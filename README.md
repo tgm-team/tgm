@@ -37,10 +37,10 @@ It provides a unified abstraction for both discrete and continuous-time graphs, 
 
 To request a method for prioritization, please [open an issue](https://github.com/tgm-team/tgm/issues) or [join the discussion](https://github.com/tgm-team/tgm/discussions).
 
-| Status      | Methods                                                                                         |
-| ----------- | ----------------------------------------------------------------------------------------------- |
-| Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8] |
-| Planned     | TNCN[^9], DyGMamba[^10], NAT[^11]                                                               |
+| Status      | Methods                                                                                                                |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8], TNCN[^9], ROLAND[^12] |
+| Planned     | DyGMamba[^10], NAT[^11]                                                                                                |
 
 ## Installation
 
@@ -202,7 +202,7 @@ We welcome contributions. If you encounter problems or would like to propose a n
 
 ## References
 
-[^12]: [Temporal Graph Benchmark](https://tgb.complexdatalab.com/)
+[^12]: [ROLAND: Graph Learning Framework for Dynamic Graphs](https://arxiv.org/abs/2208.07239)
 
 [^1]: [Towards Better Evaluation for Dynamic Link Prediction](https://arxiv.org/abs/2207.10128)
 
