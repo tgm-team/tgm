@@ -32,12 +32,6 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument(
-    '--use-torch-sparse',
-    default=False,
-    action=argparse.BooleanOptionalAction,
-    help='if use-torch-sparse is used, use NCN with torch-sparse. Otherwise, use torch',
-)
 parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
 parser.add_argument(
     '--k',
@@ -55,6 +49,12 @@ parser.add_argument(
     nargs='+',
     default=[10],
     help='num sampled nbrs at each hop',
+)
+parser.add_argument(
+    '--use-cn-time-decay',
+    default=False,
+    action=argparse.BooleanOptionalAction,
+    help='indicate whether applying decay on time',
 )
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
@@ -259,7 +259,7 @@ decoder = NCNPredictor(
     hidden_dim=args.embed_dim,
     out_channels=1,
     k=args.k,
-    use_torch_sparse=args.use_torch_sparse,
+    cn_time_decay=args.use_cn_time_decay,
 ).to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
