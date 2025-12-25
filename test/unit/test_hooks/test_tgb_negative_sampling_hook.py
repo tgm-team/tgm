@@ -16,7 +16,7 @@ def data():
 
 
 def test_hook_dependancies():
-    assert TGBNegativeEdgeSamplerHook.requires == set()
+    assert TGBNegativeEdgeSamplerHook.requires == {'src', 'dst', 'time'}
     assert TGBNegativeEdgeSamplerHook.produces == {'neg', 'neg_batch_list', 'neg_time'}
 
 

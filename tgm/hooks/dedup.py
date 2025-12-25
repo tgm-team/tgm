@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Set
-
 import torch
 
 from tgm import DGBatch, DGraph
@@ -17,7 +15,7 @@ class DeduplicationHook(StatelessHook):
     Note: Supports batches with or without negative samples and multi-hop neighbors.
     """
 
-    requires: Set[str] = set()
+    requires = {'src', 'dst'}
     produces = {'unique_nids', 'global_to_local'}
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Set
-
 import torch
 
 from tgm import DGBatch, DGraph
@@ -22,7 +20,7 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
         ValueError: If the num_nodes list is negative.
     """
 
-    requires: Set[str] = set()
+    requires = {'src', 'dst'}
     produces = {'seen_nodes', 'batch_nodes_mask'}
 
     def __init__(self, num_nodes: int) -> None:
