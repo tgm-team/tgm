@@ -3,7 +3,7 @@ import torch
 
 from tgm import DGraph
 from tgm.data import DGData
-from tgm.hooks import BasicBatchAnalyticsHook
+from tgm.hooks import BatchAnalyticsHook
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def dg():
 
 
 def test_hook_dependancies():
-    hook = BasicBatchAnalyticsHook()
+    hook = BatchAnalyticsHook()
     assert hook.requires == set()
     assert hook.produces == {
         'num_edge_events',
@@ -46,11 +46,11 @@ def test_hook_dependancies():
 
 
 def test_hook_reset_state():
-    assert BasicBatchAnalyticsHook.has_state is False
+    assert BatchAnalyticsHook.has_state is False
 
 
 def test_basic_analytics_num_events_and_timestamps(dg):
-    hook = BasicBatchAnalyticsHook()
+    hook = BatchAnalyticsHook()
     batch = dg.materialize()
     processed_batch = hook(dg, batch)
 
@@ -65,7 +65,7 @@ def test_basic_analytics_num_events_and_timestamps(dg):
 
 
 def test_basic_analytics_unique_nodes_and_degree(dg):
-    hook = BasicBatchAnalyticsHook()
+    hook = BatchAnalyticsHook()
     batch = dg.materialize()
     processed_batch = hook(dg, batch)
 
@@ -79,7 +79,7 @@ def test_basic_analytics_unique_nodes_and_degree(dg):
 
 
 def test_basic_analytics_repeated_events(dg):
-    hook = BasicBatchAnalyticsHook()
+    hook = BatchAnalyticsHook()
     batch = dg.materialize()
     processed_batch = hook(dg, batch)
 
@@ -92,7 +92,7 @@ def test_basic_analytics_repeated_events(dg):
 
 
 def test_basic_analytics_empty_edges_and_nodes(dg):
-    hook = BasicBatchAnalyticsHook()
+    hook = BatchAnalyticsHook()
     batch = dg.materialize()
 
     # Force edges and nodes to be "present but empty"
