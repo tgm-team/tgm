@@ -187,5 +187,9 @@ def test_tgb_native_time_deltas():
         'tgbn-genre': TimeDeltaDG('s'),
         'tgbn-reddit': TimeDeltaDG('s'),
         'tgbn-token': TimeDeltaDG('s'),
+        'thgl-software': TimeDeltaDG('s'),
+        'thgl-forum': TimeDeltaDG('s'),
+        'thgl-github': TimeDeltaDG('s'),
+        'thgl-myket': TimeDeltaDG('s'),
     }
     assert TGB_TIME_DELTAS == exp_dict
