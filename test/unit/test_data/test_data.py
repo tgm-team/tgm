@@ -1003,6 +1003,9 @@ def tgb_dataset_factory():
         for i in range(5):
             mock_dataset.full_data['node_label_dict'][i] = {i: np.zeros(10)}
 
+        mock_dataset.full_data['edge_type'] = np.arange(num_events)
+        mock_dataset.node_type = np.arange(max(sources.max(), destinations.max()) + 1)
+
         return mock_dataset
 
     return _make_dataset
@@ -1011,11 +1014,6 @@ def tgb_dataset_factory():
 def test_from_tkgl():
     with pytest.raises(NotImplementedError):
         DGData.from_tgb('tkgl-foo')
-
-
-def test_from_thgl():
-    with pytest.raises(NotImplementedError):
-        DGData.from_tgb('thgl-foo')
 
 
 def test_from_bad_tgb_name():
@@ -1108,6 +1106,47 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
+
+
+@pytest.mark.parametrize('with_node_feats', [True, False])
+@patch('tgb.linkproppred.dataset.LinkPropPredDataset')
+@patch.dict('tgm.core.timedelta.TGB_TIME_DELTAS', {'thgl-software': TimeDeltaDG('D')})
+def test_from_thgl(mock_dataset_cls, tgb_dataset_factory, with_node_feats):
+    dataset = tgb_dataset_factory(with_node_feats=with_node_feats)
+    mock_dataset_cls.return_value = dataset
+
+    mock_native_time_delta = TimeDeltaDG('D')  # Patched value
+
+    def _get_exp_edges():
+        src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
+        return np.stack([src, dst], axis=1)
+
+    def _get_exp_times():
+        return dataset.full_data['timestamps']
+
+    def _get_exp_edge_type():
+        return dataset.full_data['edge_type']
+
+    def _get_exp_node_type():
+        return dataset.node_type
+
+    data = DGData.from_tgb(name='thgl-software')
+    assert isinstance(data, DGData)
+    assert data.time_delta == mock_native_time_delta
+    np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
+    np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
+    np.testing.assert_allclose(data.edge_type.numpy(), _get_exp_edge_type())
+    np.testing.assert_allclose(data.node_type.numpy(), _get_exp_node_type())
+
+    # Confirm correct dataset instantiation
+    mock_dataset_cls.assert_called_once_with(name='thgl-software')
+
+    if with_node_feats:
+        torch.testing.assert_close(
+            data.static_node_feats, torch.Tensor(dataset.node_feat)
+        )
+    else:
+        assert data.static_node_feats is None
 
 
 def test_discretize_reduce_op_bad():

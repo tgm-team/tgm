@@ -820,9 +820,7 @@ class DGData:
         elif name.startswith('tkgl-'):
             raise NotImplementedError('TGB Temporal Knowledge Graphs not yet supported')
         elif name.startswith('thgl-'):
-            raise NotImplementedError(
-                'TGB Temporal Heterogeneous Graphs not yet supported'
-            )
+            dataset = LinkPropPredDataset(name=name, **kwargs)
         else:
             raise ValueError(f'Unknown dataset: {name}')
 
@@ -887,6 +885,16 @@ class DGData:
         if dataset.node_feat is not None:
             static_node_feats = torch.from_numpy(dataset.node_feat).to(torch.float32)
 
+        edge_type = None
+        node_type = None
+        if name.startswith('thgl'):
+            if 'edge_type' not in data or not hasattr(dataset, 'node_type'):
+                raise ValueError(
+                    f'Failed to construct TGB dataset. Try updating your TGB package: `pip install --upgrade py-tgb`'
+                )
+            edge_type = torch.from_numpy(data['edge_type']).to(torch.int32)
+            node_type = torch.from_numpy(dataset.node_type).to(torch.int32)
+
         raw_times = torch.from_numpy(data['timestamps'])
         split_bounds = {}
         for split_name, mask in {
@@ -906,6 +914,8 @@ class DGData:
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
+            edge_type=edge_type,
+            node_type=node_type,
         )
 
         data._split_strategy = TGBSplit(split_bounds)
