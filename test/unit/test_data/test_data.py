@@ -32,6 +32,8 @@ def test_init_dg_data():
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
+    assert data.edge_type is None
+    assert data.node_type is None
     assert data.time_delta == TimeDeltaDG('r')
 
 
@@ -62,6 +64,8 @@ def test_init_dg_data_no_node_events_with_edge_features():
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
+    assert data.edge_type is None
+    assert data.node_type is None
     assert data.time_delta == TimeDeltaDG('r')
 
 
@@ -82,6 +86,8 @@ def test_init_dg_data_node_events():
     torch.testing.assert_close(data.node_ids, node_ids)
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
+    assert data.edge_type is None
+    assert data.node_type is None
     assert data.time_delta == TimeDeltaDG('r')
 
 
@@ -1119,6 +1125,8 @@ def test_discretize_reduce_op_bad():
 def test_discretize_reduce_op_first():
     edge_index = torch.IntTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
     edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_type = torch.IntTensor([0, 0, 1, 0, 2])
+    node_type = torch.arange(6, dtype=torch.int32)
     edge_feats = torch.rand(5, 5)
     static_node_feats = torch.rand(6, 11)
     data = DGData.from_raw(
@@ -1127,6 +1135,8 @@ def test_discretize_reduce_op_first():
         edge_feats,
         static_node_feats=static_node_feats,
         time_delta='m',
+        edge_type=edge_type,
+        node_type=node_type,
     )
     new_granularity = TimeDeltaDG('h')
     coarse_data = data.discretize(new_granularity, reduce_op='first')
@@ -1141,13 +1151,17 @@ def test_discretize_reduce_op_first():
     exp_edge_feats = torch.stack(
         [edge_feats[0], edge_feats[2], edge_feats[3], edge_feats[4]]
     )
+    exp_edge_type = torch.IntTensor([0, 1, 0, 2])
     exp_static_node_feats = static_node_feats
+    exp_node_type = node_type
 
     torch.testing.assert_close(coarse_data.timestamps, exp_timestamps)
     torch.testing.assert_close(coarse_data.edge_event_idx, exp_edge_event_idx)
     torch.testing.assert_close(coarse_data.edge_index, exp_edge_index)
     torch.testing.assert_close(coarse_data.edge_feats, exp_edge_feats)
     torch.testing.assert_close(coarse_data.static_node_feats, exp_static_node_feats)
+    torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
+    torch.testing.assert_close(coarse_data.node_type, exp_node_type)
 
     assert coarse_data.node_event_idx is None
     assert coarse_data.node_ids is None
@@ -1158,6 +1172,8 @@ def test_discretize_with_node_events_reduce_op_first():
     edge_index = torch.IntTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
     edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
     edge_feats = torch.rand(5, 5)
+    edge_type = torch.IntTensor([0, 0, 1, 0, 2])
+    node_type = torch.arange(8, dtype=torch.int32)
 
     node_ids = torch.IntTensor([6, 6, 7, 6, 6, 7])
     node_timestamps = torch.LongTensor([10, 20, 30, 70, 80, 90])
@@ -1172,6 +1188,8 @@ def test_discretize_with_node_events_reduce_op_first():
         dynamic_node_feats,
         static_node_feats,
         time_delta='m',
+        edge_type=edge_type,
+        node_type=node_type,
     )
 
     new_granularity = TimeDeltaDG('h')
@@ -1187,6 +1205,8 @@ def test_discretize_with_node_events_reduce_op_first():
     exp_edge_feats = torch.stack(
         [edge_feats[0], edge_feats[2], edge_feats[3], edge_feats[4]]
     )
+    exp_edge_type = torch.IntTensor([0, 1, 0, 2])
+    exp_node_type = node_type
     exp_static_node_feats = static_node_feats
 
     exp_node_event_idx = torch.IntTensor([2, 3, 6, 7])
@@ -1210,6 +1230,8 @@ def test_discretize_with_node_events_reduce_op_first():
     torch.testing.assert_close(coarse_data.node_event_idx, exp_node_event_idx)
     torch.testing.assert_close(coarse_data.node_ids, exp_node_ids)
     torch.testing.assert_close(coarse_data.dynamic_node_feats, exp_dynamic_node_feats)
+    torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
+    torch.testing.assert_close(coarse_data.node_type, exp_node_type)
 
 
 def test_discretize_no_op():
@@ -1230,9 +1252,16 @@ def test_discretize_with_huge_ids_no_overflow():
     edge_index = torch.IntTensor(
         [[1, 2], [1, 2], [2, 3], [1, 2], [max_int32 - 1, max_int32 - 1]]
     )
+    edge_type = torch.IntTensor([0, 0, 1, 0, 2])
     edge_timestamps = torch.LongTensor([1, 2, 3, max_int32 - 1, max_int32 - 1])
     edge_feats = torch.rand(5, 5)
-    data = DGData.from_raw(edge_timestamps, edge_index, edge_feats, time_delta='m')
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        time_delta='m',
+        edge_type=edge_type,
+    )
     new_granularity = TimeDeltaDG('h')
     coarse_data = data.discretize(new_granularity, reduce_op='first')
 
@@ -1250,11 +1279,15 @@ def test_discretize_with_huge_ids_no_overflow():
     exp_edge_feats = torch.stack(
         [edge_feats[0], edge_feats[2], edge_feats[3], edge_feats[4]]
     )
+    exp_edge_type = torch.stack(
+        [edge_type[0], edge_type[2], edge_type[3], edge_type[4]]
+    )
 
     torch.testing.assert_close(coarse_data.timestamps, exp_timestamps)
     torch.testing.assert_close(coarse_data.edge_event_idx, exp_edge_event_idx)
     torch.testing.assert_close(coarse_data.edge_index, exp_edge_index)
     torch.testing.assert_close(coarse_data.edge_feats, exp_edge_feats)
+    torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
 
 
 def test_discretize_bad_args():
@@ -1344,3 +1377,226 @@ def test_clone():
 
     assert dg1.time_delta == dg2.time_delta
     assert dg1.time_delta is not dg2.time_delta
+
+
+def test_init_edge_type():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    edge_type = torch.arange(2, dtype=torch.int32)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_type=edge_type,
+    )
+    torch.testing.assert_close(data.edge_index, edge_index)
+    torch.testing.assert_close(data.timestamps, edge_timestamps)
+    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_type, edge_type)
+    assert data.edge_feats is None
+    assert data.node_event_idx is None
+    assert data.node_ids is None
+    assert data.dynamic_node_feats is None
+    assert data.static_node_feats is None
+    assert data.node_type is None
+    assert data.time_delta == TimeDeltaDG('r')
+
+
+def test_init_bad_edge_type():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    edge_type = torch.arange(10, dtype=torch.int32)
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            edge_type=edge_type,
+        )
+
+    edge_type = torch.arange(1, dtype=torch.int32)
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            edge_type=edge_type,
+        )
+
+    edge_type = torch.arange(2, dtype=torch.float16)
+    with pytest.raises(TypeError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            edge_type=edge_type,
+        )
+
+    edge_type = torch.arange(2, dtype=torch.int32)
+    with pytest.raises(TypeError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            edge_type=edge_type.numpy(),
+        )
+
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            edge_type=torch.stack([edge_type, edge_type]),
+        )
+
+    edge_type = torch.empty(2).fill_(float('nan'))
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            edge_type=edge_type,
+        )
+
+
+def test_init_node_type():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    node_type = torch.arange(21, dtype=torch.int32)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        node_type=node_type,
+    )
+    torch.testing.assert_close(data.edge_index, edge_index)
+    torch.testing.assert_close(data.timestamps, edge_timestamps)
+    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.node_type, node_type)
+    assert data.edge_feats is None
+    assert data.node_event_idx is None
+    assert data.node_ids is None
+    assert data.dynamic_node_feats is None
+    assert data.static_node_feats is None
+    assert data.edge_type is None
+    assert data.time_delta == TimeDeltaDG('r')
+
+
+def test_init_bad_node_type():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    node_type = torch.arange(2, dtype=torch.int32)
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_type=node_type,
+        )
+
+    node_type = torch.arange(50, dtype=torch.int32)
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_type=node_type,
+        )
+
+    node_type = torch.arange(21, dtype=torch.float32)
+    with pytest.raises(TypeError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_type=node_type,
+        )
+
+    node_type = torch.arange(21, dtype=torch.int32)
+    with pytest.raises(TypeError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_type=node_type.numpy(),
+        )
+
+    node_type = torch.arange(21, dtype=torch.int32)
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_type=torch.stack([node_type, node_type]),
+        )
+
+    node_type = torch.empty(21).fill_(float('nan'))
+    with pytest.raises(ValueError):
+        data = DGData.from_raw(
+            edge_timestamps,
+            edge_index,
+            node_type=node_type,
+        )
+
+
+def test_init_edge_node_types():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    edge_type = torch.arange(2, dtype=torch.int32)
+    node_type = torch.arange(21, dtype=torch.int32)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_type=edge_type,
+        node_type=node_type,
+    )
+    torch.testing.assert_close(data.edge_index, edge_index)
+    torch.testing.assert_close(data.timestamps, edge_timestamps)
+    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_type, edge_type)
+    torch.testing.assert_close(data.node_type, node_type)
+    assert data.edge_feats is None
+    assert data.node_event_idx is None
+    assert data.node_ids is None
+    assert data.dynamic_node_feats is None
+    assert data.static_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
+
+
+def test_init_node_edge_types_with_edge_features():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    edge_feats = torch.rand(2, 5)
+    edge_type = torch.arange(2, dtype=torch.int32)
+    node_type = torch.arange(21, dtype=torch.int32)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        edge_type=edge_type,
+        node_type=node_type,
+    )
+    torch.testing.assert_close(data.edge_index, edge_index)
+    torch.testing.assert_close(data.timestamps, edge_timestamps)
+    torch.testing.assert_close(data.edge_feats, edge_feats)
+    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_type, edge_type)
+    torch.testing.assert_close(data.node_type, node_type)
+    assert data.node_event_idx is None
+    assert data.node_ids is None
+    assert data.dynamic_node_feats is None
+    assert data.static_node_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
+
+
+def test_init_node_edge_types_with_node_features():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 5])
+    static_node_feats = torch.rand(21, 11)
+    edge_type = torch.arange(2, dtype=torch.int32)
+    node_type = torch.arange(21, dtype=torch.int32)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        static_node_feats=static_node_feats,
+        edge_type=edge_type,
+        node_type=node_type,
+    )
+    torch.testing.assert_close(data.edge_index, edge_index)
+    torch.testing.assert_close(data.timestamps, edge_timestamps)
+    torch.testing.assert_close(data.static_node_feats, static_node_feats)
+    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_type, edge_type)
+    torch.testing.assert_close(data.node_type, node_type)
+    assert data.node_event_idx is None
+    assert data.node_ids is None
+    assert data.dynamic_node_feats is None
+    assert data.edge_feats is None
+    assert data.time_delta == TimeDeltaDG('r')
