@@ -202,7 +202,7 @@ We welcome contributions. If you encounter problems or would like to propose a n
 
 ## References
 
-[^12]: [ROLAND: Graph Learning Framework for Dynamic Graphs](https://arxiv.org/abs/2208.07239)
+[^12]: [Temporal Graph Benchmark](https://tgb.complexdatalab.com/)
 
 [^1]: [Towards Better Evaluation for Dynamic Link Prediction](https://arxiv.org/abs/2207.10128)
 
