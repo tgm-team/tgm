@@ -152,6 +152,9 @@ def test_bad_init_args():
         tCoMemPredictor(shorter_src, dst, ts, num_nodes=10, k=5)
 
     with pytest.raises(ValueError):
+        tCoMemPredictor(src, dst, ts, num_nodes=10, k=5, co_occurrence_weight=1.5)
+
+    with pytest.raises(ValueError):
         tCoMemPredictor(src, dst, ts, num_nodes=10, k=5, window_ratio=0)
 
     with pytest.raises(ValueError):
