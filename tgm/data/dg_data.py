@@ -600,7 +600,7 @@ class DGData:
             edge_feats = torch.empty((num_edges, len(edge_feats_col)))
         edge_type = None
         if edge_type_col is not None:
-            edge_type = torch.empty(num_edges)
+            edge_type = torch.empty(num_edges, dtype=torch.int32)
 
         for i, row in enumerate(edge_reader):
             edge_index[i, 0] = int(row[edge_src_col])
@@ -642,19 +642,21 @@ class DGData:
         static_node_feats = None
         node_type = None
         if static_node_feats_file_path is not None:
-            if static_node_feats_col is None:
+            if static_node_feats_col is None and node_type_col is None:
                 raise ValueError(
-                    'specified static_node_feats_file_path without specifying static_node_feats_col'
+                    'specified static_node_feats_file_path without specifying static_node_feats_col and node_type_col'
                 )
             logger.debug('Reading static_node_file_path: %s', node_file_path)
             static_node_feats_reader = _read_csv(static_node_feats_file_path)
             num_nodes = len(static_node_feats_reader)
-            static_node_feats = torch.empty((num_nodes, len(static_node_feats_col)))
+            if static_node_feats_col is not None:
+                static_node_feats = torch.empty((num_nodes, len(static_node_feats_col)))
             if node_type_col is not None:
-                node_type = torch.empty(num_nodes)
+                node_type = torch.empty(num_nodes, dtype=torch.int32)
             for i, row in enumerate(static_node_feats_reader):
-                for j, col in enumerate(static_node_feats_col):
-                    static_node_feats[i, j] = float(row[col])
+                if static_node_feats_col is not None:
+                    for j, col in enumerate(static_node_feats_col):
+                        static_node_feats[i, j] = float(row[col])  # type: ignore
 
                 if node_type_col is not None:
                     node_type[i] = int(row[node_type_col])  # type: ignore
@@ -755,16 +757,19 @@ class DGData:
         static_node_feats = None
         node_type = None
         if static_node_feats_df is not None:
-            if static_node_feats_col is None:
+            if static_node_feats_col is None and node_type_col is None:
                 raise ValueError(
-                    'specified static_node_feats_df without specifying static_node_feats_col'
+                    'specified static_node_feats_df without specifying static_node_feats_col and node_type'
                 )
-            static_node_feats = torch.stack(
-                [
-                    torch.tensor(row)
-                    for row in static_node_feats_df[static_node_feats_col]
-                ]
-            )
+
+            if static_node_feats_col is not None:
+                static_node_feats = torch.stack(
+                    [
+                        torch.tensor(row)
+                        for row in static_node_feats_df[static_node_feats_col]
+                    ]
+                )
+
             if node_type_col is not None:
                 node_type = torch.from_numpy(
                     static_node_feats_df[node_type_col].to_numpy()

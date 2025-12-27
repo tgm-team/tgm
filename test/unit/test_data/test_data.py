@@ -1600,3 +1600,163 @@ def test_init_node_edge_types_with_node_features():
     assert data.dynamic_node_feats is None
     assert data.edge_feats is None
     assert data.time_delta == TimeDeltaDG('r')
+
+
+def test_from_csv_with_edge_type():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    timestamps = torch.LongTensor([1, 5])
+    edge_type = torch.arange(2, dtype=torch.int32)
+    data = DGData.from_raw(
+        edge_timestamps=timestamps, edge_index=edge_index, edge_type=edge_type
+    )
+
+    edge_type_col = 'edge_type'
+    col_names = {'edge_src_col': 'src', 'edge_dst_col': 'dst', 'edge_time_col': 't'}
+
+    tmp = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name = tmp.name
+    tmp.close()
+
+    try:
+        with open(tmp_name, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(list(col_names.values()) + [edge_type_col])
+            writer.writerows(
+                zip(
+                    edge_index[:, 0].tolist(),
+                    edge_index[:, 1].tolist(),
+                    timestamps.tolist(),
+                    edge_type.tolist(),
+                )
+            )
+            f.flush()
+
+        recovered_data = DGData.from_csv(
+            f.name, edge_type_col=edge_type_col, **col_names
+        )
+
+        torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+        torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+        torch.testing.assert_close(data.edge_feats, recovered_data.edge_feats)
+        torch.testing.assert_close(data.edge_type, recovered_data.edge_type)
+        assert data.time_delta == TimeDeltaDG('r')
+    except Exception as e:
+        raise e
+    finally:
+        os.remove(tmp_name)
+
+
+def test_from_csv_with_node_type():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([1, 1])
+    node_ids = torch.IntTensor([7, 8])
+    node_type = torch.arange(21, dtype=torch.int32)
+
+    data = DGData.from_raw(
+        edge_timestamps=edge_timestamps,
+        edge_index=edge_index,
+        node_ids=node_ids,
+        node_type=node_type,
+    )
+
+    torch.testing.assert_close(data.node_type, node_type)
+
+    edge_col_names = {
+        'edge_src_col': 'src',
+        'edge_dst_col': 'dst',
+        'edge_time_col': 't',
+    }
+    node_type_col = 'node_type'
+
+    tmp_edge = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_edge = tmp_edge.name
+    tmp_edge.close()
+
+    tmp_static_node = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
+    tmp_name_static_node = tmp_static_node.name
+    tmp_static_node.close()
+
+    try:
+        with open(tmp_name_edge, 'w', newline='') as edge_file:
+            writer = csv.writer(edge_file)
+            writer.writerow(list(edge_col_names.values()))
+            writer.writerows(
+                zip(
+                    edge_index[:, 0].tolist(),
+                    edge_index[:, 1].tolist(),
+                    edge_timestamps.tolist(),
+                )
+            )
+            edge_file.flush()
+
+        with open(tmp_name_static_node, 'w', newline='') as static_node_file:
+            writer = csv.writer(static_node_file)
+            writer.writerow([node_type_col])
+            writer.writerows([[i] for i in node_type.tolist()])
+            static_node_file.flush()
+
+        recovered_data = DGData.from_csv(
+            edge_file_path=edge_file.name,
+            static_node_feats_file_path=static_node_file.name,
+            node_type_col=node_type_col,
+            **edge_col_names,
+        )
+
+        torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
+        torch.testing.assert_close(data.timestamps, recovered_data.timestamps)
+        torch.testing.assert_close(data.node_type, recovered_data.node_type)
+        assert data.time_delta == TimeDeltaDG('r')
+    except Exception as e:
+        raise e
+    finally:
+        os.remove(tmp_name_edge)
+        os.remove(tmp_name_static_node)
+
+
+def test_from_pandas_with_edge_type():
+    events_dict = {
+        'src': [2, 10],
+        'dst': [3, 20],
+        't': [1337, 1338],
+        'edge_type': [0, 1],
+    }
+    events_df = pd.DataFrame(events_dict)
+    events_df[['src', 'dst', 't', 'edge_type']] = events_df[
+        ['src', 'dst', 't', 'edge_type']
+    ].astype('int32')
+
+    data = DGData.from_pandas(
+        events_df,
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
+        edge_type_col='edge_type',
+    )
+    assert isinstance(data, DGData)
+    assert data.edge_index.tolist() == [[2, 3], [10, 20]]
+    assert data.timestamps.tolist() == [1337, 1338]
+    assert data.edge_type.tolist() == [0, 1]
+    assert data.time_delta == TimeDeltaDG('r')
+
+
+def test_from_pandas_with_static_node_type():
+    edge_dict = {'src': [2, 10], 'dst': [3, 20], 't': [1337, 1338]}
+    edge_df = pd.DataFrame(edge_dict)
+    edge_df[['src', 'dst', 't']] = edge_df[['src', 'dst', 't']].astype('int32')
+
+    node_dict = {
+        'node_type': list(range(21)),
+    }
+    node_df = pd.DataFrame(node_dict)
+    node_df[['node_type']] = node_df[['node_type']].astype('int32')
+
+    data = DGData.from_pandas(
+        edge_df=edge_df,
+        edge_src_col='src',
+        edge_dst_col='dst',
+        edge_time_col='t',
+        static_node_feats_df=node_df,
+        node_type_col='node_type',
+    )
+    assert isinstance(data, DGData)
+    torch.testing.assert_close(data.node_type.tolist(), node_dict['node_type'])
