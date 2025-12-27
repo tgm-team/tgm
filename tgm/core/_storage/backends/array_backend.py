@@ -151,9 +151,6 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_static_node_feats(self) -> Optional[Tensor]:
         return self._data.static_node_feats
 
-    def get_static_node_type(self) -> Optional[Tensor]:
-        return self._data.node_type
-
     def get_node_type(self) -> Optional[Tensor]:
         return self._data.node_type
 
