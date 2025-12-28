@@ -27,7 +27,6 @@ class DGBatch:
         node_times (Tensor | None, optional): Timestamps corresponding to dynamic node features.
         node_ids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
         edge_type (Tensor | None, optional): Type of each edge. Shape `(E,)`
-        node_type (Tensor | None, optional): Type of each node. Shape `(V,)`
     """
 
     src: Tensor
@@ -38,7 +37,6 @@ class DGBatch:
     node_times: Optional[Tensor] = None
     node_ids: Optional[Tensor] = None
     edge_type: Optional[Tensor] = None
-    node_type: Optional[Tensor] = None
 
     def __str__(self) -> str:
         def _get_description(object: Any) -> str:

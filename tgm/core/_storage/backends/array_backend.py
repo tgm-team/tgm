@@ -216,11 +216,6 @@ class DGStorageArrayBackend(DGStorageBase):
             return None
         return self._data.static_node_feats.shape[1]
 
-    def get_node_type_dim(self) -> Optional[int]:
-        if self._data.node_type is None:
-            return None
-        return self._data.node_type.shape[0]
-
     def get_dynamic_node_feats_dim(self) -> Optional[int]:
         if self._data.dynamic_node_feats is None:
             return None
@@ -230,11 +225,6 @@ class DGStorageArrayBackend(DGStorageBase):
         if self._data.edge_feats is None:
             return None
         return self._data.edge_feats.shape[1]
-
-    def get_edge_type_dim(self) -> Optional[int]:
-        if self._data.edge_type is None:
-            return None
-        return self._data.edge_type.shape[0]
 
     def _binary_search(self, slice: DGSliceTracker) -> Tuple[int, int]:
         ts = self._data.timestamps

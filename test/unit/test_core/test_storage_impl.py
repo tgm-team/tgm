@@ -353,14 +353,12 @@ def test_get_node_type_no_node_type(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
     storage = DGStorageImpl(data)
     assert storage.get_node_type() is None
-    assert storage.get_node_type_dim() is None
 
 
 def test_get_node_type(DGStorageImpl, edge_only_data_with_node_type):
     data = edge_only_data_with_node_type
     storage = DGStorageImpl(data)
     assert storage.get_node_type().shape == (9,)
-    assert storage.get_node_type_dim() == 9
 
 
 def test_get_dg_storage_backend():
@@ -680,14 +678,12 @@ def test_get_edge_type_no_edge_type(DGStorageImpl, edge_only_data):
     storage = DGStorageImpl(data)
 
     assert storage.get_edge_type(DGSliceTracker()) is None
-    assert storage.get_edge_type_dim() is None
 
 
 def test_get_edge_type(DGStorageImpl, edge_only_data_with_edge_type):
     data = edge_only_data_with_edge_type
     storage = DGStorageImpl(data)
 
-    assert storage.get_edge_type_dim() == 3
     assert torch.equal(
         storage.get_edge_type(DGSliceTracker()),
         edge_only_data_with_edge_type.edge_type,
