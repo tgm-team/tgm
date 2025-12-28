@@ -90,7 +90,7 @@ class DGraph:
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats
 
-        if materialize_features and self.edge_type is not None:
+        if self.edge_type is not None:
             batch.edge_type = self.edge_type
 
         logger.debug(

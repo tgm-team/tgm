@@ -147,7 +147,8 @@ def test_materialize_skip_feature_materialization(data):
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int32)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int32)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
-    exp = DGBatch(exp_src, exp_dst, exp_t, None, None)
+    exp_edge_type = torch.IntTensor([0, 1, 2])
+    exp = DGBatch(exp_src, exp_dst, exp_t, None, None, edge_type=exp_edge_type)
     torch.testing.assert_close(
         asdict(dg.materialize(materialize_features=False)), asdict(exp)
     )

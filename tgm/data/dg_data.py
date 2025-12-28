@@ -259,7 +259,7 @@ class DGData:
         if self.node_type is not None:
             _assert_is_tensor(self.node_type, 'node_type')
             _assert_tensor_is_integral(self.node_type, 'node_type')
-            if self.node_type.ndim != 1 or self.node_type.shape[0] != num_nodes:
+            if self.node_type.ndim != 1 or self.node_type.shape[0] < num_nodes:
                 raise ValueError(
                     'node_type must have shape [num_nodes], '
                     f'got {num_nodes} nodes and shape {self.node_type.shape}'

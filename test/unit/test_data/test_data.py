@@ -1606,14 +1606,6 @@ def test_init_bad_node_type():
             node_type=node_type,
         )
 
-    node_type = torch.arange(50, dtype=torch.int32)
-    with pytest.raises(ValueError):
-        data = DGData.from_raw(
-            edge_timestamps,
-            edge_index,
-            node_type=node_type,
-        )
-
     node_type = torch.arange(21, dtype=torch.float32)
     with pytest.raises(TypeError):
         data = DGData.from_raw(

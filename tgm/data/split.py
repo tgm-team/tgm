@@ -40,6 +40,7 @@ class SplitStrategy(ABC):
 
         edge_index = data.edge_index[edge_mask]
         edge_feats = data.edge_feats[edge_mask] if data.edge_feats is not None else None
+        edge_type = data.edge_type[edge_mask] if data.edge_type is not None else None
         edge_timestamps = data.timestamps[data.edge_event_idx[edge_mask]]
 
         node_ids, dynamic_node_feats, node_timestamps = None, None, None
@@ -51,8 +52,9 @@ class SplitStrategy(ABC):
             if data.dynamic_node_feats is not None:
                 dynamic_node_feats = data.dynamic_node_feats[node_mask]
 
-        # Static features are shared across splits, do not clone
+        # Static features and node type are shared across splits, do not clone
         static_node_feats = data.static_node_feats
+        node_type = data.node_type
 
         # In case we masked out to the point of empty node events, change to None
         if node_ids is not None and node_ids.numel() == 0:
@@ -70,6 +72,8 @@ class SplitStrategy(ABC):
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
+            edge_type=edge_type,
+            node_type=node_type,
         )
 
 
