@@ -37,10 +37,10 @@ It provides a unified abstraction for both discrete and continuous-time graphs, 
 
 To request a method for prioritization, please [open an issue](https://github.com/tgm-team/tgm/issues) or [join the discussion](https://github.com/tgm-team/tgm/discussions).
 
-| Status      | Methods                                                                                         |
-| ----------- | ----------------------------------------------------------------------------------------------- |
-| Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8], ROLAND [^13], PopTrack [^14] |
-| Planned     | TNCN[^9], DyGMamba[^10], NAT[^11]                                                               |
+| Status      | Methods                                                                                                                                 |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8], ROLAND [^13], PopTrack [^14], TNCN[^9] |
+| Planned     | DyGMamba[^10], NAT[^11]                                                                                                                 |
 
 ## Installation
 
@@ -220,12 +220,12 @@ We welcome contributions. If you encounter problems or would like to propose a n
 
 [^8]: [Improving Temporal Link Prediction via Temporal Walk Matrix Projection](https://arxiv.org/abs/2410.04013)
 
+[^13]: [ROLAND: Graph Learning Framework for Dynamic Graphs](https://arxiv.org/pdf/2208.07239)
+
+[^14]: [Temporal Graph Models Fail to Capture Global Temporal Dynamics](https://openreview.net/pdf?id=9kLDrE5rsW)
+
 [^9]: [Efficient Neural Common Neighbor for Temporal Graph Link Prediction](https://arxiv.org/abs/2406.07926)
 
 [^10]: [DyGMamba: Efficiently Modeling Long-Term Temporal Dependency on Continuous-Time Dynamic Graphs with State Space Models](https://arxiv.org/abs/2408.04713)
 
 [^11]: [Neighborhood-aware Scalable Temporal Network Representation Learning](https://arxiv.org/abs/2209.01084)
-
-[^13]: [ROLAND: Graph Learning Framework for Dynamic Graphs](https://arxiv.org/pdf/2208.07239)
-
-[^14]: [Temporal Graph Models Fail to Capture Global Temporal Dynamics](https://openreview.net/pdf?id=9kLDrE5rsW)
