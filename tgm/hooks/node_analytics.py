@@ -41,11 +41,7 @@ class NodeAnalyticsHook(StatefulHook):
     requires: Set[str] = set()
     produces = {'node_stats', 'node_macro_stats', 'edge_stats'}
 
-    def __init__(
-        self,
-        tracked_nodes: Tensor,
-        num_nodes: int,
-    ) -> None:
+    def __init__(self, tracked_nodes: Tensor, num_nodes: int) -> None:
         if num_nodes <= 0:
             raise ValueError('num_nodes must be positive')
         self.tracked_nodes = tracked_nodes.unique()
@@ -72,9 +68,6 @@ class NodeAnalyticsHook(StatefulHook):
 
         # Edge tracking
         self._seen_edges: Set[tuple] = set()
-
-        # Node tracking
-        self._seen_nodes: Set[int] = set()
 
     def _compute_node_degrees(self, batch: DGBatch, nodes: Tensor) -> Dict[int, int]:
         """Compute degree for each node in the given set."""
@@ -150,7 +143,6 @@ class NodeAnalyticsHook(StatefulHook):
             node_id = int(node.item())
             if node_id not in self._first_seen:
                 new_nodes += 1
-                self._seen_nodes.add(node_id)
 
             node_stats['new_node_count'] = new_nodes
             node_stats['node_novelty'] = (
