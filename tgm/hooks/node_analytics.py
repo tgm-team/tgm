@@ -19,7 +19,7 @@ class NodeAnalyticsHook(StatefulHook):
 
     Args:
         tracked_nodes (Tensor): 1D tensor of node IDs to track statistics for.
-        compute_moving_avg (bool): If True, compute exponential moving averages.
+        num_nodes (int): Total number of nodes in the graph.
 
     Produces:
         node_stats (Dict[int, Dict[str, float]]): Dictionary mapping node_id to statistics:
