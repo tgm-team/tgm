@@ -14,7 +14,7 @@ from tgm.util.logging import enable_logging, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='EdgeBank LinkPropPred Example',
+    description='EdgeBank LinkPropPred Example for heterogeneous graph',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
