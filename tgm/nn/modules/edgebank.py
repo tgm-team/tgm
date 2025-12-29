@@ -98,7 +98,7 @@ class EdgeBankPredictor:
         """Clean up edges that are out of window in memory."""
         while self._head and self._head.ts < self._window_start:
             curr_event = self._head
-            if self.memory.get(curr_event.edge, (-1, -1)) == curr_event.ts:
+            if self.memory.get(curr_event.edge, -1) == curr_event.ts:
                 self.memory.pop(curr_event.edge)
             self._head = curr_event.right
             if self._head == None:
