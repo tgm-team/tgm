@@ -47,22 +47,20 @@ def eval(
     model: EdgeBankPredictor,
     evaluator: Evaluator,
 ) -> float:
-    y_pred_pos, y_pred_neg = [], []
+    perf_list = []
     for batch in tqdm(loader):
         negs_per_pos = len(batch.neg)
 
         for idx in range(negs_per_pos):
             query_src = batch.src[idx].repeat(negs_per_pos + 1)
             query_dst = torch.cat([batch.dst[idx].unsqueeze(0), batch.neg[idx]])
-            y_pred = model(query_src, query_dst)
-            y_pred_pos.append(y_pred[0])
-            y_pred_neg.append(y_pred[1:])
 
+            y_pred = model(query_src, query_dst)
+            y_pred_pos, y_pred_neg = y_pred[0].unsqueeze(0), y_pred[1:]
+            perf_list.append(evaluator.eval(y_pred_pos, y_pred_neg))
         model.update(batch.src, batch.dst, batch.time)
 
-    y_pred_pos, y_pred_neg = torch.stack(y_pred_pos), torch.stack(y_pred_neg)
-    mrr_list = evaluator.eval(y_pred_pos, y_pred_neg)
-    return float(np.mean(mrr_list))
+    return float(np.mean(perf_list))
 
 
 class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
