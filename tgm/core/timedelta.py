@@ -131,3 +131,14 @@ TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
     'thgl-github': TimeDeltaDG('s'),
     'thgl-myket': TimeDeltaDG('s'),
 }
+
+TGB_SEQ_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
+    'ML-20M': TimeDeltaDG('s'),
+    'Taobao': TimeDeltaDG('s'),
+    'Yelp': TimeDeltaDG('s'),
+    'GoogleLocal': TimeDeltaDG('s'),
+    'Flickr': TimeDeltaDG('s'),
+    'Youtube': TimeDeltaDG('s'),
+    'Patent': TimeDeltaDG('s'),
+    'WikiLink': TimeDeltaDG('s'),
+}

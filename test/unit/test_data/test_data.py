@@ -1076,6 +1076,59 @@ def bad_thgl_dataset_factory():  # Missing edge_type or node_type
     return _make_dataset
 
 
+@pytest.fixture
+def tgb_seq_dataset_factory():
+    def _make_dataset(
+        split: str = 'all', with_node_feats: bool = False, with_edge_feats: bool = True
+    ):
+        num_events, num_train, num_val = 10, 7, 2
+        train_indices = np.arange(0, num_train)
+        val_indices = np.arange(num_train, num_train + num_val)
+        test_indices = np.arange(num_train + num_val, num_events)
+
+        sources = np.random.randint(0, 1000, size=num_events)
+        destinations = np.random.randint(0, 1000, size=num_events)
+        timestamps = np.arange(num_events)
+
+        train_mask = np.zeros(num_events, dtype=bool)
+        val_mask = np.zeros(num_events, dtype=bool)
+        test_mask = np.zeros(num_events, dtype=bool)
+
+        train_mask[train_indices] = True
+        val_mask[val_indices] = True
+        test_mask[test_indices] = True
+
+        mock_dataset = MagicMock()
+        mock_dataset.train_mask = train_mask
+        mock_dataset.val_mask = val_mask
+        mock_dataset.test_mask = test_mask
+        mock_dataset.num_edges = num_events
+        mock_dataset.src_node_ids = sources
+        mock_dataset.dst_node_ids = destinations
+        mock_dataset.node_interact_times = timestamps
+
+        if split == 'all':
+            num_nodes = 1 + max(np.max(sources), np.max(destinations))
+        else:
+            mask = {'train': train_mask, 'val': val_mask, 'test': test_mask}[split]
+            valid_src, valid_dst = sources[mask], destinations[mask]
+            num_nodes = 1 + max(np.max(valid_src), np.max(valid_dst))
+
+        if with_node_feats:
+            mock_dataset.node_features = np.random.rand(num_nodes, 10)
+        else:
+            mock_dataset.node_features = None
+
+        if with_edge_feats:
+            mock_dataset.edge_features = np.random.rand(num_events, 10)
+        else:
+            mock_dataset.edge_features = None
+
+        return mock_dataset
+
+    return _make_dataset
+
+
 def test_from_tkgl():
     with pytest.raises(NotImplementedError):
         DGData.from_tgb('tkgl-foo')
@@ -1171,6 +1224,56 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
+
+
+def test_from_bad_tgb_seq_name():
+    with pytest.raises(ValueError):
+        DGData.from_tgb_seq('foo', root='/tmp')
+
+
+@pytest.mark.parametrize('with_node_feats', [True, False])
+@pytest.mark.parametrize('with_edge_feats', [True, False])
+@patch.dict(
+    'tgm.core.timedelta.TGB_SEQ_TIME_DELTAS', {'tgb-seq-mock': TimeDeltaDG('s')}
+)
+@patch('tgb_seq.LinkPred.dataloader.TGBSeqLoader')
+def test_from_tgb_seq(
+    mock_dataset_cls, tgb_seq_dataset_factory, with_node_feats, with_edge_feats
+):
+    dataset = tgb_seq_dataset_factory(
+        with_node_feats=with_node_feats, with_edge_feats=with_edge_feats
+    )
+    mock_dataset_cls.return_value = dataset
+
+    mock_native_time_delta = TimeDeltaDG('s')  # Patched value
+
+    def _get_exp_edges():
+        src, dst = dataset.src_node_ids, dataset.dst_node_ids
+        return np.stack([src, dst], axis=1)
+
+    def _get_exp_times():
+        return dataset.node_interact_times
+
+    data = DGData.from_tgb_seq(name='tgb-seq-mock')
+    assert isinstance(data, DGData)
+    assert data.time_delta == mock_native_time_delta
+    np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
+    np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
+
+    # Confirm correct dataset instantiation
+    mock_dataset_cls.assert_called_once_with(name='tgb-seq-mock', root='./data')
+
+    if with_node_feats:
+        torch.testing.assert_close(
+            data.static_node_feats, torch.Tensor(dataset.node_features)
+        )
+    else:
+        assert data.static_node_feats is None
+
+    if with_edge_feats:
+        torch.testing.assert_close(data.edge_feats, torch.Tensor(dataset.edge_features))
+    else:
+        assert data.edge_feats is None
 
 
 @pytest.mark.parametrize('with_node_feats', [True, False])
