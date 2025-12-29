@@ -3,7 +3,7 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.hooks.node_analytics import NodeAnalyticsHook
+from tgm.hooks.node_analytics import NodeCentricAnalyticsHook
 
 
 @pytest.fixture
@@ -20,25 +20,25 @@ def simple_dgraph():
 
 
 def test_node_analytics_hook_initialization():
-    """Test that NodeAnalyticsHook initializes correctly."""
+    """Test that NodeCentricAnalyticsHook initializes correctly."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     assert hook.num_nodes == 5
 
 
 def test_node_analytics_hook_initialization_errors():
-    """Test that NodeAnalyticsHook raises errors for invalid inputs."""
+    """Test that NodeCentricAnalyticsHook raises errors for invalid inputs."""
     tracked_nodes = torch.tensor([0, 1, 2])
 
     with pytest.raises(ValueError, match='num_nodes must be positive'):
-        NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=-1)
+        NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=-1)
 
 
 def test_node_analytics_hook_basic_stats(simple_dgraph):
     """Test basic statistics computation."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Materialize first batch (2 edges at time 0)
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
@@ -68,7 +68,7 @@ def test_node_analytics_hook_basic_stats(simple_dgraph):
 def test_node_analytics_hook_degree_computation(simple_dgraph):
     """Test degree computation."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
     # First batch has edges: (0->1), (0->2)
     # Node 0 has degree 2 (2 outgoing)
     # Node 1 has degree 1 (1 incoming)
@@ -84,7 +84,7 @@ def test_node_analytics_hook_degree_computation(simple_dgraph):
 def test_node_analytics_hook_activity_over_batches(simple_dgraph):
     """Test activity tracking over multiple batches."""
     tracked_nodes = torch.tensor([0, 1])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Process multiple batches
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
@@ -102,7 +102,7 @@ def test_node_analytics_hook_activity_over_batches(simple_dgraph):
 def test_node_analytics_hook_edge_statistics(simple_dgraph):
     """Test edge-level statistics."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # First batch - all edges should be new
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
@@ -128,7 +128,7 @@ def test_node_analytics_hook_edge_statistics(simple_dgraph):
 def test_node_analytics_hook_neighbor_tracking(simple_dgraph):
     """Test neighbor tracking and new neighbor detection."""
     tracked_nodes = torch.tensor([0])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # First batch: edges (0->1), (0->2)
     # Node 0 has 2 new neighbors: 1 and 2
@@ -152,7 +152,7 @@ def test_node_analytics_hook_neighbor_tracking(simple_dgraph):
 def test_node_analytics_hook_reset_state(simple_dgraph):
     """Test that reset_state clears all internal state."""
     tracked_nodes = torch.tensor([0, 1])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Process a batch
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
@@ -174,7 +174,7 @@ def test_node_analytics_hook_reset_state(simple_dgraph):
 def test_node_analytics_hook_empty_batch(simple_dgraph):
     """Test behavior with empty batch."""
     tracked_nodes = torch.tensor([0, 1])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
     # Create an empty batch
     empty_batch = DGBatch(
         src=torch.tensor([], dtype=torch.int32),
@@ -192,7 +192,7 @@ def test_node_analytics_hook_empty_batch(simple_dgraph):
 def test_node_analytics_hook_batch_with_all_none_nodes(simple_dgraph):
     """Test behavior when batch has no nodes at all (src, dst, node_ids all None)."""
     tracked_nodes = torch.tensor([0, 1])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Create a batch where all node fields are None
     batch = DGBatch(
@@ -231,7 +231,7 @@ def test_node_analytics_hook_batch_with_all_none_nodes(simple_dgraph):
 def test_node_analytics_hook_unique_tracked_nodes():
     """Test that duplicate tracked nodes are deduplicated."""
     tracked_nodes = torch.tensor([0, 1, 1, 2, 0])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Should have only 3 unique tracked nodes
     assert hook.tracked_nodes.numel() == 3
@@ -241,7 +241,7 @@ def test_node_analytics_hook_unique_tracked_nodes():
 def test_node_analytics_hook_produces_and_requires():
     """Test that hook declares correct produces and requires sets."""
     tracked_nodes = torch.tensor([0])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     assert hook.requires == set()
     assert hook.produces == {'node_stats', 'node_macro_stats', 'edge_stats'}
@@ -250,7 +250,7 @@ def test_node_analytics_hook_produces_and_requires():
 def test_node_analytics_hook_node_macro_stats(simple_dgraph):
     """Test node-level macro statistics computation."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
     batch1 = hook(simple_dgraph, batch1)
@@ -267,7 +267,7 @@ def test_node_analytics_hook_node_macro_stats(simple_dgraph):
 def test_node_analytics_hook_edge_density(simple_dgraph):
     """Test edge density computation."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
     batch1 = hook(simple_dgraph, batch1)
@@ -280,7 +280,7 @@ def test_node_analytics_hook_edge_density(simple_dgraph):
 def test_node_analytics_hook_lifetime_tracking(simple_dgraph):
     """Test that node lifetime is tracked correctly over time."""
     tracked_nodes = torch.tensor([0])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Process first batch
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
@@ -299,7 +299,7 @@ def test_node_analytics_hook_lifetime_tracking(simple_dgraph):
 def test_node_analytics_hook_time_since_last_seen(simple_dgraph):
     """Test time_since_last_seen tracking."""
     tracked_nodes = torch.tensor([2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Process first batch
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
@@ -324,7 +324,7 @@ def test_node_analytics_hook_untracked_nodes_ignored(simple_dgraph):
     """Test that untracked nodes are not included in statistics."""
     # Only track nodes 0 and 1
     tracked_nodes = torch.tensor([0, 1])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Process batch with nodes 0, 1, 2
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
@@ -338,7 +338,7 @@ def test_node_analytics_hook_untracked_nodes_ignored(simple_dgraph):
 def test_node_analytics_hook_batch_with_only_nodes(simple_dgraph):
     """Test handling of batches with only node events (no edges)."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Create batch with only node events
     batch = DGBatch(
@@ -360,7 +360,7 @@ def test_node_analytics_hook_batch_with_only_nodes(simple_dgraph):
 def test_node_analytics_hook_repeated_edges(simple_dgraph):
     """Test that repeated edges are counted correctly."""
     tracked_nodes = torch.tensor([0, 1])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Process batch with edges (0->1), (0->2)
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
@@ -381,7 +381,7 @@ def test_node_analytics_hook_repeated_edges(simple_dgraph):
 def test_node_analytics_hook_nodes_not_in_batch_stats(simple_dgraph):
     """Test that tracked nodes not in current batch still get stats if seen before."""
     tracked_nodes = torch.tensor([0, 1, 2, 3])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # Process first batch with nodes 0, 1, 2
     batch1 = simple_dgraph.slice_events(0, 2).materialize()
@@ -401,7 +401,7 @@ def test_node_analytics_hook_nodes_not_in_batch_stats(simple_dgraph):
 def test_node_analytics_hook_edge_stats_all_fields(simple_dgraph):
     """Test that all expected edge stats fields are present."""
     tracked_nodes = torch.tensor([0, 1, 2])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     batch = simple_dgraph.slice_events(0, 2).materialize()
     batch = hook(simple_dgraph, batch)
@@ -414,7 +414,7 @@ def test_node_analytics_hook_edge_stats_all_fields(simple_dgraph):
 def test_node_analytics_hook_node_stats_all_fields(simple_dgraph):
     """Test that all expected node stats fields are present."""
     tracked_nodes = torch.tensor([0])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     batch = simple_dgraph.slice_events(0, 2).materialize()
     batch = hook(simple_dgraph, batch)
@@ -434,7 +434,7 @@ def test_node_analytics_hook_node_stats_all_fields(simple_dgraph):
 def test_node_analytics_hook_multiple_batches_neighbor_accumulation(simple_dgraph):
     """Test that neighbors accumulate correctly over multiple batches."""
     tracked_nodes = torch.tensor([0])
-    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+    hook = NodeCentricAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
     # First batch: node 0 connects to nodes 1, 2
     batch1 = simple_dgraph.slice_events(0, 2).materialize()

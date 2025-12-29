@@ -11,7 +11,7 @@ from tgm.util.logging import _get_logger
 logger = _get_logger(__name__)
 
 
-class NodeAnalyticsHook(StatefulHook):
+class NodeCentricAnalyticsHook(StatefulHook):
     """Compute node-centric statistics for a specific set of tracked nodes.
 
     This hook maintains state across batches to compute temporal statistics
@@ -88,8 +88,8 @@ class NodeAnalyticsHook(StatefulHook):
     ) -> Dict[int, Set[int]]:
         """Get all neighbors for each node in this batch."""
         # Convert to numpy for faster iteration
-        nodes_np = nodes.cpu().numpy() if nodes.is_cuda else nodes.numpy()
-        nodes_set = set(int(n) for n in nodes_np)
+        nodes_u = nodes.unique()
+        nodes_set = set(int(n) for n in nodes_u)
         neighbors: Dict[int, Set[int]] = {int(n): set() for n in nodes_set}
 
         if batch.src is None or batch.dst is None:
