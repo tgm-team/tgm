@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
-from tgm.core import TGB_TIME_DELTAS, TimeDeltaDG
+from tgm.core import TGB_SEQ_TIME_DELTAS, TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.data.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.exceptions import (
     EmptyGraphError,
@@ -826,6 +826,77 @@ class DGData:
 
         data._split_strategy = TGBSplit(split_bounds)
         logger.debug('Finished loading DGData from TGB dataset: %s', name)
+        return data
+
+    @classmethod
+    def from_tgb_seq(cls, name: str, **kwargs: Any) -> DGData:
+        """Load a DGData from a TGB-SEQ dataset.
+
+        Args:
+            name (str): Name of the TGB-SEQ dataset.
+            kwargs: Additional dataset-specific arguments.
+
+        Returns:
+            DGData: Dataset with `_split_strategy` automatically set to `TGBSplit`.
+
+        Raises:
+            ImportError: If the TGB-SEQ package is not resolved in the current python environment.
+
+        Notes:
+            - The split strategy of a TGB-SEQ dataset cannot be modified.
+            - If a data root location is not specified, we default store location to './data'.
+        """
+        logger.debug('Loading DGData from TGB-SEQ dataset: %s', name)
+        try:
+            from tgb_seq.LinkPred.dataloader import TGBSeqLoader
+        except ImportError:
+            raise ImportError(
+                'TGB-SEQ required to load TGB data, try `pip install tgb-seq`'
+            )
+
+        if 'root' not in kwargs:
+            kwargs['root'] = './data'
+        data = TGBSeqLoader(name=name, **kwargs)
+
+        # IDs are downcast to int32, and features to float32 preventing any runtime warnings.
+        # This is safe for all TGB datasets.
+        edge_index = torch.stack(
+            [
+                torch.from_numpy(data.src_node_ids).to(torch.int32),
+                torch.from_numpy(data.dst_node_ids).to(torch.int32),
+            ],
+            dim=1,
+        )
+
+        timestamps = torch.from_numpy(data.node_interact_times).to(torch.int64)
+        edge_feats = None
+        if data.edge_features is not None:
+            edge_feats = torch.from_numpy(data.edge_features).to(torch.float32)
+
+        # Read static node features if they exist
+        static_node_feats = None
+        if data.node_features is not None:
+            static_node_feats = torch.from_numpy(data.node_features).to(torch.float32)
+
+        split_bounds = {}
+        for split_name, mask in {
+            'train': data.train_mask,
+            'val': data.val_mask,
+            'test': data.test_mask,
+        }.items():
+            times = data.node_interact_times[mask]
+            split_bounds[split_name] = (int(times.min()), int(times.max()))
+
+        data = cls.from_raw(
+            time_delta=TGB_SEQ_TIME_DELTAS[name],
+            edge_timestamps=timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            static_node_feats=static_node_feats,
+        )
+
+        data._split_strategy = TGBSplit(split_bounds)
+        logger.debug('Finished loading DGData from TGB-SEQ dataset: %s', name)
         return data
 
 

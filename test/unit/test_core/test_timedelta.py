@@ -1,7 +1,7 @@
 import pytest
 
 from tgm import TimeDeltaDG
-from tgm.core.timedelta import TGB_TIME_DELTAS
+from tgm.core.timedelta import TGB_SEQ_TIME_DELTAS, TGB_TIME_DELTAS
 from tgm.exceptions import EventOrderedConversionError
 
 
@@ -189,3 +189,17 @@ def test_tgb_native_time_deltas():
         'tgbn-token': TimeDeltaDG('s'),
     }
     assert TGB_TIME_DELTAS == exp_dict
+
+
+def test_tgb_seq_native_time_deltas():
+    exp_dict = {
+        'ML-20M': TimeDeltaDG('s'),
+        'Taobao': TimeDeltaDG('s'),
+        'Yelp': TimeDeltaDG('s'),
+        'GoogleLocal': TimeDeltaDG('s'),
+        'Flickr': TimeDeltaDG('s'),
+        'Youtube': TimeDeltaDG('s'),
+        'Patent': TimeDeltaDG('s'),
+        'WikiLink': TimeDeltaDG('s'),
+    }
+    assert TGB_SEQ_TIME_DELTAS == exp_dict
