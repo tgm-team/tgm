@@ -10,7 +10,7 @@ VENV_TGB_DIR=".venv/lib/python3.10/site-packages/tgb/datasets"
 DATASETS=(
     "tgbl_wiki"
     "tgbn_trade"
-    "thgl-software"
+    "thgl_software"
     #"tgbn_genre"
     #"tgbl_coin"
     #"tgbl_flight" TODO: Start working with the large graphs
@@ -67,7 +67,7 @@ download_dataset() {
     local dataset_name="${dataset//_/-}" # 'tgbl_wiki' -> 'tgbl-wiki'
     echo "Downloading dataset: $dataset_name"
 
-    if [[ "$dataset" == tgbl_* || "$dataset" == thgl_*]]; then
+    if [[ "$dataset" == tgbl_* || "$dataset" == thgl_* ]]; then
         .venv/bin/python -c "from tgb.linkproppred.dataset import LinkPropPredDataset as DS; DS(name='$dataset_name')"
     elif [[ "$dataset" == tgbn_* ]]; then
         .venv/bin/python -c "from tgb.nodeproppred.dataset import NodePropPredDataset as DS; DS(name='$dataset_name')"
