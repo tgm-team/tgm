@@ -153,7 +153,7 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         dataset_name (str): The name of the TGB dataset to produce sampler for.
         split_mode (str): The split mode to use for sampling, either 'val' or 'test'.
         first_node_id (int): identity of the first node
-        last_node_id (int): indentity of the last destination node
+        last_node_id (int): identity of the last destination node
         node_type (Tensor): the node type of each node
 
 
