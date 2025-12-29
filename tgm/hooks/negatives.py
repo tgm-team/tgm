@@ -175,6 +175,15 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         if split_mode not in ['val', 'test']:
             raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
 
+        if first_node_id < 0 or last_node_id < 0:
+            raise ValueError('First and last ID of node must be positive')
+
+        if node_type is None:
+            raise ValueError('Node type must not be None')
+
+        if node_type.shape[0] < last_node_id:
+            raise ValueError(f'last_node_id {last_node_id} must be within node_type')
+
         try:
             from tgb.linkproppred.thg_negative_sampler import (
                 THGNegativeEdgeSampler,
