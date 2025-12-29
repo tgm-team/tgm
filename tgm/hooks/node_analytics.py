@@ -78,17 +78,10 @@ class NodeAnalyticsHook(StatefulHook):
         edge_nodes = torch.cat([batch.src, batch.dst], dim=0)
 
         # Vectorized degree computation
-        degrees = {}
-        nodes_np = nodes.cpu().numpy() if nodes.is_cuda else nodes.numpy()
-        edge_nodes_np = (
-            edge_nodes.cpu().numpy() if edge_nodes.is_cuda else edge_nodes.numpy()
-        )
-
-        for node_val in nodes_np:
-            degree = int((edge_nodes_np == node_val).sum())
-            degrees[int(node_val)] = degree
-
-        return degrees
+        unique_nodes, inv = torch.unique(edge_nodes, return_inverse=True)
+        counts = torch.bincount(inv)
+        deg_map = dict(zip(unique_nodes.tolist(), counts.tolist()))
+        return {int(n): deg_map.get(int(n), 0) for n in nodes.tolist()}
 
     def _compute_node_neighbors(
         self, batch: DGBatch, nodes: Tensor
