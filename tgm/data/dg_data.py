@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
-from tgm.core import TGB_TIME_DELTAS, TimeDeltaDG
+from tgm.core import TGB_SEQ_TIME_DELTAS, TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.data.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.exceptions import (
     EmptyGraphError,
@@ -888,6 +888,7 @@ class DGData:
             split_bounds[split_name] = (int(times.min()), int(times.max()))
 
         data = cls.from_raw(
+            time_delta=TGB_SEQ_TIME_DELTAS[name],
             edge_timestamps=timestamps,
             edge_index=edge_index,
             edge_feats=edge_feats,

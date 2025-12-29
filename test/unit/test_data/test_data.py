@@ -1164,6 +1164,9 @@ def test_from_bad_tgb_seq_name():
 
 @pytest.mark.parametrize('with_node_feats', [True, False])
 @pytest.mark.parametrize('with_edge_feats', [True, False])
+@patch.dict(
+    'tgm.core.timedelta.TGB_SEQ_TIME_DELTAS', {'tgb-seq-mock': TimeDeltaDG('s')}
+)
 @patch('tgb_seq.LinkPred.dataloader.TGBSeqLoader')
 def test_from_tgb_seq(
     mock_dataset_cls, tgb_seq_dataset_factory, with_node_feats, with_edge_feats
@@ -1173,7 +1176,7 @@ def test_from_tgb_seq(
     )
     mock_dataset_cls.return_value = dataset
 
-    mock_native_time_delta = TimeDeltaDG('r')  # Patched value
+    mock_native_time_delta = TimeDeltaDG('s')  # Patched value
 
     def _get_exp_edges():
         src, dst = dataset.src_node_ids, dataset.dst_node_ids
