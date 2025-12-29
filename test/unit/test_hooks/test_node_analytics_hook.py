@@ -189,6 +189,45 @@ def test_node_analytics_hook_empty_batch(simple_dgraph):
     assert hasattr(result, 'edge_stats')
 
 
+def test_node_analytics_hook_batch_with_all_none_nodes(simple_dgraph):
+    """Test behavior when batch has no nodes at all (src, dst, node_ids all None)."""
+    tracked_nodes = torch.tensor([0, 1])
+    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
+
+    # Create a batch where all node fields are None
+    batch = DGBatch(
+        src=None,
+        dst=None,
+        time=None,
+        node_ids=None,
+        node_times=None,
+    )
+
+    result = hook(simple_dgraph, batch)
+
+    # Should handle batch with no nodes gracefully
+    assert hasattr(result, 'node_stats')
+    assert hasattr(result, 'node_macro_stats')
+    assert hasattr(result, 'edge_stats')
+
+    # node_stats should be empty since there are no nodes
+    assert result.node_stats == {}
+
+    # node_macro_stats should have default values
+    assert 'node_novelty' in result.node_macro_stats
+    assert 'new_node_count' in result.node_macro_stats
+    assert result.node_macro_stats['node_novelty'] == 0.0
+    assert result.node_macro_stats['new_node_count'] == 0
+
+    # edge_stats should have default values
+    assert 'edge_novelty' in result.edge_stats
+    assert 'edge_density' in result.edge_stats
+    assert 'new_edge_count' in result.edge_stats
+    assert result.edge_stats['edge_novelty'] == 0.0
+    assert result.edge_stats['edge_density'] == 0.0
+    assert result.edge_stats['new_edge_count'] == 0
+
+
 def test_node_analytics_hook_unique_tracked_nodes():
     """Test that duplicate tracked nodes are deduplicated."""
     tracked_nodes = torch.tensor([0, 1, 1, 2, 0])
