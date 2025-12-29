@@ -61,7 +61,7 @@ python "$ROOT_DIR/examples/tgb_seq/edgebank.py" \
     resources=[
         '--partition=main',
         '--cpus-per-task=2',
-        '--mem=4G',
+        '--mem=8G',
         '--time=0:03:00',
     ]
 )
@@ -79,7 +79,7 @@ python "$ROOT_DIR/examples/linkproppred/thgl/edgebank.py" \
     resources=[
         '--partition=main',
         '--cpus-per-task=2',
-        '--mem=4G',
+        '--mem=8G',
         '--time=0:03:00',
     ]
 )
