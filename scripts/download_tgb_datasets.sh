@@ -67,7 +67,7 @@ download_dataset() {
     local dataset_name="${dataset//_/-}" # 'tgbl_wiki' -> 'tgbl-wiki'
     echo "Downloading dataset: $dataset_name"
 
-    if [[ "$dataset" == tgbl_* ]]; then
+    if [[ "$dataset" == tgbl_* || "$dataset" == thgl_*]]; then
         .venv/bin/python -c "from tgb.linkproppred.dataset import LinkPropPredDataset as DS; DS(name='$dataset_name')"
     elif [[ "$dataset" == tgbn_* ]]; then
         .venv/bin/python -c "from tgb.nodeproppred.dataset import NodePropPredDataset as DS; DS(name='$dataset_name')"

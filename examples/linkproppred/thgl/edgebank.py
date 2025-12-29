@@ -74,8 +74,6 @@ val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
 
 train_data = train_dg.materialize(materialize_features=False)
-# val_data = val_data.materialize()
-# test_data = test_data.materialize()
 
 hm = HookManager(keys=['val', 'test'])
 hm.register(
