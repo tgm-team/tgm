@@ -37,6 +37,7 @@ parser.add_argument(
     '--k',
     type=int,
     default=2,
+    choices=[2, 4, 8],
     help='k-th hop common neighbour (CN) embedding extraction (select from 2/4/8)',
 )
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
