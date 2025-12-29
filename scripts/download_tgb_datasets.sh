@@ -10,6 +10,7 @@ VENV_TGB_DIR=".venv/lib/python3.10/site-packages/tgb/datasets"
 DATASETS=(
     "tgbl_wiki"
     "tgbn_trade"
+    "thgl-software"
     #"tgbn_genre"
     #"tgbl_coin"
     #"tgbl_flight" TODO: Start working with the large graphs
