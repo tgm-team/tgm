@@ -15,7 +15,7 @@ from tgm.constants import (
 )
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
-from tgm.nn import LinkPredictor, TGNMemory
+from tgm.nn import NCNPredictor, TGNMemory
 from tgm.nn.encoder.tgn import (
     GraphAttentionEmbedding,
     IdentityMessage,
@@ -25,7 +25,7 @@ from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='TGN LinkPropPred Example',
+    description='TNCN LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -33,6 +33,13 @@ parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset na
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
+parser.add_argument(
+    '--k',
+    type=int,
+    default=2,
+    choices=[2, 4, 8],
+    help='k-th hop common neighbour (CN) embedding extraction (select from 2/4/8)',
+)
 parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
@@ -43,6 +50,12 @@ parser.add_argument(
     nargs='+',
     default=[10],
     help='num sampled nbrs at each hop',
+)
+parser.add_argument(
+    '--use-cn-time-decay',
+    default=False,
+    action=argparse.BooleanOptionalAction,
+    help='indicate whether applying decay on time',
 )
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
@@ -103,8 +116,12 @@ def train(
         inv_src = batch.global_to_local(batch.src)
         inv_dst = batch.global_to_local(batch.dst)
         inv_neg = batch.global_to_local(batch.neg)
-        pos_out = decoder(z[inv_src], z[inv_dst])
-        neg_out = decoder(z[inv_src], z[inv_neg])
+        inv_edge_idx_pos = torch.stack([inv_src, inv_dst], dim=0).long()
+        inv_edge_idx_neg = torch.stack([inv_src, inv_neg], dim=0).long()
+        time_info = (last_update, batch.time)
+
+        pos_out = decoder(z, nbr_edge_index, inv_edge_idx_pos, time_info=time_info)
+        neg_out = decoder(z, nbr_edge_index, inv_edge_idx_neg, time_info=time_info)
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
@@ -171,7 +188,18 @@ def eval(
 
             inv_src = batch.global_to_local(src_ids)
             inv_dst = batch.global_to_local(dst_ids)
-            y_pred = decoder(z[inv_src], z[inv_dst]).sigmoid()
+            inv_edge_idx = torch.stack([inv_src, inv_dst], dim=0)
+            time_info = (
+                last_update,
+                batch.time.repeat(len(inv_src)),
+            )  # We can move this outside of the inner loop
+
+            y_pred = decoder(
+                z,
+                nbr_edge_index,
+                inv_edge_idx,
+                time_info=time_info,
+            ).sigmoid()
 
             input_dict = {
                 'y_pred_pos': y_pred[0],
@@ -227,9 +255,13 @@ encoder = GraphAttentionEmbedding(
     msg_dim=test_dg.edge_feats_dim,
     time_enc=memory.time_enc,
 ).to(args.device)
-decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
-    args.device
-)
+decoder = NCNPredictor(
+    in_channels=args.embed_dim,
+    hidden_dim=args.embed_dim,
+    out_channels=1,
+    k=args.k,
+    cn_time_decay=args.use_cn_time_decay,
+).to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,
