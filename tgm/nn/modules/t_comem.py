@@ -138,18 +138,15 @@ class tCoMemPredictor:
 
         Returns:
             torch.Tensor: Predictions of shape ``(len(query_src),)``, where:
-                - If ...,
-                  its probability is ``...``.
-                - Otherwise, the probability is ``0.0``.
+                - If the source node has recent neighbors within the time window, the base score
+                is computed over those neighbors, and if the pair ``(src, dst)`` has a recorded 
+                co-occurrence count, an additional co-occurrence term is added.
+                - If the source has no valid recent interactions and there is no
+                co-occurrence signal, the predicted probability is ``0.0``.
         """
         pred = torch.zeros_like(query_src)
 
         unique_src, inv = torch.unique(query_src, return_inverse=True)
-        base_scores = torch.zeros(unique_src.size(0))
-
-        window_start = self._window_start
-        window_end = self._window_end
-        window_size = self._window_size
 
         # popularity signal
         ts_mat = self.recent_ts[unique_src.long()]
@@ -159,29 +156,27 @@ class tCoMemPredictor:
         pos_idx = torch.arange(self.k, device=ts_mat.device)
         valid_mask = pos_idx.unsqueeze(0) < len_vec.unsqueeze(1)
 
-        time_mask = (ts_mat >= window_start) & (ts_mat <= window_end)
+        time_mask = (ts_mat >= self._window_start) & (ts_mat <= self._window_end)
         mask = valid_mask & time_mask
 
         ts_valid = torch.where(
-            mask, ts_mat, torch.tensor(-float('inf'), device=ts_mat.device)
+            mask, ts_mat, torch.full_like(ts_mat, -float('inf'))
         )
         nbr_valid = torch.where(mask, nbr_mat, torch.zeros_like(nbr_mat))
 
-        decay_vals = torch.exp(-(window_end - ts_valid) / window_size)
+        decay_vals = torch.exp(-(self._window_end - ts_valid) / self._window_size)
         pop_vals = torch.sigmoid(self.popularity[nbr_valid])
 
         base_scores = (decay_vals * pop_vals * mask).sum(dim=1)
         pred = base_scores[inv].clone()
-        co_vals = torch.zeros(len(query_src), device=query_src.device)
+        co_vals = torch.zeros_like(query_src)
 
         # co-occurrence signal
         for i, (s, d) in enumerate(zip(query_src, query_dst)):
             s = s.item()
             d = d.item()
             c = self.node_to_co_occurrence.get(s, {}).get(d, 0)
-
-            if c:
-                co_vals[i] = self.co_occurrence_weight * (c / (1 + c))
+            co_vals[i] = self.co_occurrence_weight * (c / (1 + c))
 
         pred += co_vals
         return pred
