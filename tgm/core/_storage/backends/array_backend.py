@@ -151,6 +151,9 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_static_node_feats(self) -> Optional[Tensor]:
         return self._data.static_node_feats
 
+    def get_node_type(self) -> Optional[Tensor]:
+        return self._data.node_type
+
     def get_dynamic_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.dynamic_node_feats is None:
             return None
@@ -194,6 +197,19 @@ class DGStorageArrayBackend(DGStorageBase):
             return None
 
         return self._data.edge_feats[edge_mask]
+
+    def get_edge_type(self, slice: DGSliceTracker) -> Optional[Tensor]:
+        if self._data.edge_type is None:
+            return None
+
+        lb_idx, ub_idx = self._binary_search(slice)
+        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
+            self._data.edge_event_idx < ub_idx
+        )
+        if edge_mask.sum() == 0:
+            return None
+
+        return self._data.edge_type[edge_mask]
 
     def get_static_node_feats_dim(self) -> Optional[int]:
         if self._data.static_node_feats is None:

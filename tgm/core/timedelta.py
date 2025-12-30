@@ -126,6 +126,10 @@ TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
     'tgbn-genre': TimeDeltaDG('s'),
     'tgbn-reddit': TimeDeltaDG('s'),
     'tgbn-token': TimeDeltaDG('s'),
+    'thgl-software': TimeDeltaDG('s'),
+    'thgl-forum': TimeDeltaDG('s'),
+    'thgl-github': TimeDeltaDG('s'),
+    'thgl-myket': TimeDeltaDG('s'),
 }
 
 TGB_SEQ_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {

@@ -57,8 +57,16 @@ class DGStorageBase(ABC):
         """Return edge features within the slice, if any."""
 
     @abstractmethod
+    def get_edge_type(self, slice: DGSliceTracker) -> Optional[Tensor]:
+        """Return edge type within the slice, if any."""
+
+    @abstractmethod
     def get_static_node_feats(self) -> Optional[Tensor]:
         """Return static node features of the entire graph."""
+
+    @abstractmethod
+    def get_node_type(self) -> Optional[Tensor]:
+        """Return node type for each node of the entire graph, if any."""
 
     @abstractmethod
     def get_dynamic_node_feats_dim(self) -> Optional[int]:

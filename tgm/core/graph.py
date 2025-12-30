@@ -90,6 +90,9 @@ class DGraph:
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats
 
+        if self.edge_type is not None:
+            batch.edge_type = self.edge_type
+
         logger.debug(
             'Materialized DGraph slice: %d edge events, %d node events',
             batch.src.numel(),
@@ -237,6 +240,22 @@ class DGraph:
             feats = feats.to(self.device)
         return feats
 
+    @cached_property
+    def _node_type_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_node_type()
+
+    @property
+    def node_type(self) -> Optional[Tensor]:
+        """If node types exist, returns a dense Tensor(num_nodes_global).
+
+        Note:
+            - num_nodes_global is the global number of nodes from the underlying DGData and it will be independent of the slice.
+        """
+        node_type = self._node_type_cpu
+        if node_type is not None:
+            node_type = node_type.to(self.device)
+        return node_type
+
     @_logged_cached_property
     def _dynamic_node_feats_cpu(self) -> Optional[Tensor]:
         return self._storage.get_dynamic_node_feats(self._slice)
@@ -266,6 +285,21 @@ class DGraph:
         if feats is not None:
             feats = feats.to(self.device)
         return feats
+
+    @_logged_cached_property
+    def _edge_type_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_edge_type(self._slice)
+
+    @property
+    def edge_type(self) -> Optional[Tensor]:
+        """The aggregated edge type over the dynamic graph.
+
+        If edge type exist, returns a tensor of shape (T x V x V).
+        """
+        edge_type = self._edge_type_cpu
+        if edge_type is not None:
+            edge_type = edge_type.to(self.device)
+        return edge_type
 
     @cached_property
     def static_node_feats_dim(self) -> Optional[int]:
