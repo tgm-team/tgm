@@ -139,7 +139,7 @@ class tCoMemPredictor:
         Returns:
             torch.Tensor: Predictions of shape ``(len(query_src),)``, where:
                 - If the source node has recent neighbors within the time window, the base score
-                is computed over those neighbors, and if the pair ``(src, dst)`` has a recorded 
+                is computed over those neighbors, and if the pair ``(src, dst)`` has a recorded
                 co-occurrence count, an additional co-occurrence term is added.
                 - If the source has no valid recent interactions and there is no
                 co-occurrence signal, the predicted probability is ``0.0``.
@@ -159,9 +159,7 @@ class tCoMemPredictor:
         time_mask = (ts_mat >= self._window_start) & (ts_mat <= self._window_end)
         mask = valid_mask & time_mask
 
-        ts_valid = torch.where(
-            mask, ts_mat, torch.full_like(ts_mat, -float('inf'))
-        )
+        ts_valid = torch.where(mask, ts_mat, torch.full_like(ts_mat, -float('inf')))
         nbr_valid = torch.where(mask, nbr_mat, torch.zeros_like(nbr_mat))
 
         decay_vals = torch.exp(-(self._window_end - ts_valid) / self._window_size)
