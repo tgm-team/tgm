@@ -191,24 +191,19 @@ def eval(
 
 
 seed_everything(args.seed)
+evaluator = Evaluator(name=args.dataset)
+
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 
 if args.time_gran is not None:
-    full_data = DGData.from_tgb(args.dataset)
-    full_graph = DGraph(full_data)
-    train_data, val_data, test_data = full_data.split()
     train_data = train_data.discretize(args.time_gran)
     val_data = val_data.discretize(args.time_gran)
     test_data = test_data.discretize(args.time_gran)
-    train_dg = DGraph(train_data, device=args.device)
-    val_dg = DGraph(val_data, device=args.device)
-    test_dg = DGraph(test_data, device=args.device)
-else:
-    train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
-    train_dg = DGraph(train_data, device=args.device)
-    val_dg = DGraph(val_data, device=args.device)
-    test_dg = DGraph(test_data, device=args.device)
 
-evaluator = Evaluator(name=args.dataset)
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
+
 num_classes = train_dg.dynamic_node_feats_dim
 
 nbr_hook = RecencyNeighborHook(

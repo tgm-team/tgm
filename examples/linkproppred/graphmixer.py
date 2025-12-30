@@ -128,7 +128,6 @@ class GraphMixerEncoder(nn.Module):
 @log_latency
 def train(
     loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -136,6 +135,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_feats = loader.dgraph.static_node_feats
 
     for batch in tqdm(loader):
         opt.zero_grad()
@@ -158,15 +158,12 @@ def train(
 @log_latency
 @torch.no_grad()
 def eval(
-    loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
-    encoder: nn.Module,
-    decoder: nn.Module,
-    evaluator: Evaluator,
+    loader: DGDataLoader, encoder: nn.Module, decoder: nn.Module, evaluator: Evaluator
 ) -> float:
     encoder.eval()
     decoder.eval()
     perf_list = []
+    static_node_feats = loader.dgraph.static_node_feats
 
     for batch in tqdm(loader):
         z = encoder(batch, static_node_feats)
@@ -194,7 +191,13 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+if full_data.static_node_feats is None:
+    full_data.static_node_feats = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
+
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
@@ -248,16 +251,8 @@ train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
-
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.zeros(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
 encoder = GraphMixerEncoder(
-    node_dim=static_node_feats.shape[1],
+    node_dim=train_dg.static_node_feats_dim,
     edge_dim=train_dg.edge_feats_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
@@ -275,10 +270,10 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        loss = train(train_loader, static_node_feats, encoder, decoder, opt)
+        loss = train(train_loader, encoder, decoder, opt)
 
     with hm.activate(val_key):
-        val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
+        val_mrr = eval(val_loader, encoder, decoder, evaluator)
 
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
@@ -287,5 +282,5 @@ for epoch in range(1, args.epochs + 1):
         hm.reset_state()
 
 with hm.activate('test'):
-    test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
+    test_mrr = eval(test_loader, encoder, decoder, evaluator)
 log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

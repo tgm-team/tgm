@@ -140,7 +140,6 @@ class RecurrentGCN(torch.nn.Module):
 def train(
     loader: DGDataLoader,
     labels: torch.Tensor,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -150,6 +149,7 @@ def train(
     decoder.train()
     total_loss = 0
     h_0 = None
+    static_node_feats = loader.dgraph.static_node_feats
 
     y_pred = torch.zeros_like(labels, dtype=torch.float)
     for i, batch in enumerate(tqdm(loader)):
@@ -181,7 +181,6 @@ def train(
 def eval(
     loader: DGDataLoader,
     y_true: torch.Tensor,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     h_0: torch.Tensor,
@@ -190,6 +189,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     y_pred = torch.zeros_like(y_true, dtype=torch.float)
+    static_node_feats = loader.dgraph.static_node_feats
 
     for i, batch in enumerate(tqdm(loader)):
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
@@ -217,6 +217,11 @@ full_data = DGData.from_pandas(
     time_delta=args.raw_time_gran,
 ).discretize(args.batch_time_gran)
 
+if full_data.static_node_feats is None:
+    full_data.static_node_feats = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
+
 train_data, val_data, test_data = full_data.split(
     TemporalRatioSplit(
         train_ratio=args.train_ratio,
@@ -233,15 +238,8 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, on_empty=
 val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
 encoder = RecurrentGCN(
-    node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
+    node_dim=train_dg.static_node_feats_dim, embed_dim=args.embed_dim
 ).to(args.device)
 decoder = GraphPredictor(in_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device
@@ -269,21 +267,16 @@ for epoch in range(1, args.epochs + 1):
     loss, h_0, train_results = train(
         train_loader,
         train_labels,
-        static_node_feats,
         encoder,
         decoder,
         opt,
         train_metrics,
     )
 
-    val_results, h_0 = eval(
-        val_loader, val_labels, static_node_feats, encoder, decoder, h_0, val_metrics
-    )
+    val_results, h_0 = eval(val_loader, val_labels, encoder, decoder, h_0, val_metrics)
     log_metric('Loss', loss, epoch=epoch)
     log_metrics_dict(train_results, epoch=epoch)
     log_metrics_dict(val_results, epoch=epoch)
 
-test_results, h_0 = eval(
-    test_loader, test_labels, static_node_feats, encoder, decoder, h_0, test_metrics
-)
+test_results, h_0 = eval(test_loader, test_labels, encoder, decoder, h_0, test_metrics)
 log_metrics_dict(test_results, epoch=args.epochs)

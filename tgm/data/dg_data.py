@@ -475,6 +475,19 @@ class DGData:
 
         return replace(self, **cloned_fields)  # type: ignore
 
+    @property
+    def num_nodes(self) -> int:
+        """Global number of nodes in the dataset.
+
+        Note: Assumes node ids span a contiguous range, returning max(node_id) + 1.
+        """
+        max_id = int(self.edge_index.max())
+
+        if self.node_ids is not None:
+            max_id = max(max_id, int(self.node_ids.max()))
+
+        return max_id + 1
+
     @classmethod
     def from_raw(
         cls,
