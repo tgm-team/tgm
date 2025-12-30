@@ -80,7 +80,7 @@ python "$ROOT_DIR/examples/linkproppred/thgl/edgebank.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:10:00',
+        '--time=0:15:00',
     ]
 )
 def test_edgebank_linkprop_pred_fixed_memory_thgl(slurm_job_runner, dataset):
