@@ -206,7 +206,7 @@ evaluator = Evaluator(name=args.dataset)
 full_data = DGData.from_tgb(args.dataset)
 if full_data.static_node_feats is None:
     full_data.static_node_feats = torch.randn(
-        (full_data.num_nodes, args.node_dim), device=args.device
+        (full_data.num_nodes, 1), device=args.device
     )
 
 train_data, val_data, test_data = full_data.split()
