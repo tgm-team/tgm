@@ -290,7 +290,7 @@ hm = RecipeRegistry.build(
 hm.register_shared(
     RecencyNeighborHook(
         num_nbrs=[args.num_neighbors],
-        num_nodes=test_dg.num_nodes,
+        num_nodes=full_data.num_nodes,
         seed_nodes_keys=['src', 'dst', 'neg'],
         seed_times_keys=['time', 'time', 'neg_time'],
     )
@@ -302,7 +302,7 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 random_projection_module = RandomProjectionModule(
-    num_nodes=test_dg.num_nodes,
+    num_nodes=full_data.num_nodes,
     num_layer=args.rp_num_layers,
     time_decay_weight=args.rp_time_decay_weight,
     beginning_time=train_dg.start_time,

@@ -211,7 +211,7 @@ if args.sampling == 'uniform':
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
-        num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+        num_nodes=full_data.num_nodes,  # Assuming node ids at test set > train/val set
         seed_nodes_keys=['node_ids'],
         seed_times_keys=['node_times'],
     )

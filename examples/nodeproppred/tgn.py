@@ -193,7 +193,8 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+train_data, val_data, test_data = full_data.split()
 
 if args.time_gran is not None:
     train_data = train_data.discretize(args.time_gran)
@@ -208,7 +209,7 @@ num_classes = train_dg.dynamic_node_feats_dim
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
-    num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+    num_nodes=full_data.num_nodes,
     seed_nodes_keys=['node_ids'],
     seed_times_keys=['node_times'],
 )
@@ -221,7 +222,7 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 memory = TGNMemory(
-    test_dg.num_nodes,
+    full_data.num_nodes,
     test_dg.edge_feats_dim,
     args.memory_dim,
     args.time_dim,

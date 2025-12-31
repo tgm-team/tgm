@@ -252,7 +252,7 @@ test_snapshots_loader = DGDataLoader(
 
 encoder = RecurrentGCN(
     input_channel=train_dg.static_node_feats_dim,
-    num_nodes=test_dg.num_nodes,
+    num_nodes=full_data.num_nodes,
     nhid=args.embed_dim,
     dropout=args.dropout,
     update=args.update,
@@ -265,8 +265,8 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     last_embeddings = [
-        torch.zeros(test_dg.num_nodes, args.embed_dim, device=args.device),
-        torch.zeros(test_dg.num_nodes, args.embed_dim, device=args.device),
+        torch.zeros(full_data.num_nodes, args.embed_dim, device=args.device),
+        torch.zeros(full_data.num_nodes, args.embed_dim, device=args.device),
     ]
     with hm.activate(train_key):
         start_time = time.perf_counter()

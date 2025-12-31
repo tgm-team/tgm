@@ -241,7 +241,7 @@ hm.register_shared(GraphMixerHook(args.time_gap))
 hm.register_shared(
     RecencyNeighborHook(
         num_nbrs=[args.n_nbrs],
-        num_nodes=test_dg.num_nodes,
+        num_nodes=full_data.num_nodes,
         seed_nodes_keys=['src', 'dst', 'neg'],
         seed_times_keys=['time', 'time', 'neg_time'],
     )

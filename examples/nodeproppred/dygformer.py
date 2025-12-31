@@ -249,13 +249,13 @@ test_dg = DGraph(test_data, device=args.device)
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
-    num_nodes=test_dg.num_nodes,
+    num_nodes=full_data.num_nodes,
     seed_nodes_keys=['src', 'dst'],
     seed_times_keys=['time', 'time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
-hm.register('train', EdgeEventsSeenNodesTrackHook(test_dg.num_nodes))
+hm.register('train', EdgeEventsSeenNodesTrackHook(full_data.num_nodes))
 hm.register_shared(DeduplicationHook())
 hm.register_shared(nbr_hook)
 
@@ -266,7 +266,7 @@ test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
 num_classes = train_dg.dynamic_node_feats_dim
 
 encoder = DyGFormer_NodePrediction(
-    num_nodes=test_dg.num_nodes,
+    num_nodes=full_data.num_nodes,
     node_feat_dim=train_dg.static_node_feats_dim,
     edge_feat_dim=train_dg.edge_feats_dim,
     time_feat_dim=args.time_dim,
