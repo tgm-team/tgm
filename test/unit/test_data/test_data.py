@@ -35,6 +35,7 @@ def test_init_dg_data():
     assert data.edge_type is None
     assert data.node_type is None
     assert data.time_delta == TimeDeltaDG('r')
+    assert data.num_nodes == 21
 
 
 def test_init_dg_data_with_time_delta():
@@ -89,6 +90,7 @@ def test_init_dg_data_node_events():
     assert data.edge_type is None
     assert data.node_type is None
     assert data.time_delta == TimeDeltaDG('r')
+    assert data.num_nodes == 21
 
 
 def test_init_dg_data_node_events_and_node_features():

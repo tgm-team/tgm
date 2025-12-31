@@ -24,6 +24,7 @@ def test_init_ordered_dg_ordered_batch():
     dg = DGraph(data)
     loader = DGDataLoader(dg)
     assert loader._batch_size == 1
+    assert id(dg) == id(loader.dgraph)
 
 
 @pytest.mark.parametrize('batch_unit', ['Y', 'M', 'W', 'D', 'h', 's', 'ms', 'us', 'ns'])
