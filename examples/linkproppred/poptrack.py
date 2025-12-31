@@ -78,11 +78,11 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
-num_nodes = test_dg.num_nodes
 
 train_data = train_dg.materialize(materialize_features=False)
 
@@ -97,7 +97,7 @@ model = PopTrackPredictor(
     train_data.src,
     train_data.dst,
     train_data.time,
-    num_nodes,
+    full_data.num_nodes,
     k=args.k,
     decay=decay,
 )

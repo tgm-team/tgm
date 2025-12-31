@@ -204,13 +204,14 @@ def train(
     loader: DGDataLoader,
     model: nn.Module,
     opt: torch.optim.Optimizer,
-    static_node_feat: torch.Tensor,
 ) -> float:
     model.train()
     total_loss = 0
+    static_node_feats = loader.dgraph.static_node_feats
+
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out = model(batch, static_node_feat)
+        pos_out, neg_out = model(batch, static_node_feats)
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
@@ -227,10 +228,10 @@ def eval(
     evaluator: Evaluator,
     loader: DGDataLoader,
     model: nn.Module,
-    static_node_feat: torch.Tensor,
 ) -> float:
     model.eval()
     perf_list = []
+    static_node_feats = loader.dgraph.static_node_feats
     max_eval_batches_per_epoch = os.getenv('TGM_CI_MAX_EVAL_BATCHES_PER_EPOCH')
 
     for batch_num, batch in enumerate(tqdm(loader)):
@@ -250,7 +251,7 @@ def eval(
                 neg_idx
             ]
 
-            pos_out, neg_out = model(copy_batch, static_node_feat)
+            pos_out, neg_out = model(copy_batch, static_node_feats)
             pos_out, neg_out = pos_out.sigmoid(), neg_out.sigmoid()
 
             input_dict = {
@@ -272,18 +273,16 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+if full_data.static_node_feats is None:
+    full_data.static_node_feats = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
+
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
-
-if train_dg.static_node_feats is not None:
-    static_node_feat = train_dg.static_node_feats
-else:
-    static_node_feat = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
 
 hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
@@ -291,7 +290,7 @@ hm = RecipeRegistry.build(
 hm.register_shared(
     RecencyNeighborHook(
         num_nbrs=[args.num_neighbors],
-        num_nodes=test_dg.num_nodes,
+        num_nodes=full_data.num_nodes,
         seed_nodes_keys=['src', 'dst', 'neg'],
         seed_times_keys=['time', 'time', 'neg_time'],
     )
@@ -303,7 +302,7 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 random_projection_module = RandomProjectionModule(
-    num_nodes=test_dg.num_nodes,
+    num_nodes=full_data.num_nodes,
     num_layer=args.rp_num_layers,
     time_decay_weight=args.rp_time_decay_weight,
     beginning_time=train_dg.start_time,
@@ -316,7 +315,7 @@ random_projection_module = RandomProjectionModule(
 )
 
 model = TPNet_LinkPrediction(
-    node_feat_dim=static_node_feat.shape[1],
+    node_feat_dim=train_dg.static_node_feats_dim,
     edge_feat_dim=train_dg.edge_feats_dim,
     time_feat_dim=args.time_dim,
     output_dim=args.embed_dim,
@@ -332,9 +331,9 @@ opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        loss = train(train_loader, model, opt, static_node_feat)
+        loss = train(train_loader, model, opt)
     with hm.activate(val_key):
-        val_mrr = eval(evaluator, val_loader, model, static_node_feat)
+        val_mrr = eval(evaluator, val_loader, model)
 
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
@@ -345,5 +344,5 @@ for epoch in range(1, args.epochs + 1):
         model.rp_module.reset_random_projections()
 
 with hm.activate(test_key):
-    test_mrr = eval(evaluator, test_loader, model, static_node_feat)
+    test_mrr = eval(evaluator, test_loader, model)
 log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
