@@ -106,7 +106,7 @@ def test_init_dg_data_node_events_and_node_features():
         node_timestamps,
         node_ids,
         dynamic_node_feats,
-        static_node_feats,
+        static_node_feats=static_node_feats,
     )
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.timestamps, torch.LongTensor([1, 5, 6, 7, 8]))
@@ -134,7 +134,7 @@ def test_init_dg_data_sort_required():
         node_timestamps,
         node_ids,
         dynamic_node_feats,
-        static_node_feats,
+        static_node_feats=static_node_feats,
     )
 
     exp_edge_index = torch.IntTensor([[10, 20], [2, 3]])
@@ -467,7 +467,7 @@ def test_init_dg_data_bad_args_bad_static_node_feats():
             node_timestamps,
             node_ids,
             None,
-            torch.rand(20, 11),  # should be [21, ...]
+            static_node_feats=torch.rand(20, 11),  # should be [21, ...]
         )
 
     # Num nodes = 21
@@ -482,7 +482,7 @@ def test_init_dg_data_bad_args_bad_static_node_feats():
             None,
             None,
             None,
-            torch.rand(20, 11),  # should be [21, ...]
+            static_node_feats=torch.rand(20, 11),  # should be [21, ...]
         )
 
     # Num nodes = 101
@@ -499,7 +499,7 @@ def test_init_dg_data_bad_args_bad_static_node_feats():
             None,
             None,
             None,
-            torch.rand(20, 11),  # should be [101, ...]
+            static_node_feats=torch.rand(20, 11),  # should be [101, ...]
         )
 
 
@@ -1410,7 +1410,7 @@ def test_discretize_with_node_events_reduce_op_first():
         node_timestamps,
         node_ids,
         dynamic_node_feats,
-        static_node_feats,
+        static_node_feats=static_node_feats,
         time_delta='m',
         edge_type=edge_type,
         node_type=node_type,

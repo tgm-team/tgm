@@ -74,7 +74,7 @@ def data_with_features():
         node_timestamps,
         node_ids,
         dynamic_node_feats,
-        static_node_feats,
+        static_node_feats=static_node_feats,
         edge_type=edge_type,
         node_type=node_type,
     )
