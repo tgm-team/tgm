@@ -10,4 +10,5 @@ from .neighbors import NeighborSamplerHook, RecencyNeighborHook
 from .hook_manager import HookManager
 from .recipe import RecipeRegistry
 from .node_tracks import EdgeEventsSeenNodesTrackHook
-from .basic_analytics import BasicBatchAnalyticsHook
+from .batch_analytics import BatchAnalyticsHook
+from .node_analytics import NodeAnalyticsHook

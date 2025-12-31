@@ -10,7 +10,7 @@ from tgm.util.logging import _get_logger
 logger = _get_logger(__name__)
 
 
-class BasicBatchAnalyticsHook(StatelessHook):
+class BatchAnalyticsHook(StatelessHook):
     """Compute simple batch-level statistics."""
 
     requires: Set[str] = set()
