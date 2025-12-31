@@ -11,7 +11,7 @@ from tgm.util.logging import _get_logger
 logger = _get_logger(__name__)
 
 
-class NodeCentricAnalyticsHook(StatefulHook):
+class NodeAnalyticsHook(StatefulHook):
     """Compute node-centric statistics for a specific set of tracked nodes.
 
     This hook maintains state across batches to compute temporal statistics

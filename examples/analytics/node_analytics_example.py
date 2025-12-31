@@ -9,7 +9,7 @@ from tqdm import tqdm
 from tgm import DGraph
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager
-from tgm.hooks.node_analytics import NodeCentricAnalyticsHook
+from tgm.hooks.node_analytics import NodeAnalyticsHook
 from tgm.util.logging import enable_logging, log_latency, log_metrics_dict
 from tgm.util.seed import seed_everything
 
@@ -21,7 +21,7 @@ parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbn-trade', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument(
-    '--num-tracked', type=int, default=500, help='Number of nodes to track'
+    '--num-tracked', type=int, default=1, help='Number of nodes to track'
 )
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
@@ -65,7 +65,7 @@ def run_node_analytics(
     dg: DGraph, bsize: int, tracked_nodes: torch.Tensor
 ) -> tuple[dict, list]:
     """Run node analytics hook and collect statistics."""
-    node_analytics_hook = NodeCentricAnalyticsHook(
+    node_analytics_hook = NodeAnalyticsHook(
         tracked_nodes=tracked_nodes, num_nodes=dg.num_nodes
     )
 

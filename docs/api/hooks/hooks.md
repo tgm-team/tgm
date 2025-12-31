@@ -13,4 +13,4 @@
 ::: tgm.hooks.NegativeEdgeSamplerHook
 ::: tgm.hooks.RecencyNeighborHook
 ::: tgm.hooks.BatchAnalyticsHook
-::: tgm.hooks.NodeCentricAnalyticsHook
+::: tgm.hooks.NodeAnalyticsHook
