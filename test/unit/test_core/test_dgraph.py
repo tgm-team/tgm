@@ -134,6 +134,7 @@ def test_materialize(data):
         exp_dst,
         exp_t,
         dg.dynamic_node_feats._values(),
+        None,  # dynamic_node_targets
         dg.edge_feats,
         dg.dynamic_node_feats._indices()[0],
         dg.dynamic_node_feats._indices()[1].int(),

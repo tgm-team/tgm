@@ -53,6 +53,10 @@ class DGStorageBase(ABC):
         """Return dynamic node features as a sparse coordinate-format tensor within the slice, if any."""
 
     @abstractmethod
+    def get_dynamic_node_targets(self, slice: DGSliceTracker) -> Optional[Tensor]:
+        """Return dynamic node targets as a sparse coordinate-format tensor within the slice, if any."""
+
+    @abstractmethod
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         """Return edge features within the slice, if any."""
 
@@ -71,6 +75,10 @@ class DGStorageBase(ABC):
     @abstractmethod
     def get_dynamic_node_feats_dim(self) -> Optional[int]:
         """Return dimension of dynamic node features, if any."""
+
+    @abstractmethod
+    def get_dynamic_node_targets_dim(self) -> Optional[int]:
+        """Return dimension of dynamic node targets, if any."""
 
     @abstractmethod
     def get_edge_feats_dim(self) -> Optional[int]:

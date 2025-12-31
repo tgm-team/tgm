@@ -89,6 +89,8 @@ class DGraph:
             batch.dynamic_node_feats = self.dynamic_node_feats._values()
         if materialize_features and self.edge_feats is not None:
             batch.edge_feats = self.edge_feats
+        if materialize_features and self.dynamic_node_targets is not None:
+            batch.dynamic_node_targets = self.dynamic_node_targets._values()
 
         if self.edge_type is not None:
             batch.edge_type = self.edge_type
@@ -272,6 +274,21 @@ class DGraph:
         return feats
 
     @_logged_cached_property
+    def _dynamic_node_targets_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_dynamic_node_targets(self._slice)
+
+    @property
+    def dynamic_node_targets(self) -> Optional[Tensor]:
+        """The aggregated dynamic node targets over the dynamic graph.
+
+        If dynamic node targets exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_target).
+        """
+        targets = self._dynamic_node_targets_cpu
+        if targets is not None:
+            targets = targets.to(self.device)
+        return targets
+
+    @_logged_cached_property
     def _edge_feats_cpu(self) -> Optional[Tensor]:
         return self._storage.get_edge_feats(self._slice)
 
@@ -310,6 +327,11 @@ class DGraph:
     def dynamic_node_feats_dim(self) -> Optional[int]:
         """Dynamic Node feature dimension or None if not Node features on the Graph."""
         return self._storage.get_dynamic_node_feats_dim()
+
+    @cached_property
+    def dynamic_node_targets_dim(self) -> Optional[int]:
+        """Dynamic Node target dimension or None if not Node targets on the Graph."""
+        return self._storage.get_dynamic_node_targets_dim()
 
     @cached_property
     def edge_feats_dim(self) -> Optional[int]:

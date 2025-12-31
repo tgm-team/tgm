@@ -185,6 +185,37 @@ class DGStorageArrayBackend(DGStorageBase):
         shape = (max_time + 1, max_node_id + 1, node_feats_dim)
         return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
 
+    def get_dynamic_node_targets(self, slice: DGSliceTracker) -> Optional[Tensor]:
+        if self._data.dynamic_node_targets is None:
+            return None
+        assert self._data.node_event_idx is not None  # for mypy
+        assert self._data.node_ids is not None  # for mypy
+
+        lb_idx, ub_idx = self._binary_search(slice)
+        node_mask = (self._data.node_event_idx >= lb_idx) & (
+            self._data.node_event_idx < ub_idx
+        )
+        if node_mask.sum() == 0:
+            logger.debug(f'No dynamic node targets in slice {slice}')
+            return None
+
+        time = self._data.timestamps[self._data.node_event_idx[node_mask]]
+        nodes = self._data.node_ids[node_mask]
+        indices = torch.stack([time, nodes], dim=0)
+        values = self._data.dynamic_node_targets[node_mask]
+
+        max_node_id = nodes.max()
+        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
+            self._data.edge_event_idx < ub_idx
+        )
+        if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
+            max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
+
+        max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
+        node_targets_dim = self.get_dynamic_node_targets_dim()
+        shape = (max_time + 1, max_node_id + 1, node_targets_dim)
+        return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
+
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.edge_feats is None:
             return None
@@ -220,6 +251,11 @@ class DGStorageArrayBackend(DGStorageBase):
         if self._data.dynamic_node_feats is None:
             return None
         return self._data.dynamic_node_feats.shape[1]
+
+    def get_dynamic_node_targets_dim(self) -> Optional[int]:
+        if self._data.dynamic_node_targets is None:
+            return None
+        return self._data.dynamic_node_targets.shape[1]
 
     def get_edge_feats_dim(self) -> Optional[int]:
         if self._data.edge_feats is None:

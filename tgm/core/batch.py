@@ -22,6 +22,8 @@ class DGBatch:
         time (Tensor): Timestamps of each edge event. Shape `(E,)`.
         dynamic_node_feats (Tensor | None, optional): Dynamic node features for nodes
             in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
+        dynamic_node_targets (Tensor | None, optional): Dynamic node targets for nodes
+            in the batch. Tensor of shape `(T x V x d_node_target)`.
         edge_feats (Tensor | None, optional): Edge features for the batch. Tensor
             of shape `(T x V x V x d_edge)`.
         node_times (Tensor | None, optional): Timestamps corresponding to dynamic node features.
@@ -33,6 +35,7 @@ class DGBatch:
     dst: Tensor
     time: Tensor
     dynamic_node_feats: Optional[Tensor] = None
+    dynamic_node_targets: Optional[Tensor] = None
     edge_feats: Optional[Tensor] = None
     node_times: Optional[Tensor] = None
     node_ids: Optional[Tensor] = None
