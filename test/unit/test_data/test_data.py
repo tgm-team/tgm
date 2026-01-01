@@ -958,7 +958,9 @@ def test_from_pandas_bad_node_cols_not_specified():
 
 @pytest.fixture
 def tgb_dataset_factory():
-    def _make_dataset(split: str = 'all', with_node_feats: bool = False, thgl=False):
+    def _make_dataset(
+        split: str = 'all', with_node_feats: bool = False, thgl=False, tkgl=False
+    ):
         num_events, num_train, num_val = 10, 7, 2
         train_indices = np.arange(0, num_train)
         val_indices = np.arange(num_train, num_train + num_val)
@@ -1010,6 +1012,10 @@ def tgb_dataset_factory():
             mock_dataset.node_type = np.arange(
                 max(sources.max(), destinations.max()) + 1
             )
+
+        if tkgl:
+            mock_dataset.full_data['edge_type'] = np.arange(num_events)
+            mock_dataset.full_data['w'] = np.random.rand(num_events, 10)
 
         return mock_dataset
 
@@ -1079,6 +1085,59 @@ def bad_thgl_dataset_factory():  # Missing edge_type or node_type
 
 
 @pytest.fixture
+def bad_tkgl_dataset_factory():  # Missing edge_type
+    def _make_dataset(split: str = 'all'):
+        num_events, num_train, num_val = 10, 7, 2
+        train_indices = np.arange(0, num_train)
+        val_indices = np.arange(num_train, num_train + num_val)
+        test_indices = np.arange(num_train + num_val, num_events)
+
+        sources = np.random.randint(0, 1000, size=num_events)
+        destinations = np.random.randint(0, 1000, size=num_events)
+        timestamps = np.arange(num_events)
+        edge_feat = None
+        w = np.random.rand(num_events, 10)
+
+        train_mask = np.zeros(num_events, dtype=bool)
+        val_mask = np.zeros(num_events, dtype=bool)
+        test_mask = np.zeros(num_events, dtype=bool)
+
+        train_mask[train_indices] = True
+        val_mask[val_indices] = True
+        test_mask[test_indices] = True
+
+        mock_dataset = MagicMock()
+        mock_dataset.train_mask = train_mask
+        mock_dataset.val_mask = val_mask
+        mock_dataset.test_mask = test_mask
+        mock_dataset.num_edges = num_events
+        mock_dataset.full_data = {
+            'sources': sources,
+            'destinations': destinations,
+            'timestamps': timestamps,
+            'edge_feat': edge_feat,
+            'w': w,
+        }
+
+        if split == 'all':
+            1 + max(np.max(sources), np.max(destinations))
+        else:
+            mask = {'train': train_mask, 'val': val_mask, 'test': test_mask}[split]
+            valid_src, valid_dst = sources[mask], destinations[mask]
+            1 + max(np.max(valid_src), np.max(valid_dst))
+
+        mock_dataset.node_feat = None
+
+        mock_dataset.full_data['node_label_dict'] = {}
+        for i in range(5):
+            mock_dataset.full_data['node_label_dict'][i] = {i: np.zeros(10)}
+
+        return mock_dataset
+
+    return _make_dataset
+
+
+@pytest.fixture
 def tgb_seq_dataset_factory():
     def _make_dataset(
         split: str = 'all', with_node_feats: bool = False, with_edge_feats: bool = True
@@ -1129,11 +1188,6 @@ def tgb_seq_dataset_factory():
         return mock_dataset
 
     return _make_dataset
-
-
-def test_from_tkgl():
-    with pytest.raises(NotImplementedError):
-        DGData.from_tgb('tkgl-foo')
 
 
 def test_from_bad_tgb_name():
@@ -1978,3 +2032,53 @@ def test_from_pandas_with_static_node_type():
     )
     assert isinstance(data, DGData)
     torch.testing.assert_close(data.node_type.tolist(), node_dict['node_type'])
+
+
+@pytest.mark.parametrize('with_node_feats', [True, False])
+@pytest.mark.parametrize('tkgl', [True])
+@patch('tgb.linkproppred.dataset.LinkPropPredDataset')
+@patch.dict('tgm.core.timedelta.TGB_TIME_DELTAS', {'tkgl-smallpedia': TimeDeltaDG('D')})
+def test_from_tkgl(mock_dataset_cls, tgb_dataset_factory, with_node_feats, tkgl):
+    dataset = tgb_dataset_factory(with_node_feats=with_node_feats, tkgl=tkgl)
+    mock_dataset_cls.return_value = dataset
+
+    mock_native_time_delta = TimeDeltaDG('D')  # Patched value
+
+    def _get_exp_edges():
+        src, dst = dataset.full_data['sources'], dataset.full_data['destinations']
+        return np.stack([src, dst], axis=1)
+
+    def _get_exp_times():
+        return dataset.full_data['timestamps']
+
+    def _get_exp_edge_type():
+        return dataset.full_data['edge_type']
+
+    def _get_exp_edge_feat():
+        return dataset.full_data['w']
+
+    data = DGData.from_tgb(name='tkgl-smallpedia')
+    assert isinstance(data, DGData)
+    assert data.time_delta == mock_native_time_delta
+    np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
+    np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
+    np.testing.assert_allclose(data.edge_type.numpy(), _get_exp_edge_type())
+    np.testing.assert_allclose(data.edge_feats.numpy(), _get_exp_edge_feat())
+
+    # Confirm correct dataset instantiation
+    mock_dataset_cls.assert_called_once_with(name='tkgl-smallpedia')
+
+    if with_node_feats:
+        torch.testing.assert_close(
+            data.static_node_feats, torch.Tensor(dataset.node_feat)
+        )
+    else:
+        assert data.static_node_feats is None
+
+
+@patch('tgb.linkproppred.dataset.LinkPropPredDataset')
+def test_from_bad_thgl(mock_dataset_cls, bad_tkgl_dataset_factory):
+    dataset = bad_tkgl_dataset_factory()
+    mock_dataset_cls.return_value = dataset
+    with pytest.raises(ValueError):
+        data = DGData.from_tgb(name='tkgl-smallpedia')

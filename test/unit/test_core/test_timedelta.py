@@ -191,6 +191,10 @@ def test_tgb_native_time_deltas():
         'thgl-forum': TimeDeltaDG('s'),
         'thgl-github': TimeDeltaDG('s'),
         'thgl-myket': TimeDeltaDG('s'),
+        'tkgl-smallpedia': TimeDeltaDG('s'),
+        'tkgl-polecat': TimeDeltaDG('s'),
+        'tkgl-icews': TimeDeltaDG('s'),
+        'tkgl-wikidata': TimeDeltaDG('s'),
     }
     assert TGB_TIME_DELTAS == exp_dict
 
