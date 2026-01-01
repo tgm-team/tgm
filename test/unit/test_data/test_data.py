@@ -1015,7 +1015,7 @@ def tgb_dataset_factory():
 
         if tkgl:
             mock_dataset.full_data['edge_type'] = np.arange(num_events)
-            mock_dataset.full_data['w'] = np.random.rand(num_events, 10)
+            mock_dataset.full_data['w'] = np.random.rand(num_events)
 
         return mock_dataset
 

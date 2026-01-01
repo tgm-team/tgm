@@ -302,6 +302,9 @@ class DGData:
             if self.edge_feats is not None:
                 self.edge_feats = self.edge_feats[edge_order]
 
+            if self.edge_type is not None:
+                self.edge_type = self.edge_type[edge_order]
+
             # Reorder node-specific data
             if self.node_event_idx is not None:
                 node_order = torch.argsort(self.node_event_idx)
@@ -850,7 +853,7 @@ class DGData:
         )
         timestamps = torch.from_numpy(data['timestamps']).to(torch.int64)
         data_edge_feat = (
-            data['w'][:, None] if name.startswith('tkgl-') else data['edge_feat']
+            data['w'][..., None] if name.startswith('tkgl-') else data['edge_feat']
         )  # @TODO: Need to clarify this
         if data_edge_feat is None:
             edge_feats = None

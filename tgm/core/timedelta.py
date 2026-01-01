@@ -130,7 +130,7 @@ TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
     'thgl-forum': TimeDeltaDG('s'),
     'thgl-github': TimeDeltaDG('s'),
     'thgl-myket': TimeDeltaDG('s'),
-    'tkgl-smallpedia': TimeDeltaDG('s'),
+    'tkgl-smallpedia': TimeDeltaDG('Y'),
     'tkgl-polecat': TimeDeltaDG('s'),
     'tkgl-icews': TimeDeltaDG('s'),
     'tkgl-wikidata': TimeDeltaDG('s'),
