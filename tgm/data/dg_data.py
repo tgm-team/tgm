@@ -850,7 +850,7 @@ class DGData:
         )
         timestamps = torch.from_numpy(data['timestamps']).to(torch.int64)
         data_edge_feat = (
-            data['w'] if name.startswith('tkgl-') else data['edge_feat']
+            data['w'][:, None] if name.startswith('tkgl-') else data['edge_feat']
         )  # @TODO: Need to clarify this
         if data_edge_feat is None:
             edge_feats = None
