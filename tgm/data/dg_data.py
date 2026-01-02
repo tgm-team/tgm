@@ -309,6 +309,7 @@ class DGData:
             # Reorder node-specific data
             if self.node_event_idx is not None:
                 node_order = torch.argsort(self.node_event_idx)
+                self.node_event_idx = self.node_event_idx[node_order]
                 self.node_ids = self.node_ids[node_order]  # type: ignore
                 if self.dynamic_node_feats is not None:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]

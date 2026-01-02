@@ -98,7 +98,7 @@ python "$ROOT_DIR/examples/linkproppred/thgl/edgebank.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:15:00',
+        '--time=1:15:00',
     ]
 )
 def test_edgebank_linkprop_pred_unlimited_memory_tkgl(slurm_job_runner, dataset):
@@ -110,13 +110,13 @@ python "$ROOT_DIR/examples/linkproppred/tkgl/edgebank.py" \
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize('dataset', ['tkgl-software'])
+@pytest.mark.parametrize('dataset', ['tkgl-smallpedia'])
 @pytest.mark.slurm(
     resources=[
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:15:00',
+        '--time=1:15:00',
     ]
 )
 def test_edgebank_linkprop_pred_fixed_memory_tkgl(slurm_job_runner, dataset):
