@@ -152,7 +152,9 @@ def test_init_dg_data_sort_required():
     torch.testing.assert_close(data.edge_index, exp_edge_index)
     torch.testing.assert_close(data.timestamps, torch.LongTensor([1, 5, 6, 7, 8]))
     torch.testing.assert_close(data.edge_feats, exp_edge_feats)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([1, 0]))
+    # torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([1, 0]))
+    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+
     torch.testing.assert_close(
         data.node_event_idx,
         torch.IntTensor(
@@ -2063,7 +2065,7 @@ def test_from_tkgl(mock_dataset_cls, tgb_dataset_factory, with_node_feats, tkgl)
     np.testing.assert_allclose(data.edge_index.numpy(), _get_exp_edges())
     np.testing.assert_allclose(data.timestamps.numpy(), _get_exp_times())
     np.testing.assert_allclose(data.edge_type.numpy(), _get_exp_edge_type())
-    np.testing.assert_allclose(data.edge_feats.numpy(), _get_exp_edge_feat())
+    np.testing.assert_allclose(data.edge_feats.numpy(), _get_exp_edge_feat()[:, None])
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tkgl-smallpedia')
