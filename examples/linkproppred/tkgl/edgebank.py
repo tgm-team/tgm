@@ -10,7 +10,7 @@ from tgm.constants import METRIC_TGB_LINKPROPPRED
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, TGBTKGNegativeEdgeSamplerHook
 from tgm.nn import EdgeBankPredictor
-from tgm.util.logging import enable_logging, log_latency
+from tgm.util.logging import enable_logging, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
@@ -77,11 +77,6 @@ test_dg = DGraph(test_data)
 
 train_data = train_dg.materialize(materialize_features=False)
 
-# prev_time = -1
-# for time in train_data.time:
-#     if time.item() < prev_time:
-#         print("Out of order")
-#     prev_time = max(time,prev_time)
 
 hm = HookManager(keys=['val', 'test'])
 hm.register(
@@ -98,31 +93,27 @@ hm.register(
     TGBTKGNegativeEdgeSamplerHook(
         args.dataset,
         split_mode='test',
-        first_dst_id=test_data.edge_index[1].min().int(),
-        last_dst_id=test_data.edge_index[1].max().int(),
+        first_dst_id=min_dst_node,
+        last_dst_id=max_dst_node,
     ),
 )
 
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
-# model = EdgeBankPredictor(
-#     train_data.src,
-#     train_data.dst,
-#     train_data.time,
-#     memory_mode=args.memory_mode,
-#     window_ratio=args.window_ratio,
-#     pos_prob=args.pos_prob,
-# )
+model = EdgeBankPredictor(
+    train_data.src,
+    train_data.dst,
+    train_data.time,
+    memory_mode=args.memory_mode,
+    window_ratio=args.window_ratio,
+    pos_prob=args.pos_prob,
+)
 
 with hm.activate('val'):
-    # val_mrr = eval(val_loader, model, evaluator)
-    # log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr)
-    for batch in tqdm(val_loader):
-        continue
+    val_mrr = eval(val_loader, model, evaluator)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr)
 
 with hm.activate('test'):
-    # val_mrr = eval(val_loader, model, evaluator)
-    # log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr)
-    for batch in tqdm(test_loader):
-        continue
+    test_mrr = eval(test_loader, model, evaluator)
+    log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr)

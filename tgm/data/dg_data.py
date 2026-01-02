@@ -298,6 +298,7 @@ class DGData:
 
             # Reorder edge-specific data
             edge_order = torch.argsort(self.edge_event_idx)
+            self.edge_event_idx = self.edge_event_idx[edge_order]
             self.edge_index = self.edge_index[edge_order]
             if self.edge_feats is not None:
                 self.edge_feats = self.edge_feats[edge_order]
