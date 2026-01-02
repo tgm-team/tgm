@@ -389,7 +389,6 @@ def test_node_only_batch_negative_edge_sampler(MockNegSampler, thgl_node_only_da
         assert len(batch_2.neg_batch_list) == 0  # empty list
 
 
-# =======================
 def test_bad_tgb_tkg_negative_edge_sampler_init():
     min_id = 0
     max_id = 10
