@@ -298,13 +298,18 @@ class DGData:
 
             # Reorder edge-specific data
             edge_order = torch.argsort(self.edge_event_idx)
+            self.edge_event_idx = self.edge_event_idx[edge_order]
             self.edge_index = self.edge_index[edge_order]
             if self.edge_feats is not None:
                 self.edge_feats = self.edge_feats[edge_order]
 
+            if self.edge_type is not None:
+                self.edge_type = self.edge_type[edge_order]
+
             # Reorder node-specific data
             if self.node_event_idx is not None:
                 node_order = torch.argsort(self.node_event_idx)
+                self.node_event_idx = self.node_event_idx[node_order]
                 self.node_ids = self.node_ids[node_order]  # type: ignore
                 if self.dynamic_node_feats is not None:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]
@@ -831,7 +836,7 @@ class DGData:
         elif name.startswith('tgbn-'):
             dataset = NodePropPredDataset(name=name, **kwargs)
         elif name.startswith('tkgl-'):
-            raise NotImplementedError('TGB Temporal Knowledge Graphs not yet supported')
+            dataset = LinkPropPredDataset(name=name, **kwargs)
         elif name.startswith('thgl-'):
             dataset = LinkPropPredDataset(name=name, **kwargs)
         else:
@@ -849,10 +854,13 @@ class DGData:
             dim=1,
         )
         timestamps = torch.from_numpy(data['timestamps']).to(torch.int64)
-        if data['edge_feat'] is None:
+        data_edge_feat = (
+            data['w'][..., None] if name.startswith('tkgl-') else data['edge_feat']
+        )  # @TODO: Need to clarify this
+        if data_edge_feat is None:
             edge_feats = None
         else:
-            edge_feats = torch.from_numpy(data['edge_feat']).to(torch.float32)
+            edge_feats = torch.from_numpy(data_edge_feat).to(torch.float32)
 
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if name.startswith('tgbn-'):
@@ -907,6 +915,13 @@ class DGData:
                 )
             edge_type = torch.from_numpy(data['edge_type']).to(torch.int32)
             node_type = torch.from_numpy(dataset.node_type).to(torch.int32)
+
+        if name.startswith('tkgl'):
+            if 'edge_type' not in data:
+                raise ValueError(
+                    f'Failed to construct TGB dataset. Try updating your TGB package: `pip install --upgrade py-tgb`'
+                )
+            edge_type = torch.from_numpy(data['edge_type']).to(torch.int32)
 
         raw_times = torch.from_numpy(data['timestamps'])
         split_bounds = {}

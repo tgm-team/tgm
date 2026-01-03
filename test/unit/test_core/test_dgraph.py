@@ -31,6 +31,27 @@ def data():
     )
 
 
+@pytest.fixture
+def unorder_data():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([5, 1])
+    edge_feats = torch.rand(2, 5)
+    node_ids = torch.IntTensor([1, 2, 3])
+    node_timestamps = torch.LongTensor([8, 7, 6])
+    dynamic_node_feats = torch.rand(3, 7)
+    static_node_feats = torch.rand(21, 11)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        node_timestamps,
+        node_ids,
+        dynamic_node_feats,
+        static_node_feats,
+    )
+    return data
+
+
 def test_init_from_data(data):
     dg = DGraph(data)
 
@@ -425,3 +446,21 @@ def test_batch_stringify(data):
     batch = dg.materialize()
     batch.foo = ['a']  # Add an iterable to the batch
     assert isinstance(str(batch), str)
+
+
+def test_unorder_data_init(unorder_data):
+    dg = DGraph(unorder_data)
+    src, dst, t = dg.edges
+    expected_src = torch.IntTensor([10, 2])
+    expected_dst = torch.IntTensor([20, 3])
+    expected_edge_time = torch.tensor([1, 5], dtype=torch.int64)
+    expected_node_id = torch.tensor([3, 2, 1], dtype=torch.int64)
+    expected_node_times = torch.tensor([6, 7, 8], dtype=torch.int64)
+
+    torch.testing.assert_close(src, expected_src)
+    torch.testing.assert_close(dst, expected_dst)
+    torch.testing.assert_close(t, expected_edge_time)
+
+    node_times, node_id = dg.dynamic_node_feats._indices()
+    torch.testing.assert_close(node_times, expected_node_times)
+    torch.testing.assert_close(node_id, expected_node_id)
