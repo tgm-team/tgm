@@ -131,9 +131,9 @@ TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
     'thgl-github': TimeDeltaDG('s'),
     'thgl-myket': TimeDeltaDG('s'),
     'tkgl-smallpedia': TimeDeltaDG('Y'),
-    'tkgl-polecat': TimeDeltaDG('s'),
-    'tkgl-icews': TimeDeltaDG('s'),
-    'tkgl-wikidata': TimeDeltaDG('s'),
+    'tkgl-polecat': TimeDeltaDG('D'),
+    'tkgl-icews': TimeDeltaDG('D'),
+    'tkgl-wikidata': TimeDeltaDG('Y'),
 }
 
 TGB_SEQ_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
