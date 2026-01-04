@@ -152,11 +152,11 @@ def test_init_dg_data_sort_required():
     torch.testing.assert_close(data.edge_index, exp_edge_index)
     torch.testing.assert_close(data.timestamps, torch.LongTensor([1, 5, 6, 7, 8]))
     torch.testing.assert_close(data.edge_feats, exp_edge_feats)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([1, 0]))
+    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
     torch.testing.assert_close(
         data.node_event_idx,
         torch.IntTensor(
-            [4, 3, 2],
+            [2, 3, 4],
         ),
     )
     torch.testing.assert_close(data.node_ids, exp_node_ids)
