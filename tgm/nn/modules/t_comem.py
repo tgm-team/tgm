@@ -29,9 +29,9 @@ class tCoMemPredictor:
             dst (torch.Tensor): Destination node IDs of edges used for initialization.
             ts (torch.Tensor): Timestamps of edges used for initialization.
             num_nodes (int): Total number of nodes in the dataset.
-            k (int, optional): threshold for popularity effect. 
-                Defaults to 50, must be positive and smaller than ``num_nodes``. 
-                In general, larger ``k`` leads to better performance but higher memory usage, 
+            k (int, optional): threshold for popularity effect.
+                Defaults to 50, must be positive and smaller than ``num_nodes``.
+                In general, larger ``k`` leads to better performance but higher memory usage,
                 though this usually stops being true after a certain point.
             window_ratio (float, optional): Ratio of the sliding window length to
                 the total observed time span (only used if ``memory_mode='fixed'``).
