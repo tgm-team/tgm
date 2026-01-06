@@ -1,6 +1,5 @@
-from tgm.constants import (
-    PADDED_NODE_ID,
-)
+from tgm.constants import PADDED_NODE_ID
+
 
 def make_user_prompt(src, ts, nbr_nids=None, nbr_times=None):
     if nbr_nids is not None and len(nbr_nids) > 0:

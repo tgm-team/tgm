@@ -7,21 +7,17 @@ import outlines
 import torch
 from pydantic import BaseModel
 from tgb.linkproppred.evaluate import Evaluator
+from tgtalker_utils import make_system_prompt, make_user_prompt
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from tgm import DGraph
-from tgm.constants import (
-    METRIC_TGB_LINKPROPPRED,
-    PADDED_NODE_ID,
-    RECIPE_TGB_LINK_PRED,
-)
+from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
 from tgm.util.logging import enable_logging, log_metric
 from tgm.util.seed import seed_everything
 
-from tgtalker_utils import make_user_prompt, make_system_prompt
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -95,7 +91,7 @@ def main():
     enable_logging(log_file_path=args.log_file_path)
     seed_everything(args.seed)
 
-    logger.info(f'Loading dataset {args.dataset}...')    
+    logger.info(f'Loading dataset {args.dataset}...')
     train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
     logger.info('Initializing Graphs...')
     train_dg = DGraph(train_data)
@@ -106,7 +102,7 @@ def main():
     max_node_id = max(train_dg.num_nodes, val_dg.num_nodes, test_dg.num_nodes)
     nbr_hook = RecencyNeighborHook(
         num_nbrs=[args.n_nbrs],  # One hop
-        num_nodes=max_node_id+1,
+        num_nodes=max_node_id + 1,
         seed_nodes_keys=['src'],  # We only care about src history for the prompt
         seed_times_keys=['time'],
     )
@@ -192,9 +188,9 @@ def main():
                 )
 
                 output = model(
-                        prompt,
-                        TGAnswer,
-                    )
+                    prompt,
+                    TGAnswer,
+                )
 
                 try:
                     data = json.loads(output)
