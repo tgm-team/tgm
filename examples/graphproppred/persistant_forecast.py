@@ -49,6 +49,15 @@ parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
 
+parser.add_argument(
+    '--use-tgb-dataset',
+    default=False,
+    action=argparse.BooleanOptionalAction,
+    help='if use-tgb-dataset, will use tgbl/tgbn dataset for experiments intsead of token data',
+)
+parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
+
+
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
@@ -136,29 +145,35 @@ def eval(
 
 seed_everything(args.seed)
 
-df = pd.read_csv(args.path_dataset)
-df = preprocess_raw_data(df)
+if args.use_tgb_dataset:
+    full_data = DGData.from_tgb(args.dataset).discretize(args.batch_time_gran)
+    _, val_data, test_data = full_data.split()
 
-full_data = DGData.from_pandas(
-    edge_df=df,
-    edge_src_col='from',
-    edge_dst_col='to',
-    edge_time_col='timestamp',
-    edge_feats_col='value',
-    time_delta=args.raw_time_gran,
-).discretize(args.batch_time_gran)
-
-_, val_data, test_data = full_data.split(
-    TemporalRatioSplit(
-        train_ratio=args.train_ratio,
-        val_ratio=args.val_ratio,
-        test_ratio=args.test_ratio,
+    val_dg, test_dg = DGraph(val_data), DGraph(test_data)
+    val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+    test_loader = DGDataLoader(
+        test_dg, batch_unit=args.batch_time_gran, on_empty='raise'
     )
-)
+else:
+    df = pd.read_csv(args.path_dataset)
+    df = preprocess_raw_data(df)
 
-val_dg, test_dg = DGraph(val_data), DGraph(test_data)
-val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
-test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty='raise')
+    full_data = DGData.from_pandas(
+        edge_df=df,
+        edge_src_col='from',
+        edge_dst_col='to',
+        edge_time_col='timestamp',
+        edge_feats_col='value',
+        time_delta=args.raw_time_gran,
+    ).discretize(args.batch_time_gran)
+
+    _, val_data, test_data = full_data.split(
+        TemporalRatioSplit(
+            train_ratio=args.train_ratio,
+            val_ratio=args.val_ratio,
+            test_ratio=args.test_ratio,
+        )
+    )
 
 model = PersistantForecast(edge_count)
 
