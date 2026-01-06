@@ -19,3 +19,4 @@
 ::: tgm.nn.modules.time_encoding
 ::: tgm.nn.modules.attention
 ::: tgm.nn.modules.poptrack
+::: tgm.nn.modules.t_comem

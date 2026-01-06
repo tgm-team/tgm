@@ -7,6 +7,7 @@ from .modules import (
     TemporalAttention,
     EdgeBankPredictor,
     MLPMixer,
+    tCoMemPredictor,
     PopTrackPredictor,
 )
 
@@ -23,6 +24,7 @@ __all__ = [
     'TPNet',
     'TemporalAttention',
     'Time2Vec',
+    'tCoMemPredictor',
     'TGNMemory',
     'NCNPredictor',
     'PopTrackPredictor',
