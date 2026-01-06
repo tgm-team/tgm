@@ -72,6 +72,7 @@ def eval(
 
 
 seed_everything(args.seed)
+evaluator = Evaluator(name=args.dataset)
 
 train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data)
@@ -82,7 +83,6 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
 test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
-evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
 model = PersistantForecaster(num_classes=num_classes)
 

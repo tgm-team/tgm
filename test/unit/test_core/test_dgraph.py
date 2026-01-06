@@ -16,6 +16,8 @@ def data():
     node_ids = torch.IntTensor([2, 4, 6])
     dynamic_node_feats = torch.rand([3, 5])
     static_node_feats = torch.rand(9, 11)
+    edge_type = torch.IntTensor([0, 1, 2])
+    node_type = torch.arange(9, dtype=torch.int32)
     return DGData.from_raw(
         edge_timestamps,
         edge_index,
@@ -24,7 +26,30 @@ def data():
         node_ids,
         dynamic_node_feats,
         static_node_feats,
+        edge_type=edge_type,
+        node_type=node_type,
     )
+
+
+@pytest.fixture
+def unorder_data():
+    edge_index = torch.IntTensor([[2, 3], [10, 20]])
+    edge_timestamps = torch.LongTensor([5, 1])
+    edge_feats = torch.rand(2, 5)
+    node_ids = torch.IntTensor([1, 2, 3])
+    node_timestamps = torch.LongTensor([8, 7, 6])
+    dynamic_node_feats = torch.rand(3, 7)
+    static_node_feats = torch.rand(21, 11)
+    data = DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_feats,
+        node_timestamps,
+        node_ids,
+        dynamic_node_feats,
+        static_node_feats,
+    )
+    return data
 
 
 def test_init_from_data(data):
@@ -59,6 +84,9 @@ def test_init_from_data(data):
     torch.testing.assert_close(dg.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
     torch.testing.assert_close(dg.edge_feats, data.edge_feats)
 
+    torch.testing.assert_close(dg.edge_type, data.edge_type)
+    torch.testing.assert_close(dg.node_type, data.node_type)
+
 
 @pytest.mark.gpu
 def test_init_gpu(data):
@@ -80,6 +108,9 @@ def test_init_gpu(data):
     exp_dynamic_node_feats = exp_dynamic_node_feats.cuda()
     torch.testing.assert_close(dg.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
     torch.testing.assert_close(dg.edge_feats, data.edge_feats.to('cuda'))
+
+    torch.testing.assert_close(dg.edge_type, data.edge_type.to('cuda'))
+    torch.testing.assert_close(dg.node_type, data.node_type.to('cuda'))
 
 
 def test_to_cpu(data):
@@ -118,6 +149,7 @@ def test_materialize(data):
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int32)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int32)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
+    edge_type = torch.IntTensor([0, 1, 2])
     exp = DGBatch(
         exp_src,
         exp_dst,
@@ -126,6 +158,7 @@ def test_materialize(data):
         dg.edge_feats,
         dg.dynamic_node_feats._indices()[0],
         dg.dynamic_node_feats._indices()[1].int(),
+        edge_type=edge_type,
     )
     torch.testing.assert_close(asdict(dg.materialize()), asdict(exp))
 
@@ -135,7 +168,8 @@ def test_materialize_skip_feature_materialization(data):
     exp_src = torch.tensor([2, 2, 1], dtype=torch.int32)
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int32)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
-    exp = DGBatch(exp_src, exp_dst, exp_t, None, None)
+    exp_edge_type = torch.IntTensor([0, 1, 2])
+    exp = DGBatch(exp_src, exp_dst, exp_t, None, None, edge_type=exp_edge_type)
     torch.testing.assert_close(
         asdict(dg.materialize(materialize_features=False)), asdict(exp)
     )
@@ -177,6 +211,8 @@ def test_slice_time_no_upper_bound(data):
     )
     torch.testing.assert_close(dg1.edge_feats, data.edge_feats[1:3])
     torch.testing.assert_close(dg.static_node_feats, dg1.static_node_feats)
+    torch.testing.assert_close(dg.node_type, dg1.node_type)
+    torch.testing.assert_close(dg1.edge_type, data.edge_type[1:3])
 
 
 def test_slice_time_at_end_time(data):
@@ -206,6 +242,7 @@ def test_slice_time_at_end_time(data):
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
     assert torch.equal(dg1.edge_feats, data.edge_feats[0:2])
+    assert torch.equal(dg1.edge_type, data.edge_type[0:2])
 
     # Check original graph cache is not updated
     assert len(dg) == 4
@@ -246,6 +283,7 @@ def test_slice_time_to_empty(data):
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
     assert torch.equal(dg1.edge_feats, data.edge_feats[:2])
+    assert torch.equal(dg1.edge_type, data.edge_type[:2])
 
     # Slice Number 2
     dg2 = dg1.slice_time(5, 15)
@@ -271,6 +309,7 @@ def test_slice_time_to_empty(data):
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     assert torch.equal(dg2.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
     assert torch.equal(dg2.edge_feats, data.edge_feats[1].unsqueeze(0))
+    assert torch.equal(dg2.edge_type, data.edge_type[1].unsqueeze(0))
 
     # Slice number 3
     dg3 = dg2.slice_time(7, 11)
@@ -292,6 +331,7 @@ def test_slice_time_to_empty(data):
     assert torch.equal(dg3.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
 
     assert dg3.edge_feats is None
+    assert dg3.edge_type is None
 
     # Slice number 4 (to empty)
     dg4 = dg3.slice_time(0, 8)
@@ -306,6 +346,7 @@ def test_slice_time_to_empty(data):
     assert dg4.nodes == set()
     assert dg4.dynamic_node_feats is None
     assert dg4.edge_feats is None
+    assert dg4.edge_type is None
 
     exp_edges = (torch.IntTensor([]), torch.IntTensor([]), torch.LongTensor([]))
     torch.testing.assert_close(dg4.edges, exp_edges)
@@ -353,6 +394,7 @@ def test_slice_events(data):
     exp_dynamic_node_feats[10, 6] = data.dynamic_node_feats[2]
     assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
     assert torch.equal(dg1.edge_feats, data.edge_feats[1].unsqueeze(0))
+    assert torch.equal(dg1.edge_type, data.edge_type[1].unsqueeze(0))
 
     # Check original graph cache is not updated
     assert len(dg) == 4
@@ -396,6 +438,7 @@ def test_slice_events_slice_time_combination(data):
     exp_dynamic_node_feats[5, 4] = data.dynamic_node_feats[1]
     assert torch.equal(dg1.dynamic_node_feats.to_dense(), exp_dynamic_node_feats)
     assert torch.equal(dg1.edge_feats, data.edge_feats[1].unsqueeze(0))
+    assert torch.equal(dg1.edge_type, data.edge_type[1].unsqueeze(0))
 
 
 def test_batch_stringify(data):
@@ -403,3 +446,21 @@ def test_batch_stringify(data):
     batch = dg.materialize()
     batch.foo = ['a']  # Add an iterable to the batch
     assert isinstance(str(batch), str)
+
+
+def test_unorder_data_init(unorder_data):
+    dg = DGraph(unorder_data)
+    src, dst, t = dg.edges
+    expected_src = torch.IntTensor([10, 2])
+    expected_dst = torch.IntTensor([20, 3])
+    expected_edge_time = torch.tensor([1, 5], dtype=torch.int64)
+    expected_node_id = torch.tensor([3, 2, 1], dtype=torch.int64)
+    expected_node_times = torch.tensor([6, 7, 8], dtype=torch.int64)
+
+    torch.testing.assert_close(src, expected_src)
+    torch.testing.assert_close(dst, expected_dst)
+    torch.testing.assert_close(t, expected_edge_time)
+
+    node_times, node_id = dg.dynamic_node_feats._indices()
+    torch.testing.assert_close(node_times, expected_node_times)
+    torch.testing.assert_close(node_id, expected_node_id)

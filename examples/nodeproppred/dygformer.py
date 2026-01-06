@@ -167,18 +167,18 @@ def train(
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
-    static_node_feat: torch.Tensor,
 ):
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_feats = loader.dgraph.static_node_feats
 
     for batch in tqdm(loader):
         opt.zero_grad()
 
         y_true = batch.dynamic_node_feats
         if len(batch.src) > 0:
-            z = encoder(batch, static_node_feat)  # [num_nodes, embed_dim]
+            z = encoder(batch, static_node_feats)  # [num_nodes, embed_dim]
 
         if y_true is not None:
             if len(batch.seen_nodes) == 0:
@@ -203,16 +203,17 @@ def eval(
     encoder: nn.Module,
     decoder: nn.Module,
     evaluator: Evaluator,
-    static_node_feat: torch.Tensor,
 ) -> float:
     encoder.eval()
     decoder.eval()
     perf_list = []
+    static_node_feats = loader.dgraph.static_node_feats
+
     for batch in tqdm(loader):
         y_true = batch.dynamic_node_feats
 
         if batch.src.shape[0] > 0:
-            z = encoder(batch, static_node_feat)
+            z = encoder(batch, static_node_feats)
             if y_true is not None:
                 z_node = z[batch.node_ids]
                 y_pred = decoder(z_node)
@@ -227,11 +228,13 @@ def eval(
 
 
 seed_everything(args.seed)
+evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
-full_graph = DGraph(full_data)
-num_nodes = full_graph.num_nodes
-edge_feats_dim = full_graph.edge_feats_dim
+if full_data.static_node_feats is None:
+    full_data.static_node_feats = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
 
 train_data, val_data, test_data = full_data.split()
 
@@ -243,15 +246,16 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
+
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
-    num_nodes=num_nodes,
+    num_nodes=full_data.num_nodes,
     seed_nodes_keys=['src', 'dst'],
     seed_times_keys=['time', 'time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
-hm.register('train', EdgeEventsSeenNodesTrackHook(num_nodes))
+hm.register('train', EdgeEventsSeenNodesTrackHook(full_data.num_nodes))
 hm.register_shared(DeduplicationHook())
 hm.register_shared(nbr_hook)
 
@@ -259,20 +263,12 @@ train_loader = DGDataLoader(train_dg, batch_size=args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, batch_size=args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
 
-if train_dg.static_node_feats is not None:
-    static_node_feat = train_dg.static_node_feats
-else:
-    static_node_feat = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
-evaluator = Evaluator(name=args.dataset)
 num_classes = train_dg.dynamic_node_feats_dim
 
 encoder = DyGFormer_NodePrediction(
-    num_nodes=num_nodes,
-    node_feat_dim=static_node_feat.shape[1],
-    edge_feat_dim=edge_feats_dim,
+    num_nodes=full_data.num_nodes,
+    node_feat_dim=train_dg.static_node_feats_dim,
+    edge_feat_dim=train_dg.edge_feats_dim,
     time_feat_dim=args.time_dim,
     channel_embedding_dim=args.channel_embedding_dim,
     output_dim=args.embed_dim,
@@ -294,9 +290,9 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
-        loss = train(train_loader, encoder, decoder, opt, static_node_feat)
+        loss = train(train_loader, encoder, decoder, opt)
     with hm.activate('val'):
-        val_ndcg = eval(val_loader, encoder, decoder, evaluator, static_node_feat)
+        val_ndcg = eval(val_loader, encoder, decoder, evaluator)
 
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
@@ -305,5 +301,5 @@ for epoch in range(1, args.epochs + 1):
         hm.reset_state()
 
 with hm.activate('test'):
-    test_ndcg = eval(test_loader, encoder, decoder, evaluator, static_node_feat)
+    test_ndcg = eval(test_loader, encoder, decoder, evaluator)
 log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)

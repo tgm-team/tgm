@@ -155,7 +155,6 @@ class GCNEncoder(torch.nn.Module):
 def train(
     loader: DGDataLoader,
     labels: torch.Tensor,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -164,6 +163,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_feats = loader.dgraph.static_node_feats
 
     y_pred = torch.zeros_like(labels, dtype=torch.float)
     for i, batch in enumerate(tqdm(loader)):
@@ -194,7 +194,6 @@ def train(
 def eval(
     loader: DGDataLoader,
     y_true: torch.Tensor,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     metrics: Metric,
@@ -202,6 +201,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     y_pred = torch.zeros_like(y_true, dtype=torch.float)
+    static_node_feats = loader.dgraph.static_node_feats
 
     for i, batch in enumerate(tqdm(loader)):
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
@@ -209,17 +209,16 @@ def eval(
             z_node = z[torch.cat([batch.src, batch.dst])]
             y_pred[i] = decoder(z_node).sigmoid()
 
-        indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
-        metrics(y_pred, y_true, indexes=indexes)
-        metrics_dict = {k: v.item() for k, v in metrics.compute().items()}
-        return metrics_dict
+    indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
+    metrics(y_pred, y_true, indexes=indexes)
+    metrics_dict = {k: v.item() for k, v in metrics.compute().items()}
+    return metrics_dict
 
 
 seed_everything(args.seed)
 
 df = pd.read_csv(args.path_dataset)
 df = preprocess_raw_data(df)
-
 
 full_data = DGData.from_pandas(
     edge_df=df,
@@ -229,6 +228,11 @@ full_data = DGData.from_pandas(
     edge_feats_col='value',
     time_delta=args.raw_time_gran,
 ).discretize(args.batch_time_gran)
+
+if full_data.static_node_feats is None:
+    full_data.static_node_feats = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
 
 train_data, val_data, test_data = full_data.split(
     TemporalRatioSplit(
@@ -246,15 +250,8 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, on_empty=
 val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
 encoder = GCNEncoder(
-    in_channels=static_node_feats.shape[1],
+    in_channels=train_dg.static_node_feats_dim,
     embed_dim=args.embed_dim,
     out_channels=args.embed_dim,
     num_layers=args.n_layers,
@@ -284,24 +281,14 @@ test_labels = generate_binary_trend_labels(
 
 for epoch in range(1, args.epochs + 1):
     loss, train_results = train(
-        train_loader,
-        train_labels,
-        static_node_feats,
-        encoder,
-        decoder,
-        opt,
-        train_metrics,
+        train_loader, train_labels, encoder, decoder, opt, train_metrics
     )
 
-    val_results = eval(
-        val_loader, val_labels, static_node_feats, encoder, decoder, val_metrics
-    )
+    val_results = eval(val_loader, val_labels, encoder, decoder, val_metrics)
 
     log_metric('Loss', loss, epoch=epoch)
     log_metrics_dict(train_results, epoch=epoch)
     log_metrics_dict(val_results, epoch=epoch)
 
-test_results = eval(
-    test_loader, test_labels, static_node_feats, encoder, decoder, test_metrics
-)
+test_results = eval(test_loader, test_labels, encoder, decoder, test_metrics)
 log_metrics_dict(test_results, epoch=args.epochs)

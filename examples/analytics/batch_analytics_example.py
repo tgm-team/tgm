@@ -8,12 +8,12 @@ from tqdm import tqdm
 from tgm import DGraph
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager
-from tgm.hooks.basic_analytics import BasicBatchAnalyticsHook
+from tgm.hooks.batch_analytics import BatchAnalyticsHook
 from tgm.util.logging import enable_logging, log_latency, log_metrics_dict
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='Basic Analytics Example',
+    description='Batch Analytics Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
@@ -34,7 +34,7 @@ dg = DGraph(DGData.from_tgb(args.dataset))
 
 @log_latency
 def run_basic_analytics(dg: DGraph, bsize: int) -> tuple[dict, int, list]:
-    analytics_hook = BasicBatchAnalyticsHook()
+    analytics_hook = BatchAnalyticsHook()
     hm = HookManager(keys=['basic'])
     hm.register('basic', analytics_hook)
     hm.set_active_hooks('basic')

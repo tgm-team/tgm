@@ -90,7 +90,6 @@ class RecurrentGCN(torch.nn.Module):
 def train(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -100,6 +99,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_feats = loader.dgraph.static_node_feats
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
@@ -154,7 +154,6 @@ def train(
 def eval(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     z: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
@@ -164,6 +163,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+    static_node_feats = loader.dgraph.static_node_feats
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
@@ -203,12 +203,16 @@ def eval(
     return float(np.mean(perf_list))
 
 
-args = parser.parse_args()
 seed_everything(args.seed)
-
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+if full_data.static_node_feats is None:
+    full_data.static_node_feats = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
+
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
@@ -246,16 +250,9 @@ test_snapshots_loader = DGDataLoader(
     test_snapshots, batch_unit=args.snapshot_time_gran, on_empty='raise'
 )
 
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
 encoder = RecurrentGCN(
-    input_channel=static_node_feats.shape[1],
-    num_nodes=static_node_feats.shape[0],
+    input_channel=train_dg.static_node_feats_dim,
+    num_nodes=full_data.num_nodes,
     nhid=args.embed_dim,
     dropout=args.dropout,
     update=args.update,
@@ -268,15 +265,14 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     last_embeddings = [
-        torch.zeros(test_dg.num_nodes, args.embed_dim, device=args.device),
-        torch.zeros(test_dg.num_nodes, args.embed_dim, device=args.device),
+        torch.zeros(full_data.num_nodes, args.embed_dim, device=args.device),
+        torch.zeros(full_data.num_nodes, args.embed_dim, device=args.device),
     ]
     with hm.activate(train_key):
         start_time = time.perf_counter()
         loss, last_embeddings = train(
             train_loader,
             train_snapshots_loader,
-            static_node_feats,
             encoder,
             decoder,
             opt,
@@ -290,7 +286,6 @@ for epoch in range(1, args.epochs + 1):
         val_mrr = eval(
             val_loader,
             val_snapshots_loader,
-            static_node_feats,
             last_embeddings,
             encoder,
             decoder,
@@ -304,7 +299,6 @@ with hm.activate(test_key):
     test_mrr = eval(
         test_loader,
         test_snapshots_loader,
-        static_node_feats,
         last_embeddings,
         encoder,
         decoder,
