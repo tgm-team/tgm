@@ -1,16 +1,17 @@
 from tgm.constants import PADDED_NODE_ID
 
 
-def make_user_prompt(src, ts, nbr_nids=None, nbr_times=None):
+def make_user_prompt(src: int, ts: int, nbr_nids=None, nbr_times=None):
+    if src is None or ts is None:
+        raise ValueError('Source node and timestamp must be provided')
+
+    if not isinstance(src, int) or not isinstance(ts, int):
+        raise ValueError('Source node and timestamp must be integers')
+
     if nbr_nids is not None and len(nbr_nids) > 0:
         user_prompt = f',Source Node` {src} has the following past interactions:\n'
         # Filter out padded nodes
         valid_indices = [i for i, n in enumerate(nbr_nids) if n != PADDED_NODE_ID]
-
-        # Sort by time if needed, but RecencyNeighborHook usually gives most recent.
-        # reasoning_main.py iterates and prints.
-        # TGM RecencyNeighborHook returns neighbors.
-        # Assuming nbr_nids and nbr_times are lists/arrays for this specific source.
 
         for idx in valid_indices:
             dst = int(nbr_nids[idx])
