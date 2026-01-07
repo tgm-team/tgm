@@ -32,7 +32,7 @@ python "$ROOT_DIR/examples/nodeproppred/persistant_forecast.py" \
         '--gres=gpu:a100l:1',
     ]
 )
-def test_persistant_forecast_graphprop_pred(slurm_job_runner, dataset_csv):
+def test_persistant_forecast_graphprop_pred_mint(slurm_job_runner, dataset_csv):
     data_root = os.environ.get(
         'GRAPH_PROP_PRED_DATA_ROOT', '$ROOT_DIR/examples/graphproppred'
     )
@@ -55,7 +55,9 @@ python "$ROOT_DIR/examples/graphproppred/persistant_forecast.py" \
         '--time=0:15:00',
     ]
 )
-def test_persistant_forecast_graphprop_pred(slurm_job_runner, dataset, batch_time_gran):
+def test_persistant_forecast_graphprop_pred_tgb(
+    slurm_job_runner, dataset, batch_time_gran
+):
     cmd = f"""
 python "$ROOT_DIR/examples/graphproppred/persistant_forecast.py" \
     --dataset {dataset} --batch-time-gran={batch_time_gran}"""
