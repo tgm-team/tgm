@@ -27,6 +27,15 @@ parser = argparse.ArgumentParser(
     description='GCN GraphPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
+
+"""
+Adapted graph property prediction as proposed in https://openreview.net/forum?id=DZqic2sPTY
+
+Note:
+ - `lag` is excluded from this example's setting.
+ - Graph property prediction is always DTDG setting (snapshot-based)
+"""
+
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--train-ratio', type=float, default=0.7, help='train ratio')
 parser.add_argument('--val-ratio', type=float, default=0.15, help='validation ratio')
@@ -247,7 +256,9 @@ def eval(
 seed_everything(args.seed)
 
 full_data, split_strategy = load_data(args.dataset)
-full_data = full_data.discretize(args.batch_time_gran)
+full_data = full_data.discretize(
+    args.batch_time_gran
+)  # discretize to adapt to graphproppred setting
 
 if full_data.static_node_feats is None:
     full_data.static_node_feats = torch.randn(

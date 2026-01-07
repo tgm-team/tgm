@@ -16,7 +16,9 @@ from tgm.util.seed import seed_everything
 """
 Adapted graph property prediction as proposed in https://openreview.net/forum?id=DZqic2sPTY
 
-Note: `lag` is excluded from this example's setting.
+Note:
+ - `lag` is excluded from this example's setting.
+ - Graph property prediction is always DTDG setting (snapshot-based)
 """
 
 parser = argparse.ArgumentParser(
@@ -167,7 +169,9 @@ def eval(
 seed_everything(args.seed)
 
 full_data, split_strategy = load_data(args.dataset)
-full_data = full_data.discretize(args.batch_time_gran)
+full_data = full_data.discretize(
+    args.batch_time_gran
+)  # discretize to adapt to graphproppred setting
 _, val_data, test_data = full_data.split(split_strategy)
 
 val_dg, test_dg = DGraph(val_data), DGraph(test_data)
