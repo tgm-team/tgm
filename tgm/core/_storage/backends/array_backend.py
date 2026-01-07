@@ -188,19 +188,18 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_dynamic_node_targets(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.dynamic_node_targets is None:
             return None
-        assert self._data.node_event_idx is not None  # for mypy
-        assert self._data.node_ids is not None  # for mypy
+        assert self._data.node_target_idx is not None  # for mypy
 
         lb_idx, ub_idx = self._binary_search(slice)
-        node_mask = (self._data.node_event_idx >= lb_idx) & (
-            self._data.node_event_idx < ub_idx
+        node_mask = (self._data.node_target_idx >= lb_idx) & (
+            self._data.node_target_idx < ub_idx
         )
         if node_mask.sum() == 0:
             logger.debug(f'No dynamic node targets in slice {slice}')
             return None
 
-        time = self._data.timestamps[self._data.node_event_idx[node_mask]]
-        nodes = self._data.node_ids[node_mask]
+        time = self._data.timestamps[self._data.node_target_idx[node_mask]]
+        nodes = self._data.node_target_ids[node_mask]
         indices = torch.stack([time, nodes], dim=0)
         values = self._data.dynamic_node_targets[node_mask]
 

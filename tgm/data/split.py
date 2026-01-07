@@ -79,6 +79,7 @@ class SplitStrategy(ABC):
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
+            node_target_idx=node_target_idx,
             dynamic_node_targets=dynamic_node_targets,
             static_node_feats=static_node_feats,
             edge_type=edge_type,

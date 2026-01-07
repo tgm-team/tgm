@@ -35,14 +35,16 @@ class DGData:
 
     Attributes:
         time_delta (TimeDeltaDG | str): Time granularity of the graph.
-        timestamps (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
+        timestamps (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events + num_node_targets].
         edge_event_idx (Tensor): Indices of edge events within `timestamps`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_feats (Tensor | None): Optional edge features [num_edge_events, D_edge].
         node_event_idx (Tensor | None): Indices of node events within `timestamps`.
         node_ids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         dynamic_node_feats (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
-        dynamic_node_targets (Tensor | None): Node targets over time [num_node_events, D_node_target].
+        node_target_idx (Tensor | None): Indices of node targets within `timestamps`.
+        node_target_ids (Tensor | None): Node IDs corresponding to node targets [num_node_targets, D_node_target].
+        dynamic_node_targets (Tensor | None): Node targets over time [num_node_targets, D_node_target].
         static_node_feats (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
         edge_type (Tensor | None) : Type of relation of each edge event in edge_index [num_edge_events].
         node_type (Tensor | None) : Type of each node [num_nodes].
@@ -69,7 +71,10 @@ class DGData:
     node_event_idx: Tensor | None = None  # [num_node_events]
     node_ids: Tensor | None = None  # [num_node_events]
     dynamic_node_feats: Tensor | None = None  # [num_node_events, D_node_dynamic]
-    dynamic_node_targets: Tensor | None = None  # [num_node_events, D_node_target]
+
+    node_target_idx: Tensor | None = None  # [num_node_targets]
+    node_target_ids: Tensor | None = None  # [num_node_targets]
+    dynamic_node_targets: Tensor | None = None  # [num_node_targets, D_node_target]
 
     static_node_feats: Tensor | None = None  # [num_nodes, D_node_static]
     edge_type: Tensor | None = None  # [num_edge_events]
@@ -223,21 +228,58 @@ class DGData:
                     self.dynamic_node_feats, 'dynamic_node_feats'
                 )
 
-            # Validate dynamic node targets (could be None)
-            if self.dynamic_node_targets is not None:
-                _assert_is_tensor(self.dynamic_node_targets, 'dynamic_node_targets')
-                # TODO: Double check the best data layout for practice node regression tasks
-                if (
-                    self.dynamic_node_targets.ndim != 2
-                    or self.dynamic_node_targets.shape[0] != num_node_events
-                ):
-                    raise ValueError(
-                        'dynamic_node_targets must have shape [num_node_events, D_node_target], '
-                        f'got {num_node_events} node events and shape {self.dynamic_node_targets.shape}'
-                    )
-                self.dynamic_node_targets = _maybe_cast_float_tensor(
-                    self.dynamic_node_targets, 'dynamic_node_targets'
+        # Validate node target idx
+        num_node_targets = 0
+        if self.node_target_idx is not None:
+            _assert_is_tensor(self.node_target_idx, 'node_target_idx')
+            _assert_tensor_is_integral(self.node_target_idx, 'node_target_idx')
+
+            # Safe downcast since we ensured len(timestamps) fits in int32
+            self.node_target_idx = self.node_target_idx.int()
+
+            num_node_targets = self.node_target_idx.shape[0]
+            if num_node_targets == 0:
+                raise ValueError(
+                    'node_target_idx is an empty tensor, please double-check your inputs'
                 )
+
+            # Validate node target ids
+            _assert_is_tensor(self.node_target_ids, 'node_target_ids')
+            _assert_tensor_is_integral(self.node_target_ids, 'node_target_ids')  # type: ignore
+            if (
+                self.node_target_ids.ndim != 1
+                or self.node_target_ids.shape[0] != num_node_targets
+            ):  # type: ignore
+                raise ValueError(
+                    'node_target_ids must have shape [num_node_targets], ',
+                    f'got {num_node_targets} node targets and shape {self.node_target_ids.shape}',  # type: ignore
+                )
+            if torch.any(self.node_target_ids == PADDED_NODE_ID):  # type: ignore
+                raise InvalidNodeIDError(
+                    f'Node targets contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node targets to positive integers.'
+                )
+            if not torch.all(self.node_target_ids < max_int32_capacity):  # type: ignore
+                raise InvalidNodeIDError(
+                    f'Node targets contains node ids that exceed the int32 limit ({max_int32_capacity}). '
+                    'TGM does not yet support graphs this large.'
+                )
+            self.node_target_ids = _maybe_cast_integral_tensor(
+                self.node_target_ids, 'node_target_ids'
+            )  # type: ignore
+
+            # Validate dynamic node targets
+            _assert_is_tensor(self.dynamic_node_targets, 'dynamic_node_targets')
+            if (
+                self.dynamic_node_targets.ndim != 2
+                or self.dynamic_node_targets.shape[0] != num_node_targets
+            ):
+                raise ValueError(
+                    'dynamic_node_targets must have shape [num_node_targets, D_node_target], '
+                    f'got {num_node_targets} node targets and shape {self.dynamic_node_targets.shape}'
+                )
+            self.dynamic_node_targets = _maybe_cast_float_tensor(
+                self.dynamic_node_targets, 'dynamic_node_targets'
+            )
 
         # Validate static node features
         num_nodes = torch.max(self.edge_index).item() + 1  # 0-indexed
@@ -287,11 +329,12 @@ class DGData:
         # Ensure timestamps match number of global events
         if (
             self.timestamps.ndim != 1
-            or self.timestamps.shape[0] != num_edges + num_node_events
+            or self.timestamps.shape[0]
+            != num_edges + num_node_events + num_node_targets
         ):
             raise ValueError(
-                'timestamps must have shape [num_edges + num_node_events], '
-                f'got {num_edges} edges, {num_node_events} node_events, shape: {self.timestamps.shape}. '
+                'timestamps must have shape [num_edges + num_node_events + num_node_targets], '
+                f'got {num_edges} edges, {num_node_events} node_events, {num_node_targets} node_targets, shape: {self.timestamps.shape}. '
                 'Please double-check the edge and node timestamps you provided. If this is not resolved '
                 'raise an issue and provide instructions on how to reproduce your the error'
             )
@@ -313,6 +356,8 @@ class DGData:
             self.edge_event_idx = inverse_sort_idx[self.edge_event_idx]
             if self.node_event_idx is not None:
                 self.node_event_idx = inverse_sort_idx[self.node_event_idx]
+            if self.node_target_idx is not None:
+                self.node_target_idx = inverse_sort_idx[self.node_target_idx]
 
             # Reorder edge-specific data
             edge_order = torch.argsort(self.edge_event_idx)
@@ -326,8 +371,12 @@ class DGData:
                 self.node_ids = self.node_ids[node_order]  # type: ignore
                 if self.dynamic_node_feats is not None:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]
-                if self.dynamic_node_targets is not None:
-                    self.dynamic_node_targets = self.dynamic_node_targets[node_order]
+
+            # Reorder node-target-specific data
+            if self.node_target_idx is not None:
+                node_target_order = torch.argsort(self.node_target_idx)
+                self.node_target_ids = self.node_target_ids[node_target_order]  # type: ignore
+                self.dynamic_node_targets = self.dynamic_node_targets[node_target_order]  # type: ignore
 
     def split(self, strategy: SplitStrategy | None = None) -> Tuple[DGData, ...]:
         """Split the dataset according to a strategy.
@@ -450,6 +499,9 @@ class DGData:
         node_timestamps = None
         node_ids = None
         dynamic_node_feats = None
+
+        node_target_timestamps = None
+        node_target_ids = None
         dynamic_node_targets = None
 
         if self.node_event_idx is not None:
@@ -462,9 +514,14 @@ class DGData:
             dynamic_node_feats = None
             if self.dynamic_node_feats is not None:
                 dynamic_node_feats = self.dynamic_node_feats[node_mask]
-            dynamic_node_targets = None
-            if self.dynamic_node_targets is not None:
-                dynamic_node_targets = self.dynamic_node_targets[node_mask]
+
+        if self.node_target_idx is not None:
+            node_target_mask = _get_keep_indices(
+                self.node_event_idx, self.node_target_ids
+            )
+            node_target_timestamps = buckets[self.node_target_idx][node_target_mask]
+            node_target_ids = self.node_target_ids[node_target_mask]  # type: ignore
+            dynamic_node_targets = self.dynamic_node_targets[node_target_mask]  # type: ignore
 
         # Need a deep copy
         static_node_feats = None
@@ -485,6 +542,8 @@ class DGData:
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
+            node_target_timestamps=node_target_timestamps,
+            node_target_ids=node_target_ids,
             dynamic_node_targets=dynamic_node_targets,
             static_node_feats=static_node_feats,
             edge_type=edge_type,
@@ -512,6 +571,8 @@ class DGData:
         node_timestamps: Tensor | None = None,
         node_ids: Tensor | None = None,
         dynamic_node_feats: Tensor | None = None,
+        node_target_timestamps: Tensor | None = None,
+        node_target_ids: Tensor | None = None,
         dynamic_node_targets: Tensor | None = None,
         static_node_feats: Tensor | None = None,
         time_delta: TimeDeltaDG | str = 'r',
@@ -535,6 +596,8 @@ class DGData:
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
+            node_target_timestamps=node_target_timestamps,
+            node_target_ids=node_target_ids,
             dynamic_node_targets=dynamic_node_targets,
             static_node_feats=static_node_feats,
             time_delta=time_delta,
@@ -542,17 +605,33 @@ class DGData:
             node_type=node_type,
         )
         # Build unified event timeline
-        timestamps = edge_timestamps
-        event_types = torch.zeros_like(edge_timestamps)
+
+        timestamps_list = [edge_timestamps]
+        event_types_list = [torch.full_like(edge_timestamps, fill_value=0)]
+
         if node_timestamps is not None:
-            timestamps = torch.cat([timestamps, node_timestamps])
-            event_types = torch.cat([event_types, torch.ones_like(node_timestamps)])
+            timestamps_list.append(node_timestamps)
+            event_types_list.append(torch.full_like(node_timestamps, fill_value=1))
+
+        if node_target_timestamps is not None:
+            timestamps_list.append(node_target_timestamps)
+            event_types_list.append(
+                torch.full_like(node_target_timestamps, fill_value=2)
+            )
+
+        timestamps = torch.cat(timestamps_list)
+        event_types = torch.cat(event_types_list)
 
         # Compute event masks
         edge_event_idx = (event_types == 0).nonzero(as_tuple=True)[0]
         node_event_idx = (
             (event_types == 1).nonzero(as_tuple=True)[0]
             if node_timestamps is not None
+            else None
+        )
+        node_target_idx = (
+            (event_types == 2).nonzero(as_tuple=True)[0]
+            if node_target_timestamps is not None
             else None
         )
 
@@ -565,6 +644,8 @@ class DGData:
             node_event_idx=node_event_idx,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
+            node_target_idx=node_target_idx,
+            node_target_ids=node_target_ids,
             dynamic_node_targets=dynamic_node_targets,
             static_node_feats=static_node_feats,
             edge_type=edge_type,
@@ -583,6 +664,9 @@ class DGData:
         node_id_col: str | None = None,
         node_time_col: str | None = None,
         dynamic_node_feats_col: List[str] | None = None,
+        node_target_file_path: str | pathlib.Path | None = None,
+        node_target_id_col: str | None = None,
+        node_target_time_col: str | None = None,
         dynamic_node_targets_col: List[str] | None = None,
         static_node_feats_file_path: str | pathlib.Path | None = None,
         static_node_feats_col: List[str] | None = None,
@@ -602,7 +686,10 @@ class DGData:
             node_id_col: Column name for dynamic node event ids. Required if node_file_path is specified.
             node_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
             dynamic_node_feats_col: Optional dynamic node feature columns.
-            dynamic_node_targets_col: Optional dynamic node target columns.
+            node_target_file_path: Optional CSV file for dynamic node targets.
+            node_target_id_col : Required if node_target_file_path is specified.
+            node_target_time_col: Required if node_target_file_path is specified.
+            dynamic_node_targets_col: Required if node_target_file_path is specified.
             static_node_feats_file_path: Optional CSV file for static node features.
             static_node_feats_col: Required if static_node_feats_file_path is specified.
             time_delta: Time granularity.
@@ -650,7 +737,6 @@ class DGData:
         node_timestamps = None
         node_ids = None
         dynamic_node_feats = None
-        dynamic_node_targets = None
 
         if node_file_path is not None:
             if node_id_col is None or node_time_col is None:
@@ -681,6 +767,36 @@ class DGData:
                 if dynamic_node_targets_col is not None:
                     for j, col in enumerate(dynamic_node_targets_col):
                         dynamic_node_targets[i, j] = float(row[col])  # type: ignore
+
+        # Read in node target data
+        node_target_timestamps = None
+        node_target_ids = None
+        dynamic_node_targets = None
+
+        if node_target_file_path is not None:
+            if (
+                node_target_id_col is None
+                or node_target_time_col is None
+                or dynamic_node_targets_col is None
+            ):
+                raise ValueError(
+                    'specified node_target_file_path without specifying node_target_id_col and node_target_time_col and dynamic_node_targets_col'
+                )
+            logger.debug('Reading node_target_file_path: %s', node_target_file_path)
+            node_reader = _read_csv(node_target_file_path)
+            num_node_targets = len(node_reader)
+
+            node_target_timestamps = torch.empty(num_node_targets, dtype=torch.int64)
+            node_target_ids = torch.empty(num_node_targets, dtype=torch.int32)
+            dynamic_node_targets = torch.empty(
+                (num_node_targets, len(dynamic_node_targets_col))
+            )
+
+            for i, row in enumerate(node_reader):
+                node_target_timestamps[i] = int(row[node_target_time_col])
+                node_target_ids[i] = int(row[node_target_id_col])
+                for j, col in enumerate(dynamic_node_targets_col):
+                    dynamic_node_targets[i, j] = float(row[col])  # type: ignore
 
         # Read in static node data
         static_node_feats = None
@@ -713,6 +829,8 @@ class DGData:
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
+            node_target_ids=node_target_ids,
+            node_target_timestamps=node_target_timestamps,
             dynamic_node_targets=dynamic_node_targets,
             static_node_feats=static_node_feats,
             node_type=node_type,
@@ -731,6 +849,9 @@ class DGData:
         node_id_col: str | None = None,
         node_time_col: str | None = None,
         dynamic_node_feats_col: List[str] | None = None,
+        node_target_df: 'pandas.DataFrame' | None = None,  # type: ignore
+        node_target_id_col: str | None = None,
+        node_target_time_col: str | None = None,
         dynamic_node_targets_col: List[str] | None = None,
         static_node_feats_df: 'pandas.DataFrame' | None = None,  # type: ignore
         static_node_feats_col: List[str] | None = None,
@@ -751,6 +872,10 @@ class DGData:
             node_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
             dynamic_node_feats_col: Optional node feature columns.
             dynamic_node_targets_col: Optional node targets columns.
+            node_target_df: Optional dynamic node target dataframe.
+            node_target_id_col : Required if node_target_df is specified.
+            node_target_time_col: Required if node_target_df is specified.
+            dynamic_node_targets_col: Required if node_target_df is specified.
             static_node_feats_df: Optional static node features DataFrame.
             static_node_feats_col: Required if static_node_feats_df is specified.
             time_delta: Time granularity.
@@ -790,7 +915,6 @@ class DGData:
         node_timestamps = None
         node_ids = None
         dynamic_node_feats = None
-        dynamic_node_targets = None
 
         if node_df is not None:
             if node_id_col is None or node_time_col is None:
@@ -803,10 +927,28 @@ class DGData:
                 dynamic_node_feats = torch.stack(
                     [torch.tensor(row) for row in node_df[dynamic_node_feats_col]]
                 )
-            if dynamic_node_targets_col is not None:
-                dynamic_node_targets = torch.stack(
-                    [torch.tensor(row) for row in node_df[dynamic_node_targets_col]]
+
+        # Read in node target data
+        node_target_timestamps = None
+        node_target_ids = None
+        dynamic_node_targets = None
+
+        if node_target_df is not None:
+            if (
+                node_target_id_col is None
+                or node_target_time_col is None
+                or dynamic_node_targets_col is None
+            ):
+                raise ValueError(
+                    'specified node_target_df without specifying node_target_id_col and node_target_time_col and dynamic_node_targets_col'
                 )
+            node_target_timestamps = torch.as_tensor(
+                node_target_df[node_target_time_col].values
+            )
+            node_target_ids = torch.as_tensor(node_target_df[node_target_id_col].values)
+            dynamic_node_targets = torch.stack(
+                [torch.tensor(row) for row in node_target_df[dynamic_node_targets_col]]
+            )
 
         # Read in static node data
         static_node_feats = None
@@ -838,6 +980,8 @@ class DGData:
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
+            node_target_ids=node_target_ids,
+            node_target_timestamps=node_target_timestamps,
             dynamic_node_targets=dynamic_node_targets,
             static_node_feats=static_node_feats,
             edge_type=edge_type,
