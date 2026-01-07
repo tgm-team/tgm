@@ -39,6 +39,25 @@ def test_persistant_forecast_graphprop_pred(slurm_job_runner, dataset_csv):
     dataset_path = f'{data_root}/tokens_data/{dataset_csv}'
     cmd = f"""
 python "$ROOT_DIR/examples/graphproppred/persistant_forecast.py" \
-    --path-dataset {dataset_path}"""
+    --dataset {dataset_path}"""
+    state = slurm_job_runner(cmd)
+    assert state == 'COMPLETED'
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize('dataset', ['tgbl-wiki'])
+@pytest.mark.parametrize('batch_time_gran', ['D'])
+@pytest.mark.slurm(
+    resources=[
+        '--partition=main',
+        '--cpus-per-task=2',
+        '--mem=4G',
+        '--time=0:15:00',
+    ]
+)
+def test_persistant_forecast_graphprop_pred(slurm_job_runner, dataset, batch_time_gran):
+    cmd = f"""
+python "$ROOT_DIR/examples/graphproppred/persistant_forecast.py" \
+    --dataset {dataset} --batch-time-gran={batch_time_gran}"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'

@@ -1,4 +1,5 @@
 import argparse
+import pathlib
 from typing import Callable, Tuple
 
 import pandas as pd
@@ -40,13 +41,14 @@ parser.add_argument(
     '--node-dim', type=int, default=256, help='node feat dimension if not provided'
 )
 parser.add_argument(
-    '--path-dataset',
+    '--dataset',
     type=str,
     default='examples/graphproppred/tokens_data/test-token.csv',
     help=(
-        'Path to dataset csv file. '
+        'Either Path to dataset csv file. '
         'You can run `./scripts/download_graph_prop_datasets.sh examples/graphproppred` '
         'to download the relevant token data to the default path.'
+        'Or TGB dataset'
     ),
 )
 parser.add_argument(
@@ -64,6 +66,52 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
+
+
+# ETL steps
+def preprocess_raw_data(df: pd.DataFrame) -> pd.DataFrame:
+    # time offset
+    df['timestamp'] = df['timestamp'] - df['timestamp'].min()
+
+    # normalize edge weight
+    max_weight = float(df['value'].max())
+    min_weight = float(df['value'].min())
+    df['value'] = df['value'].apply(
+        lambda x: [1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))]
+    )
+
+    # Key generator
+    node_id_map = {}
+    df['from'] = df['from'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
+    df['to'] = df['to'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
+    return df
+
+
+def load_data(dataset_str: str) -> Tuple[DGData, TemporalRatioSplit | None]:
+    r"""Load full dataset and its corresponding split."""
+    if pathlib.Path(dataset_str).exists() and dataset_str.endswith('.csv'):
+        df = pd.read_csv(dataset_str)
+        df = preprocess_raw_data(df)
+        full_data = DGData.from_pandas(
+            edge_df=df,
+            edge_src_col='from',
+            edge_dst_col='to',
+            edge_time_col='timestamp',
+            edge_feats_col='value',
+            time_delta=args.raw_time_gran,
+        )
+        split_strategy = TemporalRatioSplit(
+            train_ratio=args.train_ratio,
+            val_ratio=args.val_ratio,
+            test_ratio=args.test_ratio,
+        )
+        return full_data, split_strategy
+    elif dataset_str.startswith('tgb'):
+        full_data = DGData.from_tgb(args.dataset).discretize(args.batch_time_gran)
+        split_strategy = None  # For TGB dataset, will use TGB split by default
+    else:
+        raise ValueError('This example only supports TGB and test tokens from MiNT.')
+    return full_data, split_strategy
 
 
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
@@ -88,25 +136,6 @@ def generate_binary_trend_labels(
             labels.append(label)
             prev_snapshot_metric = curr_snapshot_metric
     return torch.tensor(labels, dtype=torch.int64)
-
-
-# ETL step
-def preprocess_raw_data(df: pd.DataFrame) -> pd.DataFrame:
-    # time offset
-    df['timestamp'] = df['timestamp'] - df['timestamp'].min()
-
-    # normalize edge weight
-    max_weight = float(df['value'].max())
-    min_weight = float(df['value'].min())
-    df['value'] = df['value'].apply(
-        lambda x: [1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))]
-    )
-
-    # Key generator
-    node_id_map = {}
-    df['from'] = df['from'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
-    df['to'] = df['to'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
-    return df
 
 
 class GCNEncoder(torch.nn.Module):
@@ -217,30 +246,15 @@ def eval(
 
 seed_everything(args.seed)
 
-df = pd.read_csv(args.path_dataset)
-df = preprocess_raw_data(df)
-
-full_data = DGData.from_pandas(
-    edge_df=df,
-    edge_src_col='from',
-    edge_dst_col='to',
-    edge_time_col='timestamp',
-    edge_feats_col='value',
-    time_delta=args.raw_time_gran,
-).discretize(args.batch_time_gran)
+full_data, split_strategy = load_data(args.dataset)
+full_data = full_data.discretize(args.batch_time_gran)
 
 if full_data.static_node_feats is None:
     full_data.static_node_feats = torch.randn(
         (full_data.num_nodes, args.node_dim), device=args.device
     )
 
-train_data, val_data, test_data = full_data.split(
-    TemporalRatioSplit(
-        train_ratio=args.train_ratio,
-        val_ratio=args.val_ratio,
-        test_ratio=args.test_ratio,
-    )
-)
+train_data, val_data, test_data = full_data.split(split_strategy)
 
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
