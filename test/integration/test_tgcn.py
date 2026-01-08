@@ -67,9 +67,7 @@ python "$ROOT_DIR/examples/graphproppred/tgcn.py" \
     --dataset {dataset} \
     --device cuda \
     --epochs 5 \
-    --batch-time-gran={batch_time_gran}
-
-    """
+    --batch-time-gran={batch_time_gran}"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
 
