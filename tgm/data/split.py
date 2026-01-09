@@ -39,7 +39,7 @@ class SplitStrategy(ABC):
         from tgm.data import DGData  # avoid circular dependency
 
         edge_index = data.edge_index[edge_mask]
-        edge_feats = data.edge_feats[edge_mask] if data.edge_feats is not None else None
+        edge_x = data.edge_x[edge_mask] if data.edge_x is not None else None
         edge_type = data.edge_type[edge_mask] if data.edge_type is not None else None
         edge_timestamps = data.time[data.edge_mask[edge_mask]]
 
@@ -67,7 +67,7 @@ class SplitStrategy(ABC):
             time_delta=data.time_delta,
             edge_timestamps=edge_timestamps,
             edge_index=edge_index,
-            edge_feats=edge_feats,
+            edge_x=edge_x,
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,

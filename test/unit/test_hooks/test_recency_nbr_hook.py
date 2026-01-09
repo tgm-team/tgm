@@ -880,7 +880,7 @@ def node_only_data():
     return DGData.from_raw(
         edge_timestamps,
         edge_index,
-        edge_feats=edge_feats,
+        edge_x=edge_feats,
         dynamic_node_feats=dynamic_node_feats,
         node_timestamps=node_timestamps,
         node_ids=node_ids,

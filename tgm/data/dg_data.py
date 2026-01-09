@@ -38,7 +38,7 @@ class DGData:
         time (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
         edge_mask (Tensor): Indices of edge events within `time`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
-        edge_feats (Tensor | None): Optional edge features [num_edge_events, D_edge].
+        edge_x (Tensor | None): Optional edge features [num_edge_events, D_edge].
         node_mask (Tensor | None): Indices of node events within `time`.
         node_ids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         dynamic_node_feats (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
@@ -63,7 +63,7 @@ class DGData:
 
     edge_mask: Tensor  # [num_edge_events]
     edge_index: Tensor  # [num_edge_events, 2]
-    edge_feats: Tensor | None = None  # [num_edge_events, D_edge]
+    edge_x: Tensor | None = None  # [num_edge_events, D_edge]
 
     node_mask: Tensor | None = None  # [num_node_events]
     node_ids: Tensor | None = None  # [num_node_events]
@@ -163,14 +163,14 @@ class DGData:
         self.edge_mask = self.edge_mask.int()
 
         # Validate edge features
-        if self.edge_feats is not None:
-            _assert_is_tensor(self.edge_feats, 'edge_feats')
-            if self.edge_feats.ndim != 2 or self.edge_feats.shape[0] != num_edges:
+        if self.edge_x is not None:
+            _assert_is_tensor(self.edge_x, 'edge_x')
+            if self.edge_x.ndim != 2 or self.edge_x.shape[0] != num_edges:
                 raise ValueError(
-                    'edge_feats must have shape [num_edges, D_edge], '
-                    f'got {num_edges} edges and shape {self.edge_feats.shape}'
+                    'edge features must have shape [num_edges, D_edge], '
+                    f'got {num_edges} edges and shape {self.edge_x.shape}'
                 )
-            self.edge_feats = _maybe_cast_float_tensor(self.edge_feats, 'edge_feats')
+            self.edge_x = _maybe_cast_float_tensor(self.edge_x, 'edge_x')
 
         # Validate node mask
         num_node_events = 0
@@ -279,7 +279,7 @@ class DGData:
         if not torch.all(torch.diff(self.time) >= 0):
             logger.warning(
                 'Timestamps in DGData are not globally sorted. Reordering all events '
-                '(edge_index, edge_feats, node_ids, etc.) to match sorted time order'
+                '(edge_index, edge_x, node_ids, etc.) to match sorted time order'
             )
 
             # Sort timestamps
@@ -297,8 +297,8 @@ class DGData:
             edge_order = torch.argsort(self.edge_mask)
             self.edge_mask = self.edge_mask[edge_order]
             self.edge_index = self.edge_index[edge_order]
-            if self.edge_feats is not None:
-                self.edge_feats = self.edge_feats[edge_order]
+            if self.edge_x is not None:
+                self.edge_x = self.edge_x[edge_order]
 
             # Reorder node-specific data
             if self.node_mask is not None:
@@ -417,9 +417,9 @@ class DGData:
         edge_mask = _get_keep_indices(self.edge_mask, self.edge_index)
         edge_timestamps = buckets[self.edge_mask][edge_mask]
         edge_index = self.edge_index[edge_mask]
-        edge_feats = None
-        if self.edge_feats is not None:
-            edge_feats = self.edge_feats[edge_mask]
+        edge_x = None
+        if self.edge_x is not None:
+            edge_x = self.edge_x[edge_mask]
 
         edge_type = None
         if self.edge_type is not None:
@@ -453,7 +453,7 @@ class DGData:
             time_delta=time_delta,  # new discretized time_delta
             edge_timestamps=edge_timestamps,
             edge_index=edge_index,
-            edge_feats=edge_feats,
+            edge_x=edge_x,
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
@@ -492,7 +492,7 @@ class DGData:
         cls,
         edge_timestamps: Tensor,
         edge_index: Tensor,
-        edge_feats: Tensor | None = None,
+        edge_x: Tensor | None = None,
         node_timestamps: Tensor | None = None,
         node_ids: Tensor | None = None,
         dynamic_node_feats: Tensor | None = None,
@@ -514,7 +514,7 @@ class DGData:
         _log_tensor_args(
             edge_timestamps=edge_timestamps,
             edge_index=edge_index,
-            edge_feats=edge_feats,
+            edge_x=edge_x,
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
@@ -543,7 +543,7 @@ class DGData:
             time=timestamps,
             edge_mask=edge_mask,
             edge_index=edge_index,
-            edge_feats=edge_feats,
+            edge_x=edge_x,
             node_mask=node_mask,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
@@ -559,7 +559,7 @@ class DGData:
         edge_src_col: str,
         edge_dst_col: str,
         edge_time_col: str,
-        edge_feats_col: List[str] | None = None,
+        edge_x_col: List[str] | None = None,
         node_file_path: str | pathlib.Path | None = None,
         node_id_col: str | None = None,
         node_time_col: str | None = None,
@@ -577,7 +577,7 @@ class DGData:
             edge_src_col: Column name for src nodes.
             edge_dst_col: Column name for dst nodes.
             edge_time_col: Column name for edge times.
-            edge_feats_col: Optional edge feature columns.
+            edge_x_col: Optional edge feature columns.
             node_file_path: Optional CSV file for dynamic node features.
             node_id_col: Column name for dynamic node event ids. Required if node_file_path is specified.
             node_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
@@ -607,9 +607,9 @@ class DGData:
 
         edge_index = torch.empty((num_edges, 2), dtype=torch.int32)
         timestamps = torch.empty(num_edges, dtype=torch.int64)
-        edge_feats = None
-        if edge_feats_col is not None:
-            edge_feats = torch.empty((num_edges, len(edge_feats_col)))
+        edge_x = None
+        if edge_x_col is not None:
+            edge_x = torch.empty((num_edges, len(edge_x_col)))
         edge_type = None
         if edge_type_col is not None:
             edge_type = torch.empty(num_edges, dtype=torch.int32)
@@ -618,9 +618,9 @@ class DGData:
             edge_index[i, 0] = int(row[edge_src_col])
             edge_index[i, 1] = int(row[edge_dst_col])
             timestamps[i] = int(row[edge_time_col])
-            if edge_feats_col is not None:
-                for j, col in enumerate(edge_feats_col):
-                    edge_feats[i, j] = float(row[col])  # type: ignore
+            if edge_x_col is not None:
+                for j, col in enumerate(edge_x_col):
+                    edge_x[i, j] = float(row[col])  # type: ignore
 
             if edge_type_col is not None:
                 edge_type[i] = int(row[edge_type_col])  # type: ignore
@@ -677,7 +677,7 @@ class DGData:
             time_delta=time_delta,
             edge_timestamps=timestamps,
             edge_index=edge_index,
-            edge_feats=edge_feats,
+            edge_x=edge_x,
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
@@ -693,7 +693,7 @@ class DGData:
         edge_src_col: str,
         edge_dst_col: str,
         edge_time_col: str,
-        edge_feats_col: List[str] | None = None,
+        edge_x_col: List[str] | None = None,
         node_df: 'pandas.DataFrame' | None = None,  # type: ignore
         node_id_col: str | None = None,
         node_time_col: str | None = None,
@@ -711,7 +711,7 @@ class DGData:
             edge_src_col: Column name for src nodes.
             edge_dst_col: Column name for dst nodes.
             edge_time_col: Column name for edge times.
-            edge_feats_col: Optional edge feature columns.
+            edge_x_col: Optional edge feature columns.
             node_df: Optional DataFrame of dynamic node events.
             node_id_col: Column name for dynamic node event ids. Required if node_file_path is specified.
             node_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
@@ -741,11 +741,9 @@ class DGData:
         # Read in edge data
         edge_index = torch.from_numpy(edge_df[[edge_src_col, edge_dst_col]].to_numpy())
         edge_timestamps = torch.from_numpy(edge_df[edge_time_col].to_numpy())
-        edge_feats = None
-        if edge_feats_col is not None:
-            edge_feats = torch.stack(
-                [torch.tensor(row) for row in edge_df[edge_feats_col]]
-            )
+        edge_x = None
+        if edge_x_col is not None:
+            edge_x = torch.stack([torch.tensor(row) for row in edge_df[edge_x_col]])
 
         edge_type = None
         if edge_type_col is not None:
@@ -791,7 +789,7 @@ class DGData:
             time_delta=time_delta,
             edge_timestamps=edge_timestamps,
             edge_index=edge_index,
-            edge_feats=edge_feats,
+            edge_x=edge_x,
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
@@ -849,9 +847,9 @@ class DGData:
         )
         timestamps = torch.from_numpy(data['timestamps']).to(torch.int64)
         if data['edge_feat'] is None:
-            edge_feats = None
+            edge_x = None
         else:
-            edge_feats = torch.from_numpy(data['edge_feat']).to(torch.float32)
+            edge_x = torch.from_numpy(data['edge_feat']).to(torch.float32)
 
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if name.startswith('tgbn-'):
@@ -921,7 +919,7 @@ class DGData:
             time_delta=TGB_TIME_DELTAS[name],
             edge_timestamps=timestamps,
             edge_index=edge_index,
-            edge_feats=edge_feats,
+            edge_x=edge_x,
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
@@ -975,9 +973,9 @@ class DGData:
         )
 
         timestamps = torch.from_numpy(data.node_interact_times).to(torch.int64)
-        edge_feats = None
+        edge_x = None
         if data.edge_features is not None:
-            edge_feats = torch.from_numpy(data.edge_features).to(torch.float32)
+            edge_x = torch.from_numpy(data.edge_features).to(torch.float32)
 
         # Read static node features if they exist
         static_node_feats = None
@@ -997,7 +995,7 @@ class DGData:
             time_delta=TGB_SEQ_TIME_DELTAS[name],
             edge_timestamps=timestamps,
             edge_index=edge_index,
-            edge_feats=edge_feats,
+            edge_x=edge_x,
             static_node_feats=static_node_feats,
         )
 

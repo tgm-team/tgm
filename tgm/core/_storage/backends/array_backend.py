@@ -128,8 +128,8 @@ class DGStorageArrayBackend(DGStorageBase):
             for eid, nbr_id in node_nbrs:
                 nbr_ids.append(nbr_id)
                 times.append(self._data.time[eid])
-                if self._data.edge_feats is not None:
-                    feats.append(self._data.edge_feats[eid])
+                if self._data.edge_x is not None:
+                    feats.append(self._data.edge_x[eid])
 
             nn = len(nbr_ids)
             mask = inverse_indices == i
@@ -137,7 +137,7 @@ class DGStorageArrayBackend(DGStorageBase):
                 nbr_ids, dtype=torch.int32, device=device
             )
             nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.int64, device=device)
-            if self._data.edge_feats is not None:
+            if self._data.edge_x is not None:
                 nbr_feats[mask, :nn] = torch.stack(feats).to(device)
 
         return nbr_nids, nbr_times, nbr_feats
@@ -176,7 +176,7 @@ class DGStorageArrayBackend(DGStorageBase):
         return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
 
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        if self._data.edge_feats is None:
+        if self._data.edge_x is None:
             return None
 
         lb_idx, ub_idx = self._binary_search(slice)
@@ -184,7 +184,7 @@ class DGStorageArrayBackend(DGStorageBase):
         if edge_mask.sum() == 0:
             return None
 
-        return self._data.edge_feats[edge_mask]
+        return self._data.edge_x[edge_mask]
 
     def get_edge_type(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.edge_type is None:
@@ -208,9 +208,9 @@ class DGStorageArrayBackend(DGStorageBase):
         return self._data.dynamic_node_feats.shape[1]
 
     def get_edge_feats_dim(self) -> Optional[int]:
-        if self._data.edge_feats is None:
+        if self._data.edge_x is None:
             return None
-        return self._data.edge_feats.shape[1]
+        return self._data.edge_x.shape[1]
 
     def _binary_search(self, slice: DGSliceTracker) -> Tuple[int, int]:
         ts = self._data.time

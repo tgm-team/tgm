@@ -244,23 +244,23 @@ def test_get_edge_feats(DGStorageImpl, edge_only_data_with_features):
 
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker()),
-        edge_only_data_with_features.edge_feats,
+        edge_only_data_with_features.edge_x,
     )
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(start_time=5)),
-        edge_only_data_with_features.edge_feats[1:],
+        edge_only_data_with_features.edge_x[1:],
     )
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(end_time=4)),
-        edge_only_data_with_features.edge_feats[:1],
+        edge_only_data_with_features.edge_x[:1],
     )
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(start_time=5)),
-        edge_only_data_with_features.edge_feats[1:],
+        edge_only_data_with_features.edge_x[1:],
     )
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(start_idx=2, end_idx=5)),
-        edge_only_data_with_features.edge_feats[2].unsqueeze(0),
+        edge_only_data_with_features.edge_x[2].unsqueeze(0),
     )
     assert (
         storage.get_edge_feats(DGSliceTracker(start_idx=2, end_idx=5, end_time=6))
