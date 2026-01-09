@@ -99,7 +99,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
@@ -108,7 +108,7 @@ def train(
 
     z = encoder(
         snapshot_batch,
-        static_node_feats,
+        static_node_x,
         last_embeddings,
         num_previous_edges=prev_num_edge,
         num_current_edges=curr_num_edge,
@@ -135,7 +135,7 @@ def train(
                 curr_num_edge = snapshot_batch.src.numel()
                 z = encoder(
                     snapshot_batch,
-                    static_node_feats,
+                    static_node_x,
                     last_embeddings,
                     num_previous_edges=prev_num_edge,
                     num_current_edges=curr_num_edge,
@@ -163,7 +163,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
@@ -192,7 +192,7 @@ def eval(
                 curr_num_edge = snapshot_batch.src.numel()
                 z = encoder(
                     snapshot_batch,
-                    static_node_feats,
+                    static_node_x,
                     z,
                     num_previous_edges=prev_num_edge,
                     num_current_edges=curr_num_edge,
@@ -251,7 +251,7 @@ test_snapshots_loader = DGDataLoader(
 )
 
 encoder = RecurrentGCN(
-    input_channel=train_dg.static_node_feats_dim,
+    input_channel=train_dg.static_node_x_dim,
     num_nodes=full_data.num_nodes,
     nhid=args.embed_dim,
     dropout=args.dropout,

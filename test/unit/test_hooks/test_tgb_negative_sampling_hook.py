@@ -121,13 +121,13 @@ def test_negative_edge_sampler_throws_value_error(MockNegSampler, data):
 def node_only_data():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
     edge_timestamps = torch.IntTensor([1, 2, 3])
-    dynamic_node_feats = torch.rand(2, 5)
+    node_x = torch.rand(2, 5)
     node_timestamps = torch.IntTensor([4, 5])
     node_ids = torch.IntTensor([5, 6])
     return DGData.from_raw(
         edge_timestamps,
         edge_index,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=node_x,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
     )
@@ -322,13 +322,13 @@ def thgl_node_only_data():
     edge_timestamps = torch.IntTensor([1, 2, 3])
     edge_type = torch.IntTensor([0, 1, 2])
     node_type = torch.arange(7, dtype=torch.int32)
-    dynamic_node_feats = torch.rand(2, 5)
+    node_x = torch.rand(2, 5)
     node_timestamps = torch.IntTensor([4, 5])
     node_ids = torch.IntTensor([5, 6])
     return DGData.from_raw(
         edge_timestamps,
         edge_index,
-        node_x=dynamic_node_feats,
+        node_x=node_x,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
         edge_type=edge_type,

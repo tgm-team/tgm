@@ -207,11 +207,11 @@ def train(
 ) -> float:
     model.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out = model(batch, static_node_feats)
+        pos_out, neg_out = model(batch, static_node_x)
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
@@ -231,7 +231,7 @@ def eval(
 ) -> float:
     model.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
     max_eval_batches_per_epoch = os.getenv('TGM_CI_MAX_EVAL_BATCHES_PER_EPOCH')
 
     for batch_num, batch in enumerate(tqdm(loader)):
@@ -251,7 +251,7 @@ def eval(
                 neg_idx
             ]
 
-            pos_out, neg_out = model(copy_batch, static_node_feats)
+            pos_out, neg_out = model(copy_batch, static_node_x)
             pos_out, neg_out = pos_out.sigmoid(), neg_out.sigmoid()
 
             input_dict = {
@@ -315,8 +315,8 @@ random_projection_module = RandomProjectionModule(
 )
 
 model = TPNet_LinkPrediction(
-    node_feat_dim=train_dg.static_node_feats_dim,
-    edge_feat_dim=train_dg.edge_feats_dim,
+    node_feat_dim=train_dg.static_node_x_dim,
+    edge_feat_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     output_dim=args.embed_dim,
     dropout=args.dropout,

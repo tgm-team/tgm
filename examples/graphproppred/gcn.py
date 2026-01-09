@@ -163,13 +163,13 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     y_pred = torch.zeros_like(labels, dtype=torch.float)
     for i, batch in enumerate(tqdm(loader)):
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             opt.zero_grad()
-            z = encoder(batch, static_node_feats)
+            z = encoder(batch, static_node_x)
             z_node = z[torch.cat([batch.src, batch.dst])]
             pred = decoder(z_node)
 
@@ -201,11 +201,11 @@ def eval(
     encoder.eval()
     decoder.eval()
     y_pred = torch.zeros_like(y_true, dtype=torch.float)
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for i, batch in enumerate(tqdm(loader)):
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
-            z = encoder(batch, static_node_feats)
+            z = encoder(batch, static_node_x)
             z_node = z[torch.cat([batch.src, batch.dst])]
             y_pred[i] = decoder(z_node).sigmoid()
 
@@ -251,7 +251,7 @@ val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='rai
 test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 
 encoder = GCNEncoder(
-    in_channels=train_dg.static_node_feats_dim,
+    in_channels=train_dg.static_node_x_dim,
     embed_dim=args.embed_dim,
     out_channels=args.embed_dim,
     num_layers=args.n_layers,

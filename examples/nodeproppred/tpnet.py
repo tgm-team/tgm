@@ -201,14 +201,14 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
 
         y_true = batch.dynamic_node_feats
         if len(batch.src) > 0:
-            z = encoder(batch, static_node_feats)  # [num_nodes, embed_dim]
+            z = encoder(batch, static_node_x)  # [num_nodes, embed_dim]
 
         if y_true is not None:
             if len(batch.seen_nodes) == 0:
@@ -237,13 +237,13 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         y_true = batch.dynamic_node_feats
 
         if batch.src.shape[0] > 0:
-            z = encoder(batch, static_node_feats)
+            z = encoder(batch, static_node_x)
             if y_true is not None:
                 z_node = z[batch.node_ids]
                 y_pred = decoder(z_node)
@@ -292,7 +292,7 @@ train_loader = DGDataLoader(train_dg, batch_size=args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, batch_size=args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_x_dim
 
 random_projection_module = RandomProjectionModule(
     num_nodes=full_data.num_nodes,
@@ -308,8 +308,8 @@ random_projection_module = RandomProjectionModule(
 ).to(args.device)
 
 encoder = TPNet_NodePrediction(
-    node_feat_dim=train_dg.static_node_feats_dim,
-    edge_feat_dim=train_dg.edge_feats_dim,
+    node_feat_dim=train_dg.static_node_x_dim,
+    edge_feat_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     output_dim=args.embed_dim,
     dropout=args.dropout,

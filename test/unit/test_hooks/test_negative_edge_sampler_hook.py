@@ -46,13 +46,13 @@ def test_negative_edge_sampler(data):
 def node_only_data():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
     edge_timestamps = torch.IntTensor([1, 2, 3])
-    dynamic_node_feats = torch.rand(2, 5)
+    node_x = torch.rand(2, 5)
     node_timestamps = torch.IntTensor([4, 5])
     node_ids = torch.IntTensor([5, 6])
     return DGData.from_raw(
         edge_timestamps,
         edge_index,
-        node_x=dynamic_node_feats,
+        node_x=node_x,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
     )

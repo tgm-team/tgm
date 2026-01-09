@@ -90,15 +90,15 @@ def test_dedup_with_nbrs(dg):
 def node_only_graph():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4], [4, 5], [5, 6]])
     edge_timestamps = torch.IntTensor([1, 2, 3, 7, 8])
-    edge_feats = torch.IntTensor([[1], [2], [3], [0], [0]])
-    dynamic_node_feats = torch.rand(5, 5)
+    edge_x = torch.IntTensor([[1], [2], [3], [0], [0]])
+    node_x = torch.rand(5, 5)
     node_timestamps = torch.IntTensor([4, 5, 6, 7, 8])
     node_ids = torch.IntTensor([4, 5, 6, 5, 6])
     data = DGData.from_raw(
         edge_timestamps,
         edge_index,
-        edge_x=edge_feats,
-        node_x=dynamic_node_feats,
+        edge_x=edge_x,
+        node_x=node_x,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
     )

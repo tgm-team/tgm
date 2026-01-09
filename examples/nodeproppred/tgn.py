@@ -205,7 +205,7 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_x_dim
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,

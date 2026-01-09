@@ -15,13 +15,13 @@ def dg():
     node_ids = torch.IntTensor([4, 2, 5, 1, 2])
 
     # Can't actually get node events without dynamic node feats
-    dynamic_node_feats = torch.rand(5, 3)
+    node_x = torch.rand(5, 3)
     data = DGData.from_raw(
         edge_timestamps,
         edge_index,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
-        node_x=dynamic_node_feats,
+        node_x=node_x,
         time_delta='s',
     )
 

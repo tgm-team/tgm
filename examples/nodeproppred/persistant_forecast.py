@@ -83,7 +83,7 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
 test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_x_dim
 model = PersistantForecaster(num_classes=num_classes)
 
 eval(train_loader, model, evaluator)

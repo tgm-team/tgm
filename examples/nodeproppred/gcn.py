@@ -96,7 +96,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
@@ -104,7 +104,7 @@ def train(
         if y_true is None:
             continue
 
-        z = encoder(batch, static_node_feats)
+        z = encoder(batch, static_node_x)
         z_node = z[batch.node_ids]
         y_pred = decoder(z_node)
 
@@ -128,14 +128,14 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         y_true = batch.dynamic_node_feats
         if y_true is None:
             continue
 
-        z = encoder(batch, static_node_feats)
+        z = encoder(batch, static_node_x)
         z_node = z[batch.node_ids]
         y_pred = decoder(z_node)
 
@@ -167,10 +167,10 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
 test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_x_dim
 
 encoder = GCNEncoder(
-    in_channels=train_dg.static_node_feats_dim,
+    in_channels=train_dg.static_node_x_dim,
     embed_dim=args.embed_dim,
     out_channels=args.embed_dim,
     num_layers=args.n_layers,

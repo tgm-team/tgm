@@ -242,18 +242,16 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 memory = TGNMemory(
     full_data.num_nodes,
-    test_dg.edge_feats_dim,
+    test_dg.edge_x_dim,
     args.memory_dim,
     args.time_dim,
-    message_module=IdentityMessage(
-        test_dg.edge_feats_dim, args.memory_dim, args.time_dim
-    ),
+    message_module=IdentityMessage(test_dg.edge_x_dim, args.memory_dim, args.time_dim),
     aggregator_module=LastAggregator(),
 ).to(args.device)
 encoder = GraphAttentionEmbedding(
     in_channels=args.memory_dim,
     out_channels=args.embed_dim,
-    msg_dim=test_dg.edge_feats_dim,
+    msg_dim=test_dg.edge_x_dim,
     time_enc=memory.time_enc,
 ).to(args.device)
 decoder = NCNPredictor(
