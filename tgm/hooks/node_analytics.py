@@ -38,7 +38,7 @@ class NodeAnalyticsHook(StatefulHook):
             - new_edge_count: Number of new edges in the batch, that is not seen in previous batches.
     """
 
-    requires: Set[str] = set()
+    requires = {'src', 'dst', 'time', 'node_times', 'node_ids'}
     produces = {'node_stats', 'node_macro_stats', 'edge_stats'}
 
     def __init__(self, tracked_nodes: Tensor, num_nodes: int) -> None:

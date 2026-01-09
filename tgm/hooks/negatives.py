@@ -160,7 +160,7 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
-    requires: Set[str] = set()
+    requires = {'src', 'dst', 'time', 'edge_type'}
     produces = {'neg', 'neg_batch_list', 'neg_time'}
 
     def __init__(
