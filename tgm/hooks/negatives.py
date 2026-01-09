@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Set
 
 import torch
 
@@ -22,7 +21,7 @@ class NegativeEdgeSamplerHook(StatelessHook):
             to the number of positive destination nodes (default = 1.0).
     """
 
-    requires: Set[str] = set()
+    requires = {'src', 'dst', 'time'}
     produces = {'neg', 'neg_time'}
 
     def __init__(self, low: int, high: int, neg_ratio: float = 1.0) -> None:
@@ -60,7 +59,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
-    requires: Set[str] = set()
+    requires = {'src', 'dst', 'time'}
     produces = {'neg', 'neg_batch_list', 'neg_time'}
 
     def __init__(self, dataset_name: str, split_mode: str) -> None:
@@ -161,7 +160,7 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
-    requires: Set[str] = set()
+    requires = {'src', 'dst', 'time', 'edge_type'}
     produces = {'neg', 'neg_batch_list', 'neg_time'}
 
     def __init__(
