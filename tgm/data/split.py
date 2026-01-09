@@ -41,14 +41,14 @@ class SplitStrategy(ABC):
         edge_index = data.edge_index[edge_mask]
         edge_feats = data.edge_feats[edge_mask] if data.edge_feats is not None else None
         edge_type = data.edge_type[edge_mask] if data.edge_type is not None else None
-        edge_timestamps = data.time[data.edge_event_idx[edge_mask]]
+        edge_timestamps = data.time[data.edge_mask[edge_mask]]
 
         node_ids, dynamic_node_feats, node_timestamps = None, None, None
         if data.node_ids is not None:
             if node_mask is None:
                 node_mask = torch.ones(data.node_ids.shape[0], dtype=torch.bool)
             node_ids = data.node_ids[node_mask]
-            node_timestamps = data.time[data.node_event_idx[node_mask]]
+            node_timestamps = data.time[data.node_mask[node_mask]]
             if data.dynamic_node_feats is not None:
                 dynamic_node_feats = data.dynamic_node_feats[node_mask]
 
@@ -106,10 +106,10 @@ class TemporalSplit(SplitStrategy):
             )
 
     def apply(self, data: 'DGData') -> Tuple['DGData', ...]:  # type: ignore
-        edge_times = data.time[data.edge_event_idx]
+        edge_times = data.time[data.edge_mask]
         node_times = None
         if data.node_ids is not None:
-            node_times = data.time[data.node_event_idx]
+            node_times = data.time[data.node_mask]
 
         ranges = {
             'train': (-float('inf'), self.val_time),
@@ -225,13 +225,13 @@ class TGBSplit(SplitStrategy):
         splits = []
         for split_name in ['train', 'val', 'test']:
             edge_start_time, edge_end_time = self.split_bounds[split_name]
-            edge_mask = (data.time[data.edge_event_idx] >= edge_start_time) & (
-                data.time[data.edge_event_idx] <= edge_end_time
+            edge_mask = (data.time[data.edge_mask] >= edge_start_time) & (
+                data.time[data.edge_mask] <= edge_end_time
             )
 
             node_mask = None
             if data.node_ids is not None:
-                node_times = data.time[data.node_event_idx]
+                node_times = data.time[data.node_mask]
                 if edge_mask.any():
                     node_mask = (node_times >= (edge_start_time - 1)) & (
                         node_times < edge_end_time

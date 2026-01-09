@@ -40,15 +40,13 @@ class DGStorageArrayBackend(DGStorageBase):
         all_nodes: Set[int] = set()
         lb_idx, ub_idx = self._binary_search(slice)
 
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         edge_event_nodes = self._data.edge_index[edge_mask].unique().tolist()
         all_nodes.update(edge_event_nodes)
 
-        if self._data.node_event_idx is not None:
-            node_mask = (self._data.node_event_idx >= lb_idx) & (
-                self._data.node_event_idx < ub_idx
+        if self._data.node_mask is not None:
+            node_mask = (self._data.node_mask >= lb_idx) & (
+                self._data.node_mask < ub_idx
             )
             node_event_nodes = self._data.node_ids[node_mask].unique().tolist()
             all_nodes.update(node_event_nodes)
@@ -58,12 +56,10 @@ class DGStorageArrayBackend(DGStorageBase):
 
     def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
         lb_idx, ub_idx = self._binary_search(slice)
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         edges = self._data.edge_index[edge_mask]
         src, dst = edges[:, 0], edges[:, 1]
-        time = self._data.time[self._data.edge_event_idx[edge_mask]]
+        time = self._data.time[self._data.edge_mask[edge_mask]]
 
         src, dst, time = src.contiguous(), dst.contiguous(), time.contiguous()
 
@@ -92,11 +88,9 @@ class DGStorageArrayBackend(DGStorageBase):
         seed_nodes_set = set(unique_nodes.tolist())
 
         lb_idx, ub_idx = self._binary_search(slice)
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         edges = self._data.edge_index[edge_mask]
-        event_ids = self._data.edge_event_idx[edge_mask]
+        event_ids = self._data.edge_mask[edge_mask]
 
         src_list = edges[:, 0].tolist()
         dst_list = edges[:, 1].tolist()
@@ -157,26 +151,22 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_dynamic_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.dynamic_node_feats is None:
             return None
-        assert self._data.node_event_idx is not None  # for mypy
+        assert self._data.node_mask is not None  # for mypy
         assert self._data.node_ids is not None  # for mypy
 
         lb_idx, ub_idx = self._binary_search(slice)
-        node_mask = (self._data.node_event_idx >= lb_idx) & (
-            self._data.node_event_idx < ub_idx
-        )
+        node_mask = (self._data.node_mask >= lb_idx) & (self._data.node_mask < ub_idx)
         if node_mask.sum() == 0:
             logger.debug(f'No dynamic node features in slice {slice}')
             return None
 
-        time = self._data.time[self._data.node_event_idx[node_mask]]
+        time = self._data.time[self._data.node_mask[node_mask]]
         nodes = self._data.node_ids[node_mask]
         indices = torch.stack([time, nodes], dim=0)
         values = self._data.dynamic_node_feats[node_mask]
 
         max_node_id = nodes.max()
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
             max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
 
@@ -190,9 +180,7 @@ class DGStorageArrayBackend(DGStorageBase):
             return None
 
         lb_idx, ub_idx = self._binary_search(slice)
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         if edge_mask.sum() == 0:
             return None
 
@@ -203,9 +191,7 @@ class DGStorageArrayBackend(DGStorageBase):
             return None
 
         lb_idx, ub_idx = self._binary_search(slice)
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         if edge_mask.sum() == 0:
             return None
 

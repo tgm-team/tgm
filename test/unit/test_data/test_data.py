@@ -26,9 +26,9 @@ def test_init_dg_data():
     data = DGData.from_raw(edge_timestamps, edge_index)
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, edge_timestamps)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     assert data.edge_feats is None
-    assert data.node_event_idx is None
+    assert data.node_mask is None
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
@@ -60,8 +60,8 @@ def test_init_dg_data_no_node_events_with_edge_features():
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, edge_timestamps)
     torch.testing.assert_close(data.edge_feats, edge_feats)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
-    assert data.node_event_idx is None
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
+    assert data.node_mask is None
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
@@ -82,8 +82,8 @@ def test_init_dg_data_node_events():
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, torch.LongTensor([1, 5, 6, 7, 8]))
     torch.testing.assert_close(data.edge_feats, edge_feats)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
-    torch.testing.assert_close(data.node_event_idx, torch.IntTensor([2, 3, 4]))
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.node_mask, torch.IntTensor([2, 3, 4]))
     torch.testing.assert_close(data.node_ids, node_ids)
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
@@ -113,8 +113,8 @@ def test_init_dg_data_node_events_and_node_features():
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, torch.LongTensor([1, 5, 6, 7, 8]))
     torch.testing.assert_close(data.edge_feats, edge_feats)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
-    torch.testing.assert_close(data.node_event_idx, torch.IntTensor([2, 3, 4]))
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.node_mask, torch.IntTensor([2, 3, 4]))
     torch.testing.assert_close(data.node_ids, node_ids)
     torch.testing.assert_close(data.dynamic_node_feats, dynamic_node_feats)
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
@@ -152,9 +152,9 @@ def test_init_dg_data_sort_required():
     torch.testing.assert_close(data.edge_index, exp_edge_index)
     torch.testing.assert_close(data.time, torch.LongTensor([1, 5, 6, 7, 8]))
     torch.testing.assert_close(data.edge_feats, exp_edge_feats)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(
-        data.node_event_idx,
+        data.node_mask,
         torch.IntTensor(
             [2, 3, 4],
         ),
@@ -1372,7 +1372,7 @@ def test_discretize_reduce_op_first():
     assert id(coarse_data) != id(data)
 
     exp_timestamps = torch.LongTensor([0, 0, 1, 1])
-    exp_edge_event_idx = torch.IntTensor([0, 1, 2, 3])
+    exp_edge_mask = torch.IntTensor([0, 1, 2, 3])
     exp_edge_index = torch.IntTensor([[1, 2], [2, 3], [1, 2], [4, 5]])
     exp_edge_feats = torch.stack(
         [edge_feats[0], edge_feats[2], edge_feats[3], edge_feats[4]]
@@ -1382,14 +1382,14 @@ def test_discretize_reduce_op_first():
     exp_node_type = node_type
 
     torch.testing.assert_close(coarse_data.time, exp_timestamps)
-    torch.testing.assert_close(coarse_data.edge_event_idx, exp_edge_event_idx)
+    torch.testing.assert_close(coarse_data.edge_mask, exp_edge_mask)
     torch.testing.assert_close(coarse_data.edge_index, exp_edge_index)
     torch.testing.assert_close(coarse_data.edge_feats, exp_edge_feats)
     torch.testing.assert_close(coarse_data.static_node_feats, exp_static_node_feats)
     torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
     torch.testing.assert_close(coarse_data.node_type, exp_node_type)
 
-    assert coarse_data.node_event_idx is None
+    assert coarse_data.node_mask is None
     assert coarse_data.node_ids is None
     assert coarse_data.dynamic_node_feats is None
 
@@ -1426,7 +1426,7 @@ def test_discretize_with_node_events_reduce_op_first():
     assert id(coarse_data) != id(data)
 
     exp_timestamps = torch.LongTensor([0, 0, 0, 0, 1, 1, 1, 1])
-    exp_edge_event_idx = torch.IntTensor([0, 1, 4, 5])
+    exp_edge_mask = torch.IntTensor([0, 1, 4, 5])
     exp_edge_index = torch.IntTensor([[1, 2], [2, 3], [1, 2], [4, 5]])
     exp_edge_feats = torch.stack(
         [edge_feats[0], edge_feats[2], edge_feats[3], edge_feats[4]]
@@ -1435,7 +1435,7 @@ def test_discretize_with_node_events_reduce_op_first():
     exp_node_type = node_type
     exp_static_node_feats = static_node_feats
 
-    exp_node_event_idx = torch.IntTensor([2, 3, 6, 7])
+    exp_node_mask = torch.IntTensor([2, 3, 6, 7])
     exp_node_ids = torch.IntTensor([6, 7, 6, 7])
 
     exp_dynamic_node_feats = torch.stack(
@@ -1448,12 +1448,12 @@ def test_discretize_with_node_events_reduce_op_first():
     )
 
     torch.testing.assert_close(coarse_data.time, exp_timestamps)
-    torch.testing.assert_close(coarse_data.edge_event_idx, exp_edge_event_idx)
+    torch.testing.assert_close(coarse_data.edge_mask, exp_edge_mask)
     torch.testing.assert_close(coarse_data.edge_index, exp_edge_index)
     torch.testing.assert_close(coarse_data.edge_feats, exp_edge_feats)
     torch.testing.assert_close(coarse_data.static_node_feats, exp_static_node_feats)
 
-    torch.testing.assert_close(coarse_data.node_event_idx, exp_node_event_idx)
+    torch.testing.assert_close(coarse_data.node_mask, exp_node_mask)
     torch.testing.assert_close(coarse_data.node_ids, exp_node_ids)
     torch.testing.assert_close(coarse_data.dynamic_node_feats, exp_dynamic_node_feats)
     torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
@@ -1498,7 +1498,7 @@ def test_discretize_with_huge_ids_no_overflow():
     exp_timestamps = torch.LongTensor(
         [0, 0, (max_int32 - 1) // 60, (max_int32 - 1) // 60]
     )
-    exp_edge_event_idx = torch.IntTensor([0, 1, 2, 3])
+    exp_edge_mask = torch.IntTensor([0, 1, 2, 3])
     exp_edge_index = torch.IntTensor(
         [[1, 2], [2, 3], [1, 2], [max_int32 - 1, max_int32 - 1]]
     )
@@ -1510,7 +1510,7 @@ def test_discretize_with_huge_ids_no_overflow():
     )
 
     torch.testing.assert_close(coarse_data.time, exp_timestamps)
-    torch.testing.assert_close(coarse_data.edge_event_idx, exp_edge_event_idx)
+    torch.testing.assert_close(coarse_data.edge_mask, exp_edge_mask)
     torch.testing.assert_close(coarse_data.edge_index, exp_edge_index)
     torch.testing.assert_close(coarse_data.edge_feats, exp_edge_feats)
     torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
@@ -1616,10 +1616,10 @@ def test_init_edge_type():
     )
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, edge_timestamps)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     assert data.edge_feats is None
-    assert data.node_event_idx is None
+    assert data.node_mask is None
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
@@ -1689,10 +1689,10 @@ def test_init_node_type():
     )
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, edge_timestamps)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.node_type, node_type)
     assert data.edge_feats is None
-    assert data.node_event_idx is None
+    assert data.node_mask is None
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
@@ -1757,11 +1757,11 @@ def test_init_edge_node_types():
     )
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, edge_timestamps)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     torch.testing.assert_close(data.node_type, node_type)
     assert data.edge_feats is None
-    assert data.node_event_idx is None
+    assert data.node_mask is None
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
@@ -1784,10 +1784,10 @@ def test_init_node_edge_types_with_edge_features():
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, edge_timestamps)
     torch.testing.assert_close(data.edge_feats, edge_feats)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     torch.testing.assert_close(data.node_type, node_type)
-    assert data.node_event_idx is None
+    assert data.node_mask is None
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.static_node_feats is None
@@ -1810,10 +1810,10 @@ def test_init_node_edge_types_with_node_features():
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, edge_timestamps)
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
-    torch.testing.assert_close(data.edge_event_idx, torch.IntTensor([0, 1]))
+    torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     torch.testing.assert_close(data.node_type, node_type)
-    assert data.node_event_idx is None
+    assert data.node_mask is None
     assert data.node_ids is None
     assert data.dynamic_node_feats is None
     assert data.edge_feats is None

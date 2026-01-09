@@ -51,10 +51,10 @@ class DGData:
     Attributes:
         time_delta (TimeDeltaDG | str): Time granularity of the graph.
         timestamps (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
-        edge_event_idx (Tensor): Indices of edge events within `timestamps`.
+        edge_mask (Tensor): Indices of edge events within `timestamps`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_feats (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_event_idx (Tensor | None): Indices of node events within `timestamps`.
+        node_maks (Tensor | None): Indices of node events within `timestamps`.
         node_ids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         dynamic_node_feats (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
         static_node_feats (Tensor | None): Node features invariant over time [num_nodes, D_node_static].

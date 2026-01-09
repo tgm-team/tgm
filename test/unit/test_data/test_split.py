@@ -37,13 +37,13 @@ def test_temporal_split():
     assert val.time.tolist() == [3]
     assert test.time.tolist() == [4]
 
-    assert train.edge_event_idx.tolist() == [0, 1]
-    assert val.edge_event_idx.tolist() == [0]
-    assert test.edge_event_idx.tolist() == [0]
+    assert train.edge_mask.tolist() == [0, 1]
+    assert val.edge_mask.tolist() == [0]
+    assert test.edge_mask.tolist() == [0]
 
-    assert train.node_event_idx is None
-    assert val.node_event_idx is None
-    assert test.node_event_idx is None
+    assert train.node_mask is None
+    assert val.node_mask is None
+    assert test.node_mask is None
 
     assert id(train.static_node_feats) == id(data.static_node_feats)
     assert id(val.static_node_feats) == id(data.static_node_feats)
@@ -77,11 +77,11 @@ def test_temporal_split_with_node_feats():
     assert train.time.tolist() == [1, 1, 2, 2]
     assert val.time.tolist() == [3, 4, 4]
 
-    assert train.edge_event_idx.tolist() == [0, 2]
-    assert val.edge_event_idx.tolist() == [0, 1]
+    assert train.edge_mask.tolist() == [0, 2]
+    assert val.edge_mask.tolist() == [0, 1]
 
-    assert train.node_event_idx.tolist() == [1, 3]
-    assert val.node_event_idx.tolist() == [2]
+    assert train.node_mask.tolist() == [1, 3]
+    assert val.node_mask.tolist() == [2]
 
     assert train.node_ids.tolist() == [1, 2]
     assert val.node_ids.tolist() == [3]
@@ -149,13 +149,13 @@ def test_temporal_ratio_split():
     assert val.time.tolist() == [3]
     assert test.time.tolist() == [4]
 
-    assert train.edge_event_idx.tolist() == [0, 1]
-    assert val.edge_event_idx.tolist() == [0]
-    assert test.edge_event_idx.tolist() == [0]
+    assert train.edge_mask.tolist() == [0, 1]
+    assert val.edge_mask.tolist() == [0]
+    assert test.edge_mask.tolist() == [0]
 
-    assert train.node_event_idx is None
-    assert val.node_event_idx is None
-    assert test.node_event_idx is None
+    assert train.node_mask is None
+    assert val.node_mask is None
+    assert test.node_mask is None
 
     assert id(train.static_node_feats) == id(data.static_node_feats)
     assert id(val.static_node_feats) == id(data.static_node_feats)
@@ -184,13 +184,13 @@ def test_temporal_ratio_split_with_node_type():
     assert val.time.tolist() == [3]
     assert test.time.tolist() == [4]
 
-    assert train.edge_event_idx.tolist() == [0, 1]
-    assert val.edge_event_idx.tolist() == [0]
-    assert test.edge_event_idx.tolist() == [0]
+    assert train.edge_mask.tolist() == [0, 1]
+    assert val.edge_mask.tolist() == [0]
+    assert test.edge_mask.tolist() == [0]
 
-    assert train.node_event_idx is None
-    assert val.node_event_idx is None
-    assert test.node_event_idx is None
+    assert train.node_mask is None
+    assert val.node_mask is None
+    assert test.node_mask is None
 
     assert id(train.node_type) == id(data.node_type)
     assert id(val.node_type) == id(data.node_type)
@@ -227,11 +227,11 @@ def test_temporal_ratio_split_with_node_feats():
     assert train.time.tolist() == [1, 1, 2, 2]
     assert val.time.tolist() == [3, 4, 4]
 
-    assert train.edge_event_idx.tolist() == [0, 2]
-    assert val.edge_event_idx.tolist() == [0, 1]
+    assert train.edge_mask.tolist() == [0, 2]
+    assert val.edge_mask.tolist() == [0, 1]
 
-    assert train.node_event_idx.tolist() == [1, 3]
-    assert val.node_event_idx.tolist() == [2]
+    assert train.node_mask.tolist() == [1, 3]
+    assert val.node_mask.tolist() == [2]
 
     assert train.node_ids.tolist() == [1, 2]
     assert val.node_ids.tolist() == [3]
@@ -356,7 +356,7 @@ def test_tgbl_split_matches(tgb_dataset_factory):
             actual = split_map[split]
 
             torch.testing.assert_close(expected.time, actual.time)
-            torch.testing.assert_close(expected.edge_event_idx, actual.edge_event_idx)
+            torch.testing.assert_close(expected.edge_mask, actual.edge_mask)
             torch.testing.assert_close(
                 data.dynamic_node_feats, actual.dynamic_node_feats
             )
@@ -381,19 +381,17 @@ def test_tgbn_split_matches(tgb_dataset_factory):
 
             assert expected.time_delta == actual.time_delta
             torch.testing.assert_close(expected.time, actual.time)
-            torch.testing.assert_close(expected.edge_event_idx, actual.edge_event_idx)
+            torch.testing.assert_close(expected.edge_mask, actual.edge_mask)
             torch.testing.assert_close(data.static_node_feats, actual.static_node_feats)
 
             if split == 'train':
-                torch.testing.assert_close(
-                    expected.node_event_idx, actual.node_event_idx
-                )
+                torch.testing.assert_close(expected.node_mask, actual.node_mask)
                 torch.testing.assert_close(expected.node_ids, actual.node_ids)
                 torch.testing.assert_close(
                     data.dynamic_node_feats, actual.dynamic_node_feats
                 )
             else:
-                assert actual.node_event_idx is None
+                assert actual.node_mask is None
                 assert actual.node_ids is None
                 assert actual.dynamic_node_feats is None
 
@@ -417,7 +415,7 @@ def test_thgl_split_matches(tgb_dataset_factory):
             actual = split_map[split]
 
             torch.testing.assert_close(expected.time, actual.time)
-            torch.testing.assert_close(expected.edge_event_idx, actual.edge_event_idx)
+            torch.testing.assert_close(expected.edge_mask, actual.edge_mask)
             torch.testing.assert_close(expected.edge_type, actual.edge_type)
             torch.testing.assert_close(data.static_node_feats, actual.static_node_feats)
             torch.testing.assert_close(data.node_type, actual.node_type)

@@ -36,10 +36,10 @@ class DGData:
     Attributes:
         time_delta (TimeDeltaDG | str): Time granularity of the graph.
         time (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
-        edge_event_idx (Tensor): Indices of edge events within `time`.
+        edge_mask (Tensor): Indices of edge events within `time`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_feats (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_event_idx (Tensor | None): Indices of node events within `time`.
+        node_mask (Tensor | None): Indices of node events within `time`.
         node_ids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         dynamic_node_feats (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
         static_node_feats (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
@@ -61,11 +61,11 @@ class DGData:
     time_delta: TimeDeltaDG | str
     time: Tensor  # [num_events]
 
-    edge_event_idx: Tensor  # [num_edge_events]
+    edge_mask: Tensor  # [num_edge_events]
     edge_index: Tensor  # [num_edge_events, 2]
     edge_feats: Tensor | None = None  # [num_edge_events, D_edge]
 
-    node_event_idx: Tensor | None = None  # [num_node_events]
+    node_mask: Tensor | None = None  # [num_node_events]
     node_ids: Tensor | None = None  # [num_node_events]
     dynamic_node_feats: Tensor | None = None  # [num_node_events, D_node_dynamic]
 
@@ -156,11 +156,11 @@ class DGData:
         if num_edges == 0:
             raise EmptyGraphError('TGM does not support graphs without edge events')
 
-        # Validate edge event idx
-        _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
-        _assert_tensor_is_integral(self.edge_event_idx, 'edge_event_idx')
+        # Validate edge mask
+        _assert_is_tensor(self.edge_mask, 'edge_mask')
+        _assert_tensor_is_integral(self.edge_mask, 'edge_mask')
         # Safe downcast since we ensured len(time) fits in int32
-        self.edge_event_idx = self.edge_event_idx.int()
+        self.edge_mask = self.edge_mask.int()
 
         # Validate edge features
         if self.edge_feats is not None:
@@ -172,19 +172,19 @@ class DGData:
                 )
             self.edge_feats = _maybe_cast_float_tensor(self.edge_feats, 'edge_feats')
 
-        # Validate node event idx
+        # Validate node mask
         num_node_events = 0
-        if self.node_event_idx is not None:
-            _assert_is_tensor(self.node_event_idx, 'node_event_idx')
-            _assert_tensor_is_integral(self.node_event_idx, 'node_event_idx')
+        if self.node_mask is not None:
+            _assert_is_tensor(self.node_mask, 'node_mask')
+            _assert_tensor_is_integral(self.node_mask, 'node_mask')
 
             # Safe downcast since we ensured len(time) fits in int32
-            self.node_event_idx = self.node_event_idx.int()
+            self.node_mask = self.node_mask.int()
 
-            num_node_events = self.node_event_idx.shape[0]
+            num_node_events = self.node_mask.shape[0]
             if num_node_events == 0:
                 raise ValueError(
-                    'node_event_idx is an empty tensor, please double-check your inputs'
+                    'node_mask is an empty tensor, please double-check your inputs'
                 )
 
             # Validate node ids
@@ -289,21 +289,21 @@ class DGData:
             self.time = self.time[sort_idx]
 
             # Update global event indices
-            self.edge_event_idx = inverse_sort_idx[self.edge_event_idx]
-            if self.node_event_idx is not None:
-                self.node_event_idx = inverse_sort_idx[self.node_event_idx]
+            self.edge_mask = inverse_sort_idx[self.edge_mask]
+            if self.node_mask is not None:
+                self.node_mask = inverse_sort_idx[self.node_mask]
 
             # Reorder edge-specific data
-            edge_order = torch.argsort(self.edge_event_idx)
-            self.edge_event_idx = self.edge_event_idx[edge_order]
+            edge_order = torch.argsort(self.edge_mask)
+            self.edge_mask = self.edge_mask[edge_order]
             self.edge_index = self.edge_index[edge_order]
             if self.edge_feats is not None:
                 self.edge_feats = self.edge_feats[edge_order]
 
             # Reorder node-specific data
-            if self.node_event_idx is not None:
-                node_order = torch.argsort(self.node_event_idx)
-                self.node_event_idx = self.node_event_idx[node_order]
+            if self.node_mask is not None:
+                node_order = torch.argsort(self.node_mask)
+                self.node_mask = self.node_mask[node_order]
                 self.node_ids = self.node_ids[node_order]  # type: ignore
                 if self.dynamic_node_feats is not None:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]
@@ -414,8 +414,8 @@ class DGData:
             return keep
 
         # Edge events
-        edge_mask = _get_keep_indices(self.edge_event_idx, self.edge_index)
-        edge_timestamps = buckets[self.edge_event_idx][edge_mask]
+        edge_mask = _get_keep_indices(self.edge_mask, self.edge_index)
+        edge_timestamps = buckets[self.edge_mask][edge_mask]
         edge_index = self.edge_index[edge_mask]
         edge_feats = None
         if self.edge_feats is not None:
@@ -427,12 +427,12 @@ class DGData:
 
         # Node events
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
-        if self.node_event_idx is not None:
+        if self.node_mask is not None:
             node_mask = _get_keep_indices(
-                self.node_event_idx,
+                self.node_mask,
                 self.node_ids,  # type: ignore
             )
-            node_timestamps = buckets[self.node_event_idx][node_mask]
+            node_timestamps = buckets[self.node_mask][node_mask]
             node_ids = self.node_ids[node_mask]  # type: ignore
             dynamic_node_feats = None
             if self.dynamic_node_feats is not None:
@@ -531,8 +531,8 @@ class DGData:
             event_types = torch.cat([event_types, torch.ones_like(node_timestamps)])
 
         # Compute event masks
-        edge_event_idx = (event_types == 0).nonzero(as_tuple=True)[0]
-        node_event_idx = (
+        edge_mask = (event_types == 0).nonzero(as_tuple=True)[0]
+        node_mask = (
             (event_types == 1).nonzero(as_tuple=True)[0]
             if node_timestamps is not None
             else None
@@ -541,10 +541,10 @@ class DGData:
         return cls(
             time_delta=time_delta,
             time=timestamps,
-            edge_event_idx=edge_event_idx,
+            edge_mask=edge_mask,
             edge_index=edge_index,
             edge_feats=edge_feats,
-            node_event_idx=node_event_idx,
+            node_mask=node_mask,
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
