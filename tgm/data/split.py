@@ -41,14 +41,14 @@ class SplitStrategy(ABC):
         edge_index = data.edge_index[edge_mask]
         edge_feats = data.edge_feats[edge_mask] if data.edge_feats is not None else None
         edge_type = data.edge_type[edge_mask] if data.edge_type is not None else None
-        edge_timestamps = data.timestamps[data.edge_event_idx[edge_mask]]
+        edge_timestamps = data.time[data.edge_event_idx[edge_mask]]
 
         node_ids, dynamic_node_feats, node_timestamps = None, None, None
         if data.node_ids is not None:
             if node_mask is None:
                 node_mask = torch.ones(data.node_ids.shape[0], dtype=torch.bool)
             node_ids = data.node_ids[node_mask]
-            node_timestamps = data.timestamps[data.node_event_idx[node_mask]]
+            node_timestamps = data.time[data.node_event_idx[node_mask]]
             if data.dynamic_node_feats is not None:
                 dynamic_node_feats = data.dynamic_node_feats[node_mask]
 
@@ -106,10 +106,10 @@ class TemporalSplit(SplitStrategy):
             )
 
     def apply(self, data: 'DGData') -> Tuple['DGData', ...]:  # type: ignore
-        edge_times = data.timestamps[data.edge_event_idx]
+        edge_times = data.time[data.edge_event_idx]
         node_times = None
         if data.node_ids is not None:
-            node_times = data.timestamps[data.node_event_idx]
+            node_times = data.time[data.node_event_idx]
 
         ranges = {
             'train': (-float('inf'), self.val_time),
@@ -182,7 +182,7 @@ class TemporalRatioSplit(SplitStrategy):
             )
 
     def apply(self, data: 'DGData') -> Tuple['DGData', ...]:  # type: ignore
-        min_time, max_time = data.timestamps[0], data.timestamps[-1]  # it's sorted
+        min_time, max_time = data.time[0], data.time[-1]  # it's sorted
         total_span = max_time - min_time + 1
 
         val_time = min_time + int(total_span * self.train_ratio)
@@ -225,13 +225,13 @@ class TGBSplit(SplitStrategy):
         splits = []
         for split_name in ['train', 'val', 'test']:
             edge_start_time, edge_end_time = self.split_bounds[split_name]
-            edge_mask = (data.timestamps[data.edge_event_idx] >= edge_start_time) & (
-                data.timestamps[data.edge_event_idx] <= edge_end_time
+            edge_mask = (data.time[data.edge_event_idx] >= edge_start_time) & (
+                data.time[data.edge_event_idx] <= edge_end_time
             )
 
             node_mask = None
             if data.node_ids is not None:
-                node_times = data.timestamps[data.node_event_idx]
+                node_times = data.time[data.node_event_idx]
                 if edge_mask.any():
                     node_mask = (node_times >= (edge_start_time - 1)) & (
                         node_times < edge_end_time

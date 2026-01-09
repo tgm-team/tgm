@@ -35,11 +35,11 @@ class DGData:
 
     Attributes:
         time_delta (TimeDeltaDG | str): Time granularity of the graph.
-        timestamps (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
-        edge_event_idx (Tensor): Indices of edge events within `timestamps`.
+        time (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
+        edge_event_idx (Tensor): Indices of edge events within `time`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_feats (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_event_idx (Tensor | None): Indices of node events within `timestamps`.
+        node_event_idx (Tensor | None): Indices of node events within `time`.
         node_ids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         dynamic_node_feats (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
         static_node_feats (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
@@ -59,7 +59,7 @@ class DGData:
     """
 
     time_delta: TimeDeltaDG | str
-    timestamps: Tensor  # [num_events]
+    time: Tensor  # [num_events]
 
     edge_event_idx: Tensor  # [num_edge_events]
     edge_index: Tensor  # [num_edge_events, 2]
@@ -114,23 +114,23 @@ class DGData:
         max_int32_capacity = torch.iinfo(torch.int32).max
 
         # Validate timestamps
-        _assert_is_tensor(self.timestamps, 'timestamps')
-        _assert_tensor_is_integral(self.timestamps, 'timestamps')
-        if not torch.all(self.timestamps >= 0):
+        _assert_is_tensor(self.time, 'timestamps')
+        _assert_tensor_is_integral(self.time, 'timestamps')
+        if not torch.all(self.time >= 0):
             raise ValueError('timestamps must all be non-negative')
-        if not torch.all(self.timestamps < max_int32_capacity):
+        if not torch.all(self.time < max_int32_capacity):
             raise ValueError(
                 f'timestamps exceed the int32 limit ({max_int32_capacity}). '
                 'TGM does not yet support graphs this large.'
             )
-        if self.timestamps.dtype != torch.int64:  # This can only be an upcast
+        if self.time.dtype != torch.int64:  # This can only be an upcast
             logger.debug('Upcasting global timestamps to torch.int64')
-            self.timestamps = self.timestamps.to(torch.int64)
+            self.time = self.time.to(torch.int64)
 
         # Ensure our data does not overflow int32 capacity
-        if len(self.timestamps) > max_int32_capacity:
+        if len(self.time) > max_int32_capacity:
             raise ValueError(
-                f'Number of events ({len(self.timestamps)}) exceeds the int32 limit '
+                f'Number of events ({len(self.time)}) exceeds the int32 limit '
                 f'({max_int32_capacity}). TGM does not yet support graphs this large.'
             )
 
@@ -159,7 +159,7 @@ class DGData:
         # Validate edge event idx
         _assert_is_tensor(self.edge_event_idx, 'edge_event_idx')
         _assert_tensor_is_integral(self.edge_event_idx, 'edge_event_idx')
-        # Safe downcast since we ensured len(timestamps) fits in int32
+        # Safe downcast since we ensured len(time) fits in int32
         self.edge_event_idx = self.edge_event_idx.int()
 
         # Validate edge features
@@ -178,7 +178,7 @@ class DGData:
             _assert_is_tensor(self.node_event_idx, 'node_event_idx')
             _assert_tensor_is_integral(self.node_event_idx, 'node_event_idx')
 
-            # Safe downcast since we ensured len(timestamps) fits in int32
+            # Safe downcast since we ensured len(time) fits in int32
             self.node_event_idx = self.node_event_idx.int()
 
             num_node_events = self.node_event_idx.shape[0]
@@ -267,29 +267,26 @@ class DGData:
             _maybe_cast_integral_tensor(self.node_type, 'node_type')
 
         # Ensure timestamps match number of global events
-        if (
-            self.timestamps.ndim != 1
-            or self.timestamps.shape[0] != num_edges + num_node_events
-        ):
+        if self.time.ndim != 1 or self.time.shape[0] != num_edges + num_node_events:
             raise ValueError(
                 'timestamps must have shape [num_edges + num_node_events], '
-                f'got {num_edges} edges, {num_node_events} node_events, shape: {self.timestamps.shape}. '
+                f'got {num_edges} edges, {num_node_events} node_events, shape: {self.time.shape}. '
                 'Please double-check the edge and node timestamps you provided. If this is not resolved '
                 'raise an issue and provide instructions on how to reproduce your the error'
             )
 
         # Sort if necessary
-        if not torch.all(torch.diff(self.timestamps) >= 0):
+        if not torch.all(torch.diff(self.time) >= 0):
             logger.warning(
                 'Timestamps in DGData are not globally sorted. Reordering all events '
                 '(edge_index, edge_feats, node_ids, etc.) to match sorted time order'
             )
 
             # Sort timestamps
-            sort_idx = torch.argsort(self.timestamps).int()
+            sort_idx = torch.argsort(self.time).int()
             inverse_sort_idx = torch.empty_like(sort_idx)
             inverse_sort_idx[sort_idx] = torch.arange(len(sort_idx), dtype=torch.int32)
-            self.timestamps = self.timestamps[sort_idx]
+            self.time = self.time[sort_idx]
 
             # Update global event indices
             self.edge_event_idx = inverse_sort_idx[self.edge_event_idx]
@@ -385,7 +382,7 @@ class DGData:
         # won't be able to clean up the current graph storage while `self` is alive.
         time_factor = self.time_delta.convert(time_delta)  # type: ignore
         # Doing time conversion in 64-bit to avoid numerical issues with float cast
-        buckets = (self.timestamps.to(torch.float64) * time_factor).floor().int()
+        buckets = (self.time.to(torch.float64) * time_factor).floor().int()
 
         def _get_keep_indices(event_idx: Tensor, ids: Tensor) -> Tensor:
             event_buckets = buckets[event_idx]
@@ -543,7 +540,7 @@ class DGData:
 
         return cls(
             time_delta=time_delta,
-            timestamps=timestamps,
+            time=timestamps,
             edge_event_idx=edge_event_idx,
             edge_index=edge_index,
             edge_feats=edge_feats,

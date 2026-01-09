@@ -85,7 +85,7 @@ def test_get_start_time_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
     storage = DGStorageImpl(data)
 
-    assert storage.get_start_time(DGSliceTracker()) == data.timestamps[0]
+    assert storage.get_start_time(DGSliceTracker()) == data.time[0]
     assert storage.get_start_time(DGSliceTracker(start_time=5)) == 5
     assert storage.get_start_time(DGSliceTracker(end_time=4)) == 1
     assert storage.get_start_time(DGSliceTracker(start_time=5, end_time=9)) == 5
@@ -101,7 +101,7 @@ def test_get_end_time_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
     storage = DGStorageImpl(data)
 
-    assert storage.get_end_time(DGSliceTracker()) == data.timestamps[-1]
+    assert storage.get_end_time(DGSliceTracker()) == data.time[-1]
     assert storage.get_end_time(DGSliceTracker(start_time=5)) == 10
     assert storage.get_end_time(DGSliceTracker(end_time=4)) == 1
     assert storage.get_end_time(DGSliceTracker(start_time=5, end_time=9)) == 5

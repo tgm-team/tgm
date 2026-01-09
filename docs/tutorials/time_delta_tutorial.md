@@ -78,14 +78,14 @@ from tgm.data import DGData
 # Custom dataset with day granularity
 dg_data = DGData(
     time_delta="D",
-    timestamps=timestamps,
+    time=timestamps,
     ...
 )
 
 # Ordered dataset (relative order only)
 dg_event_ordered = DGData(
     time_delta="r",
-    timestamps=timestamps,
+    time=timestamps,
     ...
 )
 ```

@@ -33,9 +33,9 @@ def test_temporal_split():
     assert val.time_delta == TimeDeltaDG('r')
     assert test.time_delta == TimeDeltaDG('r')
 
-    assert train.timestamps.tolist() == [1, 2]
-    assert val.timestamps.tolist() == [3]
-    assert test.timestamps.tolist() == [4]
+    assert train.time.tolist() == [1, 2]
+    assert val.time.tolist() == [3]
+    assert test.time.tolist() == [4]
 
     assert train.edge_event_idx.tolist() == [0, 1]
     assert val.edge_event_idx.tolist() == [0]
@@ -74,8 +74,8 @@ def test_temporal_split_with_node_feats():
     assert train.time_delta == TimeDeltaDG('r')
     assert val.time_delta == TimeDeltaDG('r')
 
-    assert train.timestamps.tolist() == [1, 1, 2, 2]
-    assert val.timestamps.tolist() == [3, 4, 4]
+    assert train.time.tolist() == [1, 1, 2, 2]
+    assert val.time.tolist() == [3, 4, 4]
 
     assert train.edge_event_idx.tolist() == [0, 2]
     assert val.edge_event_idx.tolist() == [0, 1]
@@ -145,9 +145,9 @@ def test_temporal_ratio_split():
     assert val.time_delta == TimeDeltaDG('r')
     assert test.time_delta == TimeDeltaDG('r')
 
-    assert train.timestamps.tolist() == [1, 2]
-    assert val.timestamps.tolist() == [3]
-    assert test.timestamps.tolist() == [4]
+    assert train.time.tolist() == [1, 2]
+    assert val.time.tolist() == [3]
+    assert test.time.tolist() == [4]
 
     assert train.edge_event_idx.tolist() == [0, 1]
     assert val.edge_event_idx.tolist() == [0]
@@ -180,9 +180,9 @@ def test_temporal_ratio_split_with_node_type():
     assert val.time_delta == TimeDeltaDG('r')
     assert test.time_delta == TimeDeltaDG('r')
 
-    assert train.timestamps.tolist() == [1, 2]
-    assert val.timestamps.tolist() == [3]
-    assert test.timestamps.tolist() == [4]
+    assert train.time.tolist() == [1, 2]
+    assert val.time.tolist() == [3]
+    assert test.time.tolist() == [4]
 
     assert train.edge_event_idx.tolist() == [0, 1]
     assert val.edge_event_idx.tolist() == [0]
@@ -224,8 +224,8 @@ def test_temporal_ratio_split_with_node_feats():
     assert train.time_delta == TimeDeltaDG('r')
     assert val.time_delta == TimeDeltaDG('r')
 
-    assert train.timestamps.tolist() == [1, 1, 2, 2]
-    assert val.timestamps.tolist() == [3, 4, 4]
+    assert train.time.tolist() == [1, 1, 2, 2]
+    assert val.time.tolist() == [3, 4, 4]
 
     assert train.edge_event_idx.tolist() == [0, 2]
     assert val.edge_event_idx.tolist() == [0, 1]
@@ -355,7 +355,7 @@ def test_tgbl_split_matches(tgb_dataset_factory):
             expected = DGData.from_tgb(name)
             actual = split_map[split]
 
-            torch.testing.assert_close(expected.timestamps, actual.timestamps)
+            torch.testing.assert_close(expected.time, actual.time)
             torch.testing.assert_close(expected.edge_event_idx, actual.edge_event_idx)
             torch.testing.assert_close(
                 data.dynamic_node_feats, actual.dynamic_node_feats
@@ -380,7 +380,7 @@ def test_tgbn_split_matches(tgb_dataset_factory):
             actual = split_map[split]
 
             assert expected.time_delta == actual.time_delta
-            torch.testing.assert_close(expected.timestamps, actual.timestamps)
+            torch.testing.assert_close(expected.time, actual.time)
             torch.testing.assert_close(expected.edge_event_idx, actual.edge_event_idx)
             torch.testing.assert_close(data.static_node_feats, actual.static_node_feats)
 
@@ -416,7 +416,7 @@ def test_thgl_split_matches(tgb_dataset_factory):
             expected = DGData.from_tgb(name)
             actual = split_map[split]
 
-            torch.testing.assert_close(expected.timestamps, actual.timestamps)
+            torch.testing.assert_close(expected.time, actual.time)
             torch.testing.assert_close(expected.edge_event_idx, actual.edge_event_idx)
             torch.testing.assert_close(expected.edge_type, actual.edge_type)
             torch.testing.assert_close(data.static_node_feats, actual.static_node_feats)

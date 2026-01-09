@@ -27,14 +27,14 @@ class DGStorageArrayBackend(DGStorageBase):
         if lb_idx >= ub_idx:
             logger.debug('No events in slice: %s', slice)
             return None
-        return int(self._data.timestamps[lb_idx].item())
+        return int(self._data.time[lb_idx].item())
 
     def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
         if lb_idx >= ub_idx:
             logger.debug('No events in slice: %s', slice)
             return None
-        return int(self._data.timestamps[ub_idx - 1].item())
+        return int(self._data.time[ub_idx - 1].item())
 
     def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         all_nodes: Set[int] = set()
@@ -63,7 +63,7 @@ class DGStorageArrayBackend(DGStorageBase):
         )
         edges = self._data.edge_index[edge_mask]
         src, dst = edges[:, 0], edges[:, 1]
-        time = self._data.timestamps[self._data.edge_event_idx[edge_mask]]
+        time = self._data.time[self._data.edge_event_idx[edge_mask]]
 
         src, dst, time = src.contiguous(), dst.contiguous(), time.contiguous()
 
@@ -73,7 +73,7 @@ class DGStorageArrayBackend(DGStorageBase):
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         lb_idx, ub_idx = self._binary_search(slice)
-        return len(self._data.timestamps[lb_idx:ub_idx].unique())
+        return len(self._data.time[lb_idx:ub_idx].unique())
 
     def get_num_events(self, slice: DGSliceTracker) -> int:
         lb_idx, ub_idx = self._binary_search(slice)
@@ -133,7 +133,7 @@ class DGStorageArrayBackend(DGStorageBase):
             nbr_ids, times, feats = [], [], []
             for eid, nbr_id in node_nbrs:
                 nbr_ids.append(nbr_id)
-                times.append(self._data.timestamps[eid])
+                times.append(self._data.time[eid])
                 if self._data.edge_feats is not None:
                     feats.append(self._data.edge_feats[eid])
 
@@ -168,7 +168,7 @@ class DGStorageArrayBackend(DGStorageBase):
             logger.debug(f'No dynamic node features in slice {slice}')
             return None
 
-        time = self._data.timestamps[self._data.node_event_idx[node_mask]]
+        time = self._data.time[self._data.node_event_idx[node_mask]]
         nodes = self._data.node_ids[node_mask]
         indices = torch.stack([time, nodes], dim=0)
         values = self._data.dynamic_node_feats[node_mask]
@@ -180,7 +180,7 @@ class DGStorageArrayBackend(DGStorageBase):
         if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
             max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
 
-        max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
+        max_time = slice.end_time or self._data.time[ub_idx - 1]
         node_feats_dim = self.get_dynamic_node_feats_dim()
         shape = (max_time + 1, max_node_id + 1, node_feats_dim)
         return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
@@ -227,7 +227,7 @@ class DGStorageArrayBackend(DGStorageBase):
         return self._data.edge_feats.shape[1]
 
     def _binary_search(self, slice: DGSliceTracker) -> Tuple[int, int]:
-        ts = self._data.timestamps
+        ts = self._data.time
         if slice.start_time not in self._lb_cache:
             t = ts[0] if slice.start_time is None else slice.start_time
             self._lb_cache[slice.start_time] = int(torch.searchsorted(ts, t))
