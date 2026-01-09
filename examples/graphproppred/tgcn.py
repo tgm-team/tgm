@@ -213,12 +213,12 @@ full_data = DGData.from_pandas(
     edge_src_col='from',
     edge_dst_col='to',
     edge_time_col='timestamp',
-    edge_feats_col='value',
+    edge_x_col='value',
     time_delta=args.raw_time_gran,
 ).discretize(args.batch_time_gran)
 
-if full_data.static_node_feats is None:
-    full_data.static_node_feats = torch.randn(
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
         (full_data.num_nodes, args.node_dim), device=args.device
     )
 

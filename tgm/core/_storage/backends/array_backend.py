@@ -143,7 +143,7 @@ class DGStorageArrayBackend(DGStorageBase):
         return nbr_nids, nbr_times, nbr_feats
 
     def get_static_node_feats(self) -> Optional[Tensor]:
-        return self._data.static_node_feats
+        return self._data.static_node_x
 
     def get_node_type(self) -> Optional[Tensor]:
         return self._data.node_type
@@ -198,9 +198,9 @@ class DGStorageArrayBackend(DGStorageBase):
         return self._data.edge_type[edge_mask]
 
     def get_static_node_feats_dim(self) -> Optional[int]:
-        if self._data.static_node_feats is None:
+        if self._data.static_node_x is None:
             return None
-        return self._data.static_node_feats.shape[1]
+        return self._data.static_node_x.shape[1]
 
     def get_dynamic_node_feats_dim(self) -> Optional[int]:
         if self._data.node_x is None:

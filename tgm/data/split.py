@@ -53,7 +53,7 @@ class SplitStrategy(ABC):
                 node_x = data.node_x[node_mask]
 
         # Static features and node type are shared across splits, do not clone
-        static_node_feats = data.static_node_feats
+        static_node_x = data.static_node_x
         node_type = data.node_type
 
         # In case we masked out to the point of empty node events, change to None
@@ -71,7 +71,7 @@ class SplitStrategy(ABC):
             node_timestamps=node_timestamps,
             node_ids=node_ids,
             node_x=node_x,
-            static_node_feats=static_node_feats,
+            static_node_x=static_node_x,
             edge_type=edge_type,
             node_type=node_type,
         )

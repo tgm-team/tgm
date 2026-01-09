@@ -144,7 +144,7 @@ full_data = DGData.from_pandas(
     edge_src_col='from',
     edge_dst_col='to',
     edge_time_col='timestamp',
-    edge_feats_col='value',
+    edge_x_col='value',
     time_delta=args.raw_time_gran,
 ).discretize(args.batch_time_gran)
 

@@ -161,8 +161,8 @@ seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
-if full_data.static_node_feats is None:
-    full_data.static_node_feats = torch.randn(
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
         (full_data.num_nodes, args.node_dim), device=args.device
     )
 
