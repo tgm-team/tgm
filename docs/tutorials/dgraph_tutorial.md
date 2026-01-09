@@ -414,12 +414,12 @@ For example:
 # Our full graph view
 dg_batch = dg.materialize(materialize_features=False) # Skip features
 print(dg_batch.src) # torch.tensor([2, 2, 1], dtype=torch.long, device='cuda:0')
-print(dg_batch.edge_feats) # None, because we skipped materializing features
+print(dg_batch.edge_x) # None, because we skipped materializing features
 
 # Our sliced graph view (from start_time=5, end_time=10)
 sliced_dg_batch = sliced_dg.materialize()
 print(dg_batch.src) # torch.tensor([5], dtype=torch.long, device='cuda:0')
-print(dg_batch.edge_feats is None) # False, we matrialized our slice of edge features
+print(dg_batch.edge_x is None) # False, we matrialized our slice of edge features
 ```
 
 > **Note**: Materializing a full graph view with features could be expensive, especially on large graphs.

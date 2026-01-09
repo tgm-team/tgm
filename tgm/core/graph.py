@@ -226,7 +226,7 @@ class DGraph:
 
     @cached_property
     def _static_node_x_cpu(self) -> Optional[Tensor]:
-        return self._storage.get_static_node_feats()
+        return self._storage.get_static_node_x()
 
     @property
     def static_node_x(self) -> Optional[Tensor]:
@@ -258,7 +258,7 @@ class DGraph:
 
     @_logged_cached_property
     def _node_x_cpu(self) -> Optional[Tensor]:
-        return self._storage.get_dynamic_node_feats(self._slice)
+        return self._storage.get_node_x(self._slice)
 
     @property
     def node_x(self) -> Optional[Tensor]:
@@ -273,7 +273,7 @@ class DGraph:
 
     @_logged_cached_property
     def _edge_x_cpu(self) -> Optional[Tensor]:
-        return self._storage.get_edge_feats(self._slice)
+        return self._storage.get_edge_x(self._slice)
 
     @property
     def edge_x(self) -> Optional[Tensor]:
@@ -304,17 +304,17 @@ class DGraph:
     @cached_property
     def static_node_x_dim(self) -> Optional[int]:
         """Static Node feature dimension or None if not Node features on the Graph."""
-        return self._storage.get_static_node_feats_dim()
+        return self._storage.get_static_node_x_dim()
 
     @cached_property
     def node_x_dim(self) -> Optional[int]:
         """Dynamic Node feature dimension or None if not Node features on the Graph."""
-        return self._storage.get_dynamic_node_feats_dim()
+        return self._storage.get_node_x_dim()
 
     @cached_property
     def edge_x_dim(self) -> Optional[int]:
         """Edge feature dimension or None if not Node features on the Graph."""
-        return self._storage.get_edge_feats_dim()
+        return self._storage.get_edge_x_dim()
 
     @staticmethod
     def _maybe_max(a: Any, b: Any) -> Optional[int]:

@@ -49,11 +49,11 @@ class DGStorageBase(ABC):
         """Return the total number of events in the slice."""
 
     @abstractmethod
-    def get_dynamic_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
+    def get_node_x(self, slice: DGSliceTracker) -> Optional[Tensor]:
         """Return dynamic node features as a sparse coordinate-format tensor within the slice, if any."""
 
     @abstractmethod
-    def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
+    def get_edge_x(self, slice: DGSliceTracker) -> Optional[Tensor]:
         """Return edge features within the slice, if any."""
 
     @abstractmethod
@@ -61,7 +61,7 @@ class DGStorageBase(ABC):
         """Return edge type within the slice, if any."""
 
     @abstractmethod
-    def get_static_node_feats(self) -> Optional[Tensor]:
+    def get_static_node_x(self) -> Optional[Tensor]:
         """Return static node features of the entire graph."""
 
     @abstractmethod
@@ -69,15 +69,15 @@ class DGStorageBase(ABC):
         """Return node type for each node of the entire graph, if any."""
 
     @abstractmethod
-    def get_dynamic_node_feats_dim(self) -> Optional[int]:
+    def get_node_x_dim(self) -> Optional[int]:
         """Return dimension of dynamic node features, if any."""
 
     @abstractmethod
-    def get_edge_feats_dim(self) -> Optional[int]:
+    def get_edge_x_dim(self) -> Optional[int]:
         """Return dimension of edge features, if any."""
 
     @abstractmethod
-    def get_static_node_feats_dim(self) -> Optional[int]:
+    def get_static_node_x_dim(self) -> Optional[int]:
         """Return dimension of static node features, if any."""
 
     @abstractmethod
