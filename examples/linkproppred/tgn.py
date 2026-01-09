@@ -14,7 +14,7 @@ from tgm.constants import (
     RECIPE_TGB_LINK_PRED,
 )
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import RecencyNeighborHook, RecipeRegistry
+from tgm.hooks import DeduplicationHook, RecencyNeighborHook, RecipeRegistry
 from tgm.nn import LinkPredictor, TGNMemory
 from tgm.nn.encoder.tgn import (
     GraphAttentionEmbedding,
@@ -74,11 +74,6 @@ def train(
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-        #! run my own deduplication
-        all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
-        batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-        batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
         num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
         src_nodes = torch.cat(
             [
@@ -92,12 +87,13 @@ def train(
                 batch.global_to_local(src_nodes[nbr_mask]),
                 batch.global_to_local(nbr_nodes[nbr_mask]),
             ]
-        )
+        ).to(dtype=torch.int64)
 
         nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
         nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
+
         z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
         inv_src = batch.global_to_local(batch.src)
@@ -140,11 +136,6 @@ def eval(
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-        #! run my own deduplication
-        all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
-        batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-        batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
         num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
         src_nodes = torch.cat(
             [
@@ -158,7 +149,7 @@ def eval(
                 batch.global_to_local(src_nodes[nbr_mask]),
                 batch.global_to_local(nbr_nodes[nbr_mask]),
             ]
-        )
+        ).to(dtype=torch.int64)
         nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
         nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
 
@@ -207,6 +198,7 @@ hm = RecipeRegistry.build(
 )
 train_key, val_key, test_key = hm.keys
 hm.register_shared(nbr_hook)
+hm.register_shared(DeduplicationHook())
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
