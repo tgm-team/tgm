@@ -93,7 +93,6 @@ class GCNEncoder(torch.nn.Module):
 def train(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -102,6 +101,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_feats = loader.dgraph.static_node_feats
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
@@ -138,7 +138,6 @@ def train(
 def eval(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     z: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
@@ -148,6 +147,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+    static_node_feats = loader.dgraph.static_node_feats
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
@@ -180,7 +180,13 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+if full_data.static_node_feats is None:
+    full_data.static_node_feats = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
+
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
@@ -212,15 +218,8 @@ val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time
 test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran)
 
 
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
 encoder = GCNEncoder(
-    in_channels=static_node_feats.shape[1],
+    in_channels=train_dg.static_node_feats_dim,
     embed_dim=args.embed_dim,
     out_channels=args.embed_dim,
     num_layers=args.n_layers,
@@ -238,7 +237,6 @@ for epoch in range(1, args.epochs + 1):
         loss, z = train(
             train_loader,
             train_snapshots_loader,
-            static_node_feats,
             encoder,
             decoder,
             opt,
@@ -249,7 +247,6 @@ for epoch in range(1, args.epochs + 1):
         val_mrr = eval(
             val_loader,
             val_snapshots_loader,
-            static_node_feats,
             z,
             encoder,
             decoder,
@@ -264,7 +261,6 @@ with hm.activate(test_key):
     test_mrr = eval(
         test_loader,
         test_snapshots_loader,
-        static_node_feats,
         z,
         encoder,
         decoder,

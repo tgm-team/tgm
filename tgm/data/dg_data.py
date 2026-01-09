@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 
 from tgm.constants import PADDED_NODE_ID
-from tgm.core import TGB_TIME_DELTAS, TimeDeltaDG
+from tgm.core import TGB_SEQ_TIME_DELTAS, TGB_TIME_DELTAS, TimeDeltaDG
 from tgm.data.split import SplitStrategy, TemporalRatioSplit, TGBSplit
 from tgm.exceptions import (
     EmptyGraphError,
@@ -43,6 +43,8 @@ class DGData:
         node_ids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         dynamic_node_feats (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
         static_node_feats (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
+        edge_type (Tensor | None) : Type of relation of each edge event in edge_index [num_edge_events].
+        node_type (Tensor | None) : Type of each node [num_nodes].
 
     Raises:
         InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
@@ -52,6 +54,8 @@ class DGData:
     Notes:
         - Timestamps must be non-negative and sorted; DGData will sort automatically if necessary.
         - Cloning creates a deep copy of tensors to prevent in-place modifications.
+        - Edge type is only applicable for Heterogeneous & Knowledge graph.
+        - Node type is only applicable for Knowledge graph.
     """
 
     time_delta: TimeDeltaDG | str
@@ -66,6 +70,8 @@ class DGData:
     dynamic_node_feats: Tensor | None = None  # [num_node_events, D_node_dynamic]
 
     static_node_feats: Tensor | None = None  # [num_nodes, D_node_static]
+    edge_type: Tensor | None = None  # [num_edge_events]
+    node_type: Tensor | None = None  # [num_nodes]
 
     _split_strategy: SplitStrategy | None = None
 
@@ -238,6 +244,28 @@ class DGData:
                 self.static_node_feats, 'static_node_feats'
             )
 
+        # Validate edge type for Knowledge and Heterogeneous
+        if self.edge_type is not None:
+            _assert_is_tensor(self.edge_type, 'edge_type')
+            _assert_tensor_is_integral(self.edge_type, 'edge_type')
+            if self.edge_type.ndim != 1 or self.edge_type.shape[0] != num_edges:
+                raise ValueError(
+                    'edge_type must have shape [num_edges], '
+                    f'got {num_edges} edges and shape {self.edge_type.shape}'
+                )
+            _maybe_cast_integral_tensor(self.edge_type, 'edge_type')
+
+        # Validate node type for Heterogeneous
+        if self.node_type is not None:
+            _assert_is_tensor(self.node_type, 'node_type')
+            _assert_tensor_is_integral(self.node_type, 'node_type')
+            if self.node_type.ndim != 1 or self.node_type.shape[0] < num_nodes:
+                raise ValueError(
+                    'node_type must have shape [num_nodes], '
+                    f'got {num_nodes} nodes and shape {self.node_type.shape}'
+                )
+            _maybe_cast_integral_tensor(self.node_type, 'node_type')
+
         # Ensure timestamps match number of global events
         if (
             self.timestamps.ndim != 1
@@ -270,6 +298,7 @@ class DGData:
 
             # Reorder edge-specific data
             edge_order = torch.argsort(self.edge_event_idx)
+            self.edge_event_idx = self.edge_event_idx[edge_order]
             self.edge_index = self.edge_index[edge_order]
             if self.edge_feats is not None:
                 self.edge_feats = self.edge_feats[edge_order]
@@ -277,6 +306,7 @@ class DGData:
             # Reorder node-specific data
             if self.node_event_idx is not None:
                 node_order = torch.argsort(self.node_event_idx)
+                self.node_event_idx = self.node_event_idx[node_order]
                 self.node_ids = self.node_ids[node_order]  # type: ignore
                 if self.dynamic_node_feats is not None:
                     self.dynamic_node_feats = self.dynamic_node_feats[node_order]
@@ -394,6 +424,10 @@ class DGData:
         if self.edge_feats is not None:
             edge_feats = self.edge_feats[edge_mask]
 
+        edge_type = None
+        if self.edge_type is not None:
+            edge_type = self.edge_type[edge_mask]
+
         # Node events
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if self.node_event_idx is not None:
@@ -407,10 +441,16 @@ class DGData:
             if self.dynamic_node_feats is not None:
                 dynamic_node_feats = self.dynamic_node_feats[node_mask]
 
+        # Need a deep copy
         static_node_feats = None
-        if self.static_node_feats is not None:  # Need a deep copy
+        if self.static_node_feats is not None:
             logger.debug('Deep copying static_node_features for coarser DGData')
             static_node_feats = self.static_node_feats.clone()
+
+        node_type = None
+        if self.node_type is not None:  # Need a deep
+            logger.debug('Deep copying node_type for coarser DGData')
+            node_type = self.node_type.clone()
 
         return DGData.from_raw(
             time_delta=time_delta,  # new discretized time_delta
@@ -421,6 +461,8 @@ class DGData:
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
+            edge_type=edge_type,
+            node_type=node_type,
         )
 
     def clone(self) -> DGData:
@@ -435,6 +477,19 @@ class DGData:
 
         return replace(self, **cloned_fields)  # type: ignore
 
+    @property
+    def num_nodes(self) -> int:
+        """Global number of nodes in the dataset.
+
+        Note: Assumes node ids span a contiguous range, returning max(node_id) + 1.
+        """
+        max_id = int(self.edge_index.max())
+
+        if self.node_ids is not None:
+            max_id = max(max_id, int(self.node_ids.max()))
+
+        return max_id + 1
+
     @classmethod
     def from_raw(
         cls,
@@ -446,6 +501,8 @@ class DGData:
         dynamic_node_feats: Tensor | None = None,
         static_node_feats: Tensor | None = None,
         time_delta: TimeDeltaDG | str = 'r',
+        edge_type: Tensor | None = None,
+        node_type: Tensor | None = None,
     ) -> DGData:
         """Construct a DGData from raw tensors for edges, nodes, and features.
 
@@ -466,6 +523,8 @@ class DGData:
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
             time_delta=time_delta,
+            edge_type=edge_type,
+            node_type=node_type,
         )
         # Build unified event timeline
         timestamps = edge_timestamps
@@ -492,6 +551,8 @@ class DGData:
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
+            edge_type=edge_type,
+            node_type=node_type,
         )
 
     @classmethod
@@ -509,6 +570,8 @@ class DGData:
         static_node_feats_file_path: str | pathlib.Path | None = None,
         static_node_feats_col: List[str] | None = None,
         time_delta: TimeDeltaDG | str = 'r',
+        edge_type_col: str | None = None,
+        node_type_col: str | None = None,
     ) -> DGData:
         """Construct a DGData from CSV files containing edge and optional node events.
 
@@ -525,6 +588,8 @@ class DGData:
             static_node_feats_file_path: Optional CSV file for static node features.
             static_node_feats_col: Required if static_node_feats_file_path is specified.
             time_delta: Time granularity.
+            edge_type_col: Column name for edge types.
+            node_type_col: Column name for node types.
 
         Raises:
             InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
@@ -548,6 +613,9 @@ class DGData:
         edge_feats = None
         if edge_feats_col is not None:
             edge_feats = torch.empty((num_edges, len(edge_feats_col)))
+        edge_type = None
+        if edge_type_col is not None:
+            edge_type = torch.empty(num_edges, dtype=torch.int32)
 
         for i, row in enumerate(edge_reader):
             edge_index[i, 0] = int(row[edge_src_col])
@@ -556,6 +624,9 @@ class DGData:
             if edge_feats_col is not None:
                 for j, col in enumerate(edge_feats_col):
                     edge_feats[i, j] = float(row[col])  # type: ignore
+
+            if edge_type_col is not None:
+                edge_type[i] = int(row[edge_type_col])  # type: ignore
 
         # Read in dynamic node data
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
@@ -584,18 +655,26 @@ class DGData:
 
         # Read in static node data
         static_node_feats = None
+        node_type = None
         if static_node_feats_file_path is not None:
-            if static_node_feats_col is None:
+            if static_node_feats_col is None and node_type_col is None:
                 raise ValueError(
-                    'specified static_node_feats_file_path without specifying static_node_feats_col'
+                    'specified static_node_feats_file_path without specifying static_node_feats_col and node_type_col'
                 )
             logger.debug('Reading static_node_file_path: %s', node_file_path)
             static_node_feats_reader = _read_csv(static_node_feats_file_path)
             num_nodes = len(static_node_feats_reader)
-            static_node_feats = torch.empty((num_nodes, len(static_node_feats_col)))
+            if static_node_feats_col is not None:
+                static_node_feats = torch.empty((num_nodes, len(static_node_feats_col)))
+            if node_type_col is not None:
+                node_type = torch.empty(num_nodes, dtype=torch.int32)
             for i, row in enumerate(static_node_feats_reader):
-                for j, col in enumerate(static_node_feats_col):
-                    static_node_feats[i, j] = float(row[col])
+                if static_node_feats_col is not None:
+                    for j, col in enumerate(static_node_feats_col):
+                        static_node_feats[i, j] = float(row[col])  # type: ignore
+
+                if node_type_col is not None:
+                    node_type[i] = int(row[node_type_col])  # type: ignore
 
         return cls.from_raw(
             time_delta=time_delta,
@@ -606,6 +685,8 @@ class DGData:
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
+            node_type=node_type,
+            edge_type=edge_type,
         )
 
     @classmethod
@@ -623,6 +704,8 @@ class DGData:
         static_node_feats_df: 'pandas.DataFrame' | None = None,  # type: ignore
         static_node_feats_col: List[str] | None = None,
         time_delta: TimeDeltaDG | str = 'r',
+        edge_type_col: str | None = None,
+        node_type_col: str | None = None,
     ) -> DGData:
         """Construct a DGData from Pandas DataFrames.
 
@@ -639,6 +722,8 @@ class DGData:
             static_node_feats_df: Optional static node features DataFrame.
             static_node_feats_col: Required if static_node_feats_df is specified.
             time_delta: Time granularity.
+            edge_type_col: Column name for edge types.
+            node_type_col: Column name for node types.
 
         Raises:
             InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
@@ -665,6 +750,10 @@ class DGData:
                 [torch.tensor(row) for row in edge_df[edge_feats_col]]
             )
 
+        edge_type = None
+        if edge_type_col is not None:
+            edge_type = torch.from_numpy(edge_df[edge_type_col].to_numpy())
+
         # Read in dynamic node data
         node_timestamps, node_ids, dynamic_node_feats = None, None, None
         if node_df is not None:
@@ -681,17 +770,25 @@ class DGData:
 
         # Read in static node data
         static_node_feats = None
+        node_type = None
         if static_node_feats_df is not None:
-            if static_node_feats_col is None:
+            if static_node_feats_col is None and node_type_col is None:
                 raise ValueError(
-                    'specified static_node_feats_df without specifying static_node_feats_col'
+                    'specified static_node_feats_df without specifying static_node_feats_col and node_type'
                 )
-            static_node_feats = torch.stack(
-                [
-                    torch.tensor(row)
-                    for row in static_node_feats_df[static_node_feats_col]
-                ]
-            )
+
+            if static_node_feats_col is not None:
+                static_node_feats = torch.stack(
+                    [
+                        torch.tensor(row)
+                        for row in static_node_feats_df[static_node_feats_col]
+                    ]
+                )
+
+            if node_type_col is not None:
+                node_type = torch.from_numpy(
+                    static_node_feats_df[node_type_col].to_numpy()
+                )
 
         return cls.from_raw(
             time_delta=time_delta,
@@ -702,6 +799,8 @@ class DGData:
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
+            edge_type=edge_type,
+            node_type=node_type,
         )
 
     @classmethod
@@ -736,9 +835,7 @@ class DGData:
         elif name.startswith('tkgl-'):
             raise NotImplementedError('TGB Temporal Knowledge Graphs not yet supported')
         elif name.startswith('thgl-'):
-            raise NotImplementedError(
-                'TGB Temporal Heterogeneous Graphs not yet supported'
-            )
+            dataset = LinkPropPredDataset(name=name, **kwargs)
         else:
             raise ValueError(f'Unknown dataset: {name}')
 
@@ -803,6 +900,16 @@ class DGData:
         if dataset.node_feat is not None:
             static_node_feats = torch.from_numpy(dataset.node_feat).to(torch.float32)
 
+        edge_type = None
+        node_type = None
+        if name.startswith('thgl'):
+            if 'edge_type' not in data or not hasattr(dataset, 'node_type'):
+                raise ValueError(
+                    f'Failed to construct TGB dataset. Try updating your TGB package: `pip install --upgrade py-tgb`'
+                )
+            edge_type = torch.from_numpy(data['edge_type']).to(torch.int32)
+            node_type = torch.from_numpy(dataset.node_type).to(torch.int32)
+
         raw_times = torch.from_numpy(data['timestamps'])
         split_bounds = {}
         for split_name, mask in {
@@ -822,10 +929,83 @@ class DGData:
             node_ids=node_ids,
             dynamic_node_feats=dynamic_node_feats,
             static_node_feats=static_node_feats,
+            edge_type=edge_type,
+            node_type=node_type,
         )
 
         data._split_strategy = TGBSplit(split_bounds)
         logger.debug('Finished loading DGData from TGB dataset: %s', name)
+        return data
+
+    @classmethod
+    def from_tgb_seq(cls, name: str, **kwargs: Any) -> DGData:
+        """Load a DGData from a TGB-SEQ dataset.
+
+        Args:
+            name (str): Name of the TGB-SEQ dataset.
+            kwargs: Additional dataset-specific arguments.
+
+        Returns:
+            DGData: Dataset with `_split_strategy` automatically set to `TGBSplit`.
+
+        Raises:
+            ImportError: If the TGB-SEQ package is not resolved in the current python environment.
+
+        Notes:
+            - The split strategy of a TGB-SEQ dataset cannot be modified.
+            - If a data root location is not specified, we default store location to './data'.
+        """
+        logger.debug('Loading DGData from TGB-SEQ dataset: %s', name)
+        try:
+            from tgb_seq.LinkPred.dataloader import TGBSeqLoader
+        except ImportError:
+            raise ImportError(
+                'TGB-SEQ required to load TGB data, try `pip install tgb-seq`'
+            )
+
+        if 'root' not in kwargs:
+            kwargs['root'] = './data'
+        data = TGBSeqLoader(name=name, **kwargs)
+
+        # IDs are downcast to int32, and features to float32 preventing any runtime warnings.
+        # This is safe for all TGB datasets.
+        edge_index = torch.stack(
+            [
+                torch.from_numpy(data.src_node_ids).to(torch.int32),
+                torch.from_numpy(data.dst_node_ids).to(torch.int32),
+            ],
+            dim=1,
+        )
+
+        timestamps = torch.from_numpy(data.node_interact_times).to(torch.int64)
+        edge_feats = None
+        if data.edge_features is not None:
+            edge_feats = torch.from_numpy(data.edge_features).to(torch.float32)
+
+        # Read static node features if they exist
+        static_node_feats = None
+        if data.node_features is not None:
+            static_node_feats = torch.from_numpy(data.node_features).to(torch.float32)
+
+        split_bounds = {}
+        for split_name, mask in {
+            'train': data.train_mask,
+            'val': data.val_mask,
+            'test': data.test_mask,
+        }.items():
+            times = data.node_interact_times[mask]
+            split_bounds[split_name] = (int(times.min()), int(times.max()))
+
+        data = cls.from_raw(
+            time_delta=TGB_SEQ_TIME_DELTAS[name],
+            edge_timestamps=timestamps,
+            edge_index=edge_index,
+            edge_feats=edge_feats,
+            static_node_feats=static_node_feats,
+        )
+
+        data._split_strategy = TGBSplit(split_bounds)
+        logger.debug('Finished loading DGData from TGB-SEQ dataset: %s', name)
         return data
 
 
