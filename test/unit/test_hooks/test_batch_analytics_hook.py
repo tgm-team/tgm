@@ -19,14 +19,14 @@ def dg():
 
     node_timestamps = torch.IntTensor([5, 5, 6])
     node_ids = torch.IntTensor([2, 2, 3])
-    dynamic_node_feats = torch.rand(3, 3)
+    node_x = torch.rand(3, 3)
 
     data = DGData.from_raw(
         edge_timestamps=edge_timestamps,
         edge_index=edge_index,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=node_x,
     )
     return DGraph(data)
 

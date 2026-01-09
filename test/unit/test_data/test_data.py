@@ -30,7 +30,7 @@ def test_init_dg_data():
     assert data.edge_x is None
     assert data.node_mask is None
     assert data.node_ids is None
-    assert data.dynamic_node_feats is None
+    assert data.node_x is None
     assert data.static_node_feats is None
     assert data.edge_type is None
     assert data.node_type is None
@@ -63,7 +63,7 @@ def test_init_dg_data_no_node_events_with_edge_features():
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     assert data.node_mask is None
     assert data.node_ids is None
-    assert data.dynamic_node_feats is None
+    assert data.node_x is None
     assert data.static_node_feats is None
     assert data.edge_type is None
     assert data.node_type is None
@@ -85,7 +85,7 @@ def test_init_dg_data_node_events():
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.node_mask, torch.IntTensor([2, 3, 4]))
     torch.testing.assert_close(data.node_ids, node_ids)
-    assert data.dynamic_node_feats is None
+    assert data.node_x is None
     assert data.static_node_feats is None
     assert data.edge_type is None
     assert data.node_type is None
@@ -99,7 +99,7 @@ def test_init_dg_data_node_events_and_node_features():
     edge_x = torch.rand(2, 5)
     node_ids = torch.IntTensor([1, 2, 3])
     node_timestamps = torch.LongTensor([6, 7, 8])
-    dynamic_node_feats = torch.rand(3, 7)
+    node_x = torch.rand(3, 7)
     static_node_feats = torch.rand(21, 11)
     data = DGData.from_raw(
         edge_timestamps,
@@ -107,7 +107,7 @@ def test_init_dg_data_node_events_and_node_features():
         edge_x,
         node_timestamps,
         node_ids,
-        dynamic_node_feats,
+        node_x,
         static_node_feats,
     )
     torch.testing.assert_close(data.edge_index, edge_index)
@@ -116,7 +116,7 @@ def test_init_dg_data_node_events_and_node_features():
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.node_mask, torch.IntTensor([2, 3, 4]))
     torch.testing.assert_close(data.node_ids, node_ids)
-    torch.testing.assert_close(data.dynamic_node_feats, dynamic_node_feats)
+    torch.testing.assert_close(data.node_x, node_x)
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
     assert data.time_delta == TimeDeltaDG('r')
 
@@ -127,7 +127,7 @@ def test_init_dg_data_sort_required():
     edge_x = torch.rand(2, 5)
     node_ids = torch.IntTensor([1, 2, 3])
     node_timestamps = torch.LongTensor([8, 7, 6])
-    dynamic_node_feats = torch.rand(3, 7)
+    node_x = torch.rand(3, 7)
     static_node_feats = torch.rand(21, 11)
     data = DGData.from_raw(
         edge_timestamps,
@@ -135,18 +135,18 @@ def test_init_dg_data_sort_required():
         edge_x,
         node_timestamps,
         node_ids,
-        dynamic_node_feats,
+        node_x,
         static_node_feats,
     )
 
     exp_edge_index = torch.IntTensor([[10, 20], [2, 3]])
     exp_node_ids = torch.IntTensor([3, 2, 1])
     exp_edge_x = torch.Tensor([edge_x[1].tolist(), edge_x[0].tolist()])
-    exp_dynamic_node_feats = torch.Tensor(
+    exp_node_x = torch.Tensor(
         [
-            dynamic_node_feats[2].tolist(),
-            dynamic_node_feats[1].tolist(),
-            dynamic_node_feats[0].tolist(),
+            node_x[2].tolist(),
+            node_x[1].tolist(),
+            node_x[0].tolist(),
         ]
     )
     torch.testing.assert_close(data.edge_index, exp_edge_index)
@@ -160,7 +160,7 @@ def test_init_dg_data_sort_required():
         ),
     )
     torch.testing.assert_close(data.node_ids, exp_node_ids)
-    torch.testing.assert_close(data.dynamic_node_feats, exp_dynamic_node_feats)
+    torch.testing.assert_close(data.node_x, exp_node_x)
     torch.testing.assert_close(data.static_node_feats, static_node_feats)
     assert data.time_delta == TimeDeltaDG('r')
 
@@ -211,7 +211,7 @@ def test_init_dg_data_with_nan_feats():
             edge_index,
             node_ids=node_ids,
             node_timestamps=node_timestamps,
-            dynamic_node_feats=node_feats,
+            node_x=node_feats,
         )
 
     with pytest.raises(ValueError):
@@ -235,7 +235,7 @@ def test_init_dg_data_with_downcast_warning():
         'edge_index': edge_index.long(),
         'node_ids': node_ids.long(),
         'edge_x': torch.rand((len(edge_index), 1), dtype=torch.float64),
-        'dynamic_node_feats': torch.rand((len(node_ids), 1), dtype=torch.float64),
+        'node_x': torch.rand((len(node_ids), 1), dtype=torch.float64),
         'static_node_feats': torch.rand((3, 1), dtype=torch.float64),
     }
 
@@ -255,8 +255,8 @@ def test_init_dg_data_with_downcast_warning():
         assert dg.node_ids.dtype == torch.int32
         if dg.edge_x is not None:
             assert dg.edge_x.dtype == torch.float32
-        if dg.dynamic_node_feats is not None:
-            assert dg.dynamic_node_feats.dtype == torch.float32
+        if dg.node_x is not None:
+            assert dg.node_x.dtype == torch.float32
         if dg.static_node_feats is not None:
             assert dg.static_node_feats.dtype == torch.float32
 
@@ -611,9 +611,7 @@ def test_from_csv_with_node_events():
         torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
         torch.testing.assert_close(data.time, recovered_data.time)
         torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
-        torch.testing.assert_close(
-            data.dynamic_node_feats, recovered_data.dynamic_node_feats
-        )
+        torch.testing.assert_close(data.node_x, recovered_data.node_x)
         assert data.time_delta == TimeDeltaDG('r')
     except Exception as e:
         raise e
@@ -627,7 +625,7 @@ def test_from_csv_with_node_features():
     edge_timestamps = torch.LongTensor([1, 1])
     node_ids = torch.IntTensor([7, 8])
     node_timestamps = torch.LongTensor([3, 6])
-    dynamic_node_feats = torch.rand(2, 5)
+    node_x = torch.rand(2, 5)
     static_node_feats = torch.rand(21, 3)
 
     data = DGData.from_raw(
@@ -635,7 +633,7 @@ def test_from_csv_with_node_features():
         edge_index=edge_index,
         node_ids=node_ids,
         node_timestamps=node_timestamps,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=node_x,
         static_node_feats=static_node_feats,
     )
 
@@ -680,11 +678,11 @@ def test_from_csv_with_node_features():
                 zip(
                     node_ids.tolist(),
                     node_timestamps.tolist(),
-                    dynamic_node_feats[:, 0].tolist(),
-                    dynamic_node_feats[:, 1].tolist(),
-                    dynamic_node_feats[:, 2].tolist(),
-                    dynamic_node_feats[:, 3].tolist(),
-                    dynamic_node_feats[:, 4].tolist(),
+                    node_x[:, 0].tolist(),
+                    node_x[:, 1].tolist(),
+                    node_x[:, 2].tolist(),
+                    node_x[:, 3].tolist(),
+                    node_x[:, 4].tolist(),
                 )
             )
             node_file.flush()
@@ -705,7 +703,7 @@ def test_from_csv_with_node_features():
             edge_file_path=edge_file.name,
             node_file_path=node_file.name,
             static_node_feats_file_path=static_node_file.name,
-            dynamic_node_feats_col=node_feats_col,
+            node_x_col=node_feats_col,
             static_node_feats_col=static_node_feats_col,
             **edge_col_names,
             **node_col_names,
@@ -714,9 +712,7 @@ def test_from_csv_with_node_features():
         torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
         torch.testing.assert_close(data.time, recovered_data.time)
         torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
-        torch.testing.assert_close(
-            data.dynamic_node_feats, recovered_data.dynamic_node_feats
-        )
+        torch.testing.assert_close(data.node_x, recovered_data.node_x)
         torch.testing.assert_close(
             data.static_node_feats, recovered_data.static_node_feats
         )
@@ -734,7 +730,7 @@ def test_from_csv_bad_node_cols_not_specified():
     edge_timestamps = torch.LongTensor([1, 1])
     node_ids = torch.IntTensor([7, 8])
     node_timestamps = torch.LongTensor([3, 6])
-    dynamic_node_feats = torch.rand(2, 5)
+    node_x = torch.rand(2, 5)
 
     edge_col_names = {
         'edge_src_col': 'src',
@@ -772,11 +768,11 @@ def test_from_csv_bad_node_cols_not_specified():
                 zip(
                     node_ids.tolist(),
                     node_timestamps.tolist(),
-                    dynamic_node_feats[:, 0].tolist(),
-                    dynamic_node_feats[:, 1].tolist(),
-                    dynamic_node_feats[:, 2].tolist(),
-                    dynamic_node_feats[:, 3].tolist(),
-                    dynamic_node_feats[:, 4].tolist(),
+                    node_x[:, 0].tolist(),
+                    node_x[:, 1].tolist(),
+                    node_x[:, 2].tolist(),
+                    node_x[:, 3].tolist(),
+                    node_x[:, 4].tolist(),
                 )
             )
             node_file.flush()
@@ -785,7 +781,7 @@ def test_from_csv_bad_node_cols_not_specified():
             DGData.from_csv(
                 edge_file_path=edge_file.name,
                 node_file_path=node_file.name,
-                dynamic_node_feats_col=node_feats_col,
+                node_x_col=node_feats_col,
                 **edge_col_names,
             )
         with pytest.raises(ValueError):
@@ -848,7 +844,7 @@ def test_from_pandas_with_node_events():
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
     assert data.time.tolist() == [3, 6, 1337, 1338]
     assert data.node_ids.tolist() == [7, 8]
-    assert data.dynamic_node_feats is None
+    assert data.node_x is None
     assert data.time_delta == TimeDeltaDG('r')
 
 
@@ -873,15 +869,13 @@ def test_from_pandas_with_node_features():
         node_df=node_df,
         node_id_col='node',
         node_time_col='t',
-        dynamic_node_feats_col='node_features',
+        node_x_col='node_features',
     )
     assert isinstance(data, DGData)
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
     assert data.time.tolist() == [3, 6, 1337, 1338]
     assert data.node_ids.tolist() == [7, 8]
-    torch.testing.assert_close(
-        data.dynamic_node_feats.tolist(), node_df.node_features.tolist()
-    )
+    torch.testing.assert_close(data.node_x.tolist(), node_df.node_features.tolist())
     assert data.time_delta == TimeDeltaDG('r')
 
 
@@ -1209,7 +1203,7 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
     }
     if not len(split_node_dict):
         assert data.node_ids is None
-        assert data.dynamic_node_feats is None
+        assert data.node_x is None
     else:
         exp_node_ids, exp_node_feats = [], []
         for node_dict in split_node_dict.values():
@@ -1218,7 +1212,7 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
             exp_node_ids.append(nodes)
             exp_node_feats.append(feats)
         assert data.node_ids.tolist() == exp_node_ids
-        assert data.dynamic_node_feats.tolist() == exp_node_feats
+        assert data.node_x.tolist() == exp_node_feats
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
@@ -1385,7 +1379,7 @@ def test_discretize_reduce_op_first():
 
     assert coarse_data.node_mask is None
     assert coarse_data.node_ids is None
-    assert coarse_data.dynamic_node_feats is None
+    assert coarse_data.node_x is None
 
 
 def test_discretize_with_node_events_reduce_op_first():
@@ -1397,7 +1391,7 @@ def test_discretize_with_node_events_reduce_op_first():
 
     node_ids = torch.IntTensor([6, 6, 7, 6, 6, 7])
     node_timestamps = torch.LongTensor([10, 20, 30, 70, 80, 90])
-    dynamic_node_feats = torch.rand(6, 5)
+    node_x = torch.rand(6, 5)
     static_node_feats = torch.rand(8, 11)
     data = DGData.from_raw(
         edge_timestamps,
@@ -1405,7 +1399,7 @@ def test_discretize_with_node_events_reduce_op_first():
         edge_x,
         node_timestamps,
         node_ids,
-        dynamic_node_feats,
+        node_x,
         static_node_feats,
         time_delta='m',
         edge_type=edge_type,
@@ -1430,12 +1424,12 @@ def test_discretize_with_node_events_reduce_op_first():
     exp_node_mask = torch.IntTensor([2, 3, 6, 7])
     exp_node_ids = torch.IntTensor([6, 7, 6, 7])
 
-    exp_dynamic_node_feats = torch.stack(
+    exp_node_x = torch.stack(
         [
-            dynamic_node_feats[0],
-            dynamic_node_feats[2],
-            dynamic_node_feats[3],
-            dynamic_node_feats[5],
+            node_x[0],
+            node_x[2],
+            node_x[3],
+            node_x[5],
         ]
     )
 
@@ -1447,7 +1441,7 @@ def test_discretize_with_node_events_reduce_op_first():
 
     torch.testing.assert_close(coarse_data.node_mask, exp_node_mask)
     torch.testing.assert_close(coarse_data.node_ids, exp_node_ids)
-    torch.testing.assert_close(coarse_data.dynamic_node_feats, exp_dynamic_node_feats)
+    torch.testing.assert_close(coarse_data.node_x, exp_node_x)
     torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
     torch.testing.assert_close(coarse_data.node_type, exp_node_type)
 
@@ -1611,7 +1605,7 @@ def test_init_edge_type():
     assert data.edge_x is None
     assert data.node_mask is None
     assert data.node_ids is None
-    assert data.dynamic_node_feats is None
+    assert data.node_x is None
     assert data.static_node_feats is None
     assert data.node_type is None
     assert data.time_delta == TimeDeltaDG('r')
@@ -1684,7 +1678,7 @@ def test_init_node_type():
     assert data.edge_x is None
     assert data.node_mask is None
     assert data.node_ids is None
-    assert data.dynamic_node_feats is None
+    assert data.node_x is None
     assert data.static_node_feats is None
     assert data.edge_type is None
     assert data.time_delta == TimeDeltaDG('r')
@@ -1753,7 +1747,7 @@ def test_init_edge_node_types():
     assert data.edge_x is None
     assert data.node_mask is None
     assert data.node_ids is None
-    assert data.dynamic_node_feats is None
+    assert data.node_x is None
     assert data.static_node_feats is None
     assert data.time_delta == TimeDeltaDG('r')
 
@@ -1779,7 +1773,7 @@ def test_init_node_edge_types_with_edge_features():
     torch.testing.assert_close(data.node_type, node_type)
     assert data.node_mask is None
     assert data.node_ids is None
-    assert data.dynamic_node_feats is None
+    assert data.node_x is None
     assert data.static_node_feats is None
     assert data.time_delta == TimeDeltaDG('r')
 
@@ -1805,7 +1799,7 @@ def test_init_node_edge_types_with_node_features():
     torch.testing.assert_close(data.node_type, node_type)
     assert data.node_mask is None
     assert data.node_ids is None
-    assert data.dynamic_node_feats is None
+    assert data.node_x is None
     assert data.edge_x is None
     assert data.time_delta == TimeDeltaDG('r')
 

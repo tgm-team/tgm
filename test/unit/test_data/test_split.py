@@ -56,7 +56,7 @@ def test_temporal_split_with_node_feats():
 
     node_times = torch.LongTensor([1, 2, 4])
     node_ids = torch.IntTensor([1, 2, 3])
-    dynamic_node_feats = torch.rand(3, 7)
+    node_x = torch.rand(3, 7)
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)
 
@@ -66,7 +66,7 @@ def test_temporal_split_with_node_feats():
         static_node_feats=static_node_feats,
         node_timestamps=node_times,
         node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=node_x,
     )
     split = TemporalSplit(val_time=3, test_time=5)
     train, val = split.apply(data)
@@ -86,8 +86,8 @@ def test_temporal_split_with_node_feats():
     assert train.node_ids.tolist() == [1, 2]
     assert val.node_ids.tolist() == [3]
 
-    torch.testing.assert_close(train.dynamic_node_feats, data.dynamic_node_feats[:2])
-    torch.testing.assert_close(val.dynamic_node_feats, data.dynamic_node_feats[2:])
+    torch.testing.assert_close(train.node_x, data.node_x[:2])
+    torch.testing.assert_close(val.node_x, data.node_x[2:])
 
     assert id(train.static_node_feats) == id(data.static_node_feats)
     assert id(val.static_node_feats) == id(data.static_node_feats)
@@ -99,7 +99,7 @@ def test_temporal_split_only_train_split():
 
     node_times = torch.LongTensor([0, 2, 4])
     node_ids = torch.IntTensor([1, 2, 3])
-    dynamic_node_feats = torch.rand(3, 7)
+    node_x = torch.rand(3, 7)
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)
 
@@ -109,7 +109,7 @@ def test_temporal_split_only_train_split():
         static_node_feats=static_node_feats,
         node_timestamps=node_times,
         node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=node_x,
     )
     split = TemporalSplit(val_time=5, test_time=5)
     (train,) = split.apply(data)
@@ -203,7 +203,7 @@ def test_temporal_ratio_split_with_node_feats():
 
     node_times = torch.LongTensor([1, 2, 4])
     node_ids = torch.IntTensor([1, 2, 3])
-    dynamic_node_feats = torch.rand(3, 7)
+    node_x = torch.rand(3, 7)
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)
 
@@ -213,7 +213,7 @@ def test_temporal_ratio_split_with_node_feats():
         static_node_feats=static_node_feats,
         node_timestamps=node_times,
         node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=node_x,
     )
     split = TemporalRatioSplit(train_ratio=0.5, val_ratio=0.5, test_ratio=0)
     train, val = split.apply(data)
@@ -236,8 +236,8 @@ def test_temporal_ratio_split_with_node_feats():
     assert train.node_ids.tolist() == [1, 2]
     assert val.node_ids.tolist() == [3]
 
-    torch.testing.assert_close(train.dynamic_node_feats, data.dynamic_node_feats[:2])
-    torch.testing.assert_close(val.dynamic_node_feats, data.dynamic_node_feats[2:])
+    torch.testing.assert_close(train.node_x, data.node_x[:2])
+    torch.testing.assert_close(val.node_x, data.node_x[2:])
 
     assert id(train.static_node_feats) == id(data.static_node_feats)
     assert id(val.static_node_feats) == id(data.static_node_feats)
@@ -250,7 +250,7 @@ def test_temporal_ratio_split_only_train_split():
 
     node_times = torch.LongTensor([0, 2, 4])
     node_ids = torch.IntTensor([1, 2, 3])
-    dynamic_node_feats = torch.rand(3, 7)
+    node_x = torch.rand(3, 7)
     num_nodes = edge_index.max() + 1
     static_node_feats = torch.rand(num_nodes, 5)
     node_type = torch.arange(9, dtype=torch.int32)
@@ -261,7 +261,7 @@ def test_temporal_ratio_split_only_train_split():
         static_node_feats=static_node_feats,
         node_timestamps=node_times,
         node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=node_x,
         edge_type=edge_type,
         node_type=node_type,
     )
@@ -357,9 +357,7 @@ def test_tgbl_split_matches(tgb_dataset_factory):
 
             torch.testing.assert_close(expected.time, actual.time)
             torch.testing.assert_close(expected.edge_mask, actual.edge_mask)
-            torch.testing.assert_close(
-                data.dynamic_node_feats, actual.dynamic_node_feats
-            )
+            torch.testing.assert_close(data.node_x, actual.node_x)
             torch.testing.assert_close(data.static_node_feats, actual.static_node_feats)
 
 
@@ -387,13 +385,11 @@ def test_tgbn_split_matches(tgb_dataset_factory):
             if split == 'train':
                 torch.testing.assert_close(expected.node_mask, actual.node_mask)
                 torch.testing.assert_close(expected.node_ids, actual.node_ids)
-                torch.testing.assert_close(
-                    data.dynamic_node_feats, actual.dynamic_node_feats
-                )
+                torch.testing.assert_close(data.node_x, actual.node_x)
             else:
                 assert actual.node_mask is None
                 assert actual.node_ids is None
-                assert actual.dynamic_node_feats is None
+                assert actual.node_x is None
 
 
 def test_thgl_split_matches(tgb_dataset_factory):

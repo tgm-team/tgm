@@ -328,7 +328,7 @@ def thgl_node_only_data():
     return DGData.from_raw(
         edge_timestamps,
         edge_index,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=dynamic_node_feats,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
         edge_type=edge_type,

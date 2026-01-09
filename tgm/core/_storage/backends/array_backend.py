@@ -149,7 +149,7 @@ class DGStorageArrayBackend(DGStorageBase):
         return self._data.node_type
 
     def get_dynamic_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        if self._data.dynamic_node_feats is None:
+        if self._data.node_x is None:
             return None
         assert self._data.node_mask is not None  # for mypy
         assert self._data.node_ids is not None  # for mypy
@@ -163,7 +163,7 @@ class DGStorageArrayBackend(DGStorageBase):
         time = self._data.time[self._data.node_mask[node_mask]]
         nodes = self._data.node_ids[node_mask]
         indices = torch.stack([time, nodes], dim=0)
-        values = self._data.dynamic_node_feats[node_mask]
+        values = self._data.node_x[node_mask]
 
         max_node_id = nodes.max()
         edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
@@ -203,9 +203,9 @@ class DGStorageArrayBackend(DGStorageBase):
         return self._data.static_node_feats.shape[1]
 
     def get_dynamic_node_feats_dim(self) -> Optional[int]:
-        if self._data.dynamic_node_feats is None:
+        if self._data.node_x is None:
             return None
-        return self._data.dynamic_node_feats.shape[1]
+        return self._data.node_x.shape[1]
 
     def get_edge_feats_dim(self) -> Optional[int]:
         if self._data.edge_x is None:

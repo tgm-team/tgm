@@ -43,14 +43,14 @@ class SplitStrategy(ABC):
         edge_type = data.edge_type[edge_mask] if data.edge_type is not None else None
         edge_timestamps = data.time[data.edge_mask[edge_mask]]
 
-        node_ids, dynamic_node_feats, node_timestamps = None, None, None
+        node_ids, node_x, node_timestamps = None, None, None
         if data.node_ids is not None:
             if node_mask is None:
                 node_mask = torch.ones(data.node_ids.shape[0], dtype=torch.bool)
             node_ids = data.node_ids[node_mask]
             node_timestamps = data.time[data.node_mask[node_mask]]
-            if data.dynamic_node_feats is not None:
-                dynamic_node_feats = data.dynamic_node_feats[node_mask]
+            if data.node_x is not None:
+                node_x = data.node_x[node_mask]
 
         # Static features and node type are shared across splits, do not clone
         static_node_feats = data.static_node_feats
@@ -59,9 +59,9 @@ class SplitStrategy(ABC):
         # In case we masked out to the point of empty node events, change to None
         if node_ids is not None and node_ids.numel() == 0:
             logger.warning(
-                'All nodes masked out, resetting node_ids/node_timestamps/dynamic_node_feats to None'
+                'All nodes masked out, resetting node_ids/node_timestamps/node_x to None'
             )
-            node_ids = node_timestamps = dynamic_node_feats = None
+            node_ids = node_timestamps = node_x = None
 
         return DGData.from_raw(
             time_delta=data.time_delta,
@@ -70,7 +70,7 @@ class SplitStrategy(ABC):
             edge_x=edge_x,
             node_timestamps=node_timestamps,
             node_ids=node_ids,
-            dynamic_node_feats=dynamic_node_feats,
+            node_x=node_x,
             static_node_feats=static_node_feats,
             edge_type=edge_type,
             node_type=node_type,

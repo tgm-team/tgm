@@ -881,7 +881,7 @@ def node_only_data():
         edge_timestamps,
         edge_index,
         edge_x=edge_feats,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=dynamic_node_feats,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
     )
