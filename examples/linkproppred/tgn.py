@@ -93,7 +93,6 @@ def train(
         nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
-
         z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
         inv_src = batch.global_to_local(batch.src)
