@@ -1,5 +1,3 @@
-from typing import Set
-
 import torch
 
 from tgm.core.batch import DGBatch
@@ -13,8 +11,7 @@ logger = _get_logger(__name__)
 class BatchAnalyticsHook(StatelessHook):
     """Compute simple batch-level statistics."""
 
-    requires: Set[str] = set()
-
+    requires = {'src', 'dst', 'time', 'node_times', 'node_ids'}
     produces = {
         'num_edge_events',
         'num_node_events',
