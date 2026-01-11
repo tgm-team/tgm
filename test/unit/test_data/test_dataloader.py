@@ -199,13 +199,13 @@ def test_iteration_with_only_node_events_is_non_empty():
     node_ids = torch.IntTensor([2, 2, 2])
 
     # Can't actually get node events without dynamic node feats
-    dynamic_node_feats = torch.rand(3, 3)
+    node_x = torch.rand(3, 3)
     data = DGData.from_raw(
         edge_timestamps,
         edge_index,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=node_x,
         time_delta='s',
     )
     dg = DGraph(data)

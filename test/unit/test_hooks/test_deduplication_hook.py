@@ -97,8 +97,8 @@ def node_only_graph():
     data = DGData.from_raw(
         edge_timestamps,
         edge_index,
-        edge_feats=edge_feats,
-        dynamic_node_feats=dynamic_node_feats,
+        edge_x=edge_feats,
+        node_x=dynamic_node_feats,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
     )

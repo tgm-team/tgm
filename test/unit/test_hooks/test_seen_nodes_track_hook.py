@@ -21,7 +21,7 @@ def dg():
         edge_index,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x=dynamic_node_feats,
         time_delta='s',
     )
 

@@ -85,7 +85,7 @@ def test_get_start_time_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
     storage = DGStorageImpl(data)
 
-    assert storage.get_start_time(DGSliceTracker()) == data.timestamps[0]
+    assert storage.get_start_time(DGSliceTracker()) == data.time[0]
     assert storage.get_start_time(DGSliceTracker(start_time=5)) == 5
     assert storage.get_start_time(DGSliceTracker(end_time=4)) == 1
     assert storage.get_start_time(DGSliceTracker(start_time=5, end_time=9)) == 5
@@ -101,7 +101,7 @@ def test_get_end_time_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
     storage = DGStorageImpl(data)
 
-    assert storage.get_end_time(DGSliceTracker()) == data.timestamps[-1]
+    assert storage.get_end_time(DGSliceTracker()) == data.time[-1]
     assert storage.get_end_time(DGSliceTracker(start_time=5)) == 10
     assert storage.get_end_time(DGSliceTracker(end_time=4)) == 1
     assert storage.get_end_time(DGSliceTracker(start_time=5, end_time=9)) == 5
@@ -244,23 +244,23 @@ def test_get_edge_feats(DGStorageImpl, edge_only_data_with_features):
 
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker()),
-        edge_only_data_with_features.edge_feats,
+        edge_only_data_with_features.edge_x,
     )
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(start_time=5)),
-        edge_only_data_with_features.edge_feats[1:],
+        edge_only_data_with_features.edge_x[1:],
     )
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(end_time=4)),
-        edge_only_data_with_features.edge_feats[:1],
+        edge_only_data_with_features.edge_x[:1],
     )
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(start_time=5)),
-        edge_only_data_with_features.edge_feats[1:],
+        edge_only_data_with_features.edge_x[1:],
     )
     assert torch.equal(
         storage.get_edge_feats(DGSliceTracker(start_idx=2, end_idx=5)),
-        edge_only_data_with_features.edge_feats[2].unsqueeze(0),
+        edge_only_data_with_features.edge_x[2].unsqueeze(0),
     )
     assert (
         storage.get_edge_feats(DGSliceTracker(start_idx=2, end_idx=5, end_time=6))
@@ -282,30 +282,30 @@ def test_get_dynamic_node_feats(DGStorageImpl, data_with_features):
     storage = DGStorageImpl(data)
 
     exp_node_feats = torch.zeros(21, 8 + 1, 5)
-    exp_node_feats[1, 2] = data.dynamic_node_feats[0]
-    exp_node_feats[5, 4] = data.dynamic_node_feats[1]
-    exp_node_feats[10, 6] = data.dynamic_node_feats[2]
+    exp_node_feats[1, 2] = data.node_x[0]
+    exp_node_feats[5, 4] = data.node_x[1]
+    exp_node_feats[10, 6] = data.node_x[2]
     assert torch.equal(
         storage.get_dynamic_node_feats(DGSliceTracker()).to_dense(), exp_node_feats
     )
 
     exp_node_feats = torch.zeros(21, 8 + 1, 5)
-    exp_node_feats[5, 4] = data.dynamic_node_feats[1]
-    exp_node_feats[10, 6] = data.dynamic_node_feats[2]
+    exp_node_feats[5, 4] = data.node_x[1]
+    exp_node_feats[10, 6] = data.node_x[2]
     assert torch.equal(
         storage.get_dynamic_node_feats(DGSliceTracker(start_time=5)).to_dense(),
         exp_node_feats,
     )
 
     exp_node_feats = torch.zeros(5, 2 + 1, 5)
-    exp_node_feats[1, 2] = data.dynamic_node_feats[0]
+    exp_node_feats[1, 2] = data.node_x[0]
     assert torch.equal(
         storage.get_dynamic_node_feats(DGSliceTracker(end_time=4)).to_dense(),
         exp_node_feats,
     )
 
     exp_node_feats = torch.zeros(10, 4 + 1, 5)
-    exp_node_feats[5, 4] = data.dynamic_node_feats[1]
+    exp_node_feats[5, 4] = data.node_x[1]
     assert torch.equal(
         storage.get_dynamic_node_feats(
             DGSliceTracker(start_time=5, end_time=9)
@@ -314,8 +314,8 @@ def test_get_dynamic_node_feats(DGStorageImpl, data_with_features):
     )
 
     exp_node_feats = torch.zeros(11, 6 + 1, 5)
-    exp_node_feats[5, 4] = data.dynamic_node_feats[1]
-    exp_node_feats[10, 6] = data.dynamic_node_feats[2]
+    exp_node_feats[5, 4] = data.node_x[1]
+    exp_node_feats[10, 6] = data.node_x[2]
     assert torch.equal(
         storage.get_dynamic_node_feats(
             DGSliceTracker(start_idx=2, end_idx=5)
@@ -324,7 +324,7 @@ def test_get_dynamic_node_feats(DGStorageImpl, data_with_features):
     )
 
     exp_node_feats = torch.zeros(7, 4 + 1, 5)
-    exp_node_feats[5, 4] = data.dynamic_node_feats[1]
+    exp_node_feats[5, 4] = data.node_x[1]
     assert torch.equal(
         storage.get_dynamic_node_feats(
             DGSliceTracker(start_idx=2, end_idx=5, end_time=6)

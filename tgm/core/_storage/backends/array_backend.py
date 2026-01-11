@@ -27,28 +27,26 @@ class DGStorageArrayBackend(DGStorageBase):
         if lb_idx >= ub_idx:
             logger.debug('No events in slice: %s', slice)
             return None
-        return int(self._data.timestamps[lb_idx].item())
+        return int(self._data.time[lb_idx].item())
 
     def get_end_time(self, slice: DGSliceTracker) -> Optional[int]:
         lb_idx, ub_idx = self._binary_search(slice)
         if lb_idx >= ub_idx:
             logger.debug('No events in slice: %s', slice)
             return None
-        return int(self._data.timestamps[ub_idx - 1].item())
+        return int(self._data.time[ub_idx - 1].item())
 
     def get_nodes(self, slice: DGSliceTracker) -> Set[int]:
         all_nodes: Set[int] = set()
         lb_idx, ub_idx = self._binary_search(slice)
 
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         edge_event_nodes = self._data.edge_index[edge_mask].unique().tolist()
         all_nodes.update(edge_event_nodes)
 
-        if self._data.node_event_idx is not None:
-            node_mask = (self._data.node_event_idx >= lb_idx) & (
-                self._data.node_event_idx < ub_idx
+        if self._data.node_mask is not None:
+            node_mask = (self._data.node_mask >= lb_idx) & (
+                self._data.node_mask < ub_idx
             )
             node_event_nodes = self._data.node_ids[node_mask].unique().tolist()
             all_nodes.update(node_event_nodes)
@@ -58,12 +56,10 @@ class DGStorageArrayBackend(DGStorageBase):
 
     def get_edges(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor, Tensor]:
         lb_idx, ub_idx = self._binary_search(slice)
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         edges = self._data.edge_index[edge_mask]
         src, dst = edges[:, 0], edges[:, 1]
-        time = self._data.timestamps[self._data.edge_event_idx[edge_mask]]
+        time = self._data.time[self._data.edge_mask[edge_mask]]
 
         src, dst, time = src.contiguous(), dst.contiguous(), time.contiguous()
 
@@ -73,7 +69,7 @@ class DGStorageArrayBackend(DGStorageBase):
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         lb_idx, ub_idx = self._binary_search(slice)
-        return len(self._data.timestamps[lb_idx:ub_idx].unique())
+        return len(self._data.time[lb_idx:ub_idx].unique())
 
     def get_num_events(self, slice: DGSliceTracker) -> int:
         lb_idx, ub_idx = self._binary_search(slice)
@@ -92,11 +88,9 @@ class DGStorageArrayBackend(DGStorageBase):
         seed_nodes_set = set(unique_nodes.tolist())
 
         lb_idx, ub_idx = self._binary_search(slice)
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         edges = self._data.edge_index[edge_mask]
-        event_ids = self._data.edge_event_idx[edge_mask]
+        event_ids = self._data.edge_mask[edge_mask]
 
         src_list = edges[:, 0].tolist()
         dst_list = edges[:, 1].tolist()
@@ -133,9 +127,9 @@ class DGStorageArrayBackend(DGStorageBase):
             nbr_ids, times, feats = [], [], []
             for eid, nbr_id in node_nbrs:
                 nbr_ids.append(nbr_id)
-                times.append(self._data.timestamps[eid])
-                if self._data.edge_feats is not None:
-                    feats.append(self._data.edge_feats[eid])
+                times.append(self._data.time[eid])
+                if self._data.edge_x is not None:
+                    feats.append(self._data.edge_x[eid])
 
             nn = len(nbr_ids)
             mask = inverse_indices == i
@@ -143,91 +137,83 @@ class DGStorageArrayBackend(DGStorageBase):
                 nbr_ids, dtype=torch.int32, device=device
             )
             nbr_times[mask, :nn] = torch.tensor(times, dtype=torch.int64, device=device)
-            if self._data.edge_feats is not None:
+            if self._data.edge_x is not None:
                 nbr_feats[mask, :nn] = torch.stack(feats).to(device)
 
         return nbr_nids, nbr_times, nbr_feats
 
     def get_static_node_feats(self) -> Optional[Tensor]:
-        return self._data.static_node_feats
+        return self._data.static_node_x
 
     def get_node_type(self) -> Optional[Tensor]:
         return self._data.node_type
 
     def get_dynamic_node_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        if self._data.dynamic_node_feats is None:
+        if self._data.node_x is None:
             return None
-        assert self._data.node_event_idx is not None  # for mypy
+        assert self._data.node_mask is not None  # for mypy
         assert self._data.node_ids is not None  # for mypy
 
         lb_idx, ub_idx = self._binary_search(slice)
-        node_mask = (self._data.node_event_idx >= lb_idx) & (
-            self._data.node_event_idx < ub_idx
-        )
+        node_mask = (self._data.node_mask >= lb_idx) & (self._data.node_mask < ub_idx)
         if node_mask.sum() == 0:
             logger.debug(f'No dynamic node features in slice {slice}')
             return None
 
-        time = self._data.timestamps[self._data.node_event_idx[node_mask]]
+        time = self._data.time[self._data.node_mask[node_mask]]
         nodes = self._data.node_ids[node_mask]
         indices = torch.stack([time, nodes], dim=0)
-        values = self._data.dynamic_node_feats[node_mask]
+        values = self._data.node_x[node_mask]
 
         max_node_id = nodes.max()
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
             max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
 
-        max_time = slice.end_time or self._data.timestamps[ub_idx - 1]
+        max_time = slice.end_time or self._data.time[ub_idx - 1]
         node_feats_dim = self.get_dynamic_node_feats_dim()
         shape = (max_time + 1, max_node_id + 1, node_feats_dim)
         return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
 
     def get_edge_feats(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        if self._data.edge_feats is None:
+        if self._data.edge_x is None:
             return None
 
         lb_idx, ub_idx = self._binary_search(slice)
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         if edge_mask.sum() == 0:
             return None
 
-        return self._data.edge_feats[edge_mask]
+        return self._data.edge_x[edge_mask]
 
     def get_edge_type(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.edge_type is None:
             return None
 
         lb_idx, ub_idx = self._binary_search(slice)
-        edge_mask = (self._data.edge_event_idx >= lb_idx) & (
-            self._data.edge_event_idx < ub_idx
-        )
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         if edge_mask.sum() == 0:
             return None
 
         return self._data.edge_type[edge_mask]
 
     def get_static_node_feats_dim(self) -> Optional[int]:
-        if self._data.static_node_feats is None:
+        if self._data.static_node_x is None:
             return None
-        return self._data.static_node_feats.shape[1]
+        return self._data.static_node_x.shape[1]
 
     def get_dynamic_node_feats_dim(self) -> Optional[int]:
-        if self._data.dynamic_node_feats is None:
+        if self._data.node_x is None:
             return None
-        return self._data.dynamic_node_feats.shape[1]
+        return self._data.node_x.shape[1]
 
     def get_edge_feats_dim(self) -> Optional[int]:
-        if self._data.edge_feats is None:
+        if self._data.edge_x is None:
             return None
-        return self._data.edge_feats.shape[1]
+        return self._data.edge_x.shape[1]
 
     def _binary_search(self, slice: DGSliceTracker) -> Tuple[int, int]:
-        ts = self._data.timestamps
+        ts = self._data.time
         if slice.start_time not in self._lb_cache:
             t = ts[0] if slice.start_time is None else slice.start_time
             self._lb_cache[slice.start_time] = int(torch.searchsorted(ts, t))

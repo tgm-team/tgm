@@ -87,7 +87,7 @@ def load_data(dataset_str: str) -> Tuple[DGData, TemporalRatioSplit | None]:
             edge_src_col='from',
             edge_dst_col='to',
             edge_time_col='timestamp',
-            edge_feats_col='value',
+            edge_x_col='value',
             time_delta=args.raw_time_gran,
         )
         split_strategy = TemporalRatioSplit(

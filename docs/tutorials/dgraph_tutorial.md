@@ -51,13 +51,13 @@ class DGData:
     Attributes:
         time_delta (TimeDeltaDG | str): Time granularity of the graph.
         timestamps (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
-        edge_event_idx (Tensor): Indices of edge events within `timestamps`.
+        edge_mask (Tensor): Mask of edge events within `timestamps`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
-        edge_feats (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_event_idx (Tensor | None): Indices of node events within `timestamps`.
+        edge_x (Tensor | None): Optional edge features [num_edge_events, D_edge].
+        node_mask (Tensor | None): Mask of node events within `timestamps`.
         node_ids (Tensor | None): Node IDs corresponding to node events [num_node_events].
-        dynamic_node_feats (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
-        static_node_feats (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
+        node_x (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
+        static_node_x (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
 
     Raises:
         InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
@@ -92,8 +92,8 @@ data = DGData.from_tgb('tgbl-wiki')
 
 print(data.time_delta) # TimeDelta('s', value=1)
 print(data.edge_index.shape) # torch.Size([157474, 2])
-print(data.dynamic_node_feats) # None, no dynamic node features in tgbl-wiki
-print(data.static_node_feats) # None, no static node features in tgbl-wiki
+print(data.node_x) # None, no dynamic node features in tgbl-wiki
+print(data.static_node_x) # None, no static node features in tgbl-wiki
 ```
 
 > **TIP**: You can `print(data)` to see which features and events exist within the dataset.
@@ -106,19 +106,19 @@ If you have our own dataset in TGM, you can create a `DGData` object either `fro
 
 Please consult our documentation for full description of our API. The table below summarizes the main pieces of data expected during construction. Note that analogous attributes are expected in the other IO constructors (e.g. `from_pandas`, `from_raw`)
 
-| Attribute                     | Description                                                    | Type                  | Required                                              | Note                                                     |
-| ----------------------------- | -------------------------------------------------------------- | --------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
-| `edge_file_path`              | Path to CSV file containing edge data                          | `str \| pathlib.Path` | Yes                                                   | `edge_df` if using `from_pandas`                         |
-| `edge_src_col`                | Column name in edge file for src nodes                         | `str`                 | Yes                                                   | Cannot have ids matching `tgm.constants.PADDED_NODE_ID`  |
-| `edge_dst_col`                | Column name in edge file for dst nodes                         | `str`                 | Yes                                                   | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
-| `edge_time_col`               | Column name in edge file for edge times                        | `str`                 | Yes                                                   | Time must be non-negative                                |
-| `node_file_path`              | Path to CSV file containing dynamic node data                  | `str \| pathlib.Path` | No                                                    | `node_df` is using `from_pandas`                         |
-| `node_id_col`                 | Column name in node file for node event node ids               | `str`                 | No, unless `node_file_path` is specified              | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
-| `node_time_col`               | Column name in node file for node event node times             | `str`                 | No, unless `node_file_path` is specified              | Time must be non-negative                                |
-| `dynamic_node_feats_col`      | Column name in node file for dynamic node features             | `str`                 | No                                                    |                                                          |
-| `static_node_feats_file_path` | Path to CSV file containing static node features               | `str \| pathlib.Path` | No                                                    | `static_node_feats_df` if using `from_pandas`            |
-| `static_node_feats_col`       | Column name in static node feats file for static node features | `str`                 | No, unless `static_node_feats_file_path` is specified |                                                          |
-| `time_delta`                  | Time granularity of the graph data                             | `TimeDeltaDG \| str`  | Yes                                                   | Default to *event_ordered* granularity `'r'`             |
+| Attribute                 | Description                                                    | Type                  | Required                                          | Note                                                     |
+| ------------------------- | -------------------------------------------------------------- | --------------------- | ------------------------------------------------- | -------------------------------------------------------- |
+| `edge_file_path`          | Path to CSV file containing edge data                          | `str \| pathlib.Path` | Yes                                               | `edge_df` if using `from_pandas`                         |
+| `edge_src_col`            | Column name in edge file for src nodes                         | `str`                 | Yes                                               | Cannot have ids matching `tgm.constants.PADDED_NODE_ID`  |
+| `edge_dst_col`            | Column name in edge file for dst nodes                         | `str`                 | Yes                                               | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
+| `edge_time_col`           | Column name in edge file for edge times                        | `str`                 | Yes                                               | Time must be non-negative                                |
+| `node_file_path`          | Path to CSV file containing dynamic node data                  | `str \| pathlib.Path` | No                                                | `node_df` is using `from_pandas`                         |
+| `node_id_col`             | Column name in node file for node event node ids               | `str`                 | No, unless `node_file_path` is specified          | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
+| `node_time_col`           | Column name in node file for node event node times             | `str`                 | No, unless `node_file_path` is specified          | Time must be non-negative                                |
+| `node_x_col`              | Column name in node file for dynamic node features             | `str`                 | No                                                |                                                          |
+| `static_node_x_file_path` | Path to CSV file containing static node features               | `str \| pathlib.Path` | No                                                | `static_node_x_df` if using `from_pandas`                |
+| `static_node_x_col`       | Column name in static node feats file for static node features | `str`                 | No, unless `static_node_x_file_path` is specified |                                                          |
+| `time_delta`              | Time granularity of the graph data                             | `TimeDeltaDG \| str`  | Yes                                               | Default to *event_ordered* granularity `'r'`             |
 
 A few key things to know:
 
@@ -127,18 +127,18 @@ A few key things to know:
   - More often than not, your timestamps have some semantics meaning (e.g. *seconds*, *days*, etc). In this case, you should specify the appropriate `time_delta` value. See our [time management tutorial](../tutorials/time_delta_tutorial.md) for more details.
 - edge data:
   - We expect an `edge_file_path` which is a csv file with `edge_src_col`, `edge_dst_col`, `edge_time_col` as a minimum.
-  - Your edge csv file may also contain `edge_feats_col` which are the edge features on your data
+  - Your edge csv file may also contain `edge_x_col` which are the edge features on your data
 - dynamic node data (optional)
   - If included, we expect a `node_file_path` which is a csv file with `node_id_col`, `node_time_col` as a minimum. These are your dynamic node events.
-  - Your dynamic node data csv file may also include `dynamic_node_feats_col`, which are the dynamic node features in your data.
+  - Your dynamic node data csv file may also include `node_x_col`, which are the dynamic node features in your data.
 - static node data (optional)
-  - If included, we expect a `static_node_feats_fil_path` which is a csv file with `static_node_feats_col`, the static node features for your dataset.
+  - If included, we expect a `static_node_x_fil_path` which is a csv file with `static_node_x_col`, the static node features for your dataset.
 
 Internally, we perform various checks on the tensors shapes, node ranges, and timestamps values. If your data is well structured, everything should work. If you get an error message that is not intuitive, please let us know.
 
 #### From Pandas
 
-The API largely the same as above, except that we expected `edge_df`, `node_df`, and `static_node_feats_df` dataframes for the edge, dynamic node, and static node data respectively, instead of csv files.
+The API largely the same as above, except that we expected `edge_df`, `node_df`, and `static_node_x_df` dataframes for the edge, dynamic node, and static node data respectively, instead of csv files.
 
 ```python
 import pandas as pd
@@ -168,13 +168,13 @@ dg = DGraph.from_pandas(
     edge_src_col='src',
     edge_dst_col='dst',
     edge_time_col='t',
-    edge_feats_col='edge_feat',
+    edge_x_col='edge_feat',
     node_df=dynamic_node_df,
     node_id_col='node',
     node_time_col='t',
-    dynamic_node_feats_col='dynamic_node_feat',
-    static_node_feats_df=static_node_df,
-    static_node_feats_col='static_node_feat',
+    node_x_col='dynamic_node_feat',
+    static_node_x_df=static_node_df,
+    static_node_x_col='static_node_feat',
     time_delta='s',  # second-wise granularity
 )
 ```
@@ -194,19 +194,19 @@ edge_feats = torch.rand(3, 5)  # optional edge features
 # Define Dynamic Node Data (Optional)
 node_timestamps = torch.LongTensor([1, 2, 3])
 node_ids = torch.LongTensor([2, 4, 6])
-dynamic_node_feats = torch.rand([3, 5])
+node_x = torch.rand([3, 5])
 
 # Define Static Node Features (Optional)
-static_node_feats = torch.rand(9, 11)
+static_node_x = torch.rand(9, 11)
 
 data = DGData.from_raw(
     edge_timestamps=edge_timestamps,
     edge_index=edge_index,
-    edge_feats=edge_feats,
+    edge_x=edge_feats,
     node_timestamps=node_timestamps,
     node_ids=node_ids,
-    dynamic_node_feats=dynamic_node_feats,
-    static_node_feats=static_node_feats,
+    node_x=node_x,
+    static_node_x=static_node_x,
     time_delta='s',  # second-wise granularity
 )
 ```
@@ -397,7 +397,7 @@ class DGBatch:
         src (Tensor): Source node indices for edges in the batch. Shape `(E,)`.
         dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
         time (Tensor): Timestamps of each edge event. Shape `(E,)`.
-        dynamic_node_feats (Tensor | None, optional): Dynamic node features for nodes
+        node_x (Tensor | None, optional): Dynamic node features for nodes
             in the batch. Typically sparse tensor of shape `(T x V x d_node_dynamic)`.
         edge_feats (Tensor | None, optional): Edge features for the batch. Typically
             sparse tensor of shape `(E x d_edge)` or `(T x V x V x d_edge)` depending
