@@ -187,8 +187,19 @@ class HookManager:
             hooks = self._shared_hooks + [
                 h for h in self._key_to_hooks[k] if h not in self._shared_hooks
             ]
+
+            # @TODO: Need a better solution when requirement at instance-level is introduced to DGHook
+            filter_hooks = [h for h in hooks if not self._is_dedup(h)]
+            dedups = list(set(hooks) - set(filter_hooks))
+            hooks = filter_hooks
+
             logger.debug('Running topological sort to resolve hooks for key: %s', k)
             self._key_to_hooks[k] = self._topological_sort_hooks(hooks)
+            if len(dedups) > 0:
+                logger.debug(
+                    'Identify DeduplicationHook. Enforce DeduplicationHook to run at the end.'
+                )
+                self._key_to_hooks[k].extend(dedups)
             self._dirty[k] = False
 
     @contextmanager
@@ -297,3 +308,6 @@ class HookManager:
             logger.debug(f'  - {h.__class__.__name__}')
 
         return ordered
+
+    def _is_dedup(self, hook: DGHook) -> bool:
+        return 'Deduplication' in hook.__class__.__name__

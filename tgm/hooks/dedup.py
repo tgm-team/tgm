@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import StatelessHook
 from tgm.util.logging import _get_logger
 
@@ -25,7 +26,10 @@ class DeduplicationHook(StatelessHook):
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
-                nids.append(batch.nbr_nids[hop].to(batch.src.device))
+                nbr_nodes = batch.nbr_nids[hop].flatten()
+                nbr_mask = nbr_nodes != PADDED_NODE_ID
+                nids.append(nbr_nodes[nbr_mask].flatten().to(batch.src.device))
+
         nids.append(
             batch.node_ids.to(batch.src.device)
         ) if batch.node_ids is not None else None
