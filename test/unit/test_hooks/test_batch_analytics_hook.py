@@ -104,9 +104,9 @@ def test_basic_analytics_empty_edges_and_nodes(dg):
     # Force edges and nodes to be "present but empty"
     batch.src = torch.empty(0, dtype=batch.src.dtype)
     batch.dst = torch.empty(0, dtype=batch.dst.dtype)
-    batch.time = torch.empty(0, dtype=batch.time.dtype)
-    batch.node_ids = torch.empty(0, dtype=batch.node_ids.dtype)
-    batch.node_times = torch.empty(0, dtype=batch.node_times.dtype)
+    batch.edge_time = torch.empty(0, dtype=batch.edge_time.dtype)
+    batch.node_event_node_ids = torch.empty(0, dtype=batch.node_event_node_ids.dtype)
+    batch.node_event_time = torch.empty(0, dtype=batch.node_event_time.dtype)
 
     processed_batch = hook(dg, batch)
 

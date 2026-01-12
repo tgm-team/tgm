@@ -53,7 +53,7 @@ def test_sample_with_node_events_seeds(node_only_data):
     hook = NeighborSamplerHook(
         num_nbrs=[1],
         seed_nodes_keys=['node_event_node_ids'],
-        seed_times_keys=['node_event_Time'],
+        seed_times_keys=['node_event_time'],
     )
     batch = dg.materialize()
     batch = hook(dg, batch)

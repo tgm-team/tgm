@@ -93,14 +93,14 @@ def node_only_graph():
     edge_x = torch.IntTensor([[1], [2], [3], [0], [0]])
     node_x = torch.rand(5, 5)
     node_timestamps = torch.IntTensor([4, 5, 6, 7, 8])
-    node_ids = torch.IntTensor([4, 5, 6, 5, 6])
+    node_event_node_ids = torch.IntTensor([4, 5, 6, 5, 6])
     data = DGData.from_raw(
         edge_timestamps,
         edge_index,
         edge_x=edge_x,
         node_x=node_x,
         node_timestamps=node_timestamps,
-        node_ids=node_ids,
+        node_ids=node_event_node_ids,
     )
     return DGraph(data)
 
@@ -123,7 +123,8 @@ def test_dedup_node_only_batch(node_only_graph):
         batch_2 = next(batch_iter)
         torch.testing.assert_close(batch_2.unique_nids, torch.IntTensor([4, 5, 6]))
         torch.testing.assert_close(
-            batch_2.global_to_local(batch_2.node_ids), torch.IntTensor([0, 1, 2])
+            batch_2.global_to_local(batch_2.node_event_node_ids),
+            torch.IntTensor([0, 1, 2]),
         )
 
         batch_3 = next(batch_iter)
@@ -135,5 +136,5 @@ def test_dedup_node_only_batch(node_only_graph):
             batch_3.global_to_local(batch_3.dst), torch.IntTensor([1, 2])
         )
         torch.testing.assert_close(
-            batch_3.global_to_local(batch_3.node_ids), torch.IntTensor([1])
+            batch_3.global_to_local(batch_3.node_event_node_ids), torch.IntTensor([1])
         )

@@ -36,7 +36,7 @@ def test_device_transfer_hook_cpu_cpu(dg):
     assert batch == processed_batch
     assert processed_batch.src.device.type == 'cpu'
     assert processed_batch.dst.device.type == 'cpu'
-    assert processed_batch.time.device.type == 'cpu'
+    assert processed_batch.edge_time.device.type == 'cpu'
 
 
 @pytest.mark.gpu
@@ -51,7 +51,7 @@ def test_device_transfer_hook_cpu_gpu(dg):
     assert batch == processed_batch
     assert processed_batch.src.device.type == 'cuda'
     assert processed_batch.dst.device.type == 'cuda'
-    assert processed_batch.time.device.type == 'cuda'
+    assert processed_batch.edge_time.device.type == 'cuda'
     assert processed_batch.foo.device.type == 'cuda'
 
 
@@ -70,5 +70,5 @@ def test_device_transfer_hook_gpu_gpu(dg):
     assert batch == processed_batch
     assert processed_batch.src.device.type == 'cuda'
     assert processed_batch.dst.device.type == 'cuda'
-    assert processed_batch.time.device.type == 'cuda'
+    assert processed_batch.edge_time.device.type == 'cuda'
     assert processed_batch.foo.device.type == 'cuda'

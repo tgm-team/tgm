@@ -42,7 +42,7 @@ class NodeAnalyticsHook(StatefulHook):
         'src',
         'dst',
         'edge_time',
-        'node_event_node_time',
+        'node_event_time',
         'node_event_node_ids',
     }
     produces = {'node_stats', 'node_macro_stats', 'edge_stats'}

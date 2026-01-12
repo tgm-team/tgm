@@ -83,7 +83,9 @@ def test_iteration_ordered(drop_last, time_delta):
         assert isinstance(batch, DGBatch)
         torch.testing.assert_close(batch.src, src[3 * batch_num : 3 * (batch_num + 1)])
         torch.testing.assert_close(batch.dst, dst[3 * batch_num : 3 * (batch_num + 1)])
-        torch.testing.assert_close(batch.time, t[3 * batch_num : 3 * (batch_num + 1)])
+        torch.testing.assert_close(
+            batch.edge_time, t[3 * batch_num : 3 * (batch_num + 1)]
+        )
         assert batch_num < 4
         batch_num += 1
     if drop_last:
@@ -124,7 +126,9 @@ def test_iteration_by_time_equal_unit(drop_last):
         assert isinstance(batch, DGBatch)
         torch.testing.assert_close(batch.src, src[3 * batch_num : 3 * (batch_num + 1)])
         torch.testing.assert_close(batch.dst, dst[3 * batch_num : 3 * (batch_num + 1)])
-        torch.testing.assert_close(batch.time, t[3 * batch_num : 3 * (batch_num + 1)])
+        torch.testing.assert_close(
+            batch.edge_time, t[3 * batch_num : 3 * (batch_num + 1)]
+        )
         assert batch_num < 4
         batch_num += 1
     if drop_last:
