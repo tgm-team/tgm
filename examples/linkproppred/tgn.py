@@ -189,7 +189,7 @@ nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
     seed_nodes_keys=['src', 'dst', 'neg'],
-    seed_times_keys=['time', 'time', 'neg_time'],
+    seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(

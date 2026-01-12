@@ -84,11 +84,11 @@ class DGraph:
         """
         batch = DGBatch(*self.edges)
         if materialize_features and self.node_x is not None:
-            batch.node_times, batch.node_ids = self.node_x._indices()
-            batch.node_ids = batch.node_ids.to(torch.int32)  # type: ignore
-            batch.dynamic_node_feats = self.node_x._values()
+            batch.node_event_time, batch.node_event_node_ids = self.node_x._indices()
+            batch.node_event_node_ids = batch.node_event_node_ids.to(torch.int32)  # type: ignore
+            batch.node_x = self.node_x._values()
         if materialize_features and self.edge_x is not None:
-            batch.edge_feats = self.edge_x
+            batch.edge_x = self.edge_x
 
         if self.edge_type is not None:
             batch.edge_type = self.edge_type
@@ -96,7 +96,9 @@ class DGraph:
         logger.debug(
             'Materialized DGraph slice: %d edge events, %d node events',
             batch.src.numel(),
-            0 if batch.node_ids is None else batch.node_ids.numel(),
+            0
+            if batch.node_event_node_ids is None
+            else batch.node_event_node_ids.numel(),
         )
         return batch
 

@@ -33,7 +33,13 @@ def dg():
 
 def test_hook_dependancies():
     hook = BatchAnalyticsHook()
-    assert hook.requires == {'src', 'dst', 'time', 'node_times', 'node_ids'}
+    assert hook.requires == {
+        'src',
+        'dst',
+        'edge_time',
+        'node_event_time',
+        'node_event_node_ids',
+    }
     assert hook.produces == {
         'num_edge_events',
         'num_node_events',

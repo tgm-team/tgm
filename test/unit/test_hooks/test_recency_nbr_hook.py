@@ -49,7 +49,7 @@ def basic_sample_graph():
 
 
 def test_hook_dependancies():
-    assert RecencyNeighborHook.requires == {'src', 'dst', 'time'}
+    assert RecencyNeighborHook.requires == {'src', 'dst', 'edge_time'}
     assert RecencyNeighborHook.produces == {
         'nids',
         'nbr_nids',
@@ -66,7 +66,7 @@ def test_mock_move_queues_to_device(basic_sample_graph):
         num_nbrs=[1],
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src'],
-        seed_times_keys=['time'],
+        seed_times_keys=['edge_time'],
     )
     batch = dg.materialize()
     hook._device = 'foo'  # Patch graph device to trigger queue movement
@@ -82,7 +82,7 @@ def test_hook_reset_state(basic_sample_graph):
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['time', 'time'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -185,15 +185,15 @@ def test_sample_with_node_events_seeds(node_only_data):
     hook = RecencyNeighborHook(
         num_nbrs=[1],
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['node_ids'],
-        seed_times_keys=['node_times'],
+        seed_nodes_keys=['node_event_node_ids'],
+        seed_times_keys=['node_event_time'],
     )
     batch = dg.materialize()
     batch = hook(dg, batch)
     assert len(batch.nids) == 1
     assert len(batch.times) == 1
-    torch.testing.assert_close(batch.nids[0], batch.node_ids)
-    torch.testing.assert_close(batch.times[0], batch.node_times)
+    torch.testing.assert_close(batch.nids[0], batch.node_event_node_ids)
+    torch.testing.assert_close(batch.times[0], batch.node_event_time)
 
 
 def test_bad_sample_with_non_existent_seeds(basic_sample_graph):
@@ -297,7 +297,7 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['time', 'time'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -373,7 +373,7 @@ def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['time', 'time'],
+        seed_times_keys=['edge_time', 'edge_time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -474,7 +474,7 @@ def test_recency_exceed_buffer(recency_buffer_graph):
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['time', 'time'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -546,7 +546,7 @@ def test_2_hop_graph(two_hop_basic_graph):
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['time', 'time'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -634,7 +634,7 @@ def test_2_hop_directed_graph(two_hop_basic_graph):
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['time', 'time'],
+        seed_times_keys=['edge_time', 'edge_time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -733,7 +733,7 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['time', 'time', 'neg_time'],
+        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', tgb_hook)
@@ -852,7 +852,7 @@ def test_no_edge_feat_recency_nbr_sampler(no_edge_feat_data):
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['time', 'time'],
+        seed_times_keys=['edge_time', 'edge_time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -895,7 +895,7 @@ def test_node_only_batch_recency_nbr_sampler(node_only_data):
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['time', 'time'],
+        seed_times_keys=['edge_time', 'edge_time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -932,7 +932,7 @@ def test_hook_nbr_mask(basic_sample_graph):
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['time', 'time'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)

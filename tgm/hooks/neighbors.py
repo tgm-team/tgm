@@ -34,7 +34,7 @@ class NeighborSamplerHook(StatelessHook):
         ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
     """
 
-    requires = {'src', 'dst', 'time'}
+    requires = {'src', 'dst', 'edge_time'}
     produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'seed_node_nbr_mask'}
 
     def __init__(
@@ -110,7 +110,7 @@ class NeighborSamplerHook(StatelessHook):
             nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
-                slice=DGSliceTracker(end_time=int(batch.time.min()) - 1),
+                slice=DGSliceTracker(end_time=int(batch.edge_time.min()) - 1),
                 directed=self._directed,
             )
 
@@ -193,7 +193,7 @@ class NeighborSamplerHook(StatelessHook):
 
 
 class RecencyNeighborHook(StatefulHook):
-    requires = {'src', 'dst', 'time'}
+    requires = {'src', 'dst', 'edge_time'}
     produces = {
         'nids',
         'nbr_nids',
@@ -475,20 +475,20 @@ class RecencyNeighborHook(StatefulHook):
 
     def _update(self, batch: DGBatch) -> None:
         assert self._nbr_feats is not None  # For mypy
-        if batch.edge_feats is None:
+        if batch.edge_x is None:
             edge_feats = torch.zeros(
                 (len(batch.src), self._edge_x_dim), device=self._device
             )
         else:
-            edge_feats = batch.edge_feats
+            edge_feats = batch.edge_x
 
         if self._directed:
-            node_ids, nbr_nids, times = batch.src, batch.dst, batch.time
+            node_ids, nbr_nids, times = batch.src, batch.dst, batch.edge_time
         else:
             # It's fine that times is out-of-order here since we sort below
             node_ids = torch.cat([batch.src, batch.dst])
             nbr_nids = torch.cat([batch.dst, batch.src])
-            times = torch.cat([batch.time, batch.time])
+            times = torch.cat([batch.edge_time, batch.edge_time])
             edge_feats = torch.cat([edge_feats, edge_feats])
 
         # Lexicographical sort by node id and time. Duplicate nodes will be adjacent.

@@ -47,7 +47,7 @@ def test_pin_memory_hook_cpu(dg):
     assert batch == processed_batch
     assert processed_batch.src.is_pinned()
     assert processed_batch.dst.is_pinned()
-    assert processed_batch.time.is_pinned()
+    assert processed_batch.edge_time.is_pinned()
     assert processed_batch.foo.is_pinned()
 
 

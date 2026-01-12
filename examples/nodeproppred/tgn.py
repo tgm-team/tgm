@@ -200,8 +200,8 @@ num_classes = train_dg.node_x_dim
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['node_ids'],
-    seed_times_keys=['node_times'],
+    seed_nodes_keys=['node_event_node_ids'],
+    seed_times_keys=['node_event_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])

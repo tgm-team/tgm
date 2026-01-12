@@ -36,8 +36,8 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         self._move_to_device_if_needed(dg.device)  # No-op after first batch
 
-        if batch.node_ids is not None:
-            batch_nodes = batch.node_ids
+        if batch.node_event_node_ids is not None:
+            batch_nodes = batch.node_event_node_ids
         else:
             logger.debug('No node event found in the batch')
             batch_nodes = torch.empty(0, device=self._device, dtype=torch.int)

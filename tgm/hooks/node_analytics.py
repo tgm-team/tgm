@@ -38,7 +38,13 @@ class NodeAnalyticsHook(StatefulHook):
             - new_edge_count: Number of new edges in the batch, that is not seen in previous batches.
     """
 
-    requires = {'src', 'dst', 'time', 'node_times', 'node_ids'}
+    requires = {
+        'src',
+        'dst',
+        'edge_time',
+        'node_event_node_time',
+        'node_event_node_ids',
+    }
     produces = {'node_stats', 'node_macro_stats', 'edge_stats'}
 
     def __init__(self, tracked_nodes: Tensor, num_nodes: int) -> None:
@@ -113,11 +119,11 @@ class NodeAnalyticsHook(StatefulHook):
         max_edge_time = 0.0
         max_node_time = 0.0
 
-        if batch.time is not None and batch.time.numel() > 0:
+        if batch.edge_time is not None and batch.edge_time.numel() > 0:
             # Use the latest timestamp in the batch
-            max_edge_time = batch.time.max().item()
-        if batch.node_times is not None and batch.node_times.numel() > 0:
-            max_node_time = batch.node_times.max().item()
+            max_edge_time = batch.edge_time.max().item()
+        if batch.node_event_time is not None and batch.node_event_time.numel() > 0:
+            max_node_time = batch.node_event_time.max().item()
 
         return max(max_edge_time, max_node_time)
 
@@ -128,19 +134,19 @@ class NodeAnalyticsHook(StatefulHook):
             'new_node_count': 0,
         }
 
-        if batch.node_ids is None or batch.node_ids.numel() == 0:
+        if batch.node_event_node_ids is None or batch.node_event_node_ids.numel() == 0:
             return node_stats
 
         new_nodes = 0
-        for node in batch.node_ids:
+        for node in batch.node_event_node_ids:
             node_id = int(node.item())
             if node_id not in self._first_seen:
                 new_nodes += 1
 
             node_stats['new_node_count'] = new_nodes
             node_stats['node_novelty'] = (
-                new_nodes / batch.node_ids.numel()
-                if batch.node_ids.numel() > 0
+                new_nodes / batch.node_event_node_ids.numel()
+                if batch.node_event_node_ids.numel() > 0
                 else 0.0
             )
 
@@ -205,8 +211,8 @@ class NodeAnalyticsHook(StatefulHook):
 
         # Track unique timesteps in this batch (vectorized)
         time_tensors = [
-            batch.time,
-            batch.node_times,
+            batch.edge_time,
+            batch.node_event_time,
         ]
 
         for times in time_tensors:
@@ -222,8 +228,8 @@ class NodeAnalyticsHook(StatefulHook):
             all_batch_nodes.append(batch.src)
         if batch.dst is not None:
             all_batch_nodes.append(batch.dst)
-        if batch.node_ids is not None:
-            all_batch_nodes.append(batch.node_ids)
+        if batch.node_event_node_ids is not None:
+            all_batch_nodes.append(batch.node_event_node_ids)
 
         # No nodes in batch, return empty stats
         if not all_batch_nodes:
@@ -259,9 +265,9 @@ class NodeAnalyticsHook(StatefulHook):
             node_timesteps_in_batch: Set[float] = set()
 
             pairs = [
-                (batch.src, batch.time),
-                (batch.dst, batch.time),
-                (batch.node_ids, batch.node_times),
+                (batch.src, batch.edge_time),
+                (batch.dst, batch.edge_time),
+                (batch.node_event_node_ids, batch.node_event_time),
             ]
 
             for ids, times in pairs:

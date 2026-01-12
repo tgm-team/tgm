@@ -31,8 +31,8 @@ class DeduplicationHook(StatelessHook):
                 nids.append(nbr_nodes[nbr_mask].flatten().to(batch.src.device))
 
         nids.append(
-            batch.node_ids.to(batch.src.device)
-        ) if batch.node_ids is not None else None
+            batch.node_event_node_ids.to(batch.src.device)
+        ) if batch.node_event_node_ids is not None else None
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)

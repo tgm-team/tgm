@@ -179,7 +179,7 @@ def test_node_analytics_hook_empty_batch(simple_dgraph):
     empty_batch = DGBatch(
         src=torch.tensor([], dtype=torch.int32),
         dst=torch.tensor([], dtype=torch.int32),
-        time=torch.tensor([], dtype=torch.int32),
+        edge_time=torch.tensor([], dtype=torch.int32),
     )
 
     result = hook(simple_dgraph, empty_batch)
@@ -198,9 +198,9 @@ def test_node_analytics_hook_batch_with_all_none_nodes(simple_dgraph):
     batch = DGBatch(
         src=None,
         dst=None,
-        time=None,
-        node_ids=None,
-        node_times=None,
+        edge_time=None,
+        node_event_node_ids=None,
+        node_event_time=None,
     )
 
     result = hook(simple_dgraph, batch)
@@ -243,7 +243,13 @@ def test_node_analytics_hook_produces_and_requires():
     tracked_nodes = torch.tensor([0])
     hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
-    assert hook.requires == {'src', 'dst', 'time', 'node_times', 'node_ids'}
+    assert hook.requires == {
+        'src',
+        'dst',
+        'edge_time',
+        'node_event_time',
+        'node_event_node_ids',
+    }
     assert hook.produces == {'node_stats', 'node_macro_stats', 'edge_stats'}
 
 
@@ -344,9 +350,9 @@ def test_node_analytics_hook_batch_with_only_nodes(simple_dgraph):
     batch = DGBatch(
         src=None,
         dst=None,
-        time=None,
-        node_ids=torch.tensor([0, 1, 2], dtype=torch.int32),
-        node_times=torch.tensor([1, 1, 1], dtype=torch.int32),
+        edge_time=None,
+        node_event_node_ids=torch.tensor([0, 1, 2], dtype=torch.int32),
+        node_event_time=torch.tensor([1, 1, 1], dtype=torch.int32),
     )
 
     result = hook(simple_dgraph, batch)

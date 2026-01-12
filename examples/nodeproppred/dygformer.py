@@ -251,7 +251,7 @@ nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
     num_nodes=full_data.num_nodes,
     seed_nodes_keys=['src', 'dst'],
-    seed_times_keys=['time', 'time'],
+    seed_times_keys=['edge_time', 'edge_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])

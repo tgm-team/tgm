@@ -292,7 +292,7 @@ hm.register_shared(
         num_nbrs=[args.num_neighbors],
         num_nodes=full_data.num_nodes,
         seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['time', 'time', 'neg_time'],
+        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
     )
 )
 train_key, val_key, test_key = hm.keys
