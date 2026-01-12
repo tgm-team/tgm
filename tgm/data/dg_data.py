@@ -211,7 +211,7 @@ class DGData:
                 _assert_is_tensor(self.node_x, 'node_x')
                 if self.node_x.ndim != 2 or self.node_x.shape[0] != num_node_events:
                     raise ValueError(
-                        'node_x must have shape [num_node_events, D_node_dynamic], '
+                        'Dynamic node features (node_x) must have shape [num_node_events, D_node_dynamic], '
                         f'got {num_node_events} node events and shape {self.node_x.shape}'
                     )
                 self.node_x = _maybe_cast_float_tensor(self.node_x, 'node_x')
@@ -231,7 +231,7 @@ class DGData:
 
             if self.static_node_x.shape[0] < num_nodes:
                 raise ValueError(
-                    f'static_node features has shape {self.static_node_x.shape}, '
+                    f'Static node features (static_node_x) has shape {self.static_node_x.shape}, '
                     f'but the data requires features for at least {num_nodes} nodes. '
                     f'The first dimension ({self.static_node_x.shape[0]}) must be >= num_nodes ({num_nodes}).'
                 )

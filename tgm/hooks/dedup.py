@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Set
-
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import StatelessHook
 from tgm.util.logging import _get_logger
 
@@ -17,7 +16,7 @@ class DeduplicationHook(StatelessHook):
     Note: Supports batches with or without negative samples and multi-hop neighbors.
     """
 
-    requires: Set[str] = set()
+    requires = {'src', 'dst'}
     produces = {'unique_nids', 'global_to_local'}
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
@@ -27,7 +26,10 @@ class DeduplicationHook(StatelessHook):
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
-                nids.append(batch.nbr_nids[hop].to(batch.src.device))
+                nbr_nodes = batch.nbr_nids[hop].flatten()
+                nbr_mask = nbr_nodes != PADDED_NODE_ID
+                nids.append(nbr_nodes[nbr_mask].flatten().to(batch.src.device))
+
         nids.append(
             batch.node_ids.to(batch.src.device)
         ) if batch.node_ids is not None else None

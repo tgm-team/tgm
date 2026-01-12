@@ -25,6 +25,11 @@ class MockHookRequires(StatelessHook):
         return batch
 
 
+class DeduplicationMockHook(StatelessHook):
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        return batch
+
+
 class MockHookWithState(StatefulHook):
     has_state: bool = True
 
@@ -374,3 +379,27 @@ def test_topo_sort_neg_before_nbr():
     # Ensure negatives precede nbrs in both cases
     assert foo_hooks.index(mock_neg_hook) < foo_hooks.index(mock_nbr_hook)
     assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)
+
+
+def test_force_last_dedup_hook():
+    # @TODO: Dedup hook is temporarily forced to run at the end.
+    # This test potentially needs to be updated once instance-level require is introduced to DGHook.
+    h1 = MockHook()
+    h2 = MockHookRequires()
+    h3 = DeduplicationMockHook()
+
+    hm = HookManager(keys=['train', 'val'])
+    hm.register('train', h3)
+    hm.register('train', h2)
+    hm.register('train', h1)
+    hm.register('val', h3)
+    hm.register('val', h2)
+    hm.register('val', h1)
+
+    hm.resolve_hooks()
+    assert len(hm._key_to_hooks['train']) == 3
+    assert len(hm._key_to_hooks['val']) == 3
+    assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)
+    assert hm._key_to_hooks['val'].index(h1) < hm._key_to_hooks['val'].index(h2)
+    assert hm._key_to_hooks['train'].index(h2) < hm._key_to_hooks['train'].index(h3)
+    assert hm._key_to_hooks['val'].index(h2) < hm._key_to_hooks['val'].index(h3)

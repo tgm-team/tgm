@@ -29,6 +29,11 @@ def dg():
     return dg
 
 
+def test_hook_dependancies():
+    assert EdgeEventsSeenNodesTrackHook.requires == {'src', 'dst'}
+    assert EdgeEventsSeenNodesTrackHook.produces == {'seen_nodes', 'batch_nodes_mask'}
+
+
 def test_seen_nodes_track_hook(dg):
     hm = HookManager(keys=['unit'])
     seen_nodes_track_hook = EdgeEventsSeenNodesTrackHook(6)

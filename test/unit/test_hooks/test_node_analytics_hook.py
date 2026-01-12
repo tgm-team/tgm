@@ -243,7 +243,7 @@ def test_node_analytics_hook_produces_and_requires():
     tracked_nodes = torch.tensor([0])
     hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5)
 
-    assert hook.requires == set()
+    assert hook.requires == {'src', 'dst', 'time', 'node_times', 'node_ids'}
     assert hook.produces == {'node_stats', 'node_macro_stats', 'edge_stats'}
 
 

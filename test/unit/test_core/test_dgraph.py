@@ -83,7 +83,6 @@ def test_init_from_data(data):
     exp_node_x[10, 6] = data.node_x[2]
     torch.testing.assert_close(dg.node_x.to_dense(), exp_node_x)
     torch.testing.assert_close(dg.edge_x, data.edge_x)
-
     torch.testing.assert_close(dg.edge_type, data.edge_type)
     torch.testing.assert_close(dg.node_type, data.node_type)
 
@@ -108,7 +107,6 @@ def test_init_gpu(data):
     exp_node_x = exp_node_x.cuda()
     torch.testing.assert_close(dg.node_x.to_dense(), exp_node_x)
     torch.testing.assert_close(dg.edge_x, data.edge_x.to('cuda'))
-
     torch.testing.assert_close(dg.edge_type, data.edge_type.to('cuda'))
     torch.testing.assert_close(dg.node_type, data.node_type.to('cuda'))
 
