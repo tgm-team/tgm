@@ -144,7 +144,7 @@ def train(
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_x
         if y_labels is not None:
             z = encoder(batch, static_node_x)
             y_pred = decoder(z)
@@ -172,7 +172,7 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_x
         if y_labels is not None:
             z = encoder(batch, static_node_x)
             y_pred = decoder(z)

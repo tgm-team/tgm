@@ -58,7 +58,7 @@ def eval(
             y_pred = model(query_src, query_dst)
             y_pred_pos, y_pred_neg = y_pred[0].unsqueeze(0), y_pred[1:]
             perf_list.append(evaluator.eval(y_pred_pos, y_pred_neg))
-        model.update(batch.src, batch.dst, batch.time)
+        model.update(batch.src, batch.dst, batch.edge_time)
 
     return float(np.mean(perf_list))
 
@@ -103,7 +103,7 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
 
         # TODO: decide whether to keep this (similar to random negative sampler), or sample
         # negative time stamps (similar to TGB negative sampler)
-        batch.neg_time = batch.time.clone()  # type: ignore
+        batch.neg_time = batch.edge_time.clone()  # type: ignore
         return batch
 
 

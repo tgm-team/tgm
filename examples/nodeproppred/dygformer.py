@@ -115,7 +115,7 @@ class DyGFormer_NodePrediction(nn.Module):
     ):
         nodes = torch.cat([batch.src, batch.dst])
         z_all = torch.cat([z_src, z_dst])
-        timestamp = torch.cat([batch.time, batch.time])
+        timestamp = torch.cat([batch.edge_time, batch.edge_time])
 
         chronological_order = torch.argsort(timestamp)
         nodes = nodes[chronological_order]
@@ -150,7 +150,7 @@ class DyGFormer_NodePrediction(nn.Module):
         z_src, z_dst = self.encoder(
             static_node_feat,
             edge_idx,
-            batch.time,
+            batch.edge_time,
             nbr_nids[src_dst_nbr_idx],
             nbr_times[src_dst_nbr_idx],
             nbr_feats[src_dst_nbr_idx],
@@ -176,7 +176,7 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_x
         if len(batch.src) > 0:
             z = encoder(batch, static_node_x)  # [num_nodes, embed_dim]
 
@@ -210,12 +210,12 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_x
 
         if batch.src.shape[0] > 0:
             z = encoder(batch, static_node_x)
             if y_true is not None:
-                z_node = z[batch.node_ids]
+                z_node = z[batch.node_event_node_ids]
                 y_pred = decoder(z_node)
                 input_dict = {
                     'y_true': y_true,

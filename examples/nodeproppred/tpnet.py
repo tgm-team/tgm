@@ -147,7 +147,7 @@ class TPNet_NodePrediction(nn.Module):
     ):
         nodes = torch.cat([batch.src, batch.dst])
         z_all = torch.cat([z_src, z_dst])
-        timestamp = torch.cat([batch.time, batch.time])
+        timestamp = torch.cat([batch.edge_time, batch.edge_time])
 
         chronological_order = torch.argsort(timestamp)
         nodes = nodes[chronological_order]
@@ -180,7 +180,7 @@ class TPNet_NodePrediction(nn.Module):
         z_src, z_dst = self.encoder(
             static_node_feat,
             edge_idx,
-            batch.time,
+            batch.edge_time,
             nbr_nids[: batch_size * 2],
             nbr_times[: batch_size * 2],
             nbr_feats[: batch_size * 2],
@@ -206,7 +206,7 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_x
         if len(batch.src) > 0:
             z = encoder(batch, static_node_x)  # [num_nodes, embed_dim]
 
@@ -240,12 +240,12 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_x
 
         if batch.src.shape[0] > 0:
             z = encoder(batch, static_node_x)
             if y_true is not None:
-                z_node = z[batch.node_ids]
+                z_node = z[batch.node_event_node_ids]
                 y_pred = decoder(z_node)
                 input_dict = {
                     'y_true': y_true,
@@ -301,7 +301,7 @@ random_projection_module = RandomProjectionModule(
     beginning_time=train_dg.start_time,
     use_matrix=bool(args.use_matrix),
     enforce_dim=args.enforce_dim,
-    num_edges=train_dg.num_edges,
+    num_edges=train_dg.num_edge_events,
     dim_factor=args.rp_dim_factor,
     concat_src_dst=bool(args.concat_src_dst),
     device=args.device,

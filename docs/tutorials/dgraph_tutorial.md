@@ -323,7 +323,7 @@ dg = DGraph(data) # Default to CPU
 print(f'Start time                : {dg.start_time}') # 1
 print(f'End time                  : {dg.end_time}') # 10
 print(f'Number of nodes           : {dg.num_nodes}') # 9
-print(f'Number of edge events     : {dg.num_edges}') # 3
+print(f'Number of edge events     : {dg.num_edge_events}') # 3
 print(f'Number of timestamps      : {dg.num_timestamps}') # or len(dg); 5
 print(f'Total events (edge+node)  : {dg.num_events}') # 6
 print(f'Edge feature dimension    : {dg.edge_x_dim}') # 5
@@ -358,7 +358,7 @@ Following from our previous code snippet:
 sliced_dg = dg.slice_time(start_time=5, end_time=10)
 print(sliced_dg.start_time) # 5
 print(sliced_dg.end_time) # 9, end time exclusive
-print(sliced_dg.num_edges) # 1
+print(sliced_dg.num_edge_events) # 1
 print(sliced_dg.device) # still on gpu
 ```
 
@@ -396,14 +396,12 @@ class DGBatch:
     Args:
         src (Tensor): Source node indices for edges in the batch. Shape `(E,)`.
         dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
-        time (Tensor): Timestamps of each edge event. Shape `(E,)`.
-        node_x (Tensor | None, optional): Dynamic node features for nodes
-            in the batch. Typically sparse tensor of shape `(T x V x d_node_dynamic)`.
-        edge_feats (Tensor | None, optional): Edge features for the batch. Typically
-            sparse tensor of shape `(E x d_edge)` or `(T x V x V x d_edge)` depending
-            on storage.
-        node_times (Tensor | None, optional): Timestamps corresponding to dynamic node features.
-        node_ids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
+        edge_time (Tensor): Timestamps of each edge event. Shape `(E,)`.
+        node_x (Tensor | None, optional): Dynamic node features for nodes in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
+        edge_x (Tensor | None, optional): Edge features for the batch. Tensor of shape `(T x V x V x d_edge)`.
+        node_event_time (Tensor | None, optional): Timestamps corresponding to dynamic node features.
+        node_event_node_ids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
+        edge_type (Tensor | None, optional): Type of each edge. Shape `(E,)`
     """
 ```
 

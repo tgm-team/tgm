@@ -100,12 +100,12 @@ def train(
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_x
         if y_true is None:
             continue
 
         z = encoder(batch, static_node_x)
-        z_node = z[batch.node_ids]
+        z_node = z[batch.node_event_node_ids]
         y_pred = decoder(z_node)
 
         loss = F.cross_entropy(y_pred, y_true)
@@ -131,12 +131,12 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_x
         if y_true is None:
             continue
 
         z = encoder(batch, static_node_x)
-        z_node = z[batch.node_ids]
+        z_node = z[batch.node_event_node_ids]
         y_pred = decoder(z_node)
 
         input_dict = {

@@ -72,15 +72,15 @@ def train(
     memory.reset_state()
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_x
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_event_node_ids))
             src_nodes = torch.cat(
                 [
-                    batch.node_ids.repeat_interleave(num_nbrs),
+                    batch.node_event_node_ids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -96,7 +96,7 @@ def train(
             z, last_update = memory(batch.unique_nids)
             z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.global_to_local(batch.node_event_node_ids)
             y_pred = decoder(z[inv_src])
             loss = F.cross_entropy(y_pred, y_labels)
             loss.backward()
@@ -114,7 +114,7 @@ def train(
         # Update memory with ground-truth state.
         if len(batch.src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+                batch.src, batch.dst, batch.edge_time, batch.edge_x.float()
             )
         memory.detach()
 
@@ -137,15 +137,15 @@ def eval(
     perf_list = []
 
     for batch in tqdm(loader):
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_x
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_event_node_ids))
             src_nodes = torch.cat(
                 [
-                    batch.node_ids.repeat_interleave(num_nbrs),
+                    batch.node_event_node_ids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -161,7 +161,7 @@ def eval(
             z, last_update = memory(batch.unique_nids)
             z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.global_to_local(batch.node_event_node_ids)
             y_pred = decoder(z[inv_src])
 
             input_dict = {
@@ -174,7 +174,7 @@ def eval(
         # Update memory with ground-truth state.
         if len(batch.src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+                batch.src, batch.dst, batch.edge_time, batch.edge_x.float()
             )
 
     return float(np.mean(perf_list))

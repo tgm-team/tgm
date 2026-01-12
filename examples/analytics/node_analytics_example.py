@@ -37,7 +37,7 @@ seed_everything(args.seed)
 dg = DGraph(DGData.from_tgb(args.dataset))
 logger.info(f'Loaded dataset: {args.dataset}')
 logger.info(f'Number of nodes: {dg.num_nodes}')
-logger.info(f'Number of edges: {dg.num_edges}')
+logger.info(f'Number of edges: {dg.num_edge_events}')
 
 
 # Select top N most frequent nodes to track

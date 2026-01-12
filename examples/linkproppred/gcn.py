@@ -121,7 +121,9 @@ def train(
         total_loss += float(loss) / batch.src.shape[0]
 
         # update the model if the prediction batch has moved to next snapshot.
-        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+        while (
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+        ):
             try:
                 snapshot_batch = next(snapshots_iterator)
                 z = encoder(snapshot_batch, static_node_x)
@@ -167,7 +169,9 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # update the model if the prediction batch has moved to next snapshot.
-        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+        while (
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+        ):
             try:
                 snapshot_batch = next(snapshots_iterator)
                 z = encoder(snapshot_batch, static_node_x)

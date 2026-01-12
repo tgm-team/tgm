@@ -106,7 +106,7 @@ class DyGFormer_LinkPrediction(nn.Module):
         src = batch.src
         dst = batch.dst
         neg = batch.neg
-        time = batch.time
+        time = batch.edge_time
         nbr_nids = batch.nbr_nids[0]
         nbr_times = batch.nbr_times[0]
         nbr_feats = batch.nbr_feats[0]
@@ -212,7 +212,7 @@ def eval(
             idx = torch.tensor([idx], device=args.device)
             copy_batch.src = batch.src[idx]
             copy_batch.dst = batch.dst[idx]
-            copy_batch.time = batch.time[idx]
+            copy_batch.time = batch.edge_time[idx]
             copy_batch.neg = neg_batch
             neg_idx = (batch.neg == neg_batch[:, None]).nonzero(as_tuple=True)[1]
 

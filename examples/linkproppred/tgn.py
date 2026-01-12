@@ -105,7 +105,7 @@ def train(
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
+        memory.update_state(batch.src, batch.dst, batch.edge_time, batch.edge_x.float())
 
         loss.backward()
         opt.step()
@@ -171,7 +171,7 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
+        memory.update_state(batch.src, batch.dst, batch.edge_time, batch.edge_x.float())
 
     return float(np.mean(perf_list))
 

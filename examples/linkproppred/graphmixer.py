@@ -220,7 +220,7 @@ class GraphMixerHook(StatelessHook):
         # Construct a the time_gap slice
         time_gap_slice = replace(dg._slice)
         time_gap_slice.start_idx = max(dg._slice.end_idx - self._time_gap, 0)
-        time_gap_slice.end_time = int(batch.time.min()) - 1
+        time_gap_slice.end_time = int(batch.edge_time.min()) - 1
         time_gap_src, time_gap_dst, _ = dg._storage.get_edges(time_gap_slice)
 
         nbr_index = defaultdict(list)
