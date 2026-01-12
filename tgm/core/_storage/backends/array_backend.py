@@ -63,9 +63,19 @@ class DGStorageArrayBackend(DGStorageBase):
 
         src, dst, time = src.contiguous(), dst.contiguous(), time.contiguous()
 
-        if edges.numel():
-            logger.debug('No events in slice: %s', slice)
+        if not edges.numel():
+            logger.debug('No edge events in slice: %s', slice)
         return src, dst, time
+
+    def get_node_events(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor]:
+        lb_idx, ub_idx = self._binary_search(slice)
+        node_mask = (self._data.node_mask >= lb_idx) & (self._data.node_mask < ub_idx)
+        node_ids = self._data.node_ids[node_mask]
+        time = self._data.time[self._data.node_mask[node_mask]]
+
+        if not node_ids.numel():
+            logger.debug('No node events in slice: %s', slice)
+        return node_ids, time
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         lb_idx, ub_idx = self._binary_search(slice)

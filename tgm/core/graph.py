@@ -196,14 +196,12 @@ class DGraph:
     @_logged_cached_property
     def num_node_events(self) -> int:
         """The total number of node events in the dynamic graph."""
-        # TODO
-        return 0
+        return len(self.node_event_time)
 
     @_logged_cached_property
     def num_edge_events(self) -> int:
         """The total number of edge events in the dynamic graph."""
-        src, *_ = self.edges
-        return len(src)
+        return len(self.edge_time)
 
     @_logged_cached_property
     def num_timestamps(self) -> int:
@@ -222,11 +220,44 @@ class DGraph:
     @property
     def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
         """The src, dst, time tensors over the dynamic graph."""
-        # TODO: rework this
+        # TODO: Deprecate?
         src, dst, time = self._edges_cpu
         return src.to(self.device), dst.to(self.device), time.to(self.device)
 
-    # TODO: Add node_ids, and node_time
+    @property
+    def edge_index(self) -> Tensor:
+        """The edge index tensor over the dynamic graph."""
+        src, dst, _ = self._edges_cpu
+        return torch.stack([src, dst], dim=0).to(self.device)
+
+    @property
+    def edge_time(self) -> Tensor:
+        """The timestamps associated with the edge events over the dynamic graph."""
+        _, _, time = self._edges_cpu
+        return time.to(self.device)
+
+    @_logged_cached_property
+    def _node_events_cpu(self) -> Tuple[Tensor, Tensor]:
+        return self._storage.get_node_events(self._slice)
+
+    @property
+    def node_events(self) -> Tuple[Tensor, Tensor]:
+        """The node ids and time tensors for node events over the dynamic graph."""
+        node_ids, node_time = self._node_events_cpu
+        return node_ids.to(self.device), node_time.to(self.device)
+
+    @property
+    def node_event_node_ids(self) -> Tensor:
+        """The node ids for associated with the node events over the dynamic graph."""
+        # TODO: A better name
+        node_ids, _ = self._node_events_cpu
+        return node_ids.to(self.device)
+
+    @property
+    def node_event_time(self) -> Tensor:
+        """The timestamps associated with teh node events over the dynamic graph."""
+        _, node_time = self._node_events_cpu
+        return node_time.to(self.device)
 
     @cached_property
     def _static_node_x_cpu(self) -> Optional[Tensor]:

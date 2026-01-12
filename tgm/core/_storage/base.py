@@ -41,6 +41,10 @@ class DGStorageBase(ABC):
         """Return (src, dst, time) tensors for edges in the slice."""
 
     @abstractmethod
+    def get_node_events(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor]:
+        """Return (node_ids, node_time) tensors for node events in the slice."""
+
+    @abstractmethod
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         """Return the number of unique timestamps in the slice."""
 
