@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 from functools import cached_property
-from typing import Any, Optional, Set, Tuple
+from typing import Any, Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -194,8 +194,14 @@ class DGraph:
         return max(nodes) + 1 if len(nodes) else 0
 
     @_logged_cached_property
-    def num_edges(self) -> int:
-        """The total number of unique edges encountered over the dynamic graph."""
+    def num_node_events(self) -> int:
+        """The total number of node events in the dynamic graph."""
+        # TODO
+        return 0
+
+    @_logged_cached_property
+    def num_edge_events(self) -> int:
+        """The total number of edge events in the dynamic graph."""
         src, *_ = self.edges
         return len(src)
 
@@ -210,19 +216,17 @@ class DGraph:
         return self._storage.get_num_events(self._slice)
 
     @_logged_cached_property
-    def nodes(self) -> Set[int]:
-        """The set of node ids over the dynamic graph."""
-        return self._storage.get_nodes(self._slice)
-
-    @_logged_cached_property
     def _edges_cpu(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self._storage.get_edges(self._slice)
 
     @property
     def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
         """The src, dst, time tensors over the dynamic graph."""
+        # TODO: rework this
         src, dst, time = self._edges_cpu
         return src.to(self.device), dst.to(self.device), time.to(self.device)
+
+    # TODO: Add node_ids, and node_time
 
     @cached_property
     def _static_node_x_cpu(self) -> Optional[Tensor]:

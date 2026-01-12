@@ -61,10 +61,9 @@ def test_init_from_data(data):
     assert dg.start_time == 1
     assert dg.end_time == 20
     assert dg.num_nodes == 9
-    assert dg.num_edges == 3
+    assert dg.num_edge_events == 3
     assert dg.num_timestamps == 4
     assert dg.num_events == 6
-    assert dg.nodes == {1, 2, 4, 6, 8}
     assert dg.static_node_x_dim == 11
     assert dg.node_x_dim == 5
     assert dg.edge_x_dim == 5
@@ -190,9 +189,8 @@ def test_slice_time_no_upper_bound(data):
     assert dg1.start_time == 5
     assert dg1.end_time == 20
     assert dg1.num_nodes == 9
-    assert dg1.num_edges == 2
+    assert dg1.num_edge_events == 2
     assert dg1.num_timestamps == 3
-    assert dg.nodes == {1, 2, 4, 6, 8}
 
     exp_edges = (
         torch.IntTensor([2, 1]),
@@ -221,9 +219,8 @@ def test_slice_time_at_end_time(data):
     assert dg1.start_time == 1
     assert dg1.end_time == 19  # Note: this is 19 despite no events in [10, 19)
     assert dg1.num_nodes == 7
-    assert dg1.num_edges == 2
+    assert dg1.num_edge_events == 2
     assert dg1.num_timestamps == 3
-    assert dg1.nodes == {2, 4, 6}
 
     exp_edges = (
         torch.IntTensor([2, 2]),
@@ -245,10 +242,9 @@ def test_slice_time_at_end_time(data):
     assert dg.start_time == 1
     assert dg.end_time == 20
     assert dg.num_nodes == 9
-    assert dg.num_edges == 3
+    assert dg.num_edge_events == 3
     assert dg.num_timestamps == 4
     assert dg.num_events == 6
-    assert dg.nodes == {1, 2, 4, 6, 8}
 
 
 def test_slice_time_to_empty(data):
@@ -262,9 +258,8 @@ def test_slice_time_to_empty(data):
     assert dg1.start_time == 1
     assert dg1.end_time == 14
     assert dg1.num_nodes == 7
-    assert dg1.num_edges == 2
+    assert dg1.num_edge_events == 2
     assert dg1.num_timestamps == 3
-    assert dg1.nodes == {2, 4, 6}
 
     exp_edges = (
         torch.IntTensor([2, 2]),
@@ -289,9 +284,8 @@ def test_slice_time_to_empty(data):
     assert dg2.start_time == 5
     assert dg2.end_time == 14
     assert dg2.num_nodes == 7
-    assert dg2.num_edges == 1
+    assert dg2.num_edge_events == 1
     assert dg2.num_timestamps == 2
-    assert dg2.nodes == {2, 4, 6}
 
     exp_edges = (
         torch.IntTensor([2]),
@@ -315,9 +309,8 @@ def test_slice_time_to_empty(data):
     assert dg3.start_time == 7
     assert dg3.end_time == 10
     assert dg3.num_nodes == 7
-    assert dg3.num_edges == 0
+    assert dg3.num_edge_events == 0
     assert dg3.num_timestamps == 1
-    assert dg3.nodes == {6}
 
     exp_edges = (torch.IntTensor([]), torch.IntTensor([]), torch.LongTensor([]))
     torch.testing.assert_close(dg3.edges, exp_edges)
@@ -337,9 +330,8 @@ def test_slice_time_to_empty(data):
     assert dg4.start_time == 7
     assert dg4.end_time == 7
     assert dg4.num_nodes == 0
-    assert dg4.num_edges == 0
+    assert dg4.num_edge_events == 0
     assert dg4.num_timestamps == 0
-    assert dg4.nodes == set()
     assert dg4.node_x is None
     assert dg4.edge_x is None
     assert dg4.edge_type is None
@@ -352,10 +344,9 @@ def test_slice_time_to_empty(data):
     assert dg.start_time == 1
     assert dg.end_time == 20
     assert dg.num_nodes == 9
-    assert dg.num_edges == 3
+    assert dg.num_edge_events == 3
     assert dg.num_timestamps == 4
     assert dg.num_events == 6
-    assert dg.nodes == {1, 2, 4, 6, 8}
 
 
 def test_slice_time_bad_args(data):
@@ -374,9 +365,8 @@ def test_slice_events(data):
     assert dg1.start_time == 5
     assert dg1.end_time == 10
     assert dg1.num_nodes == 7
-    assert dg1.num_edges == 1
+    assert dg1.num_edge_events == 1
     assert dg1.num_timestamps == 2
-    assert dg1.nodes == {2, 4, 6}
 
     exp_edges = (
         torch.IntTensor([2]),
@@ -397,10 +387,9 @@ def test_slice_events(data):
     assert dg.start_time == 1
     assert dg.end_time == 20
     assert dg.num_nodes == 9
-    assert dg.num_edges == 3
+    assert dg.num_edge_events == 3
     assert dg.num_timestamps == 4
     assert dg.num_events == 6
-    assert dg.nodes == {1, 2, 4, 6, 8}
 
 
 def test_slice_events_bad_args(data):
@@ -419,9 +408,8 @@ def test_slice_events_slice_time_combination(data):
     assert dg1.start_time == 5
     assert dg1.end_time == 6
     assert dg1.num_nodes == 5
-    assert dg1.num_edges == 1
+    assert dg1.num_edge_events == 1
     assert dg1.num_timestamps == 1
-    assert dg1.nodes == {2, 4}
 
     exp_edges = (
         torch.IntTensor([2]),
