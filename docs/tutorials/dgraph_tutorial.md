@@ -51,17 +51,10 @@ class DGData:
     Attributes:
         time_delta (TimeDeltaDG | str): Time granularity of the graph.
         timestamps (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
-<<<<<<< HEAD
-        edge_mask (Tensor): Indices of edge events within `timestamps`.
-        edge_index (Tensor): Edge connections [num_edge_events, 2].
-        edge_x (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_mask (Tensor | None): Indices of node events within `timestamps`.
-=======
         edge_mask (Tensor): Mask of edge events within `timestamps`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_x (Tensor | None): Optional edge features [num_edge_events, D_edge].
         node_mask (Tensor | None): Mask of node events within `timestamps`.
->>>>>>> main
         node_ids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         node_x (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
         static_node_x (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
@@ -137,13 +130,7 @@ A few key things to know:
   - Your edge csv file may also contain `edge_x_col` which are the edge features on your data
 - dynamic node data (optional)
   - If included, we expect a `node_file_path` which is a csv file with `node_id_col`, `node_time_col` as a minimum. These are your dynamic node events.
-    \<\<\<\<\<\<\< HEAD
-  - Your dynamic node data csv file may also include `dynamic_node_x_col`, which are the dynamic node features in your data.
-    \=======
   - Your dynamic node data csv file may also include `node_x_col`, which are the dynamic node features in your data.
-
-> > > > > > > main
-
 - static node data (optional)
   - If included, we expect a `static_node_x_fil_path` which is a csv file with `static_node_x_col`, the static node features for your dataset.
 
@@ -207,11 +194,7 @@ edge_feats = torch.rand(3, 5)  # optional edge features
 # Define Dynamic Node Data (Optional)
 node_timestamps = torch.LongTensor([1, 2, 3])
 node_ids = torch.LongTensor([2, 4, 6])
-<<<<<<< HEAD
-dynamic_node_x = torch.rand([3, 5])
-=======
 node_x = torch.rand([3, 5])
->>>>>>> main
 
 # Define Static Node Features (Optional)
 static_node_x = torch.rand(9, 11)
@@ -222,11 +205,7 @@ data = DGData.from_raw(
     edge_x=edge_feats,
     node_timestamps=node_timestamps,
     node_ids=node_ids,
-<<<<<<< HEAD
-    dynamic_node_x=dynamic_node_x,
-=======
     node_x=node_x,
->>>>>>> main
     static_node_x=static_node_x,
     time_delta='s',  # second-wise granularity
 )
@@ -418,11 +397,7 @@ class DGBatch:
         src (Tensor): Source node indices for edges in the batch. Shape `(E,)`.
         dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
         time (Tensor): Timestamps of each edge event. Shape `(E,)`.
-<<<<<<< HEAD
-        dynamic_node_x (Tensor | None, optional): Dynamic node features for nodes
-=======
         node_x (Tensor | None, optional): Dynamic node features for nodes
->>>>>>> main
             in the batch. Typically sparse tensor of shape `(T x V x d_node_dynamic)`.
         edge_feats (Tensor | None, optional): Edge features for the batch. Typically
             sparse tensor of shape `(E x d_edge)` or `(T x V x V x d_edge)` depending
