@@ -255,7 +255,7 @@ class DGraph:
 
     @property
     def node_event_time(self) -> Tensor:
-        """The timestamps associated with teh node events over the dynamic graph."""
+        """The timestamps associated with the node events over the dynamic graph."""
         _, node_time = self._node_events_cpu
         return node_time.to(self.device)
 
