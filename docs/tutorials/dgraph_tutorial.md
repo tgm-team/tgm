@@ -326,9 +326,9 @@ print(f'Number of nodes           : {dg.num_nodes}') # 9
 print(f'Number of edge events     : {dg.num_edges}') # 3
 print(f'Number of timestamps      : {dg.num_timestamps}') # or len(dg); 5
 print(f'Total events (edge+node)  : {dg.num_events}') # 6
-print(f'Edge feature dimension    : {dg.edge_feats_dim}') # 5
-print(f'Static node feature dim   : {dg.static_node_feats_dim}') # 11
-print(f'Dynamic node feature dim  : {dg.dynamic_node_feats_dim}') # 5
+print(f'Edge feature dimension    : {dg.edge_x_dim}') # 5
+print(f'Static node feature dim   : {dg.static_node_x_dim}') # 11
+print(f'Dynamic node feature dim  : {dg.node_x_dim}') # 5
 
 print(f'TimeDelta                 : {dg.time_delta}') # TimeDelta('s', value=1)
 print(f'Device                    : {dg.device}') # torch.device(cpu)
@@ -414,12 +414,12 @@ For example:
 # Our full graph view
 dg_batch = dg.materialize(materialize_features=False) # Skip features
 print(dg_batch.src) # torch.tensor([2, 2, 1], dtype=torch.long, device='cuda:0')
-print(dg_batch.edge_feats) # None, because we skipped materializing features
+print(dg_batch.edge_x) # None, because we skipped materializing features
 
 # Our sliced graph view (from start_time=5, end_time=10)
 sliced_dg_batch = sliced_dg.materialize()
 print(dg_batch.src) # torch.tensor([5], dtype=torch.long, device='cuda:0')
-print(dg_batch.edge_feats is None) # False, we matrialized our slice of edge features
+print(dg_batch.edge_x is None) # False, we matrialized our slice of edge features
 ```
 
 > **Note**: Materializing a full graph view with features could be expensive, especially on large graphs.

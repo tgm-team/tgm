@@ -14,8 +14,8 @@ from tgm.hooks import HookManager, NeighborSamplerHook
 def data():
     edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
     edge_timestamps = torch.LongTensor([1, 5, 20])
-    edge_feats = torch.rand(3, 5)
-    return DGData.from_raw(edge_timestamps, edge_index, edge_feats)
+    edge_x = torch.rand(3, 5)
+    return DGData.from_raw(edge_timestamps, edge_index, edge_x)
 
 
 def test_hook_dependancies():
@@ -213,10 +213,10 @@ def basic_sample_graph():
     """
     edge_index = torch.IntTensor([[0, 1], [0, 2], [2, 3], [2, 0]])
     edge_timestamps = torch.LongTensor([1, 2, 3, 4])
-    edge_feats = torch.Tensor(
+    edge_x = torch.Tensor(
         [[1], [2], [5], [2]]
     )  # edge feat is simply summing the node IDs at two end points
-    data = DGData.from_raw(edge_timestamps, edge_index, edge_feats)
+    data = DGData.from_raw(edge_timestamps, edge_index, edge_x)
     return data
 
 
@@ -491,15 +491,15 @@ def test_no_edge_feat_data_neighbor_sampler(no_edge_feat_data):
 def node_only_data():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
     edge_timestamps = torch.IntTensor([1, 2, 3])
-    edge_feats = torch.IntTensor([[1], [2], [3]])
-    dynamic_node_feats = torch.rand(2, 5)
+    edge_x = torch.IntTensor([[1], [2], [3]])
+    node_x = torch.rand(2, 5)
     node_timestamps = torch.IntTensor([4, 5])
     node_ids = torch.IntTensor([5, 6])
     return DGData.from_raw(
         edge_timestamps,
         edge_index,
-        edge_x=edge_feats,
-        node_x=dynamic_node_feats,
+        edge_x=edge_x,
+        node_x=node_x,
         node_timestamps=node_timestamps,
         node_ids=node_ids,
     )

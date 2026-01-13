@@ -276,7 +276,7 @@ val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='rai
 test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 
 encoder = GCNEncoder(
-    in_channels=train_dg.static_node_feats_dim,
+    in_channels=train_dg.static_node_x_dim,
     embed_dim=args.embed_dim,
     out_channels=args.embed_dim,
     num_layers=args.n_layers,

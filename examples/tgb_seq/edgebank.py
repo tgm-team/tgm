@@ -85,7 +85,7 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
             self.neg_idx = 0
         else:
             # Fallback to random negative sampler on train/val splits
-            _, dst, _ = dgraph.edges
+            _, dst, _ = dgraph.edge_events
             self.low, self.high = int(dst.min()), int(dst.max())
             self.num_negs = 100  # TGB-SEQ hardcodes 100 negatives per positive link
 
@@ -117,7 +117,7 @@ train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
 
-_, dst, _ = test_dg.edges
+_, dst, _ = test_dg.edge_events
 low, high = int(dst.min()), int(dst.max())
 
 hm = HookManager(keys=['val', 'test'])

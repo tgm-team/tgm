@@ -180,11 +180,11 @@ class DyGFormer_LinkPrediction(nn.Module):
 def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) -> float:
     model.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out = model(batch, static_node_feats)
+        pos_out, neg_out = model(batch, static_node_x)
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
@@ -204,7 +204,7 @@ def eval(
 ) -> float:
     model.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         copy_batch = copy.deepcopy(batch)
@@ -223,7 +223,7 @@ def eval(
                 neg_idx
             ]
 
-            pos_out, neg_out = model(copy_batch, static_node_feats)
+            pos_out, neg_out = model(copy_batch, static_node_x)
             pos_out, neg_out = pos_out.sigmoid(), neg_out.sigmoid()
 
             input_dict = {
@@ -268,8 +268,8 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = DyGFormer_LinkPrediction(
-    node_feat_dim=train_dg.static_node_feats_dim,
-    edge_feat_dim=train_dg.edge_feats_dim,
+    node_feat_dim=train_dg.static_node_x_dim,
+    edge_feat_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     channel_embedding_dim=args.channel_embedding_dim,
     output_dim=args.embed_dim,

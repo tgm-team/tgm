@@ -82,7 +82,7 @@ class NeighborSamplerHook(StatelessHook):
             batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
             batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
             batch.nbr_feats.append(  # type: ignore
-                torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
+                torch.empty(0, dg.edge_x_dim).float()  # type: ignore
             )
 
         seed_nodes, seed_times, seed_node_nbr_mask = self._get_seed_tensors(batch)
@@ -266,9 +266,9 @@ class RecencyNeighborHook(StatefulHook):
         self._nbr_times = torch.zeros((num_nodes, self._max_nbrs), dtype=torch.int64)
         self._write_pos = torch.zeros(num_nodes, dtype=torch.int32)
 
-        # Wait until first __call__ to infer the edge_feats_dim on the underlying graph
+        # Wait until first __call__ to infer the edge_x_dim on the underlying graph
         self._need_to_initialize_nbr_feats = True
-        self._edge_feats_dim = None
+        self._edge_x_dim = None
         self._nbr_feats = None
 
     @property
@@ -297,7 +297,7 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
             batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
             batch.nbr_feats.append(  # type: ignore
-                torch.empty(0, dg.edge_feats_dim).float()  # type: ignore
+                torch.empty(0, dg.edge_x_dim).float()  # type: ignore
             )
 
         seed_nodes, seed_times, seed_node_mask = self._get_seed_tensors(batch)
@@ -463,7 +463,7 @@ class RecencyNeighborHook(StatefulHook):
         out_nbrs = torch.gather(nbr_nids, 1, safe_idx)
         out_times = torch.gather(nbr_times, 1, safe_idx)
         out_feats = torch.gather(
-            nbr_feats, 1, safe_idx.unsqueeze(-1).expand(-1, -1, self._edge_feats_dim)
+            nbr_feats, 1, safe_idx.unsqueeze(-1).expand(-1, -1, self._edge_x_dim)
         )
 
         # Overwrite invalid positions in-place
@@ -477,7 +477,7 @@ class RecencyNeighborHook(StatefulHook):
         assert self._nbr_feats is not None  # For mypy
         if batch.edge_feats is None:
             edge_feats = torch.zeros(
-                (len(batch.src), self._edge_feats_dim), device=self._device
+                (len(batch.src), self._edge_x_dim), device=self._device
             )
         else:
             edge_feats = batch.edge_feats
@@ -558,8 +558,8 @@ class RecencyNeighborHook(StatefulHook):
 
     def _initialize_nbr_feats_if_needed(self, dg: DGraph) -> None:
         if self._need_to_initialize_nbr_feats:
-            self._edge_feats_dim = dg.edge_feats_dim or 0  # type: ignore
+            self._edge_x_dim = dg.edge_x_dim or 0  # type: ignore
             self._nbr_feats = torch.zeros(
-                (self._num_nodes, self._max_nbrs, self._edge_feats_dim)  # type: ignore
+                (self._num_nodes, self._max_nbrs, self._edge_x_dim)  # type: ignore
             )
             self._need_to_initialize_nbr_feats = False

@@ -79,11 +79,11 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
-    z, h_0, c_0 = encoder(snapshot_batch, static_node_feats)
+    z, h_0, c_0 = encoder(snapshot_batch, static_node_x)
     z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()
 
     for batch in tqdm(loader):
@@ -102,7 +102,7 @@ def train(
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
             try:
                 snapshot_batch = next(snapshots_iterator)
-                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_x, h_0, c_0)
                 z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()  # Truncate BPTT
             except StopIteration:
                 pass
@@ -127,7 +127,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
@@ -150,7 +150,7 @@ def eval(
         while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
             try:
                 snapshot_batch = next(snapshots_iterator)
-                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_x, h_0, c_0)
             except StopIteration:
                 pass
 
@@ -199,7 +199,7 @@ test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_ti
 
 
 encoder = RecurrentGCN(
-    node_dim=train_dg.static_node_feats_dim, embed_dim=args.embed_dim
+    node_dim=train_dg.static_node_x_dim, embed_dim=args.embed_dim
 ).to(args.device)
 decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device

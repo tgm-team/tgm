@@ -140,13 +140,13 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
         y_labels = batch.dynamic_node_feats
         if y_labels is not None:
-            z = encoder(batch, static_node_feats)
+            z = encoder(batch, static_node_x)
             y_pred = decoder(z)
 
             loss = F.cross_entropy(y_pred, y_labels)
@@ -169,12 +169,12 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         y_labels = batch.dynamic_node_feats
         if y_labels is not None:
-            z = encoder(batch, static_node_feats)
+            z = encoder(batch, static_node_x)
             y_pred = decoder(z)
             input_dict = {
                 'y_true': y_labels,
@@ -191,16 +191,14 @@ evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
 if full_data.static_node_x is None:
-    full_data.static_node_x = torch.randn(
-        (full_data.num_nodes, args.node_dim), device=args.device
-    )
+    full_data.static_node_x = torch.randn((full_data.num_nodes, 1), device=args.device)
 
 train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_x_dim
 
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
@@ -227,11 +225,11 @@ train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_x_dim
 
 encoder = TGAT(
-    node_dim=train_dg.static_node_feats_dim,
-    edge_dim=train_dg.edge_feats_dim,
+    node_dim=train_dg.static_node_x_dim,
+    edge_dim=train_dg.edge_x_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
     num_layers=len(args.n_nbrs),
