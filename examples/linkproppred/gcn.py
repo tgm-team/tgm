@@ -122,7 +122,8 @@ def train(
 
         # update the model if the prediction batch has moved to next snapshot.
         while (
-            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+            batch.edge_event_time[-1]
+            > (snapshot_batch.edge_event_time[-1] + 1) * conversion_rate
         ):
             try:
                 snapshot_batch = next(snapshots_iterator)
@@ -170,7 +171,8 @@ def eval(
 
         # update the model if the prediction batch has moved to next snapshot.
         while (
-            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+            batch.edge_event_time[-1]
+            > (snapshot_batch.edge_event_time[-1] + 1) * conversion_rate
         ):
             try:
                 snapshot_batch = next(snapshots_iterator)

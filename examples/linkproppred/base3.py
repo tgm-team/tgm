@@ -66,8 +66,8 @@ def eval(
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
-        edgebank_model.update(batch.src, batch.dst, batch.edge_time)
-        tcomem_model.update(batch.src, batch.dst, batch.edge_time)
+        edgebank_model.update(batch.src, batch.dst, batch.edge_event_time)
+        tcomem_model.update(batch.src, batch.dst, batch.edge_event_time)
 
     return float(np.mean(perf_list))
 

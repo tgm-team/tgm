@@ -49,7 +49,7 @@ class MyNegativeHook(StatelessHook):
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.my_neg = torch.randint(10, 100, (len(batch.dst),))
-        batch.my_neg_time = batch.edge_time.clone()
+        batch.my_neg_time = batch.edge_event_time.clone()
         return batch
 ```
 
@@ -112,7 +112,7 @@ with hm.activate('test'):
         assert batch.dst.shape() == batch.my_neg.shape() # True
         assert torch.all(batch.my_neg >= 10) # True
         assert torch.all(batch.my_neg < 100) # True
-        assert torch.equal(batch.my_neg_time, batch.edge_time) # True
+        assert torch.equal(batch.my_neg_time, batch.edge_event_time) # True
 ```
 
 > **Note**: The context manager is just syntactical sugar for the following:
@@ -182,7 +182,7 @@ class MyNegativeHookWithFoo(StatelessHook):
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.my_neg = torch.randint(10, 100, (len(batch.dst),))
-        batch.my_neg_time = batch.edge_time.clone()
+        batch.my_neg_time = batch.edge_event_time.clone()
         return batch
 ```
 

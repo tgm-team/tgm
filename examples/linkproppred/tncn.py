@@ -118,7 +118,7 @@ def train(
         inv_neg = batch.global_to_local(batch.neg)
         inv_edge_idx_pos = torch.stack([inv_src, inv_dst], dim=0).long()
         inv_edge_idx_neg = torch.stack([inv_src, inv_neg], dim=0).long()
-        time_info = (last_update, batch.edge_time)
+        time_info = (last_update, batch.edge_event_time)
 
         pos_out = decoder(z, nbr_edge_index, inv_edge_idx_pos, time_info=time_info)
         neg_out = decoder(z, nbr_edge_index, inv_edge_idx_neg, time_info=time_info)
@@ -127,7 +127,9 @@ def train(
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.edge_time, batch.edge_x.float())
+        memory.update_state(
+            batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
+        )
 
         loss.backward()
         opt.step()
@@ -191,7 +193,7 @@ def eval(
             inv_edge_idx = torch.stack([inv_src, inv_dst], dim=0)
             time_info = (
                 last_update,
-                batch.edge_time.repeat(len(inv_src)),
+                batch.edge_event_time.repeat(len(inv_src)),
             )  # We can move this outside of the inner loop
 
             y_pred = decoder(
@@ -209,7 +211,9 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.edge_time, batch.edge_x.float())
+        memory.update_state(
+            batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
+        )
 
     return float(np.mean(perf_list))
 
@@ -227,7 +231,7 @@ nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
     seed_nodes_keys=['src', 'dst', 'neg'],
-    seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
+    seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(

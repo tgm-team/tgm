@@ -114,7 +114,7 @@ def train(
         # Update memory with ground-truth state.
         if len(batch.src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.edge_time, batch.edge_x.float()
+                batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
             )
         memory.detach()
 
@@ -174,7 +174,7 @@ def eval(
         # Update memory with ground-truth state.
         if len(batch.src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.edge_time, batch.edge_x.float()
+                batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
             )
 
     return float(np.mean(perf_list))

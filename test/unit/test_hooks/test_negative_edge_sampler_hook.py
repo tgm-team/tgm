@@ -14,7 +14,7 @@ def data():
 
 
 def test_hook_dependancies():
-    assert NegativeEdgeSamplerHook.requires == {'src', 'dst', 'edge_time'}
+    assert NegativeEdgeSamplerHook.requires == {'src', 'dst', 'edge_event_time'}
     assert NegativeEdgeSamplerHook.produces == {'neg', 'neg_time'}
 
 

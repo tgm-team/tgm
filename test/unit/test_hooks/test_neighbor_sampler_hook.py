@@ -19,7 +19,7 @@ def data():
 
 
 def test_hook_dependancies():
-    assert NeighborSamplerHook.requires == {'src', 'dst', 'edge_time'}
+    assert NeighborSamplerHook.requires == {'src', 'dst', 'edge_event_time'}
     assert NeighborSamplerHook.produces == {
         'nids',
         'nbr_nids',
@@ -143,7 +143,7 @@ def test_neighbor_sampler_hook_link_pred(data):
     hook = NeighborSamplerHook(
         num_nbrs=[2],
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_time', 'edge_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time'],
     )
     batch = dg.materialize()
 
@@ -163,7 +163,7 @@ def test_neighbor_sampler_hook_node_pred(data):
     hook = NeighborSamplerHook(
         num_nbrs=[2],
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_time', 'edge_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time'],
     )
     batch = hook(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
@@ -226,7 +226,7 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     uniform_hook = NeighborSamplerHook(
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_time', 'edge_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
@@ -310,7 +310,7 @@ def test_init_basic_sampled_graph_2_hop(basic_sample_graph):
     uniform_hook = NeighborSamplerHook(
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_time', 'edge_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
@@ -376,7 +376,7 @@ def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
     uniform_hook = NeighborSamplerHook(
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_time', 'edge_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -471,7 +471,7 @@ def test_no_edge_feat_data_neighbor_sampler(no_edge_feat_data):
     uniform_hook = NeighborSamplerHook(
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_time', 'edge_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
@@ -512,7 +512,7 @@ def test_node_only_batch_recency_nbr_sampler(node_only_data):
     uniform_hook = NeighborSamplerHook(
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_time', 'edge_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register_shared(uniform_hook)
@@ -547,7 +547,7 @@ def test_hook_nbr_mask(basic_sample_graph):
     recency_hook = NeighborSamplerHook(
         num_nbrs=n_nbrs,
         seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_time', 'edge_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)

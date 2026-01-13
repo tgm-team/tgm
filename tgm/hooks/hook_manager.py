@@ -250,7 +250,7 @@ class HookManager:
             [
                 'src',
                 'dst',
-                'edge_time',
+                'edge_event_time',
                 'node_event_time',
                 'node_event_node_ids',
                 'edge_type',

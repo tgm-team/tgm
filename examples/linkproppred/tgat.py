@@ -216,14 +216,14 @@ if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
         num_nbrs=args.n_nbrs,
         seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
     )
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=full_data.num_nodes,
         seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')

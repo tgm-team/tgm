@@ -115,7 +115,7 @@ class DyGFormer_NodePrediction(nn.Module):
     ):
         nodes = torch.cat([batch.src, batch.dst])
         z_all = torch.cat([z_src, z_dst])
-        timestamp = torch.cat([batch.edge_time, batch.edge_time])
+        timestamp = torch.cat([batch.edge_event_time, batch.edge_event_time])
 
         chronological_order = torch.argsort(timestamp)
         nodes = nodes[chronological_order]
@@ -150,7 +150,7 @@ class DyGFormer_NodePrediction(nn.Module):
         z_src, z_dst = self.encoder(
             static_node_feat,
             edge_idx,
-            batch.edge_time,
+            batch.edge_event_time,
             nbr_nids[src_dst_nbr_idx],
             nbr_times[src_dst_nbr_idx],
             nbr_feats[src_dst_nbr_idx],
@@ -251,7 +251,7 @@ nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
     num_nodes=full_data.num_nodes,
     seed_nodes_keys=['src', 'dst'],
-    seed_times_keys=['edge_time', 'edge_time'],
+    seed_times_keys=['edge_event_time', 'edge_event_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])

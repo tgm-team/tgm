@@ -19,7 +19,7 @@ class DGBatch:
     Args:
         src (Tensor): Source node indices for edges in the batch. Shape `(E,)`.
         dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
-        edge_time (Tensor): Timestamps of each edge event. Shape `(E,)`.
+        edge_event_time (Tensor): Timestamps of each edge event. Shape `(E,)`.
         node_x (Tensor | None, optional): Dynamic node features for nodes in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
         edge_x (Tensor | None, optional): Edge features for the batch. Tensor of shape `(T x V x V x d_edge)`.
         node_event_time (Tensor | None, optional): Timestamps corresponding to dynamic node features.
@@ -29,7 +29,7 @@ class DGBatch:
 
     src: Tensor
     dst: Tensor
-    edge_time: Tensor
+    edge_event_time: Tensor
     node_x: Optional[Tensor] = None
     edge_x: Optional[Tensor] = None
     node_event_time: Optional[Tensor] = None

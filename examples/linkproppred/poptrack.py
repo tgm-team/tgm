@@ -70,7 +70,7 @@ def eval(
                 'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
-        model.update(batch.src, batch.dst, batch.edge_time)
+        model.update(batch.src, batch.dst, batch.edge_event_time)
 
     return float(np.mean(perf_list))
 

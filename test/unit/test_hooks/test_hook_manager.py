@@ -14,7 +14,7 @@ class MockHook(StatelessHook):
     produces = {'foo'}
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        batch.edge_time *= 2
+        batch.edge_event_time *= 2
         return batch
 
 
@@ -37,7 +37,7 @@ class MockHookWithState(StatefulHook):
         self.x = 0
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        batch.edge_time *= 2
+        batch.edge_event_time *= 2
         return batch
 
     def reset_state(self) -> None:
@@ -298,7 +298,7 @@ def test_execute_active_hooks_keyed(dg):
     hm.register('train', hook)
     hm.set_active_hooks('train')
     exp_batch = dg.materialize()
-    exp_batch.edge_time *= 2
+    exp_batch.edge_event_time *= 2
     batch = hm.execute_active_hooks(dg, dg.materialize())
     assert batch == exp_batch
 
@@ -312,7 +312,7 @@ def test_execute_active_hooks_keyed_and_shared(dg):
     hm.set_active_hooks('train')
     assert len(hm._key_to_hooks['train']) == 1
     exp_batch = dg.materialize()
-    exp_batch.edge_time *= 4
+    exp_batch.edge_event_time *= 4
     batch = hm.execute_active_hooks(dg, dg.materialize())
     assert batch == exp_batch
 

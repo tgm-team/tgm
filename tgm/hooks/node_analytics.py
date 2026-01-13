@@ -41,7 +41,7 @@ class NodeAnalyticsHook(StatefulHook):
     requires = {
         'src',
         'dst',
-        'edge_time',
+        'edge_event_time',
         'node_event_time',
         'node_event_node_ids',
     }
@@ -119,9 +119,9 @@ class NodeAnalyticsHook(StatefulHook):
         max_edge_time = 0.0
         max_node_time = 0.0
 
-        if batch.edge_time is not None and batch.edge_time.numel() > 0:
+        if batch.edge_event_time is not None and batch.edge_event_time.numel() > 0:
             # Use the latest timestamp in the batch
-            max_edge_time = batch.edge_time.max().item()
+            max_edge_time = batch.edge_event_time.max().item()
         if batch.node_event_time is not None and batch.node_event_time.numel() > 0:
             max_node_time = batch.node_event_time.max().item()
 
@@ -211,7 +211,7 @@ class NodeAnalyticsHook(StatefulHook):
 
         # Track unique timesteps in this batch (vectorized)
         time_tensors = [
-            batch.edge_time,
+            batch.edge_event_time,
             batch.node_event_time,
         ]
 
@@ -265,8 +265,8 @@ class NodeAnalyticsHook(StatefulHook):
             node_timesteps_in_batch: Set[float] = set()
 
             pairs = [
-                (batch.src, batch.edge_time),
-                (batch.dst, batch.edge_time),
+                (batch.src, batch.edge_event_time),
+                (batch.dst, batch.edge_event_time),
                 (batch.node_event_node_ids, batch.node_event_time),
             ]
 

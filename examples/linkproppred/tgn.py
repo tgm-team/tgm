@@ -105,7 +105,9 @@ def train(
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.edge_time, batch.edge_x.float())
+        memory.update_state(
+            batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
+        )
 
         loss.backward()
         opt.step()
@@ -171,7 +173,9 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.edge_time, batch.edge_x.float())
+        memory.update_state(
+            batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
+        )
 
     return float(np.mean(perf_list))
 
@@ -189,7 +193,7 @@ nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
     seed_nodes_keys=['src', 'dst', 'neg'],
-    seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
+    seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(

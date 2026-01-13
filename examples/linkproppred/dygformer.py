@@ -106,7 +106,7 @@ class DyGFormer_LinkPrediction(nn.Module):
         src = batch.src
         dst = batch.dst
         neg = batch.neg
-        time = batch.edge_time
+        time = batch.edge_event_time
         nbr_nids = batch.nbr_nids[0]
         nbr_times = batch.nbr_times[0]
         nbr_feats = batch.nbr_feats[0]
@@ -212,7 +212,7 @@ def eval(
             idx = torch.tensor([idx], device=args.device)
             copy_batch.src = batch.src[idx]
             copy_batch.dst = batch.dst[idx]
-            copy_batch.time = batch.edge_time[idx]
+            copy_batch.time = batch.edge_event_time[idx]
             copy_batch.neg = neg_batch
             neg_idx = (batch.neg == neg_batch[:, None]).nonzero(as_tuple=True)[1]
 
@@ -254,7 +254,7 @@ nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # 1 remaining for seed node itself
     num_nodes=full_data.num_nodes,
     seed_nodes_keys=['src', 'dst', 'neg'],
-    seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
+    seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(

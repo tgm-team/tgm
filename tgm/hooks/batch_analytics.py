@@ -11,7 +11,13 @@ logger = _get_logger(__name__)
 class BatchAnalyticsHook(StatelessHook):
     """Compute simple batch-level statistics."""
 
-    requires = {'src', 'dst', 'edge_time', 'node_event_time', 'node_event_node_ids'}
+    requires = {
+        'src',
+        'dst',
+        'edge_event_time',
+        'node_event_time',
+        'node_event_node_ids',
+    }
     produces = {
         'num_edge_events',
         'num_node_events',
@@ -33,7 +39,11 @@ class BatchAnalyticsHook(StatelessHook):
         )
 
     def _count_unique_timestamps(self, batch: DGBatch) -> int:
-        edge_ts = batch.edge_time if batch.edge_time is not None else torch.tensor([])
+        edge_ts = (
+            batch.edge_event_time
+            if batch.edge_event_time is not None
+            else torch.tensor([])
+        )
         node_ts = (
             batch.node_event_time
             if batch.node_event_time is not None
@@ -66,7 +76,7 @@ class BatchAnalyticsHook(StatelessHook):
         return float(degree_per_node.float().mean().item())
 
     def _count_repeated_edge_events(self, batch: DGBatch) -> int:
-        src, dst, time = batch.src, batch.dst, batch.edge_time
+        src, dst, time = batch.src, batch.dst, batch.edge_event_time
         if src is None or dst is None or time is None or src.numel() == 0:
             return 0
 
