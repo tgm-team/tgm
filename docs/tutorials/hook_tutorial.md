@@ -245,7 +245,7 @@ dataset = PyGLinkPropPredDataset(
 
 dataset.load_val_ns()
 dataset.load_test_ns()
-_, dst, _ = train_dg.edges
+_, dst, _ = train_dg.edge_events
 neg_sampler = dataset.negative_sampler
 
 hm = HookManager(keys=['train', 'val', 'test'])
@@ -272,7 +272,7 @@ def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
    )
    dataset.load_val_ns()
    dataset.load_test_ns()
-   _, dst, _ = train_dg.edges
+   _, dst, _ = train_dg.edge_events
    neg_sampler = dataset.negative_sampler
 
 

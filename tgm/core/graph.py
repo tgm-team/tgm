@@ -82,7 +82,7 @@ class DGraph:
             DGBatch: A batch containing src, dst, timestamps, and optionally
                 features from the current slice.
         """
-        batch = DGBatch(*self.edges)
+        batch = DGBatch(*self.edge_events)
         if materialize_features and self.node_x is not None:
             batch.node_event_time, batch.node_event_node_ids = self.node_x._indices()
             batch.node_event_node_ids = batch.node_event_node_ids.to(torch.int32)  # type: ignore
@@ -220,9 +220,8 @@ class DGraph:
         return self._storage.get_edges(self._slice)
 
     @property
-    def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
+    def edge_events(self) -> Tuple[Tensor, Tensor, Tensor]:
         """The src, dst, time tensors over the dynamic graph."""
-        # TODO: Deprecate?
         src, dst, time = self._edges_cpu
         return src.to(self.device), dst.to(self.device), time.to(self.device)
 
@@ -251,7 +250,6 @@ class DGraph:
     @property
     def node_event_node_ids(self) -> Tensor:
         """The node ids for associated with the node events over the dynamic graph."""
-        # TODO: A better name
         node_ids, _ = self._node_events_cpu
         return node_ids.to(self.device)
 
