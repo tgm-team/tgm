@@ -180,7 +180,7 @@ train_snapshots = DGraph(train_data_discretized, device=args.device)
 val_snapshots = DGraph(val_data_discretized, device=args.device)
 test_snapshots = DGraph(test_data_discretized, device=args.device)
 
-_, dst, _ = train_dg.edges
+_, dst, _ = train_dg.edge_events
 
 hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
