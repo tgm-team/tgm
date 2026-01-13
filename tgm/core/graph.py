@@ -203,7 +203,7 @@ class DGraph:
     @_logged_cached_property
     def num_edge_events(self) -> int:
         """The total number of edge events in the dynamic graph."""
-        return len(self.edge_time)
+        return len(self.edge_event_time)
 
     @_logged_cached_property
     def num_timestamps(self) -> int:
@@ -226,13 +226,13 @@ class DGraph:
         return src.to(self.device), dst.to(self.device), time.to(self.device)
 
     @property
-    def edge_index(self) -> Tensor:
+    def edge_event_edge_index(self) -> Tensor:
         """The edge index tensor over the dynamic graph."""
         src, dst, _ = self._edges_cpu
         return torch.stack([src, dst], dim=0).to(self.device)
 
     @property
-    def edge_time(self) -> Tensor:
+    def edge_event_time(self) -> Tensor:
         """The timestamps associated with the edge events over the dynamic graph."""
         _, _, time = self._edges_cpu
         return time.to(self.device)
