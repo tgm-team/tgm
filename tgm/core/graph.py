@@ -85,7 +85,7 @@ class DGraph:
         batch = DGBatch(*self.edge_events)
         if materialize_features and self.node_x is not None:
             batch.node_event_time, batch.node_event_node_ids = self.node_x._indices()
-            batch.node_event_node_ids = batch.node_event_node_ids.to(torch.int32)  # type: ignore
+            batch.node_ids = batch.node_ids.to(torch.int32)  # type: ignore
             batch.node_x = self.node_x._values()
         if materialize_features and self.edge_x is not None:
             batch.edge_x = self.edge_x

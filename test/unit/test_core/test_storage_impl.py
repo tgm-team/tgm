@@ -198,6 +198,51 @@ def test_get_edges(DGStorageImpl, data, request):
     )
 
 
+@pytest.mark.parametrize('data', ['data_with_features'])
+def test_get_node_events(DGStorageImpl, data, request):
+    data = request.getfixturevalue(data)
+    storage = DGStorageImpl(data)
+
+    expected = (
+        torch.tensor([2, 4, 6], dtype=torch.int32),
+        torch.tensor([1, 5, 10], dtype=torch.int64),
+    )
+    torch.testing.assert_close(storage.get_node_events(DGSliceTracker()), expected)
+
+    expected = (
+        torch.tensor([4, 6], dtype=torch.int32),
+        torch.tensor([5, 10], dtype=torch.int64),
+    )
+    torch.testing.assert_close(
+        storage.get_node_events(DGSliceTracker(start_time=5)), expected
+    )
+
+    expected = (
+        torch.tensor([2], dtype=torch.int32),
+        torch.tensor([1], dtype=torch.int64),
+    )
+    torch.testing.assert_close(
+        storage.get_node_events(DGSliceTracker(end_time=4)), expected
+    )
+
+    expected = (
+        torch.tensor([6], dtype=torch.int32),
+        torch.tensor([10], dtype=torch.int64),
+    )
+    torch.testing.assert_close(
+        storage.get_node_events(DGSliceTracker(start_idx=4, end_idx=5)), expected
+    )
+
+    expected = (
+        torch.tensor([], dtype=torch.int32),
+        torch.tensor([], dtype=torch.int64),
+    )
+    torch.testing.assert_close(
+        storage.get_node_events(DGSliceTracker(start_idx=4, end_idx=5, end_time=6)),
+        expected,
+    )
+
+
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
 def test_get_num_timestamps_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
