@@ -215,7 +215,7 @@ def eval(
         if batch.edge_src.shape[0] > 0:
             z = encoder(batch, static_node_x)
             if y_true is not None:
-                z_node = z[batch.node_event_node_ids]
+                z_node = z[batch.node_x_nids]
                 y_pred = decoder(z_node)
                 input_dict = {
                     'y_true': y_true,
