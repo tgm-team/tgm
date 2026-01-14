@@ -140,7 +140,7 @@ class DyGFormer_NodePrediction(nn.Module):
         edge_src = batch.edge_src
         edge_dst = batch.edge_dst
         nbr_nids = batch.nbr_nids[0]
-        nbr_edge_times = batch.nbr_edge_times[0]
+        nbr_edge_times = batch.nbr_edge_time[0]
         nbr_edge_x = batch.nbr_edge_x[0]
         src_nbr_idx = batch.seed_node_nbr_mask['edge_src']
         dst_nbr_idx = batch.seed_node_nbr_mask['edge_dst']
