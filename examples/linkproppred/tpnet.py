@@ -240,7 +240,7 @@ def eval(
             idx = torch.tensor([idx], device=args.device)
             copy_batch.edge_src = batch.edge_src[idx]
             copy_batch.edge_dst = batch.edge_dst[idx]
-            copy_batch.time = batch.edge_time[idx]
+            copy_batch.edge_time = batch.edge_time[idx]
             copy_batch.neg = neg_batch
             neg_idx = (batch.neg == neg_batch[:, None]).nonzero(as_tuple=True)[1]
 
