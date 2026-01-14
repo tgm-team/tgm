@@ -66,7 +66,7 @@ parser.add_argument(
     help='if no-use-matrix, will not explicitly maintain the temporal walk matrices',
 )
 parser.add_argument(
-    '--concat-edge_src-edge_dst',
+    '--concat-src-dst',
     default=True,
     action=argparse.BooleanOptionalAction,
     help='if no-concat-edge_src-edge_dst, Random projection avoids concat edge_src and edge_dst in computation',
