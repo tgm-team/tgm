@@ -49,7 +49,7 @@ python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
 )
 def test_edgebank_tgb_seq_unlimited_memory(slurm_job_runner, dataset):
     cmd = f"""
-python "$ROOT_DIR/examples/tgb_seq/edgebank.py" \
+python "$ROOT_DIR/examples/linkproppred/tgb_seq/edgebank.py" \
     --dataset {dataset}"""
     state = slurm_job_runner(cmd)
     assert state == 'COMPLETED'
