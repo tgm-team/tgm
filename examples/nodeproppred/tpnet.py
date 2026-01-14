@@ -145,9 +145,9 @@ class TPNet_NodePrediction(nn.Module):
     def _update_latest_node_embedding(
         self, batch: DGBatch, z_src: torch.Tensor, z_dst: torch.Tensor
     ):
-        nodes = torch.cat([batch.src, batch.dst])
+        nodes = torch.cat([batch.edge_src, batch.edge_dst])
         z_all = torch.cat([z_src, z_dst])
-        timestamp = torch.cat([batch.edge_event_time, batch.edge_event_time])
+        timestamp = torch.cat([batch.edge_time, batch.edge_time])
 
         chronological_order = torch.argsort(timestamp)
         nodes = nodes[chronological_order]
@@ -169,8 +169,8 @@ class TPNet_NodePrediction(nn.Module):
     def forward(
         self, batch: DGBatch, static_node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        src = batch.src
-        dst = batch.dst
+        src = batch.edge_src
+        dst = batch.edge_dst
         nbr_nids = batch.nbr_nids[0]
         nbr_times = batch.nbr_times[0]
         nbr_feats = batch.nbr_feats[0]
@@ -180,7 +180,7 @@ class TPNet_NodePrediction(nn.Module):
         z_src, z_dst = self.encoder(
             static_node_feat,
             edge_idx,
-            batch.edge_event_time,
+            batch.edge_time,
             nbr_nids[: batch_size * 2],
             nbr_times[: batch_size * 2],
             nbr_feats[: batch_size * 2],
@@ -207,7 +207,7 @@ def train(
         opt.zero_grad()
 
         y_true = batch.node_x
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             z = encoder(batch, static_node_x)  # [num_nodes, embed_dim]
 
         if y_true is not None:
@@ -280,7 +280,7 @@ nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.num_neighbors],  # Keep 1 slot for seed node itself
     num_nodes=full_data.num_nodes,
     seed_nodes_keys=['src', 'dst'],
-    seed_times_keys=['edge_event_time', 'edge_event_time'],
+    seed_times_keys=['edge_time', 'edge_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])

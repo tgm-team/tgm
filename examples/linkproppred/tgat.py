@@ -105,7 +105,7 @@ class TGAT(nn.Module):
             )
 
     def forward(self, batch: DGBatch, static_node_feat: torch.Tensor) -> torch.Tensor:
-        device = batch.src.device
+        device = batch.edge_src.device
         z = {j: {} for j in range(self.num_layers + 1)}  # z[j][i] = z of nbr^i at hop j
 
         # Layer 0 (leaf nodes): z[0][i] = static_node_feat
@@ -181,8 +181,8 @@ def eval(
         z = encoder(batch, static_node_x)
         id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src_ids = batch.src[idx].repeat(len(dst_ids))
+            dst_ids = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.edge_src[idx].repeat(len(dst_ids))
 
             src_idx = torch.tensor([id_map[n.item()] for n in src_ids], device=z.device)
             dst_idx = torch.tensor([id_map[n.item()] for n in dst_ids], device=z.device)
@@ -215,15 +215,15 @@ test_dg = DGraph(test_data, device=args.device)
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
         num_nbrs=args.n_nbrs,
-        seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
     )
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=full_data.num_nodes,
-        seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')

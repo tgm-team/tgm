@@ -74,7 +74,7 @@ class GCNEncoder(torch.nn.Module):
             bn.reset_parameters()
 
     def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         x = node_feat
         for i, conv in enumerate(self.convs[:-1]):
             x = conv(x, edge_index)
@@ -105,7 +105,7 @@ def train(
             continue
 
         z = encoder(batch, static_node_x)
-        z_node = z[batch.node_event_node_ids]
+        z_node = z[batch.node_x_nids]
         y_pred = decoder(z_node)
 
         loss = F.cross_entropy(y_pred, y_true)
@@ -136,7 +136,7 @@ def eval(
             continue
 
         z = encoder(batch, static_node_x)
-        z_node = z[batch.node_event_node_ids]
+        z_node = z[batch.node_x_nids]
         y_pred = decoder(z_node)
 
         input_dict = {

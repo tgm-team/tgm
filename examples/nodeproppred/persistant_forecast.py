@@ -57,7 +57,7 @@ def eval(
             continue
 
         y_pred = torch.zeros_like(y_true)
-        for i, node_id in enumerate(batch.node_event_node_ids.tolist()):
+        for i, node_id in enumerate(batch.node_x_nids.tolist()):
             y_pred[i] = model(node_id)
             model.update(node_id, y_true[i])
 

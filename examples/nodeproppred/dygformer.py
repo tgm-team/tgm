@@ -113,9 +113,9 @@ class DyGFormer_NodePrediction(nn.Module):
     def _update_latest_node_embedding(
         self, batch: DGBatch, z_src: torch.Tensor, z_dst: torch.Tensor
     ):
-        nodes = torch.cat([batch.src, batch.dst])
+        nodes = torch.cat([batch.edge_src, batch.edge_dst])
         z_all = torch.cat([z_src, z_dst])
-        timestamp = torch.cat([batch.edge_event_time, batch.edge_event_time])
+        timestamp = torch.cat([batch.edge_time, batch.edge_time])
 
         chronological_order = torch.argsort(timestamp)
         nodes = nodes[chronological_order]
@@ -137,20 +137,20 @@ class DyGFormer_NodePrediction(nn.Module):
     def forward(
         self, batch: DGBatch, static_node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        src = batch.src
-        dst = batch.dst
+        edge_src = batch.edge_src
+        edge_dst = batch.edge_dst
         nbr_nids = batch.nbr_nids[0]
         nbr_times = batch.nbr_times[0]
         nbr_feats = batch.nbr_feats[0]
-        src_nbr_idx = batch.seed_node_nbr_mask['src']
-        dst_nbr_idx = batch.seed_node_nbr_mask['dst']
-        edge_idx = torch.stack((src, dst), dim=0)
+        src_nbr_idx = batch.seed_node_nbr_mask['edge_src']
+        dst_nbr_idx = batch.seed_node_nbr_mask['edge_dst']
+        edge_idx = torch.stack((edge_src, edge_dst), dim=0)
 
         src_dst_nbr_idx = torch.cat([src_nbr_idx, dst_nbr_idx])
         z_src, z_dst = self.encoder(
             static_node_feat,
             edge_idx,
-            batch.edge_event_time,
+            batch.edge_time,
             nbr_nids[src_dst_nbr_idx],
             nbr_times[src_dst_nbr_idx],
             nbr_feats[src_dst_nbr_idx],
@@ -177,7 +177,7 @@ def train(
         opt.zero_grad()
 
         y_true = batch.node_x
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             z = encoder(batch, static_node_x)  # [num_nodes, embed_dim]
 
         if y_true is not None:
@@ -212,7 +212,7 @@ def eval(
     for batch in tqdm(loader):
         y_true = batch.node_x
 
-        if batch.src.shape[0] > 0:
+        if batch.edge_src.shape[0] > 0:
             z = encoder(batch, static_node_x)
             if y_true is not None:
                 z_node = z[batch.node_event_node_ids]
@@ -250,8 +250,8 @@ test_dg = DGraph(test_data, device=args.device)
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['src', 'dst'],
-    seed_times_keys=['edge_event_time', 'edge_event_time'],
+    seed_nodes_keys=['edge_src', 'edge_dst'],
+    seed_times_keys=['edge_time', 'edge_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])

@@ -73,7 +73,7 @@ class RecurrentGCN(torch.nn.Module):
         num_current_edges: int | None = None,
         num_previous_edges: int | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
 
         h_0 = self.recurrent(
             node_feat,
@@ -104,7 +104,7 @@ def train(
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
     prev_num_edge = None
-    curr_num_edge = snapshot_batch.src.numel()
+    curr_num_edge = snapshot_batch.edge_src.numel()
 
     z = encoder(
         snapshot_batch,
@@ -118,24 +118,23 @@ def train(
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out = decoder(z[-1][batch.src], z[-1][batch.dst])
-        neg_out = decoder(z[-1][batch.src], z[-1][batch.neg])
+        pos_out = decoder(z[-1][batch.edge_src], z[-1][batch.edge_dst])
+        neg_out = decoder(z[-1][batch.edge_src], z[-1][batch.neg])
 
         loss = F.mse_loss(pos_out, torch.ones_like(pos_out))
         loss += F.mse_loss(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
-        total_loss += float(loss) / batch.src.shape[0]
+        total_loss += float(loss) / batch.edge_src.shape[0]
 
         # update the model if the prediction batch has moved to next snapshot.
         while (
-            batch.edge_event_time[-1]
-            > (snapshot_batch.edge_event_time[-1] + 1) * conversion_rate
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
         ):
             try:
                 snapshot_batch = next(snapshots_iterator)
                 prev_num_edge = curr_num_edge
-                curr_num_edge = snapshot_batch.src.numel()
+                curr_num_edge = snapshot_batch.edge_src.numel()
                 z = encoder(
                     snapshot_batch,
                     static_node_x,
@@ -171,13 +170,13 @@ def eval(
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
     prev_num_edge = None
-    curr_num_edge = snapshot_batch.src.numel()
+    curr_num_edge = snapshot_batch.edge_src.numel()
 
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
-            query_src = batch.src[idx].repeat(len(neg_batch) + 1)
-            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            query_src = batch.edge_src[idx].repeat(len(neg_batch) + 1)
+            query_dst = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
 
             y_pred = decoder(z[-1][query_src], z[-1][query_dst])
             input_dict = {
@@ -189,13 +188,12 @@ def eval(
 
         # update the model if the prediction batch has moved to next snapshot.
         while (
-            batch.edge_event_time[-1]
-            > (snapshot_batch.edge_event_time[-1] + 1) * conversion_rate
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
         ):
             try:
                 snapshot_batch = next(snapshots_iterator)
                 prev_num_edge = curr_num_edge
-                curr_num_edge = snapshot_batch.src.numel()
+                curr_num_edge = snapshot_batch.edge_src.numel()
                 z = encoder(
                     snapshot_batch,
                     static_node_x,
@@ -234,7 +232,7 @@ train_snapshots = DGraph(train_data_discretized, device=args.device)
 val_snapshots = DGraph(val_data_discretized, device=args.device)
 test_snapshots = DGraph(test_data_discretized, device=args.device)
 
-_, dst, _ = train_dg.edge_events
+edge_dst = train_dg.edge_dst
 
 hm = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg

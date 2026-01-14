@@ -55,7 +55,7 @@ class RecurrentGCN(torch.nn.Module):
         node_feat: torch.tensor,
         h: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
 
         h_0 = self.recurrent(node_feat, edge_index, edge_weight, h)
@@ -85,7 +85,7 @@ def train(
             continue
 
         z, h_0 = encoder(batch, static_node_x)
-        z_node = z[batch.node_event_node_ids]
+        z_node = z[batch.node_x_nids]
         y_pred = decoder(z_node)
 
         loss = F.cross_entropy(y_pred, y_true)
@@ -119,7 +119,7 @@ def eval(
             continue
 
         z, h_0 = encoder(batch, static_node_x, h_0)
-        z_node = z[batch.node_event_node_ids]
+        z_node = z[batch.node_x_nids]
         y_pred = decoder(z_node)
 
         input_dict = {

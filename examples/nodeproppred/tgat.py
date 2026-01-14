@@ -101,7 +101,7 @@ class TGAT(nn.Module):
             )
 
     def forward(self, batch: DGBatch, static_node_feat: torch.Tensor) -> torch.Tensor:
-        device = batch.src.device
+        device = batch.edge_src.device
         z = {j: {} for j in range(self.num_layers + 1)}  # z[j][i] = z of nbr^i at hop j
 
         # Layer 0 (leaf nodes): z[0][i] = static_node_feat
@@ -203,15 +203,15 @@ num_classes = train_dg.node_x_dim
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
         num_nbrs=args.n_nbrs,
-        seed_nodes_keys=['node_event_node_ids'],
-        seed_times_keys=['node_event_time'],
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
     )
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=full_data.num_nodes,  # Assuming node ids at test set > train/val set
-        seed_nodes_keys=['node_event_node_ids'],
-        seed_times_keys=['node_event_time'],
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')

@@ -77,10 +77,10 @@ def train(
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            num_nbrs = len(nbr_nodes) // (len(batch.node_event_node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_x_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_event_node_ids.repeat_interleave(num_nbrs),
+                    batch.node_x_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -96,7 +96,7 @@ def train(
             z, last_update = memory(batch.unique_nids)
             z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
-            inv_src = batch.global_to_local(batch.node_event_node_ids)
+            inv_src = batch.global_to_local(batch.node_x_nids)
             y_pred = decoder(z[inv_src])
             loss = F.cross_entropy(y_pred, y_labels)
             loss.backward()
@@ -112,9 +112,9 @@ def train(
             perf_list.append(perf)
 
         # Update memory with ground-truth state.
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
+                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
         memory.detach()
 
@@ -142,10 +142,10 @@ def eval(
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            num_nbrs = len(nbr_nodes) // (len(batch.node_event_node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_x_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_event_node_ids.repeat_interleave(num_nbrs),
+                    batch.node_x_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -161,7 +161,7 @@ def eval(
             z, last_update = memory(batch.unique_nids)
             z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
-            inv_src = batch.global_to_local(batch.node_event_node_ids)
+            inv_src = batch.global_to_local(batch.node_x_nids)
             y_pred = decoder(z[inv_src])
 
             input_dict = {
@@ -172,9 +172,9 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
         # Update memory with ground-truth state.
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
+                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
 
     return float(np.mean(perf_list))
@@ -200,8 +200,8 @@ num_classes = train_dg.node_x_dim
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['node_event_node_ids'],
-    seed_times_keys=['node_event_time'],
+    seed_nodes_keys=['node_x_nids'],
+    seed_times_keys=['node_x_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])

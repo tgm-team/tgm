@@ -88,15 +88,19 @@ def train(
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
         #! run my own deduplication
-        all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
+        all_nids = torch.cat(
+            [batch.edge_src, batch.edge_dst, batch.neg, nbr_nodes[nbr_mask]]
+        )
         batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
         batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
 
-        num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
+        num_nbrs = len(nbr_nodes) // (
+            len(batch.edge_src) + len(batch.edge_dst) + len(batch.neg)
+        )
         src_nodes = torch.cat(
             [
-                batch.src.repeat_interleave(num_nbrs),
-                batch.dst.repeat_interleave(num_nbrs),
+                batch.edge_src.repeat_interleave(num_nbrs),
+                batch.edge_dst.repeat_interleave(num_nbrs),
                 batch.neg.repeat_interleave(num_nbrs),
             ]
         )
@@ -113,12 +117,12 @@ def train(
         z, last_update = memory(batch.unique_nids)
         z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
-        inv_src = batch.global_to_local(batch.src)
-        inv_dst = batch.global_to_local(batch.dst)
+        inv_src = batch.global_to_local(batch.edge_src)
+        inv_dst = batch.global_to_local(batch.edge_dst)
         inv_neg = batch.global_to_local(batch.neg)
         inv_edge_idx_pos = torch.stack([inv_src, inv_dst], dim=0).long()
         inv_edge_idx_neg = torch.stack([inv_src, inv_neg], dim=0).long()
-        time_info = (last_update, batch.edge_event_time)
+        time_info = (last_update, batch.edge_time)
 
         pos_out = decoder(z, nbr_edge_index, inv_edge_idx_pos, time_info=time_info)
         neg_out = decoder(z, nbr_edge_index, inv_edge_idx_neg, time_info=time_info)
@@ -128,7 +132,7 @@ def train(
 
         # Update memory with ground-truth state.
         memory.update_state(
-            batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
+            batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
         )
 
         loss.backward()
@@ -160,15 +164,19 @@ def eval(
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
         #! run my own deduplication
-        all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
+        all_nids = torch.cat(
+            [batch.edge_src, batch.edge_dst, batch.neg, nbr_nodes[nbr_mask]]
+        )
         batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
         batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
 
-        num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
+        num_nbrs = len(nbr_nodes) // (
+            len(batch.edge_src) + len(batch.edge_dst) + len(batch.neg)
+        )
         src_nodes = torch.cat(
             [
-                batch.src.repeat_interleave(num_nbrs),
-                batch.dst.repeat_interleave(num_nbrs),
+                batch.edge_src.repeat_interleave(num_nbrs),
+                batch.edge_dst.repeat_interleave(num_nbrs),
                 batch.neg.repeat_interleave(num_nbrs),
             ]
         )
@@ -185,15 +193,15 @@ def eval(
         z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src_ids = batch.src[idx].repeat(len(dst_ids))
+            dst_ids = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.edge_src[idx].repeat(len(dst_ids))
 
             inv_src = batch.global_to_local(src_ids)
             inv_dst = batch.global_to_local(dst_ids)
             inv_edge_idx = torch.stack([inv_src, inv_dst], dim=0)
             time_info = (
                 last_update,
-                batch.edge_event_time.repeat(len(inv_src)),
+                batch.edge_time.repeat(len(inv_src)),
             )  # We can move this outside of the inner loop
 
             y_pred = decoder(
@@ -212,7 +220,7 @@ def eval(
 
         # Update memory with ground-truth state.
         memory.update_state(
-            batch.src, batch.dst, batch.edge_event_time, batch.edge_x.float()
+            batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
         )
 
     return float(np.mean(perf_list))
@@ -230,8 +238,8 @@ test_dg = DGraph(test_data, device=args.device)
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['src', 'dst', 'neg'],
-    seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
+    seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+    seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(

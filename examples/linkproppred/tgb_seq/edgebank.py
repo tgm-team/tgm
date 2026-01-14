@@ -52,13 +52,13 @@ def eval(
         negs_per_pos = len(batch.neg)
 
         for idx in range(negs_per_pos):
-            query_src = batch.src[idx].repeat(negs_per_pos + 1)
-            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), batch.neg[idx]])
+            query_src = batch.edge_src[idx].repeat(negs_per_pos + 1)
+            query_dst = torch.cat([batch.edge_dst[idx].unsqueeze(0), batch.neg[idx]])
 
             y_pred = model(query_src, query_dst)
             y_pred_pos, y_pred_neg = y_pred[0].unsqueeze(0), y_pred[1:]
             perf_list.append(evaluator.eval(y_pred_pos, y_pred_neg))
-        model.update(batch.src, batch.dst, batch.edge_event_time)
+        model.update(batch.edge_src, batch.edge_dst, batch.edge_time)
 
     return float(np.mean(perf_list))
 
@@ -85,12 +85,12 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
             self.neg_idx = 0
         else:
             # Fallback to random negative sampler on train/val splits
-            _, dst, _ = dgraph.edge_events
-            self.low, self.high = int(dst.min()), int(dst.max())
+            edge_dst = dgraph.edge_dst
+            self.low, self.high = int(edge_dst.min()), int(edge_dst.max())
             self.num_negs = 100  # TGB-SEQ hardcodes 100 negatives per positive link
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        batch_size = len(batch.src)
+        batch_size = len(batch.edge_src)
 
         if self.has_precomputed_negatives:
             batch.neg = self.negs[self.neg_idx : self.neg_idx + batch_size]  # type: ignore
@@ -103,7 +103,7 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
 
         # TODO: decide whether to keep this (similar to random negative sampler), or sample
         # negative time stamps (similar to TGB negative sampler)
-        batch.neg_time = batch.edge_event_time.clone()  # type: ignore
+        batch.neg_time = batch.edge_time.clone()  # type: ignore
         return batch
 
 
@@ -117,8 +117,8 @@ train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
 
-_, dst, _ = test_dg.edge_events
-low, high = int(dst.min()), int(dst.max())
+edge_dst = test_dg.edge_dst
+low, high = int(edge_dst.min()), int(edge_dst.max())
 
 hm = HookManager(keys=['val', 'test'])
 hm.register(
@@ -139,9 +139,9 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm, drop_last=True)
 
 train_data = train_dg.materialize(materialize_features=False)
 model = EdgeBankPredictor(
-    train_data.src,
-    train_data.dst,
-    train_data.edge_event_time,
+    train_data.edge_src,
+    train_data.edge_dst,
+    train_data.edge_time,
     memory_mode=args.memory_mode,
     window_ratio=args.window_ratio,
     pos_prob=args.pos_prob,
