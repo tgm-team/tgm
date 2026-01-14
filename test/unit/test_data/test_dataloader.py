@@ -77,7 +77,7 @@ def test_iteration_ordered(drop_last, time_delta):
     dg = DGraph(data)
     loader = DGDataLoader(dg, batch_size=3, batch_unit='r', drop_last=drop_last)
 
-    edge_src, edge_dst, t = dg.edge_events
+    edge_src, edge_dst, t = dg.edge_src, dg.edge_dst, dg.edge_time
     batch_num = 0
     for batch in loader:
         assert isinstance(batch, DGBatch)
@@ -124,7 +124,7 @@ def test_iteration_by_time_equal_unit(drop_last):
         drop_last=drop_last,
     )
 
-    edge_src, edge_dst, t = dg.edge_events
+    edge_src, edge_dst, t = dg.edge_src, dg.edge_dst, dg.edge_time
     batch_num = 0
     for batch in loader:
         assert isinstance(batch, DGBatch)
@@ -165,7 +165,7 @@ def test_iteration_by_time_with_conversion_time_delta_value(drop_last):
     dg = DGraph(data)
     loader = DGDataLoader(dg, batch_size=2, batch_unit='m', drop_last=drop_last)
 
-    edge_src, _, _ = dg.edge_events
+    edge_src, _, _ = dg.edge_src, dg.edge_dst, dg.edge_time
     batch_num = 0
     for batch in loader:
         assert isinstance(batch, DGBatch)
