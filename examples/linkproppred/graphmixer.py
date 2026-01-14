@@ -34,7 +34,7 @@ parser.add_argument('--lr', type=float, default=0.0002, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
 parser.add_argument(
-    '--edge_event_time-dim',
+    '--time-dim',
     type=int,
     default=100,
     help='edge_event_time encoding dimension',
@@ -44,7 +44,7 @@ parser.add_argument(
     '--node-dim', type=int, default=100, help='node feat dimension if not provided'
 )
 parser.add_argument(
-    '--edge_event_time-gap',
+    '--time-gap',
     type=int,
     default=2000,
     help='graphmixer edge_event_time slot size',

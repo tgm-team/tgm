@@ -103,7 +103,7 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 model = EdgeBankPredictor(
     train_data.src,
     train_data.dst,
-    train_data.time,
+    train_data.edge_event_time,
     memory_mode=args.memory_mode,
     window_ratio=args.window_ratio,
     pos_prob=args.pos_prob,
