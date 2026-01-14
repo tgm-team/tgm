@@ -135,7 +135,7 @@ class RecurrentGCN(torch.nn.Module):
 
 # Initialize our model and optimizer
 encoder = RecurrentGCN(node_dim=static_node_x.shape[1], embed_dim=128)
-decoder = NodePredictor(in_dim=128, out_dim=train_dg.dynamic_node_feats_dim)
+decoder = NodePredictor(in_dim=128, out_dim=train_dg.node_x_dim)
 opt = torch.optim.Adam(set(encoder.parameters()) | set(decoder.parameters()), lr=0.001)
 
 # Training loop

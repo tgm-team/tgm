@@ -21,7 +21,7 @@ train_dg = DGraph(train_data)
 train_loader = DGDataLoader(train_dg, batch_unit="Y")
 
 # tgbn-trade has no static node features, so we create Gaussian ones (dim=64)
-static_node_feats = torch.randn((train_dg.num_nodes, 64))
+static_node_x = torch.randn((train_dg.num_nodes, 64))
 
 class RecurrentGCN(torch.nn.Module):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
@@ -39,20 +39,20 @@ class RecurrentGCN(torch.nn.Module):
         return z, h_0
 
 # Initialize our model and optimizer
-encoder = RecurrentGCN(node_dim=static_node_feats.shape[1], embed_dim=128)
-decoder = NodePredictor(in_dim=128, out_dim=train_dg.dynamic_node_feats_dim)
+encoder = RecurrentGCN(node_dim=static_node_x.shape[1], embed_dim=128)
+decoder = NodePredictor(in_dim=128, out_dim=train_dg.node_x_dim)
 opt = torch.optim.Adam(set(encoder.parameters()) | set(decoder.parameters()), lr=0.001)
 
 # Training loop
 h_0 = None
 for batch in train_loader:
     opt.zero_grad()
-    y_true = batch.dynamic_node_feats
+    y_true = batch.node_x
     if y_true is None:
         continue
 
-    z, h_0 = encoder(batch, static_node_feats, h_0)
-    z_node = z[batch.node_ids]
+    z, h_0 = encoder(batch, static_node_x, h_0)
+    z_node = z[batch.node_event_node_ids]
     y_pred = decoder(z_node)
 
     loss = F.cross_entropy(y_pred, y_true)
