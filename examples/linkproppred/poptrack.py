@@ -96,7 +96,7 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 model = PopTrackPredictor(
     train_data.src,
     train_data.dst,
-    train_data.time,
+    train_data.edge_event_time,
     full_data.num_nodes,
     k=args.k,
     decay=decay,

@@ -141,7 +141,7 @@ train_data = train_dg.materialize(materialize_features=False)
 model = EdgeBankPredictor(
     train_data.src,
     train_data.dst,
-    train_data.time,
+    train_data.edge_event_time,
     memory_mode=args.memory_mode,
     window_ratio=args.window_ratio,
     pos_prob=args.pos_prob,

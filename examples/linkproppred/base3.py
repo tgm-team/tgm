@@ -93,7 +93,7 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 edgebank_model = EdgeBankPredictor(
     train_data.src,
     train_data.dst,
-    train_data.time,
+    train_data.edge_event_time,
     memory_mode='fixed',
     window_ratio=args.window_ratio,
     pos_prob=args.pos_prob,
@@ -102,7 +102,7 @@ edgebank_model = EdgeBankPredictor(
 tcomem_model = tCoMemPredictor(
     train_data.src,
     train_data.dst,
-    train_data.time,
+    train_data.edge_event_time,
     num_nodes=num_nodes,
     k=args.k,
     window_ratio=args.window_ratio,

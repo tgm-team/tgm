@@ -33,13 +33,21 @@ parser.add_argument('--epochs', type=int, default=3, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0002, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
-parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
+parser.add_argument(
+    '--edge_event_time-dim',
+    type=int,
+    default=100,
+    help='edge_event_time encoding dimension',
+)
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
     '--node-dim', type=int, default=100, help='node feat dimension if not provided'
 )
 parser.add_argument(
-    '--time-gap', type=int, default=2000, help='graphmixer time slot size'
+    '--edge_event_time-gap',
+    type=int,
+    default=2000,
+    help='graphmixer edge_event_time slot size',
 )
 parser.add_argument(
     '--token-dim-expansion',
@@ -76,7 +84,7 @@ class GraphMixerEncoder(nn.Module):
     ) -> None:
         super().__init__()
 
-        # GraphMixer time encoding function is not trainable
+        # GraphMixer edge_event_time encoding function is not trainable
         self.time_encoder = Time2Vec(time_dim=time_dim)
         for param in self.time_encoder.parameters():
             param.requires_grad = False
@@ -243,7 +251,7 @@ hm.register_shared(
         num_nbrs=[args.n_nbrs],
         num_nodes=full_data.num_nodes,
         seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['time', 'time', 'neg_time'],
+        seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
     )
 )
 
