@@ -49,7 +49,7 @@ class MyNegativeHook(StatelessHook):
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.my_neg = torch.randint(10, 100, (len(batch.dst),))
-        batch.my_neg_time = batch.edge_event_time.clone()
+        batch.my_neg_time = batch.edge_time.clone()
         return batch
 ```
 
@@ -112,7 +112,7 @@ with hm.activate('test'):
         assert batch.dst.shape() == batch.my_neg.shape() # True
         assert torch.all(batch.my_neg >= 10) # True
         assert torch.all(batch.my_neg < 100) # True
-        assert torch.equal(batch.my_neg_time, batch.edge_event_time) # True
+        assert torch.equal(batch.my_neg_time, batch.edge_time) # True
 ```
 
 > **Note**: The context manager is just syntactical sugar for the following:
@@ -182,7 +182,7 @@ class MyNegativeHookWithFoo(StatelessHook):
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.my_neg = torch.randint(10, 100, (len(batch.dst),))
-        batch.my_neg_time = batch.edge_event_time.clone()
+        batch.my_neg_time = batch.edge_time.clone()
         return batch
 ```
 
@@ -245,7 +245,7 @@ dataset = PyGLinkPropPredDataset(
 
 dataset.load_val_ns()
 dataset.load_test_ns()
-_, dst, _ = train_dg.edge_events
+dst = train_dg.edge_dst
 neg_sampler = dataset.negative_sampler
 
 hm = HookManager(keys=['train', 'val', 'test'])
@@ -272,7 +272,7 @@ def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
    )
    dataset.load_val_ns()
    dataset.load_test_ns()
-   _, dst, _ = train_dg.edge_events
+   dst = train_dg.edge_dst
    neg_sampler = dataset.negative_sampler
 
 

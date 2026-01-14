@@ -52,7 +52,7 @@ for batch in train_loader:
         continue
 
     z, h_0 = encoder(batch, static_node_x, h_0)
-    z_node = z[batch.node_event_node_ids]
+    z_node = z[batch.node_x_nids]
     y_pred = decoder(z_node)
 
     loss = F.cross_entropy(y_pred, y_true)
