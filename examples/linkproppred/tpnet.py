@@ -69,7 +69,7 @@ parser.add_argument(
     '--concat-src-dst',
     default=True,
     action=argparse.BooleanOptionalAction,
-    help='if no-concat-edge_src-edge_dst, Random projection avoids concat edge_src and edge_dst in computation',
+    help='if no-concat-src-dst, Random projection avoids concat edge_src and edge_dst in computation',
 )
 parser.add_argument('--node-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
