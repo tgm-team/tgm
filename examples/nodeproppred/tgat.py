@@ -105,7 +105,7 @@ class TGAT(nn.Module):
         z = {j: {} for j in range(self.num_layers + 1)}  # z[j][i] = z of nbr^i at hop j
 
         # Layer 0 (leaf nodes): z[0][i] = static_node_feat
-        z[0][0] = static_node_feat[batch.nids[0]]
+        z[0][0] = static_node_feat[batch.seed_nids[0]]
         for i in range(1, self.num_layers + 1):
             z[0][i] = static_node_feat[batch.nbr_nids[i - 1].flatten()]
 
