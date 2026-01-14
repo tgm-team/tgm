@@ -21,7 +21,7 @@ class NeighborSamplerHook(StatelessHook):
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
         directed (bool): If true, aggregates interactions in edge_src->edge_dst direction only (default=False).
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
-        seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed seed_times to sample for.
+        seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
 
     Note:
         The order of the output tensors respect the order of seed_nodes_keys.
@@ -68,7 +68,7 @@ class NeighborSamplerHook(StatelessHook):
         self._seed_nodes_keys = seed_nodes_keys
         self._seed_times_keys = seed_times_keys
         logger.debug(
-            'Seed nodes keys: %s, Seed seed_times keys: %s',
+            'Seed nodes keys: %s, Seed times keys: %s',
             self._seed_nodes_keys,
             self._seed_times_keys,
         )
@@ -187,7 +187,7 @@ class NeighborSamplerHook(StatelessHook):
                 elif name == time_attr:
                     if (tensor < 0).any():
                         raise ValueError(
-                            f'Seed seed_times in {name} must be >= 0, got min value: {tensor.min().item()}'
+                            f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
                         )
                     seed_times.append(time.to(device))
 
@@ -219,7 +219,7 @@ class RecencyNeighborHook(StatefulHook):
                                                If not specified, defaults to batch edges: ['edge_src', 'edge_dst']
                                                If not specified, defaults to batch seed_times: ['time', 'time']
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
-        seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed seed_times to sample for.
+        seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
 
     Note:
         The order of the output tensors respect the order of seed_nodes_keys.
@@ -261,7 +261,7 @@ class RecencyNeighborHook(StatefulHook):
         self._seed_nodes_keys = seed_nodes_keys
         self._seed_times_keys = seed_times_keys
         logger.debug(
-            'Seed nodes keys: %s, Seed seed_times keys: %s',
+            'Seed nodes keys: %s, Seed times keys: %s',
             self._seed_nodes_keys,
             self._seed_times_keys,
         )
@@ -396,7 +396,7 @@ class RecencyNeighborHook(StatefulHook):
                 elif name == time_attr:
                     if (tensor < 0).any():
                         raise ValueError(
-                            f'Seed seed_times in {name} must be >= 0, got min value: {tensor.min().item()}'
+                            f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
                         )
                     seed_times.append(time.to(device))
 
