@@ -9,7 +9,7 @@ from tgm.data import DGData
 # num_node_events
 # edge_index, edge_time
 # node_events
-# node_event_node_ids, node_time
+# node_x_nids, node_time
 
 
 @pytest.fixture
@@ -96,8 +96,8 @@ def test_init_from_data(data):
     exp_node_time = torch.tensor([1, 5, 10], dtype=torch.int64)
     exp_node_ids = torch.tensor([2, 4, 6], dtype=torch.int32)
     torch.testing.assert_close(dg.node_events, (exp_node_ids, exp_node_time))
-    torch.testing.assert_close(dg.node_event_node_ids, exp_node_ids)
-    torch.testing.assert_close(dg.node_event_time, exp_node_time)
+    torch.testing.assert_close(dg.node_x_nids, exp_node_ids)
+    torch.testing.assert_close(dg.node_x_time, exp_node_time)
 
 
 @pytest.mark.gpu
@@ -165,11 +165,11 @@ def test_materialize(data):
         exp_src,
         exp_dst,
         exp_t,
-        dg.node_x._values(),
         dg.edge_x,
+        edge_type,
         dg.node_x._indices()[0],
         dg.node_x._indices()[1].int(),
-        edge_type=edge_type,
+        dg.node_x._values(),
     )
     torch.testing.assert_close(asdict(dg.materialize()), asdict(exp))
 
@@ -180,7 +180,7 @@ def test_materialize_skip_feature_materialization(data):
     exp_dst = torch.tensor([2, 4, 8], dtype=torch.int32)
     exp_t = torch.tensor([1, 5, 20], dtype=torch.int64)
     exp_edge_type = torch.IntTensor([0, 1, 2])
-    exp = DGBatch(exp_src, exp_dst, exp_t, None, None, edge_type=exp_edge_type)
+    exp = DGBatch(exp_src, exp_dst, exp_t, None, exp_edge_type, None, None)
     torch.testing.assert_close(
         asdict(dg.materialize(materialize_features=False)), asdict(exp)
     )

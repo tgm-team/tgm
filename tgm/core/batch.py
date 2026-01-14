@@ -17,24 +17,25 @@ class DGBatch:
     additional attributes to the container transparently during dataloading.
 
     Args:
-        src (Tensor): Source node indices for edges in the batch. Shape `(E,)`.
-        dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
-        edge_event_time (Tensor): Timestamps of each edge event. Shape `(E,)`.
-        node_x (Tensor | None, optional): Dynamic node features for nodes in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
+        edge_src (Tensor): Source node indices for edges in the batch. Shape `(E,)`.
+        edge_dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
+        edge_time (Tensor): Timestamps of each edge event. Shape `(E,)`.
         edge_x (Tensor | None, optional): Edge features for the batch. Tensor of shape `(T x V x V x d_edge)`.
-        node_event_time (Tensor | None, optional): Timestamps corresponding to dynamic node features.
-        node_event_node_ids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
         edge_type (Tensor | None, optional): Type of each edge. Shape `(E,)`
+        node_x (Tensor | None, optional): Dynamic node features for nodes in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
+        node_x_time (Tensor | None, optional): Timestamps corresponding to dynamic node features.
+        node_x_nids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
     """
 
-    src: Tensor
-    dst: Tensor
-    edge_event_time: Tensor
-    node_x: Optional[Tensor] = None
+    edge_src: Tensor
+    edge_dst: Tensor
+    edge_time: Tensor
     edge_x: Optional[Tensor] = None
-    node_event_time: Optional[Tensor] = None
-    node_event_node_ids: Optional[Tensor] = None
     edge_type: Optional[Tensor] = None
+
+    node_x_time: Optional[Tensor] = None
+    node_x_nids: Optional[Tensor] = None
+    node_x: Optional[Tensor] = None
 
     def __str__(self) -> str:
         def _get_description(object: Any) -> str:

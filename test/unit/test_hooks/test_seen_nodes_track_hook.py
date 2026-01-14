@@ -10,17 +10,17 @@ from tgm.hooks.hook_manager import HookManager
 @pytest.fixture
 def dg():
     edge_index = torch.IntTensor([[2, 3], [2, 5]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    node_timestamps = torch.LongTensor([2, 3, 5, 5, 5])
-    node_ids = torch.IntTensor([4, 2, 5, 1, 2])
+    edge_time = torch.LongTensor([1, 5])
+    node_x_time = torch.LongTensor([2, 3, 5, 5, 5])
+    node_x_nids = torch.IntTensor([4, 2, 5, 1, 2])
 
     # Can't actually get node events without dynamic node feats
     node_x = torch.rand(5, 3)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
-        node_timestamps=node_timestamps,
-        node_ids=node_ids,
+        node_x_time=node_x_time,
+        node_x_nids=node_x_nids,
         node_x=node_x,
         time_delta='s',
     )
@@ -30,7 +30,7 @@ def dg():
 
 
 def test_hook_dependancies():
-    assert EdgeEventsSeenNodesTrackHook.requires == {'src', 'dst'}
+    assert EdgeEventsSeenNodesTrackHook.requires == {'edge_src', 'edge_dst'}
     assert EdgeEventsSeenNodesTrackHook.produces == {'seen_nodes', 'batch_nodes_mask'}
 
 

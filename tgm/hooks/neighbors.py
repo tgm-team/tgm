@@ -19,22 +19,22 @@ class NeighborSamplerHook(StatelessHook):
 
     Args:
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
-        directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
+        directed (bool): If true, aggregates interactions in edge_src->edge_dst direction only (default=False).
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
         seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
 
     Note:
         The order of the output tensors respect the order of seed_nodes_keys.
-        For instance, for seed node keys ['src', 'dst', 'neg'] will have the first output index (hop 0) contain the concatenation
-        of batch.src, batch.dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.src
-        followed by first-hop neighbors of batch.dst, and then those of batch.neg. This pattern repeats for deeper hops.
+        For instance, for seed node keys ['edge_src', 'edge_dst', 'neg'] will have the first output index (hop 0) contain the concatenation
+        of batch.edge_src, batch.edge_dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.edge_src
+        followed by first-hop neighbors of batch.edge_dst, and then those of batch.neg. This pattern repeats for deeper hops.
 
     Raises:
         ValueError: If the num_nbrs list is empty or has non-positive entries.
         ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
     """
 
-    requires = {'src', 'dst', 'edge_event_time'}
+    requires = {'edge_src', 'edge_dst', 'edge_time'}
     produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'seed_node_nbr_mask'}
 
     def __init__(
@@ -110,7 +110,7 @@ class NeighborSamplerHook(StatelessHook):
             nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
-                slice=DGSliceTracker(end_time=int(batch.edge_event_time.min()) - 1),
+                slice=DGSliceTracker(end_time=int(batch.edge_time.min()) - 1),
                 directed=self._directed,
             )
 
@@ -126,7 +126,7 @@ class NeighborSamplerHook(StatelessHook):
     def _get_seed_tensors(
         self, batch: DGBatch
     ) -> Tuple[torch.Tensor, torch.Tensor, dict]:
-        device = batch.src.device
+        device = batch.edge_src.device
         seeds, times = [], []
         seed_node_mask = dict()
 
@@ -193,7 +193,7 @@ class NeighborSamplerHook(StatelessHook):
 
 
 class RecencyNeighborHook(StatefulHook):
-    requires = {'src', 'dst', 'edge_event_time'}
+    requires = {'edge_src', 'edge_dst', 'edge_time'}
     produces = {
         'nids',
         'nbr_nids',
@@ -208,17 +208,17 @@ class RecencyNeighborHook(StatefulHook):
     Args:
         num_nodes (int): Total number of nodes to track.
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
-        directed (bool): If true, aggregates interactions in src->dst direction only (default=False).
-                                               If not specified, defaults to batch edges: ['src', 'dst']
+        directed (bool): If true, aggregates interactions in edge_src->edge_dst direction only (default=False).
+                                               If not specified, defaults to batch edges: ['edge_src', 'edge_dst']
                                                If not specified, defaults to batch times: ['time', 'time']
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
         seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
 
     Note:
         The order of the output tensors respect the order of seed_nodes_keys.
-        For instance, for seed node keys ['src', 'dst', 'neg'] will have the first output index (hop 0) contain the concatenation
-        of batch.src, batch.dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.src
-        followed by first-hop neighbors of batch.dst, and then those of batch.neg. This pattern repeats for deeper hops.
+        For instance, for seed node keys ['edge_src', 'edge_dst', 'neg'] will have the first output index (hop 0) contain the concatenation
+        of batch.edge_src, batch.edge_dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.edge_src
+        followed by first-hop neighbors of batch.edge_dst, and then those of batch.neg. This pattern repeats for deeper hops.
 
     Raises:
         ValueError: If the num_nbrs list is empty or has non-positive entries.
@@ -329,7 +329,7 @@ class RecencyNeighborHook(StatefulHook):
             batch.nbr_feats.append(nbr_feats)  # type: ignore
 
         batch.seed_node_nbr_mask = seed_node_mask  # type: ignore
-        if batch.src.numel():
+        if batch.edge_src.numel():
             logger.debug('Updating circular buffers')
             self._update(batch)
         return batch
@@ -337,7 +337,7 @@ class RecencyNeighborHook(StatefulHook):
     def _get_seed_tensors(
         self, batch: DGBatch
     ) -> Tuple[torch.Tensor, torch.Tensor, dict]:
-        device = batch.src.device
+        device = batch.edge_src.device
         seeds, times = [], []
         seed_node_mask = dict()
 
@@ -477,18 +477,18 @@ class RecencyNeighborHook(StatefulHook):
         assert self._nbr_feats is not None  # For mypy
         if batch.edge_x is None:
             edge_feats = torch.zeros(
-                (len(batch.src), self._edge_x_dim), device=self._device
+                (len(batch.edge_src), self._edge_x_dim), device=self._device
             )
         else:
             edge_feats = batch.edge_x
 
         if self._directed:
-            node_ids, nbr_nids, times = batch.src, batch.dst, batch.edge_event_time
+            node_ids, nbr_nids, times = batch.edge_src, batch.edge_dst, batch.edge_time
         else:
             # It's fine that times is out-of-order here since we sort below
-            node_ids = torch.cat([batch.src, batch.dst])
-            nbr_nids = torch.cat([batch.dst, batch.src])
-            times = torch.cat([batch.edge_event_time, batch.edge_event_time])
+            node_ids = torch.cat([batch.edge_src, batch.edge_dst])
+            nbr_nids = torch.cat([batch.edge_dst, batch.edge_src])
+            times = torch.cat([batch.edge_time, batch.edge_time])
             edge_feats = torch.cat([edge_feats, edge_feats])
 
         # Lexicographical sort by node id and time. Duplicate nodes will be adjacent.

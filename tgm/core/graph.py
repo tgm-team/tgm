@@ -84,8 +84,8 @@ class DGraph:
         """
         batch = DGBatch(*self.edge_events)
         if materialize_features and self.node_x is not None:
-            batch.node_event_time, batch.node_event_node_ids = self.node_x._indices()
-            batch.node_event_node_ids = batch.node_event_node_ids.to(torch.int32)  # type: ignore
+            batch.node_x_time, batch.node_x_nids = self.node_x._indices()
+            batch.node_x_nids = batch.node_x_nids.to(torch.int32)  # type: ignore
             batch.node_x = self.node_x._values()
         if materialize_features and self.edge_x is not None:
             batch.edge_x = self.edge_x
@@ -95,10 +95,8 @@ class DGraph:
 
         logger.debug(
             'Materialized DGraph slice: %d edge events, %d node events',
-            batch.src.numel(),
-            0
-            if batch.node_event_node_ids is None
-            else batch.node_event_node_ids.numel(),
+            batch.edge_src.numel(),
+            0 if batch.node_x_nids is None else batch.node_x_nids.numel(),
         )
         return batch
 
@@ -198,7 +196,7 @@ class DGraph:
     @_logged_cached_property
     def num_node_events(self) -> int:
         """The total number of node events in the dynamic graph."""
-        return len(self.node_event_time)
+        return len(self.node_x_time)
 
     @_logged_cached_property
     def num_edge_events(self) -> int:
@@ -248,13 +246,13 @@ class DGraph:
         return node_ids.to(self.device), node_time.to(self.device)
 
     @property
-    def node_event_node_ids(self) -> Tensor:
+    def node_x_nids(self) -> Tensor:
         """The node ids for associated with the node events over the dynamic graph."""
         node_ids, _ = self._node_events_cpu
         return node_ids.to(self.device)
 
     @property
-    def node_event_time(self) -> Tensor:
+    def node_x_time(self) -> Tensor:
         """The timestamps associated with the node events over the dynamic graph."""
         _, node_time = self._node_events_cpu
         return node_time.to(self.device)

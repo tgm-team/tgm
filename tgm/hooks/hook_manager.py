@@ -248,11 +248,11 @@ class HookManager:
         # edge/node events can only be inferred during data loading.
         all_produced = set(
             [
-                'src',
-                'dst',
-                'edge_event_time',
-                'node_event_time',
-                'node_event_node_ids',
+                'edge_src',
+                'edge_dst',
+                'edge_time',
+                'node_x_time',
+                'node_x_nids',
                 'edge_type',
                 'node_type',
             ]

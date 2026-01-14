@@ -16,23 +16,23 @@ class DeduplicationHook(StatelessHook):
     Note: Supports batches with or without negative samples and multi-hop neighbors.
     """
 
-    requires = {'src', 'dst'}
+    requires = {'edge_src', 'edge_dst'}
     produces = {'unique_nids', 'global_to_local'}
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        nids = [batch.src, batch.dst]
+        nids = [batch.edge_src, batch.edge_dst]
         if hasattr(batch, 'neg'):
-            batch.neg = batch.neg.to(batch.src.device)
+            batch.neg = batch.neg.to(batch.edge_src.device)
             nids.append(batch.neg)
         if hasattr(batch, 'nbr_nids'):
             for hop in range(len(batch.nbr_nids)):
                 nbr_nodes = batch.nbr_nids[hop].flatten()
                 nbr_mask = nbr_nodes != PADDED_NODE_ID
-                nids.append(nbr_nodes[nbr_mask].flatten().to(batch.src.device))
+                nids.append(nbr_nodes[nbr_mask].flatten().to(batch.edge_src.device))
 
         nids.append(
-            batch.node_event_node_ids.to(batch.src.device)
-        ) if batch.node_event_node_ids is not None else None
+            batch.node_x_nids.to(batch.edge_src.device)
+        ) if batch.node_x_nids is not None else None
 
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)

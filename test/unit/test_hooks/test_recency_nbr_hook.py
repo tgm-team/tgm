@@ -40,16 +40,16 @@ def basic_sample_graph():
     #############
     """
     edge_index = torch.IntTensor([[0, 1], [0, 2], [2, 3], [2, 0]])
-    edge_timestamps = torch.LongTensor([1, 2, 3, 4])
+    edge_time = torch.LongTensor([1, 2, 3, 4])
     edge_x = torch.Tensor(
         [[1], [2], [5], [2]]
     )  # edge feat is simply summing the node IDs at two end points
-    data = DGData.from_raw(edge_timestamps, edge_index, edge_x)
+    data = DGData.from_raw(edge_time, edge_index, edge_x)
     return data
 
 
 def test_hook_dependancies():
-    assert RecencyNeighborHook.requires == {'src', 'dst', 'edge_event_time'}
+    assert RecencyNeighborHook.requires == {'edge_src', 'edge_dst', 'edge_time'}
     assert RecencyNeighborHook.produces == {
         'nids',
         'nbr_nids',
@@ -65,8 +65,8 @@ def test_mock_move_queues_to_device(basic_sample_graph):
     hook = RecencyNeighborHook(
         num_nbrs=[1],
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src'],
-        seed_times_keys=['edge_event_time'],
+        seed_nodes_keys=['edge_src'],
+        seed_times_keys=['edge_time'],
     )
     batch = dg.materialize()
     hook._device = 'foo'  # Patch graph device to trigger queue movement
@@ -81,8 +81,8 @@ def test_hook_reset_state(basic_sample_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_event_time', 'edge_event_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -185,15 +185,15 @@ def test_sample_with_node_events_seeds(node_only_data):
     hook = RecencyNeighborHook(
         num_nbrs=[1],
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['node_event_node_ids'],
-        seed_times_keys=['node_event_time'],
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
     )
     batch = dg.materialize()
     batch = hook(dg, batch)
     assert len(batch.nids) == 1
     assert len(batch.times) == 1
-    torch.testing.assert_close(batch.nids[0], batch.node_event_node_ids)
-    torch.testing.assert_close(batch.times[0], batch.node_event_time)
+    torch.testing.assert_close(batch.nids[0], batch.node_x_nids)
+    torch.testing.assert_close(batch.times[0], batch.node_x_time)
 
 
 def test_bad_sample_with_non_existent_seeds(basic_sample_graph):
@@ -296,8 +296,8 @@ def test_init_basic_sampled_graph_1_hop(basic_sample_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_event_time', 'edge_event_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -372,8 +372,8 @@ def test_init_basic_sampled_graph_directed_1_hop(basic_sample_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_event_time', 'edge_event_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -453,17 +453,17 @@ def recency_buffer_graph():
     0 -> t=4 -> 5
     -- 100 edges --.
     """
-    src = [0] * 100
-    dst = list(range(1, 101))
-    edge_index = [src, dst]
+    edge_src = [0] * 100
+    edge_dst = list(range(1, 101))
+    edge_index = [edge_src, edge_dst]
     edge_index = torch.IntTensor(edge_index)
     edge_index = edge_index.transpose(0, 1)
-    edge_timestamps = torch.LongTensor(list(range(0, 100)))
+    edge_time = torch.LongTensor(list(range(0, 100)))
     edge_x = torch.Tensor(
         list(range(1, 101))
     )  # edge feat is simply summing the node IDs at two end points
     edge_x = edge_x.view(-1, 1)  # 1 feature per edge
-    data = DGData.from_raw(edge_timestamps, edge_index, edge_x)
+    data = DGData.from_raw(edge_time, edge_index, edge_x)
     return data
 
 
@@ -473,8 +473,8 @@ def test_recency_exceed_buffer(recency_buffer_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_event_time', 'edge_event_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -531,11 +531,11 @@ def two_hop_basic_graph():
     5 -> t=6 -> 2
     """
     edge_index = torch.IntTensor([[0, 1], [1, 2], [3, 2], [4, 2], [5, 0], [5, 2]])
-    edge_timestamps = torch.LongTensor([1, 2, 3, 4, 5, 6])
+    edge_time = torch.LongTensor([1, 2, 3, 4, 5, 6])
     edge_x = torch.Tensor(
         [[1], [3], [5], [6], [5], [7]]
     )  # edge feat is simply summing the node IDs at two end points
-    data = DGData.from_raw(edge_timestamps, edge_index, edge_x)
+    data = DGData.from_raw(edge_time, edge_index, edge_x)
     return data
 
 
@@ -545,8 +545,8 @@ def test_2_hop_graph(two_hop_basic_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_event_time', 'edge_event_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -633,8 +633,8 @@ def test_2_hop_directed_graph(two_hop_basic_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_event_time', 'edge_event_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -732,8 +732,8 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['edge_event_time', 'edge_event_time', 'neg_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', tgb_hook)
@@ -837,9 +837,9 @@ def test_tgb_non_time_respecting_negative_neighbor_sampling_test(
 @pytest.fixture
 def no_edge_feat_data():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
-    edge_timestamps = torch.IntTensor([1, 2, 3])
+    edge_time = torch.IntTensor([1, 2, 3])
     return DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
     )
 
@@ -851,8 +851,8 @@ def test_no_edge_feat_recency_nbr_sampler(no_edge_feat_data):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_event_time', 'edge_event_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -872,18 +872,18 @@ def test_no_edge_feat_recency_nbr_sampler(no_edge_feat_data):
 @pytest.fixture
 def node_only_data():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
-    edge_timestamps = torch.IntTensor([1, 2, 3])
+    edge_time = torch.IntTensor([1, 2, 3])
     edge_x = torch.IntTensor([[1], [2], [3]])
     node_x = torch.rand(2, 5)
-    node_timestamps = torch.IntTensor([4, 5])
-    node_ids = torch.IntTensor([5, 6])
+    node_x_time = torch.IntTensor([4, 5])
+    node_x_nids = torch.IntTensor([5, 6])
     return DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         edge_x=edge_x,
         node_x=node_x,
-        node_timestamps=node_timestamps,
-        node_ids=node_ids,
+        node_x_time=node_x_time,
+        node_x_nids=node_x_nids,
     )
 
 
@@ -894,8 +894,8 @@ def test_node_only_batch_recency_nbr_sampler(node_only_data):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_event_time', 'edge_event_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
         directed=True,
     )
     hm = HookManager(keys=['unit'])
@@ -931,8 +931,8 @@ def test_hook_nbr_mask(basic_sample_graph):
     recency_hook = RecencyNeighborHook(
         num_nbrs=n_nbrs,
         num_nodes=dg.num_nodes,
-        seed_nodes_keys=['src', 'dst'],
-        seed_times_keys=['edge_event_time', 'edge_event_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
     )
     hm = HookManager(keys=['unit'])
     hm.register('unit', recency_hook)
@@ -942,10 +942,10 @@ def test_hook_nbr_mask(basic_sample_graph):
     batch_iter = iter(loader)
     batch_1 = next(batch_iter)
     nbr_mask = batch_1.seed_node_nbr_mask
-    assert 'src' in nbr_mask
-    assert 'dst' in nbr_mask
-    assert nbr_mask['src'].shape[0] == 1
-    assert nbr_mask['dst'].shape[0] == 1
+    assert 'edge_src' in nbr_mask
+    assert 'edge_dst' in nbr_mask
+    assert nbr_mask['edge_src'].shape[0] == 1
+    assert nbr_mask['edge_dst'].shape[0] == 1
 
-    assert nbr_mask['src'] == np.array([0])
-    assert nbr_mask['dst'] == np.array([1])
+    assert nbr_mask['edge_src'] == np.array([0])
+    assert nbr_mask['edge_dst'] == np.array([1])
