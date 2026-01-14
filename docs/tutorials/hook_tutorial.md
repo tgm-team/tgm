@@ -24,14 +24,14 @@ Hooks declare the following information
 
 TGM implements several commonly used hooks. The table below summarizes them:
 
-| Hook Name                    | Type      | `requires` | `produces`                           | Description                                                                                          |
-| ---------------------------- | --------- | ---------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `NegativeEdgeSamplerHook`    | Stateless | None       | `neg`, `neg_time`                    | Generates random negatives for link prediction                                                       |
-| `TGBNegativeEdgeSamplerHook` | Stateless | None       | `neg`, `neg_time`, `neg_batch_list`  | Loads pre-computed negative edges for [TGB](https://tgb.complexdatalab.com/) datasets                |
-| `NeighborSamplerHook`        | Stateless | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Uniform sampler neighbor for a given number of hops                                                  |
-| `RecencyNeighborSamplerHook` | Stateful  | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Recency neighbor sampler for a given number of hops                                                  |
-| `PinMemoryHook`              | Stateless | None       | None                                 | Pins all `torch.Tensor` in `DGBatch` for fast CPU-GPU transfer                                       |
-| `DeduplicationHook`          | Stateful  | None       | `unique_nids`, `global_to_local`     | Computes unique node ids in `DGBatch` and a mapping from global (graph) to local (batch) coordinates |
+| Hook Name                    | Type      | `requires` | `produces`                                | Description                                                                                          |
+| ---------------------------- | --------- | ---------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `NegativeEdgeSamplerHook`    | Stateless | None       | `neg`, `neg_time`                         | Generates random negatives for link prediction                                                       |
+| `TGBNegativeEdgeSamplerHook` | Stateless | None       | `neg`, `neg_time`, `neg_batch_list`       | Loads pre-computed negative edges for [TGB](https://tgb.complexdatalab.com/) datasets                |
+| `NeighborSamplerHook`        | Stateless | None       | `nbr_nids`, `nbr_edge_time`, `nbr_edge_x` | Uniform sampler neighbor for a given number of hops                                                  |
+| `RecencyNeighborSamplerHook` | Stateful  | None       | `nbr_nids`, `nbr_edge_time`, `nbr_edge_x` | Recency neighbor sampler for a given number of hops                                                  |
+| `PinMemoryHook`              | Stateless | None       | None                                      | Pins all `torch.Tensor` in `DGBatch` for fast CPU-GPU transfer                                       |
+| `DeduplicationHook`          | Stateful  | None       | `unique_nids`, `global_to_local`          | Computes unique node ids in `DGBatch` and a mapping from global (graph) to local (batch) coordinates |
 
 ### Custom Hooks
 

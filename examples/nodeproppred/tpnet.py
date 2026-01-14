@@ -172,8 +172,8 @@ class TPNet_NodePrediction(nn.Module):
         src = batch.edge_src
         dst = batch.edge_dst
         nbr_nids = batch.nbr_nids[0]
-        nbr_times = batch.nbr_times[0]
-        nbr_feats = batch.nbr_feats[0]
+        nbr_edge_time = batch.nbr_edge_time[0]
+        nbr_edge_x = batch.nbr_edge_x[0]
         edge_idx = torch.stack((src, dst), dim=0)
         batch_size = src.shape[0]
 
@@ -182,8 +182,8 @@ class TPNet_NodePrediction(nn.Module):
             edge_idx,
             batch.edge_time,
             nbr_nids[: batch_size * 2],
-            nbr_times[: batch_size * 2],
-            nbr_feats[: batch_size * 2],
+            nbr_edge_time[: batch_size * 2],
+            nbr_edge_x[: batch_size * 2],
         )
         self._update_latest_node_embedding(batch, z_src, z_dst)
 

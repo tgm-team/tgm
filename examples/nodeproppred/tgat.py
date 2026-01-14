@@ -118,10 +118,10 @@ class TGAT(nn.Module):
                     node_feat=z[j - 1][i],
                     time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
                     nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
-                    edge_feat=batch.nbr_feats[i],
+                    edge_feat=batch.nbr_edge_x[i],
                     valid_nbr_mask=batch.nbr_nids[i] != PADDED_NODE_ID,
                     nbr_time_feat=self.time_encoder(
-                        batch.times[i][:, None] - batch.nbr_times[i]
+                        batch.seed_times[i][:, None] - batch.nbr_edge_time[i]
                     ),
                 )
                 z[j][i] = self.merge_layers[j - 1](out, z[0][i])

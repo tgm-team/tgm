@@ -111,11 +111,11 @@ def train(
             ]
         )
 
-        nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+        nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+        nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
-        z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+        z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
         inv_src = batch.global_to_local(batch.edge_src)
         inv_dst = batch.global_to_local(batch.edge_dst)
@@ -186,11 +186,11 @@ def eval(
                 batch.global_to_local(nbr_nodes[nbr_mask]),
             ]
         )
-        nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+        nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+        nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
-        z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+        z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             dst_ids = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])

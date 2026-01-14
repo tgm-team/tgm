@@ -108,8 +108,10 @@ class GraphMixerEncoder(nn.Module):
 
     def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
         # Link Encoder
-        edge_feat = batch.nbr_feats[0]
-        nbr_time_feat = self.time_encoder(batch.times[0][:, None] - batch.nbr_times[0])
+        edge_feat = batch.nbr_edge_x[0]
+        nbr_time_feat = self.time_encoder(
+            batch.seed_times[0][:, None] - batch.nbr_edge_time[0]
+        )
         z_link = self.projection_layer(torch.cat([edge_feat, nbr_time_feat], dim=-1))
         for mixer in self.mlp_mixers:
             z_link = mixer(z_link)

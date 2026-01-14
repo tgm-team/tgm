@@ -130,8 +130,8 @@ class TPNet_LinkPrediction(nn.Module):
         neg = batch.neg
         time = batch.edge_time
         nbr_nids = batch.nbr_nids[0]
-        nbr_times = batch.nbr_times[0]
-        nbr_feats = batch.nbr_feats[0]
+        nbr_edge_time = batch.nbr_edge_time[0]
+        nbr_edge_x = batch.nbr_edge_x[0]
         src_nbr_idx = batch.seed_node_nbr_mask['edge_src']
         dst_nbr_idx = batch.seed_node_nbr_mask['edge_dst']
         neg_nbr_idx = batch.seed_node_nbr_mask['neg']
@@ -146,19 +146,19 @@ class TPNet_LinkPrediction(nn.Module):
             edge_idx_pos,
             time,
             nbr_nids[pos_nbr_idx],
-            nbr_times[pos_nbr_idx],
-            nbr_feats[pos_nbr_idx],
+            nbr_edge_time[pos_nbr_idx],
+            nbr_edge_x[pos_nbr_idx],
         )
         pos_out = self.decoder(z_src_pos, z_dst_pos)
 
         neg_nbr_nids = nbr_nids[
             neg_nbr_idx
         ]  # @TODO: Assume that batch.neg doesn't have duplicated records
-        neg_nbr_times = nbr_times[neg_nbr_idx]
-        neg_nbr_feats = nbr_feats[neg_nbr_idx]
+        neg_nbr_times = nbr_edge_time[neg_nbr_idx]
+        neg_nbr_feats = nbr_edge_x[neg_nbr_idx]
         src_nbr_nids = nbr_nids[src_nbr_idx]
-        src_nbr_times = nbr_times[src_nbr_idx]
-        src_nbr_feats = nbr_feats[src_nbr_idx]
+        src_nbr_times = nbr_edge_time[src_nbr_idx]
+        src_nbr_feats = nbr_edge_x[src_nbr_idx]
 
         if edge_src.shape[0] != neg_batch_size:
             edge_src = torch.repeat_interleave(edge_src, repeats=neg_batch_size, dim=0)
@@ -178,8 +178,8 @@ class TPNet_LinkPrediction(nn.Module):
             neg = neg.repeat(pos_batch_size)
         else:
             src_nbr_nids = nbr_nids[src_nbr_idx]
-            src_nbr_times = nbr_times[src_nbr_idx]
-            src_nbr_feats = nbr_feats[src_nbr_idx]
+            src_nbr_times = nbr_edge_time[src_nbr_idx]
+            src_nbr_feats = nbr_edge_x[src_nbr_idx]
 
         edge_idx_neg = torch.stack((edge_src, neg), dim=0)
 

@@ -21,7 +21,7 @@ class NeighborSamplerHook(StatelessHook):
         num_nbrs (List[int]): Number of neighbors to sample at each hop (-1 to keep all)
         directed (bool): If true, aggregates interactions in edge_src->edge_dst direction only (default=False).
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
-        seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
+        seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed seed_times to sample for.
 
     Note:
         The order of the output tensors respect the order of seed_nodes_keys.
@@ -35,7 +35,14 @@ class NeighborSamplerHook(StatelessHook):
     """
 
     requires = {'edge_src', 'edge_dst', 'edge_time'}
-    produces = {'nids', 'nbr_nids', 'nbr_times', 'nbr_feats', 'seed_node_nbr_mask'}
+    produces = {
+        'seed_nids',
+        'seed_times',
+        'nbr_nids',
+        'nbr_edge_time',
+        'nbr_edge_x',
+        'seed_node_nbr_mask',
+    }
 
     def __init__(
         self,
@@ -61,7 +68,7 @@ class NeighborSamplerHook(StatelessHook):
         self._seed_nodes_keys = seed_nodes_keys
         self._seed_times_keys = seed_times_keys
         logger.debug(
-            'Seed nodes keys: %s, Seed times keys: %s',
+            'Seed nodes keys: %s, Seed seed_times keys: %s',
             self._seed_nodes_keys,
             self._seed_times_keys,
         )
@@ -72,16 +79,16 @@ class NeighborSamplerHook(StatelessHook):
         return self._num_nbrs
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        batch.nids, batch.times = [], []  # type: ignore
-        batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
-        batch.nbr_feats = []  # type: ignore
+        batch.seed_nids, batch.seed_times = [], []  # type: ignore
+        batch.nbr_nids, batch.nbr_edge_time = [], []  # type: ignore
+        batch.nbr_edge_x = []  # type: ignore
 
         def _append_empty_hop() -> None:
-            batch.nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
-            batch.times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+            batch.seed_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+            batch.seed_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
             batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
-            batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
-            batch.nbr_feats.append(  # type: ignore
+            batch.nbr_edge_time.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+            batch.nbr_edge_x.append(  # type: ignore
                 torch.empty(0, dg.edge_x_dim).float()  # type: ignore
             )
 
@@ -96,7 +103,7 @@ class NeighborSamplerHook(StatelessHook):
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop > 0:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
-                seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
+                seed_times = batch.nbr_edge_time[hop - 1].flatten()  # type: ignore
 
             # TODO: Storage needs to use the right device
 
@@ -107,18 +114,18 @@ class NeighborSamplerHook(StatelessHook):
                 hop,
                 seed_nodes.numel(),
             )
-            nbr_nids, nbr_times, nbr_feats = dg._storage.get_nbrs(
+            nbr_nids, nbr_edge_time, nbr_edge_x = dg._storage.get_nbrs(
                 seed_nodes,
                 num_nbrs=num_nbrs,
                 slice=DGSliceTracker(end_time=int(batch.edge_time.min()) - 1),
                 directed=self._directed,
             )
 
-            batch.nids.append(seed_nodes)  # type: ignore
-            batch.times.append(seed_times)  # type: ignore
+            batch.seed_nids.append(seed_nodes)  # type: ignore
+            batch.seed_times.append(seed_times)  # type: ignore
             batch.nbr_nids.append(nbr_nids)  # type: ignore
-            batch.nbr_times.append(nbr_times)  # type: ignore
-            batch.nbr_feats.append(nbr_feats)  # type: ignore
+            batch.nbr_edge_time.append(nbr_edge_time)  # type: ignore
+            batch.nbr_edge_x.append(nbr_edge_x)  # type: ignore
 
         batch.seed_node_nbr_mask = seed_node_nbr_mask  # type: ignore
         return batch
@@ -127,7 +134,7 @@ class NeighborSamplerHook(StatelessHook):
         self, batch: DGBatch
     ) -> Tuple[torch.Tensor, torch.Tensor, dict]:
         device = batch.edge_src.device
-        seeds, times = [], []
+        seeds, seed_times = [], []
         seed_node_mask = dict()
 
         offset = 0
@@ -180,26 +187,26 @@ class NeighborSamplerHook(StatelessHook):
                 elif name == time_attr:
                     if (tensor < 0).any():
                         raise ValueError(
-                            f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
+                            f'Seed seed_times in {name} must be >= 0, got min value: {tensor.min().item()}'
                         )
-                    times.append(time.to(device))
+                    seed_times.append(time.to(device))
 
-        if seeds and times:
-            seed_nodes, seed_times = torch.cat(seeds), torch.cat(times)
+        if seeds and seed_times:
+            seed_nodes, seed_times = torch.cat(seeds), torch.cat(seed_times)  # type: ignore
         else:
             seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
-            seed_times = torch.empty(0, dtype=torch.int64, device=device)
-        return seed_nodes, seed_times, seed_node_mask
+            seed_times = torch.empty(0, dtype=torch.int64, device=device)  # type: ignore
+        return seed_nodes, seed_times, seed_node_mask  # type: ignore
 
 
 class RecencyNeighborHook(StatefulHook):
     requires = {'edge_src', 'edge_dst', 'edge_time'}
     produces = {
-        'nids',
+        'seed_nids',
+        'seed_times',
         'nbr_nids',
-        'times',
-        'nbr_times',
-        'nbr_feats',
+        'nbr_edge_time',
+        'nbr_edge_x',
         'seed_node_nbr_mask',
     }
 
@@ -210,9 +217,9 @@ class RecencyNeighborHook(StatefulHook):
         num_nbrs (List[int]): Number of neighbors to sample at each hop (max neighbors to keep).
         directed (bool): If true, aggregates interactions in edge_src->edge_dst direction only (default=False).
                                                If not specified, defaults to batch edges: ['edge_src', 'edge_dst']
-                                               If not specified, defaults to batch times: ['time', 'time']
+                                               If not specified, defaults to batch seed_times: ['time', 'time']
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
-        seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
+        seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed seed_times to sample for.
 
     Note:
         The order of the output tensors respect the order of seed_nodes_keys.
@@ -254,7 +261,7 @@ class RecencyNeighborHook(StatefulHook):
         self._seed_nodes_keys = seed_nodes_keys
         self._seed_times_keys = seed_times_keys
         logger.debug(
-            'Seed nodes keys: %s, Seed times keys: %s',
+            'Seed nodes keys: %s, Seed seed_times keys: %s',
             self._seed_nodes_keys,
             self._seed_times_keys,
         )
@@ -287,16 +294,16 @@ class RecencyNeighborHook(StatefulHook):
         self._initialize_nbr_feats_if_needed(dg)
         self._move_queues_to_device_if_needed(dg.device)
 
-        batch.nids, batch.times = [], []  # type: ignore
-        batch.nbr_nids, batch.nbr_times = [], []  # type: ignore
-        batch.nbr_feats = []  # type: ignore
+        batch.seed_nids, batch.seed_times = [], []  # type: ignore
+        batch.nbr_nids, batch.nbr_edge_time = [], []  # type: ignore
+        batch.nbr_edge_x = []  # type: ignore
 
         def _append_empty_hop() -> None:
-            batch.nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
-            batch.times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+            batch.seed_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
+            batch.seed_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
             batch.nbr_nids.append(torch.empty(0, dtype=torch.int32))  # type: ignore
-            batch.nbr_times.append(torch.empty(0, dtype=torch.int64))  # type: ignore
-            batch.nbr_feats.append(  # type: ignore
+            batch.nbr_edge_time.append(torch.empty(0, dtype=torch.int64))  # type: ignore
+            batch.nbr_edge_x.append(  # type: ignore
                 torch.empty(0, dg.edge_x_dim).float()  # type: ignore
             )
 
@@ -310,7 +317,7 @@ class RecencyNeighborHook(StatefulHook):
         for hop, num_nbrs in enumerate(self.num_nbrs):
             if hop > 0:
                 seed_nodes = batch.nbr_nids[hop - 1].flatten()  # type: ignore
-                seed_times = batch.nbr_times[hop - 1].flatten()  # type: ignore
+                seed_times = batch.nbr_edge_time[hop - 1].flatten()  # type: ignore
 
             logger.debug(
                 'Getting last %d nbrs for hop %d with %d seed nodes',
@@ -318,15 +325,15 @@ class RecencyNeighborHook(StatefulHook):
                 hop,
                 seed_nodes.numel(),
             )
-            nbr_nids, nbr_times, nbr_feats = self._get_recency_neighbors(
+            nbr_nids, nbr_edge_time, nbr_edge_x = self._get_recency_neighbors(
                 seed_nodes, seed_times, num_nbrs
             )
 
-            batch.nids.append(seed_nodes)  # type: ignore
-            batch.times.append(seed_times)  # type: ignore
+            batch.seed_nids.append(seed_nodes)  # type: ignore
+            batch.seed_times.append(seed_times)  # type: ignore
             batch.nbr_nids.append(nbr_nids)  # type: ignore
-            batch.nbr_times.append(nbr_times)  # type: ignore
-            batch.nbr_feats.append(nbr_feats)  # type: ignore
+            batch.nbr_edge_time.append(nbr_edge_time)  # type: ignore
+            batch.nbr_edge_x.append(nbr_edge_x)  # type: ignore
 
         batch.seed_node_nbr_mask = seed_node_mask  # type: ignore
         if batch.edge_src.numel():
@@ -338,7 +345,7 @@ class RecencyNeighborHook(StatefulHook):
         self, batch: DGBatch
     ) -> Tuple[torch.Tensor, torch.Tensor, dict]:
         device = batch.edge_src.device
-        seeds, times = [], []
+        seeds, seed_times = [], []
         seed_node_mask = dict()
 
         offset = 0
@@ -389,16 +396,16 @@ class RecencyNeighborHook(StatefulHook):
                 elif name == time_attr:
                     if (tensor < 0).any():
                         raise ValueError(
-                            f'Seed times in {name} must be >= 0, got min value: {tensor.min().item()}'
+                            f'Seed seed_times in {name} must be >= 0, got min value: {tensor.min().item()}'
                         )
-                    times.append(time.to(device))
+                    seed_times.append(time.to(device))
 
-        if seeds and times:
-            seed_nodes, seed_times = torch.cat(seeds), torch.cat(times)
+        if seeds and seed_times:
+            seed_nodes, seed_times = torch.cat(seeds), torch.cat(seed_times)  # type: ignore
         else:
             seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
-            seed_times = torch.empty(0, dtype=torch.int64, device=device)
-        return seed_nodes, seed_times, seed_node_mask
+            seed_times = torch.empty(0, dtype=torch.int64, device=device)  # type: ignore
+        return seed_nodes, seed_times, seed_node_mask  # type: ignore
 
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
@@ -407,8 +414,8 @@ class RecencyNeighborHook(StatefulHook):
         B = self._max_nbrs  # buffer size
 
         nbr_nids = self._nbr_ids[node_ids]  # (N, B)
-        nbr_times = self._nbr_times[node_ids]  # (N, B)
-        nbr_feats = self._nbr_feats[node_ids]  # (N, B, edge_dim)
+        nbr_edge_time = self._nbr_times[node_ids]  # (N, B)
+        nbr_edge_x = self._nbr_feats[node_ids]  # (N, B, edge_dim)
         write_pos = self._write_pos[node_ids]  # (N,)
 
         # Unroll indices to all buffers, so that last write is at index -1
@@ -416,8 +423,8 @@ class RecencyNeighborHook(StatefulHook):
         candidate_idx = write_pos[:, None] - torch.arange(B, 0, -1, device=self._device)
         candidate_idx %= B  # (N, B) with oldest ... newest
 
-        # Read the neighbor times in that unrolled order, and get query_times mask
-        candidate_times = torch.gather(nbr_times, 1, candidate_idx)  # (N, B)
+        # Read the neighbor seed_times in that unrolled order, and get query_times mask
+        candidate_times = torch.gather(nbr_edge_time, 1, candidate_idx)  # (N, B)
         time_mask = candidate_times < query_times[:, None]  # (N, B)
         time_mask[torch.gather(nbr_nids, 1, candidate_idx) == PADDED_NODE_ID] = False
 
@@ -461,9 +468,9 @@ class RecencyNeighborHook(StatefulHook):
 
         # Gather out tensors
         out_nbrs = torch.gather(nbr_nids, 1, safe_idx)
-        out_times = torch.gather(nbr_times, 1, safe_idx)
+        out_times = torch.gather(nbr_edge_time, 1, safe_idx)
         out_feats = torch.gather(
-            nbr_feats, 1, safe_idx.unsqueeze(-1).expand(-1, -1, self._edge_x_dim)
+            nbr_edge_x, 1, safe_idx.unsqueeze(-1).expand(-1, -1, self._edge_x_dim)
         )
 
         # Overwrite invalid positions in-place
@@ -483,23 +490,27 @@ class RecencyNeighborHook(StatefulHook):
             edge_feats = batch.edge_x
 
         if self._directed:
-            node_ids, nbr_nids, times = batch.edge_src, batch.edge_dst, batch.edge_time
+            node_ids, nbr_nids, seed_times = (
+                batch.edge_src,
+                batch.edge_dst,
+                batch.edge_time,
+            )
         else:
-            # It's fine that times is out-of-order here since we sort below
+            # It's fine that seed_times is out-of-order here since we sort below
             node_ids = torch.cat([batch.edge_src, batch.edge_dst])
             nbr_nids = torch.cat([batch.edge_dst, batch.edge_src])
-            times = torch.cat([batch.edge_time, batch.edge_time])
+            seed_times = torch.cat([batch.edge_time, batch.edge_time])
             edge_feats = torch.cat([edge_feats, edge_feats])
 
         # Lexicographical sort by node id and time. Duplicate nodes will be adjacent.
         # Each nodes events will be sorted chronologically
-        max_time = times.max() + 1
-        composite_key = node_ids * max_time + times
+        max_time = seed_times.max() + 1
+        composite_key = node_ids * max_time + seed_times
         perm = torch.argsort(composite_key, stable=True)
 
         sorted_nodes = node_ids[perm]
         sorted_nbr_ids = nbr_nids[perm]
-        sorted_times = times[perm]
+        sorted_times = seed_times[perm]
         sorted_feats = edge_feats[perm]
 
         # All the tensors we need to write are properly sorted and groupbed by node.
