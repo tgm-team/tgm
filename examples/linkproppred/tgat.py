@@ -179,7 +179,7 @@ def eval(
 
     for batch in tqdm(loader):
         z = encoder(batch, static_node_x)
-        id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
+        id_map = {nid.item(): i for i, nid in enumerate(batch.seed_nids[0])}
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             dst_ids = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
             src_ids = batch.edge_src[idx].repeat(len(dst_ids))

@@ -279,7 +279,7 @@ test_dg = DGraph(test_data, device=args.device)
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.num_neighbors],  # Keep 1 slot for seed node itself
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['src', 'dst'],
+    seed_nodes_keys=['edge_src', 'edge_dst'],
     seed_times_keys=['edge_time', 'edge_time'],
 )
 
