@@ -582,7 +582,7 @@ class DGData:
             edge_time_col: Column name for edge times.
             edge_x_col: Optional edge feature columns.
             node_file_path: Optional CSV file for dynamic node features.
-            node_x_nids_col: Column name for dynamic node event ids. Required if node_file_path is specified.
+            node_x_nids_col: Column name for dynamic node event node ids. Required if node_file_path is specified.
             node_x_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
             node_x_col: Optional dynamic node feature columns.
             static_node_x_file_path: Optional CSV file for static node features.
@@ -714,7 +714,7 @@ class DGData:
             edge_time_col: Column name for edge times.
             edge_x_col: Optional edge feature columns.
             node_df: Optional DataFrame of dynamic node events.
-            node_x_nids_col: Column name for dynamic node event ids. Required if node_file_path is specified.
+            node_x_nids_col: Column name for dynamic node event node ids. Required if node_file_path is specified.
             node_x_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
             node_x_col: Optional node feature columns.
             static_node_x_df: Optional static node features DataFrame.

@@ -251,9 +251,9 @@ class HookManager:
                 'edge_src',
                 'edge_dst',
                 'edge_time',
+                'edge_type',
                 'node_x_time',
                 'node_x_nids',
-                'edge_type',
                 'node_type',
             ]
         ).union(*(h.produces for h in hooks))

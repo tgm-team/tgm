@@ -51,10 +51,10 @@ class DGData:
     Attributes:
         time_delta (TimeDeltaDG | str): Time granularity of the graph.
         time (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
-        edge_mask (Tensor): Mask of edge events within `timestamps`.
+        edge_mask (Tensor): Mask of edge events within `time`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_x (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_mask (Tensor | None): Mask of node events within `timestamps`.
+        node_mask (Tensor | None): Mask of node events within `time`.
         node_x_nids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         node_x (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
         static_node_x (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
@@ -377,7 +377,7 @@ def materialize(self, materialize_features: bool = True) -> DGBatch:
             features, node IDs/times, and edge features. Defaults to True.
 
     Returns:
-        DGBatch: A batch containing src, dst, timestamps, and optionally
+        DGBatch: A batch containing edge_src, edge_dst, edge_time, and optionally
             features from the current slice.
     """
 ```

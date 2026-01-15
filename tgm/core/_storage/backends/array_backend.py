@@ -48,8 +48,8 @@ class DGStorageArrayBackend(DGStorageBase):
             node_mask = (self._data.node_mask >= lb_idx) & (
                 self._data.node_mask < ub_idx
             )
-            node_event_nodes = self._data.node_x_nids[node_mask].unique().tolist()
-            all_nodes.update(node_event_nodes)
+            node_x_nids = self._data.node_x_nids[node_mask].unique().tolist()
+            all_nodes.update(node_x_nids)
         if not all_nodes:
             logger.debug('No events in slice: %s', slice)
         return all_nodes

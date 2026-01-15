@@ -127,7 +127,7 @@ class RecurrentGCN(torch.nn.Module):
     def forward(
         self, batch: DGBatch, node_feat: torch.tensor, h: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         h_0 = self.recurrent(node_feat, edge_index, H=h)
         z = F.relu(h_0)
         z = self.linear(z)
