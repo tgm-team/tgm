@@ -45,6 +45,10 @@ class DGStorageBase(ABC):
         """Return (node_ids, node_time) tensors for node events in the slice."""
 
     @abstractmethod
+    def get_node_labels(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor]:
+        """Return (node_ids, node_time) tensors for node labels in the slice."""
+
+    @abstractmethod
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         """Return the number of unique timestamps in the slice."""
 
@@ -55,6 +59,10 @@ class DGStorageBase(ABC):
     @abstractmethod
     def get_node_x(self, slice: DGSliceTracker) -> Optional[Tensor]:
         """Return dynamic node features as a sparse coordinate-format tensor within the slice, if any."""
+
+    @abstractmethod
+    def get_node_y(self, slice: DGSliceTracker) -> Optional[Tensor]:
+        """Return dynamic node label targets as a sparse coordinate-format tensor within the slice, if any."""
 
     @abstractmethod
     def get_edge_x(self, slice: DGSliceTracker) -> Optional[Tensor]:
@@ -75,6 +83,10 @@ class DGStorageBase(ABC):
     @abstractmethod
     def get_node_x_dim(self) -> Optional[int]:
         """Return dimension of dynamic node features, if any."""
+
+    @abstractmethod
+    def get_node_y_dim(self) -> Optional[int]:
+        """Return dimension of dynamic node labels, if any."""
 
     @abstractmethod
     def get_edge_x_dim(self) -> Optional[int]:

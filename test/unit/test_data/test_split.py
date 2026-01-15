@@ -41,9 +41,9 @@ def test_temporal_split():
     assert val.edge_mask.tolist() == [0]
     assert test.edge_mask.tolist() == [0]
 
-    assert train.node_mask is None
-    assert val.node_mask is None
-    assert test.node_mask is None
+    assert train.node_x_mask is None
+    assert val.node_x_mask is None
+    assert test.node_x_mask is None
 
     assert id(train.static_node_x) == id(data.static_node_x)
     assert id(val.static_node_x) == id(data.static_node_x)
@@ -80,8 +80,8 @@ def test_temporal_split_with_node_feats():
     assert train.edge_mask.tolist() == [0, 2]
     assert val.edge_mask.tolist() == [0, 1]
 
-    assert train.node_mask.tolist() == [1, 3]
-    assert val.node_mask.tolist() == [2]
+    assert train.node_x_mask.tolist() == [1, 3]
+    assert val.node_x_mask.tolist() == [2]
 
     assert train.node_x_nids.tolist() == [1, 2]
     assert val.node_x_nids.tolist() == [3]
@@ -153,9 +153,9 @@ def test_temporal_ratio_split():
     assert val.edge_mask.tolist() == [0]
     assert test.edge_mask.tolist() == [0]
 
-    assert train.node_mask is None
-    assert val.node_mask is None
-    assert test.node_mask is None
+    assert train.node_x_mask is None
+    assert val.node_x_mask is None
+    assert test.node_x_mask is None
 
     assert id(train.static_node_x) == id(data.static_node_x)
     assert id(val.static_node_x) == id(data.static_node_x)
@@ -188,9 +188,9 @@ def test_temporal_ratio_split_with_node_type():
     assert val.edge_mask.tolist() == [0]
     assert test.edge_mask.tolist() == [0]
 
-    assert train.node_mask is None
-    assert val.node_mask is None
-    assert test.node_mask is None
+    assert train.node_x_mask is None
+    assert val.node_x_mask is None
+    assert test.node_x_mask is None
 
     assert id(train.node_type) == id(data.node_type)
     assert id(val.node_type) == id(data.node_type)
@@ -230,8 +230,8 @@ def test_temporal_ratio_split_with_node_feats():
     assert train.edge_mask.tolist() == [0, 2]
     assert val.edge_mask.tolist() == [0, 1]
 
-    assert train.node_mask.tolist() == [1, 3]
-    assert val.node_mask.tolist() == [2]
+    assert train.node_x_mask.tolist() == [1, 3]
+    assert val.node_x_mask.tolist() == [2]
 
     assert train.node_x_nids.tolist() == [1, 2]
     assert val.node_x_nids.tolist() == [3]
@@ -383,11 +383,11 @@ def test_tgbn_split_matches(tgb_dataset_factory):
             torch.testing.assert_close(data.static_node_x, actual.static_node_x)
 
             if split == 'train':
-                torch.testing.assert_close(expected.node_mask, actual.node_mask)
+                torch.testing.assert_close(expected.node_x_mask, actual.node_x_mask)
                 torch.testing.assert_close(expected.node_x_nids, actual.node_x_nids)
                 torch.testing.assert_close(data.node_x, actual.node_x)
             else:
-                assert actual.node_mask is None
+                assert actual.node_x_mask is None
                 assert actual.node_x_nids is None
                 assert actual.node_x is None
 

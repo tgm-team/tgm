@@ -174,6 +174,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         return self._dg
 
     def _is_batch_empty(self, batch: DGBatch) -> bool:
+        # TODO: double check how we handle empty batches with node labels
         num_edge_events = batch.edge_src.numel()
         num_node_events = (
             batch.node_x_nids.numel() if batch.node_x_nids is not None else 0

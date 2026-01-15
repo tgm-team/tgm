@@ -28,7 +28,7 @@ def test_init_dg_data():
     torch.testing.assert_close(data.time, edge_time)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     assert data.edge_x is None
-    assert data.node_mask is None
+    assert data.node_x_mask is None
     assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
@@ -61,7 +61,7 @@ def test_init_dg_data_no_node_events_with_edge_features():
     torch.testing.assert_close(data.time, edge_time)
     torch.testing.assert_close(data.edge_x, edge_x)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
-    assert data.node_mask is None
+    assert data.node_x_mask is None
     assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
@@ -81,7 +81,7 @@ def test_init_dg_data_node_events():
     torch.testing.assert_close(data.time, torch.LongTensor([1, 5, 6, 7, 8]))
     torch.testing.assert_close(data.edge_x, edge_x)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
-    torch.testing.assert_close(data.node_mask, torch.IntTensor([2, 3, 4]))
+    torch.testing.assert_close(data.node_x_mask, torch.IntTensor([2, 3, 4]))
     torch.testing.assert_close(data.node_x_nids, node_x_nids)
     assert data.node_x is None
     assert data.static_node_x is None
@@ -106,13 +106,13 @@ def test_init_dg_data_node_events_and_node_features():
         node_x_time,
         node_x_nids,
         node_x,
-        static_node_x,
+        static_node_x=static_node_x,
     )
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, torch.LongTensor([1, 5, 6, 7, 8]))
     torch.testing.assert_close(data.edge_x, edge_x)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
-    torch.testing.assert_close(data.node_mask, torch.IntTensor([2, 3, 4]))
+    torch.testing.assert_close(data.node_x_mask, torch.IntTensor([2, 3, 4]))
     torch.testing.assert_close(data.node_x_nids, node_x_nids)
     torch.testing.assert_close(data.node_x, node_x)
     torch.testing.assert_close(data.static_node_x, static_node_x)
@@ -134,7 +134,7 @@ def test_init_dg_data_sort_required():
         node_x_time,
         node_x_nids,
         node_x,
-        static_node_x,
+        static_node_x=static_node_x,
     )
 
     exp_edge_index = torch.IntTensor([[10, 20], [2, 3]])
@@ -152,7 +152,7 @@ def test_init_dg_data_sort_required():
     torch.testing.assert_close(data.edge_x, exp_edge_x)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(
-        data.node_mask,
+        data.node_x_mask,
         torch.IntTensor(
             [2, 3, 4],
         ),
@@ -454,7 +454,13 @@ def test_init_dg_data_bad_args_bad_static_node_feats():
 
     with pytest.raises(TypeError):
         _ = DGData.from_raw(
-            edge_time, edge_index, None, node_x_time, node_x_nids, None, 'foo'
+            edge_time,
+            edge_index,
+            None,
+            node_x_time,
+            node_x_nids,
+            None,
+            static_node_x='foo',
         )
 
     with pytest.raises(ValueError):
@@ -465,7 +471,7 @@ def test_init_dg_data_bad_args_bad_static_node_feats():
             node_x_time,
             node_x_nids,
             None,
-            torch.rand(20, 11),  # should be [21, ...]
+            static_node_x=torch.rand(20, 11),  # should be [21, ...]
         )
 
     # Num nodes = 21
@@ -480,7 +486,7 @@ def test_init_dg_data_bad_args_bad_static_node_feats():
             None,
             None,
             None,
-            torch.rand(20, 11),  # should be [21, ...]
+            static_node_x=torch.rand(20, 11),  # should be [21, ...]
         )
 
     # Num nodes = 101
@@ -497,7 +503,7 @@ def test_init_dg_data_bad_args_bad_static_node_feats():
             None,
             None,
             None,
-            torch.rand(20, 11),  # should be [101, ...]
+            static_node_x=torch.rand(20, 11),  # should be [101, ...]
         )
 
 
@@ -1365,7 +1371,7 @@ def test_discretize_reduce_op_first():
     torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
     torch.testing.assert_close(coarse_data.node_type, exp_node_type)
 
-    assert coarse_data.node_mask is None
+    assert coarse_data.node_x_mask is None
     assert coarse_data.node_x_nids is None
     assert coarse_data.node_x is None
 
@@ -1388,7 +1394,7 @@ def test_discretize_with_node_events_reduce_op_first():
         node_x_time,
         node_x_nids,
         node_x,
-        static_node_x,
+        static_node_x=static_node_x,
         time_delta='m',
         edge_type=edge_type,
         node_type=node_type,
@@ -1427,7 +1433,7 @@ def test_discretize_with_node_events_reduce_op_first():
     torch.testing.assert_close(coarse_data.edge_x, exp_edge_x)
     torch.testing.assert_close(coarse_data.static_node_x, exp_static_node_feats)
 
-    torch.testing.assert_close(coarse_data.node_mask, exp_node_mask)
+    torch.testing.assert_close(coarse_data.node_x_mask, exp_node_mask)
     torch.testing.assert_close(coarse_data.node_x_nids, exp_node_ids)
     torch.testing.assert_close(coarse_data.node_x, exp_node_x)
     torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
@@ -1591,7 +1597,7 @@ def test_init_edge_type():
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     assert data.edge_x is None
-    assert data.node_mask is None
+    assert data.node_x_mask is None
     assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
@@ -1664,7 +1670,7 @@ def test_init_node_type():
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.node_type, node_type)
     assert data.edge_x is None
-    assert data.node_mask is None
+    assert data.node_x_mask is None
     assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
@@ -1733,7 +1739,7 @@ def test_init_edge_node_types():
     torch.testing.assert_close(data.edge_type, edge_type)
     torch.testing.assert_close(data.node_type, node_type)
     assert data.edge_x is None
-    assert data.node_mask is None
+    assert data.node_x_mask is None
     assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
@@ -1759,7 +1765,7 @@ def test_init_node_edge_types_with_edge_features():
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     torch.testing.assert_close(data.node_type, node_type)
-    assert data.node_mask is None
+    assert data.node_x_mask is None
     assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
@@ -1785,7 +1791,7 @@ def test_init_node_edge_types_with_node_features():
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     torch.testing.assert_close(data.node_type, node_type)
-    assert data.node_mask is None
+    assert data.node_x_mask is None
     assert data.node_x_nids is None
     assert data.node_x is None
     assert data.edge_x is None

@@ -35,13 +35,16 @@ class DGData:
 
     Attributes:
         time_delta (TimeDeltaDG | str): Time granularity of the graph.
-        time (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events].
+        time (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events + num_node_labels].
         edge_mask (Tensor): Indices of edge events within `time`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_x (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_mask (Tensor | None): Indices of node events within `time`.
+        node_x_mask (Tensor | None): Indices of node events within `time`.
         node_x_nids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         node_x (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
+        node_y_mask (Tensor | None): Indices of node labels within `time`.
+        node_y_nids (Tensor | None): Node IDs corresponding to node labels [num_node_labels].
+        node_y (Tensor | None): Node features over time [num_node_labels, D_node_dynamic].
         static_node_x (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
         edge_type (Tensor | None) : Type of relation of each edge event in edge_index [num_edge_events].
         node_type (Tensor | None) : Type of each node [num_nodes].
@@ -65,9 +68,13 @@ class DGData:
     edge_index: Tensor  # [num_edge_events, 2]
     edge_x: Tensor | None = None  # [num_edge_events, D_edge]
 
-    node_mask: Tensor | None = None  # [num_node_events]
+    node_x_mask: Tensor | None = None  # [num_node_events]
     node_x_nids: Tensor | None = None  # [num_node_events]
     node_x: Tensor | None = None  # [num_node_events, D_node_dynamic]
+
+    node_y_mask: Tensor | None = None  # [num_node_labels]
+    node_y_nids: Tensor | None = None  # [num_node_labels]
+    node_y: Tensor | None = None  # [num_node_labels, D_node_dynamic]
 
     static_node_x: Tensor | None = None  # [num_nodes, D_node_static]
     edge_type: Tensor | None = None  # [num_edge_events]
@@ -174,17 +181,17 @@ class DGData:
 
         # Validate node mask
         num_node_events = 0
-        if self.node_mask is not None:
-            _assert_is_tensor(self.node_mask, 'node_mask')
-            _assert_tensor_is_integral(self.node_mask, 'node_mask')
+        if self.node_x_mask is not None:
+            _assert_is_tensor(self.node_x_mask, 'node_x_mask')
+            _assert_tensor_is_integral(self.node_x_mask, 'node_x_mask')
 
             # Safe downcast since we ensured len(time) fits in int32
-            self.node_mask = self.node_mask.int()
+            self.node_x_mask = self.node_x_mask.int()
 
-            num_node_events = self.node_mask.shape[0]
+            num_node_events = self.node_x_mask.shape[0]
             if num_node_events == 0:
                 raise ValueError(
-                    'node_mask is an empty tensor, please double-check your inputs'
+                    'node_x_mask is an empty tensor, please double-check your inputs'
                 )
 
             # Validate node ids
@@ -222,11 +229,66 @@ class DGData:
                     )
                 self.node_x = _maybe_cast_float_tensor(self.node_x, 'node_x')
 
+        # Validate node labels
+        num_node_labels = 0
+        if self.node_y_mask is not None:
+            _assert_is_tensor(self.node_y_mask, 'node_y_mask')
+            _assert_tensor_is_integral(self.node_y_mask, 'node_y_mask')
+
+            # Safe downcast since we ensured len(time) fits in int32
+            self.node_y_mask = self.node_y_mask.int()
+
+            num_node_labels = self.node_y_mask.shape[0]
+            if num_node_labels == 0:
+                raise ValueError(
+                    'node_y_mask is an empty tensor, please double-check your inputs'
+                )
+
+            # Validate node ids
+            _assert_is_tensor(self.node_y_nids, 'node_y_nids')
+            _assert_tensor_is_integral(self.node_y_nids, 'node_y_nids')  # type: ignore
+            if (
+                self.node_y_nids.ndim != 1  # type: ignore
+                or self.node_y_nids.shape[0] != num_node_labels  # type: ignore
+            ):
+                raise ValueError(
+                    'node_y_nids must have shape [num_node_labels], ',
+                    f'got {num_node_labels} node labels and shape {self.node_y_nids.shape}',  # type: ignore
+                )
+            if torch.any(self.node_y_nids == PADDED_NODE_ID):  # type: ignore
+                raise InvalidNodeIDError(
+                    f'Node labels contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
+                )
+            if not torch.all(self.node_y_nids < max_int32_capacity):  # type: ignore
+                raise InvalidNodeIDError(
+                    f'Node labels contains node ids that exceed the int32 limit ({max_int32_capacity}). '
+                    'TGM does not yet support graphs this large.'
+                )
+            self.node_y_nids = _maybe_cast_integral_tensor(
+                self.node_y_nids,  # type: ignore
+                'node_y_nids',
+            )
+
+            # Validate node label features (could be None)
+            if self.node_y is not None:
+                _assert_is_tensor(self.node_y, 'node_y')
+                if self.node_y.ndim != 2 or self.node_y.shape[0] != num_node_labels:
+                    raise ValueError(
+                        'Dynamic node labels (node_y) must have shape [num_node_labels, D_node_labels], '
+                        f'got {num_node_labels} node events and shape {self.node_y.shape}'
+                    )
+                self.node_y = _maybe_cast_float_tensor(self.node_y, 'node_y')
+
         # Validate static node features
         num_nodes = torch.max(self.edge_index).item() + 1  # 0-indexed
         if self.node_x_nids is not None:
             num_nodes = max(
                 num_nodes, torch.max(self.node_x_nids).item() + 1
+            )  # 0-indexed
+
+        if self.node_y_nids is not None:
+            num_nodes = max(
+                num_nodes, torch.max(self.node_y_nids).item() + 1
             )  # 0-indexed
 
         if self.static_node_x is not None:
@@ -270,10 +332,13 @@ class DGData:
             _maybe_cast_integral_tensor(self.node_type, 'node_type')
 
         # Ensure timestamps match number of global events
-        if self.time.ndim != 1 or self.time.shape[0] != num_edges + num_node_events:
+        if (
+            self.time.ndim != 1
+            or self.time.shape[0] != num_edges + num_node_events + num_node_labels
+        ):
             raise ValueError(
-                'timestamps must have shape [num_edges + num_node_events], '
-                f'got {num_edges} edges, {num_node_events} node_events, shape: {self.time.shape}. '
+                'timestamps must have shape [num_edges + num_node_events + num_node_labels], '
+                f'got {num_edges} edges, {num_node_events} node_events, {num_node_labels} node labels, shape: {self.time.shape}. '
                 'Please double-check the edge and node timestamps you provided. If this is not resolved '
                 'raise an issue and provide instructions on how to reproduce your the error'
             )
@@ -293,8 +358,8 @@ class DGData:
 
             # Update global event indices
             self.edge_mask = inverse_sort_idx[self.edge_mask]
-            if self.node_mask is not None:
-                self.node_mask = inverse_sort_idx[self.node_mask]
+            if self.node_x_mask is not None:
+                self.node_x_mask = inverse_sort_idx[self.node_x_mask]
 
             # Reorder edge-specific data
             edge_order = torch.argsort(self.edge_mask)
@@ -304,12 +369,20 @@ class DGData:
                 self.edge_x = self.edge_x[edge_order]
 
             # Reorder node-specific data
-            if self.node_mask is not None:
-                node_order = torch.argsort(self.node_mask)
-                self.node_mask = self.node_mask[node_order]
+            if self.node_x_mask is not None:
+                node_order = torch.argsort(self.node_x_mask)
+                self.node_x_mask = self.node_x_mask[node_order]
                 self.node_x_nids = self.node_x_nids[node_order]  # type: ignore
                 if self.node_x is not None:
                     self.node_x = self.node_x[node_order]
+
+            # Reorder node-label data
+            if self.node_y_mask is not None:
+                node_order = torch.argsort(self.node_y_mask)
+                self.node_y_mask = self.node_y_mask[node_order]
+                self.node_y_nids = self.node_y_nids[node_order]  # type: ignore
+                if self.node_y is not None:
+                    self.node_y = self.node_y[node_order]
 
     def split(self, strategy: SplitStrategy | None = None) -> Tuple[DGData, ...]:
         """Split the dataset according to a strategy.
@@ -430,16 +503,29 @@ class DGData:
 
         # Node events
         node_x_time, node_x_nids, node_x = None, None, None
-        if self.node_mask is not None:
-            node_mask = _get_keep_indices(
-                self.node_mask,
+        if self.node_x_mask is not None:
+            node_x_mask = _get_keep_indices(
+                self.node_x_mask,
                 self.node_x_nids,  # type: ignore
             )
-            node_x_time = buckets[self.node_mask][node_mask]
-            node_x_nids = self.node_x_nids[node_mask]  # type: ignore
+            node_x_time = buckets[self.node_x_mask][node_x_mask]
+            node_x_nids = self.node_x_nids[node_x_mask]  # type: ignore
             node_x = None
             if self.node_x is not None:
-                node_x = self.node_x[node_mask]
+                node_x = self.node_x[node_x_mask]
+
+        # Node labels
+        node_y_time, node_y_nids, node_y = None, None, None
+        if self.node_y_mask is not None:
+            node_y_mask = _get_keep_indices(
+                self.node_y_mask,
+                self.node_y_nids,  # type: ignore
+            )
+            node_y_time = buckets[self.node_x_mask][node_y_mask]
+            node_y_nids = self.node_y_nids[node_y_mask]  # type: ignore
+            node_y = None
+            if self.node_y is not None:
+                node_y = self.node_y[node_y_mask]
 
         # Need a deep copy
         static_node_x = None
@@ -460,6 +546,9 @@ class DGData:
             node_x_time=node_x_time,
             node_x_nids=node_x_nids,
             node_x=node_x,
+            node_y_time=node_y_time,
+            node_y_nids=node_y_nids,
+            node_y=node_y,
             static_node_x=static_node_x,
             edge_type=edge_type,
             node_type=node_type,
@@ -487,6 +576,8 @@ class DGData:
 
         if self.node_x_nids is not None:
             max_id = max(max_id, int(self.node_x_nids.max()))
+        if self.node_y_nids is not None:
+            max_id = max(max_id, int(self.node_y_nids.max()))
 
         return max_id + 1
 
@@ -499,6 +590,9 @@ class DGData:
         node_x_time: Tensor | None = None,
         node_x_nids: Tensor | None = None,
         node_x: Tensor | None = None,
+        node_y_time: Tensor | None = None,
+        node_y_nids: Tensor | None = None,
+        node_y: Tensor | None = None,
         static_node_x: Tensor | None = None,
         time_delta: TimeDeltaDG | str = 'r',
         edge_type: Tensor | None = None,
@@ -521,6 +615,9 @@ class DGData:
             node_x_time=node_x_time,
             node_x_nids=node_x_nids,
             node_x=node_x,
+            node_y_time=node_y_time,
+            node_y_nids=node_y_nids,
+            node_y=node_y,
             static_node_x=static_node_x,
             time_delta=time_delta,
             edge_type=edge_type,
@@ -532,12 +629,22 @@ class DGData:
         if node_x_time is not None:
             timestamps = torch.cat([timestamps, node_x_time])
             event_types = torch.cat([event_types, torch.ones_like(node_x_time)])
+        if node_y_time is not None:
+            timestamps = torch.cat([timestamps, node_y_time])
+            event_types = torch.cat(
+                [event_types, torch.full_like(node_y_time, fill_value=2)]
+            )
 
         # Compute event masks
         edge_mask = (event_types == 0).nonzero(as_tuple=True)[0]
-        node_mask = (
+        node_x_mask = (
             (event_types == 1).nonzero(as_tuple=True)[0]
             if node_x_time is not None
+            else None
+        )
+        node_y_mask = (
+            (event_types == 2).nonzero(as_tuple=True)[0]
+            if node_y_time is not None
             else None
         )
 
@@ -547,9 +654,12 @@ class DGData:
             edge_mask=edge_mask,
             edge_index=edge_index,
             edge_x=edge_x,
-            node_mask=node_mask,
+            node_x_mask=node_x_mask,
             node_x_nids=node_x_nids,
             node_x=node_x,
+            node_y_mask=node_y_mask,
+            node_y_nids=node_y_nids,
+            node_y=node_y,
             static_node_x=static_node_x,
             edge_type=edge_type,
             node_type=node_type,
@@ -567,6 +677,9 @@ class DGData:
         node_x_nids_col: str | None = None,
         node_x_time_col: str | None = None,
         node_x_col: List[str] | None = None,
+        node_y_nids_col: str | None = None,
+        node_y_time_col: str | None = None,
+        node_y_col: List[str] | None = None,
         static_node_x_file_path: str | pathlib.Path | None = None,
         static_node_x_col: List[str] | None = None,
         time_delta: TimeDeltaDG | str = 'r',
@@ -585,6 +698,9 @@ class DGData:
             node_x_nids_col: Column name for dynamic node event node ids. Required if node_file_path is specified.
             node_x_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
             node_x_col: Optional dynamic node feature columns.
+            node_y_nids_col: Column name for dynamic node label node ids.
+            node_y_time_col: Column name for dynamic node label times.
+            node_y_col: Optional dynamic node label feature columns.
             static_node_x_file_path: Optional CSV file for static node features.
             static_node_x_col: Required if static_node_x_file_path is specified.
             time_delta: Time granularity.
@@ -630,6 +746,8 @@ class DGData:
 
         # Read in dynamic node data
         node_x_time, node_x_nids, node_x = None, None, None
+        node_y_time, node_y_nids, node_y = None, None, None
+        # TODO: read the node events
         if node_file_path is not None:
             if node_x_nids_col is None or node_x_time_col is None:
                 raise ValueError(
@@ -682,6 +800,9 @@ class DGData:
             node_x_time=node_x_time,
             node_x_nids=node_x_nids,
             node_x=node_x,
+            node_y_time=node_y_time,
+            node_y_nids=node_y_nids,
+            node_y=node_y,
             static_node_x=static_node_x,
             node_type=node_type,
             edge_type=edge_type,
@@ -699,6 +820,9 @@ class DGData:
         node_x_nids_col: str | None = None,
         node_x_time_col: str | None = None,
         node_x_col: List[str] | None = None,
+        node_y_nids_col: str | None = None,
+        node_y_time_col: str | None = None,
+        node_y_col: List[str] | None = None,
         static_node_x_df: 'pandas.DataFrame' | None = None,  # type: ignore
         static_node_x_col: List[str] | None = None,
         time_delta: TimeDeltaDG | str = 'r',
@@ -717,6 +841,9 @@ class DGData:
             node_x_nids_col: Column name for dynamic node event node ids. Required if node_file_path is specified.
             node_x_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
             node_x_col: Optional node feature columns.
+            node_y_nids_col: Column name for dynamic node label node ids.
+            node_y_time_col: Column name for dynamic node label times.
+            node_y_col: Optional node label feature columns.
             static_node_x_df: Optional static node features DataFrame.
             static_node_x_col: Required if static_node_x_df is specified.
             time_delta: Time granularity.
@@ -752,6 +879,8 @@ class DGData:
 
         # Read in dynamic node data
         node_x_time, node_x_nids, node_x = None, None, None
+        node_y_time, node_y_nids, node_y = None, None, None
+        # TODO: read node labels in
         if node_df is not None:
             if node_x_nids_col is None or node_x_time_col is None:
                 raise ValueError(
@@ -787,6 +916,9 @@ class DGData:
             node_x_time=node_x_time,
             node_x_nids=node_x_nids,
             node_x=node_x,
+            node_y_time=node_y_time,
+            node_y_nids=node_y_nids,
+            node_y=node_y,
             static_node_x=static_node_x,
             edge_type=edge_type,
             node_type=node_type,

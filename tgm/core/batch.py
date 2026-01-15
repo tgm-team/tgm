@@ -25,6 +25,9 @@ class DGBatch:
         node_x (Tensor | None, optional): Dynamic node features for nodes in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
         node_x_time (Tensor | None, optional): Timestamps corresponding to dynamic node features.
         node_x_nids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
+        node_y (Tensor | None, optional): Dynamic node labels for nodes in the batch. Tensor of shape `(T x V x d_node_labels)`.
+        node_y_time (Tensor | None, optional): Timestamps corresponding to dynamic node labels.
+        node_y_nids (Tensor | None, optional): Node IDs corresponding to dynamic node labels.
     """
 
     edge_src: Tensor
@@ -36,6 +39,10 @@ class DGBatch:
     node_x_time: Optional[Tensor] = None
     node_x_nids: Optional[Tensor] = None
     node_x: Optional[Tensor] = None
+
+    node_y_time: Optional[Tensor] = None
+    node_y_nids: Optional[Tensor] = None
+    node_y: Optional[Tensor] = None
 
     def __str__(self) -> str:
         def _get_description(object: Any) -> str:

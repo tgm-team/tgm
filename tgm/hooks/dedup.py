@@ -34,6 +34,8 @@ class DeduplicationHook(StatelessHook):
             batch.node_x_nids.to(batch.edge_src.device)
         ) if batch.node_x_nids is not None else None
 
+        # TODO: Do we consider node label ids
+
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)
 

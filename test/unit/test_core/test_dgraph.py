@@ -25,7 +25,7 @@ def data():
         node_timestamps,
         node_ids,
         node_x,
-        static_node_x,
+        static_node_x=static_node_x,
         edge_type=edge_type,
         node_type=node_type,
     )
@@ -47,7 +47,7 @@ def unorder_data():
         node_timestamps,
         node_ids,
         node_x,
-        static_node_x,
+        static_node_x=static_node_x,
     )
     return data
 

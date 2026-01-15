@@ -36,6 +36,7 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         self._move_to_device_if_needed(dg.device)  # No-op after first batch
 
+        # TODO: do we consider node labels
         if batch.node_x_nids is not None:
             batch_nodes = batch.node_x_nids
         else:

@@ -254,6 +254,8 @@ class HookManager:
                 'edge_type',
                 'node_x_time',
                 'node_x_nids',
+                'node_y_time',
+                'node_y_nids',
                 'node_type',
             ]
         ).union(*(h.produces for h in hooks))
