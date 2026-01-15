@@ -124,7 +124,7 @@ def load_data(dataset_str: str) -> Tuple[DGData, TemporalRatioSplit | None]:
 
 
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
-    return snapshot.src.shape[0]
+    return snapshot.edge_src.shape[0]
 
 
 def node_count(snapshot: DGBatch):  # return number of nodes of current snapshot
@@ -177,7 +177,7 @@ class GCNEncoder(torch.nn.Module):
             bn.reset_parameters()
 
     def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         x = node_feat
         for i, conv in enumerate(self.convs[:-1]):
             x = conv(x, edge_index)
@@ -208,7 +208,7 @@ def train(
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             opt.zero_grad()
             z = encoder(batch, static_node_x)
-            z_node = z[torch.cat([batch.src, batch.dst])]
+            z_node = z[torch.cat([batch.edge_src, batch.edge_dst])]
             pred = decoder(z_node)
 
             loss = F.binary_cross_entropy_with_logits(
@@ -244,7 +244,7 @@ def eval(
     for i, batch in enumerate(tqdm(loader)):
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             z = encoder(batch, static_node_x)
-            z_node = z[torch.cat([batch.src, batch.dst])]
+            z_node = z[torch.cat([batch.edge_src, batch.edge_dst])]
             y_pred[i] = decoder(z_node).sigmoid()
 
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)

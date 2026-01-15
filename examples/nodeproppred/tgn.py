@@ -72,15 +72,15 @@ def train(
     memory.reset_state()
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_x
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_x_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_ids.repeat_interleave(num_nbrs),
+                    batch.node_x_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -90,13 +90,13 @@ def train(
                 ]
             ).to(dtype=torch.int64)
 
-            nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-            nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+            nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+            nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
             z, last_update = memory(batch.unique_nids)
-            z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+            z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.global_to_local(batch.node_x_nids)
             y_pred = decoder(z[inv_src])
             loss = F.cross_entropy(y_pred, y_labels)
             loss.backward()
@@ -112,9 +112,9 @@ def train(
             perf_list.append(perf)
 
         # Update memory with ground-truth state.
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
         memory.detach()
 
@@ -137,15 +137,15 @@ def eval(
     perf_list = []
 
     for batch in tqdm(loader):
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_x
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_x_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_ids.repeat_interleave(num_nbrs),
+                    batch.node_x_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -155,13 +155,13 @@ def eval(
                 ]
             ).to(dtype=torch.int64)
 
-            nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-            nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+            nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+            nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
             z, last_update = memory(batch.unique_nids)
-            z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+            z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.global_to_local(batch.node_x_nids)
             y_pred = decoder(z[inv_src])
 
             input_dict = {
@@ -172,9 +172,9 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
         # Update memory with ground-truth state.
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
 
     return float(np.mean(perf_list))
@@ -200,8 +200,8 @@ num_classes = train_dg.node_x_dim
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['node_ids'],
-    seed_times_keys=['node_times'],
+    seed_nodes_keys=['node_x_nids'],
+    seed_times_keys=['node_x_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])

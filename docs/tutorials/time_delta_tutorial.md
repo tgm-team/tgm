@@ -138,7 +138,7 @@ This is useful for tuning dataset granularity (e.g. converting from continuous t
 ```python
 dg_data_second_wise = DGData.from_raw(
     time_delta="s",
-    edge_timestamps=torch.tensor([15, 30, 45, 60]),
+    edge_time=torch.tensor([15, 30, 45, 60]),
     edge_index=torch.tensor([[0, 1], [2, 3], [0, 1], [0, 1]),
     edge_x=torch.tensor([[100, 200, 300, 400]]),
 )
@@ -150,7 +150,7 @@ dg_data_minute_wise = dg_data_second_wise.discretize(time_delta="m", reduce_op="
 # after grouping to minute-wise buckets (minute 0). In this case, we keep the first event (edge_x 100)
 # and drop the second event (edge_x 400).
 print(dg_data.time_delta) # TimeDeltaDG("m")
-print(dg_data.edge_timestamps) # torch.tensor([0, 0, 1])
+print(dg_data.edge_time) # torch.tensor([0, 0, 1])
 print(dg_data.edge_index) # torch.tensor([[0, 1], [2, 3], [0, 1])
 print(dg_data.edge_x) # torch.tensor([[[100, 200, 400]])
 ```

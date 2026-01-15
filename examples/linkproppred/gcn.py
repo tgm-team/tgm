@@ -77,7 +77,7 @@ class GCNEncoder(torch.nn.Module):
             bn.reset_parameters()
 
     def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         x = node_feat
         for i, conv in enumerate(self.convs[:-1]):
             x = conv(x, edge_index)
@@ -111,17 +111,19 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        pos_out = decoder(z[batch.src], z[batch.dst])
-        neg_out = decoder(z[batch.src], z[batch.neg])
+        pos_out = decoder(z[batch.edge_src], z[batch.edge_dst])
+        neg_out = decoder(z[batch.edge_src], z[batch.neg])
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
-        total_loss += float(loss) / batch.src.shape[0]
+        total_loss += float(loss) / batch.edge_src.shape[0]
 
         # update the model if the prediction batch has moved to next snapshot.
-        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+        while (
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+        ):
             try:
                 snapshot_batch = next(snapshots_iterator)
                 z = encoder(snapshot_batch, static_node_x)
@@ -155,8 +157,8 @@ def eval(
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
-            query_src = batch.src[idx].repeat(len(neg_batch) + 1)
-            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            query_src = batch.edge_src[idx].repeat(len(neg_batch) + 1)
+            query_dst = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
 
             y_pred = decoder(z[query_src], z[query_dst]).sigmoid()
             input_dict = {
@@ -167,7 +169,9 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # update the model if the prediction batch has moved to next snapshot.
-        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+        while (
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+        ):
             try:
                 snapshot_batch = next(snapshots_iterator)
                 z = encoder(snapshot_batch, static_node_x)

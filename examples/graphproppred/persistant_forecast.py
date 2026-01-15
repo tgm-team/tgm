@@ -105,7 +105,7 @@ def load_data(dataset_str: str) -> Tuple[DGData, TemporalRatioSplit | None]:
 
 
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
-    return snapshot.src.shape[0]
+    return snapshot.edge_src.shape[0]
 
 
 def node_count(snapshot: DGBatch):  # return number of nodes of current snapshot

@@ -48,8 +48,8 @@ class DGStorageArrayBackend(DGStorageBase):
             node_mask = (self._data.node_mask >= lb_idx) & (
                 self._data.node_mask < ub_idx
             )
-            node_event_nodes = self._data.node_ids[node_mask].unique().tolist()
-            all_nodes.update(node_event_nodes)
+            node_x_nids = self._data.node_x_nids[node_mask].unique().tolist()
+            all_nodes.update(node_x_nids)
         if not all_nodes:
             logger.debug('No events in slice: %s', slice)
         return all_nodes
@@ -70,12 +70,12 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_node_events(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor]:
         lb_idx, ub_idx = self._binary_search(slice)
         node_mask = (self._data.node_mask >= lb_idx) & (self._data.node_mask < ub_idx)
-        node_ids = self._data.node_ids[node_mask]
+        node_x_nids = self._data.node_x_nids[node_mask]
         time = self._data.time[self._data.node_mask[node_mask]]
 
-        if not node_ids.numel():
+        if not node_x_nids.numel():
             logger.debug('No node events in slice: %s', slice)
-        return node_ids, time
+        return node_x_nids, time
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         lb_idx, ub_idx = self._binary_search(slice)
@@ -160,7 +160,7 @@ class DGStorageArrayBackend(DGStorageBase):
         if self._data.node_x is None:
             return None
         assert self._data.node_mask is not None  # for mypy
-        assert self._data.node_ids is not None  # for mypy
+        assert self._data.node_x_nids is not None  # for mypy
 
         lb_idx, ub_idx = self._binary_search(slice)
         node_mask = (self._data.node_mask >= lb_idx) & (self._data.node_mask < ub_idx)
@@ -169,7 +169,7 @@ class DGStorageArrayBackend(DGStorageBase):
             return None
 
         time = self._data.time[self._data.node_mask[node_mask]]
-        nodes = self._data.node_ids[node_mask]
+        nodes = self._data.node_x_nids[node_mask]
         indices = torch.stack([time, nodes], dim=0)
         values = self._data.node_x[node_mask]
 

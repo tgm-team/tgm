@@ -20,7 +20,7 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
         ValueError: If the num_nodes list is negative.
     """
 
-    requires = {'src', 'dst'}
+    requires = {'edge_src', 'edge_dst'}
     produces = {'seen_nodes', 'batch_nodes_mask'}
 
     def __init__(self, num_nodes: int) -> None:
@@ -36,13 +36,13 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         self._move_to_device_if_needed(dg.device)  # No-op after first batch
 
-        if batch.node_ids is not None:
-            batch_nodes = batch.node_ids
+        if batch.node_x_nids is not None:
+            batch_nodes = batch.node_x_nids
         else:
             logger.debug('No node event found in the batch')
             batch_nodes = torch.empty(0, device=self._device, dtype=torch.int)
 
-        edge_event_nodes = torch.unique(torch.cat([batch.src, batch.dst]))
+        edge_event_nodes = torch.unique(torch.cat([batch.edge_src, batch.edge_dst]))
 
         self._seen_mask[edge_event_nodes] = True
         previous_seen = self._seen_mask[batch_nodes]

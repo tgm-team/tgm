@@ -38,7 +38,13 @@ class NodeAnalyticsHook(StatefulHook):
             - new_edge_count: Number of new edges in the batch, that is not seen in previous batches.
     """
 
-    requires = {'src', 'dst', 'time', 'node_times', 'node_ids'}
+    requires = {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'node_x_time',
+        'node_x_nids',
+    }
     produces = {'node_stats', 'node_macro_stats', 'edge_stats'}
 
     def __init__(self, tracked_nodes: Tensor, num_nodes: int) -> None:
@@ -71,11 +77,11 @@ class NodeAnalyticsHook(StatefulHook):
 
     def _compute_node_degrees(self, batch: DGBatch, nodes: Tensor) -> Dict[int, int]:
         """Compute degree for each node in the given set."""
-        if batch.src is None or batch.dst is None:
+        if batch.edge_src is None or batch.edge_dst is None:
             return {int(n.item()): 0 for n in nodes}
 
-        # Concatenate src and dst to count all edge connections
-        edge_nodes = torch.cat([batch.src, batch.dst], dim=0)
+        # Concatenate edge_src and edge_dst to count all edge connections
+        edge_nodes = torch.cat([batch.edge_src, batch.edge_dst], dim=0)
 
         # Vectorized degree computation
         unique_nodes, inv = torch.unique(edge_nodes, return_inverse=True)
@@ -92,15 +98,23 @@ class NodeAnalyticsHook(StatefulHook):
         nodes_set = set(int(n) for n in nodes_u)
         neighbors: Dict[int, Set[int]] = {int(n): set() for n in nodes_set}
 
-        if batch.src is None or batch.dst is None:
+        if batch.edge_src is None or batch.edge_dst is None:
             return neighbors
 
         # Convert to numpy arrays for faster iteration
-        src_np = batch.src.cpu().numpy() if batch.src.is_cuda else batch.src.numpy()
-        dst_np = batch.dst.cpu().numpy() if batch.dst.is_cuda else batch.dst.numpy()
+        src_np = (
+            batch.edge_src.cpu().numpy()
+            if batch.edge_src.is_cuda
+            else batch.edge_src.numpy()
+        )
+        dst_np = (
+            batch.edge_dst.cpu().numpy()
+            if batch.edge_dst.is_cuda
+            else batch.edge_dst.numpy()
+        )
 
-        for src, dst in zip(src_np, dst_np):
-            src_int, dst_int = int(src), int(dst)
+        for edge_src, edge_dst in zip(src_np, dst_np):
+            src_int, dst_int = int(edge_src), int(edge_dst)
             if src_int in nodes_set:
                 neighbors[src_int].add(dst_int)
             if dst_int in nodes_set:
@@ -113,11 +127,11 @@ class NodeAnalyticsHook(StatefulHook):
         max_edge_time = 0.0
         max_node_time = 0.0
 
-        if batch.time is not None and batch.time.numel() > 0:
+        if batch.edge_time is not None and batch.edge_time.numel() > 0:
             # Use the latest timestamp in the batch
-            max_edge_time = batch.time.max().item()
-        if batch.node_times is not None and batch.node_times.numel() > 0:
-            max_node_time = batch.node_times.max().item()
+            max_edge_time = batch.edge_time.max().item()
+        if batch.node_x_time is not None and batch.node_x_time.numel() > 0:
+            max_node_time = batch.node_x_time.max().item()
 
         return max(max_edge_time, max_node_time)
 
@@ -128,19 +142,19 @@ class NodeAnalyticsHook(StatefulHook):
             'new_node_count': 0,
         }
 
-        if batch.node_ids is None or batch.node_ids.numel() == 0:
+        if batch.node_x_nids is None or batch.node_x_nids.numel() == 0:
             return node_stats
 
         new_nodes = 0
-        for node in batch.node_ids:
+        for node in batch.node_x_nids:
             node_id = int(node.item())
             if node_id not in self._first_seen:
                 new_nodes += 1
 
             node_stats['new_node_count'] = new_nodes
             node_stats['node_novelty'] = (
-                new_nodes / batch.node_ids.numel()
-                if batch.node_ids.numel() > 0
+                new_nodes / batch.node_x_nids.numel()
+                if batch.node_x_nids.numel() > 0
                 else 0.0
             )
 
@@ -154,33 +168,45 @@ class NodeAnalyticsHook(StatefulHook):
             'new_edge_count': 0,
         }
 
-        if batch.src is None or batch.dst is None or batch.src.numel() == 0:
+        if (
+            batch.edge_src is None
+            or batch.edge_dst is None
+            or batch.edge_src.numel() == 0
+        ):
             return edge_stats
 
         # Convert to numpy for faster iteration
-        src_np = batch.src.cpu().numpy() if batch.src.is_cuda else batch.src.numpy()
-        dst_np = batch.dst.cpu().numpy() if batch.dst.is_cuda else batch.dst.numpy()
+        src_np = (
+            batch.edge_src.cpu().numpy()
+            if batch.edge_src.is_cuda
+            else batch.edge_src.numpy()
+        )
+        dst_np = (
+            batch.edge_dst.cpu().numpy()
+            if batch.edge_dst.is_cuda
+            else batch.edge_dst.numpy()
+        )
 
         # Count new edges
         new_edges = 0
-        for src, dst in zip(src_np, dst_np):
-            edge_tuple = (int(src), int(dst))
+        for edge_src, edge_dst in zip(src_np, dst_np):
+            edge_tuple = (int(edge_src), int(edge_dst))
             if edge_tuple not in self._seen_edges:
                 new_edges += 1
                 self._seen_edges.add(edge_tuple)
 
         edge_stats['new_edge_count'] = new_edges
         edge_stats['edge_novelty'] = (
-            new_edges / batch.src.numel() if batch.src.numel() > 0 else 0.0
+            new_edges / batch.edge_src.numel() if batch.edge_src.numel() > 0 else 0.0
         )
 
         # Compute edge density
-        unique_nodes = torch.unique(torch.cat([batch.src, batch.dst]))
+        unique_nodes = torch.unique(torch.cat([batch.edge_src, batch.edge_dst]))
         num_unique = unique_nodes.numel()
         possible_edges = num_unique * (num_unique - 1)  # Directed graph
 
         edge_stats['edge_density'] = (
-            batch.src.numel() / possible_edges if possible_edges > 0 else 0.0
+            batch.edge_src.numel() / possible_edges if possible_edges > 0 else 0.0
         )
 
         return edge_stats
@@ -205,8 +231,8 @@ class NodeAnalyticsHook(StatefulHook):
 
         # Track unique timesteps in this batch (vectorized)
         time_tensors = [
-            batch.time,
-            batch.node_times,
+            batch.edge_time,
+            batch.node_x_time,
         ]
 
         for times in time_tensors:
@@ -218,12 +244,12 @@ class NodeAnalyticsHook(StatefulHook):
 
         # Find which tracked nodes appear in this batch
         all_batch_nodes = []
-        if batch.src is not None:
-            all_batch_nodes.append(batch.src)
-        if batch.dst is not None:
-            all_batch_nodes.append(batch.dst)
-        if batch.node_ids is not None:
-            all_batch_nodes.append(batch.node_ids)
+        if batch.edge_src is not None:
+            all_batch_nodes.append(batch.edge_src)
+        if batch.edge_dst is not None:
+            all_batch_nodes.append(batch.edge_dst)
+        if batch.node_x_nids is not None:
+            all_batch_nodes.append(batch.node_x_nids)
 
         # No nodes in batch, return empty stats
         if not all_batch_nodes:
@@ -259,9 +285,9 @@ class NodeAnalyticsHook(StatefulHook):
             node_timesteps_in_batch: Set[float] = set()
 
             pairs = [
-                (batch.src, batch.time),
-                (batch.dst, batch.time),
-                (batch.node_ids, batch.node_times),
+                (batch.edge_src, batch.edge_time),
+                (batch.edge_dst, batch.edge_time),
+                (batch.node_x_nids, batch.node_x_time),
             ]
 
             for ids, times in pairs:
