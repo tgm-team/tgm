@@ -51,6 +51,7 @@ class DGData:
 
     Raises:
         InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
+        InvalidNodeIDError: If node labels exists with node IDs outside the graph's node ID range.
         ValueError: If any data attributes have non-well defined tensor shapes.
         EmptyGraphError: If attempting to initialize an empty graph.
 
@@ -289,7 +290,7 @@ class DGData:
         if self.node_y_nids is not None:
             max_node_id_in_labels = torch.max(self.node_y_nids).item() + 1
             if max_node_id_in_labels > num_nodes:
-                raise ValueError(
+                raise InvalidNodeIDError(
                     "Dynamic node labels (node_y) reference node IDs outside the graph's node ID range. "
                     f'Max node ID in labels: {max_node_id_in_labels}, max node ID in graph: {num_nodes}.'
                 )
@@ -610,6 +611,7 @@ class DGData:
 
         Raises:
             InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
+            InvalidNodeIDError: If node labels exists with node IDs outside the graph's node ID range.
             ValueError: If any data attributes have non-well defined tensor shapes.
             EmptyGraphError: If attempting to initialize an empty graph.
         """
@@ -716,6 +718,7 @@ class DGData:
 
         Raises:
             InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
+            InvalidNodeIDError: If node labels exists with node IDs outside the graph's node ID range.
             ValueError: If any data attributes have non-well defined tensor shapes.
             EmptyGraphError: If attempting to initialize an empty graph.
         """
@@ -882,6 +885,7 @@ class DGData:
 
         Raises:
             InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
+            InvalidNodeIDError: If node labels exists with node IDs outside the graph's node ID range.
             ValueError: If any data attributes have non-well defined tensor shapes.
             ImportError: If the Pandas package is not resolved in the current python environment.
         """

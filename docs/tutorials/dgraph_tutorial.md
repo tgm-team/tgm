@@ -54,19 +54,27 @@ class DGData:
         edge_mask (Tensor): Mask of edge events within `time`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_x (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_mask (Tensor | None): Mask of node events within `time`.
+        node_x_mask (Tensor | None): Indices of node events within `time`.
         node_x_nids (Tensor | None): Node IDs corresponding to node events [num_node_events].
         node_x (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
+        node_y_mask (Tensor | None): Indices of node labels within `time`.
+        node_y_nids (Tensor | None): Node IDs corresponding to node labels [num_node_labels].
+        node_y (Tensor | None): Node features over time [num_node_labels, D_node_dynamic].
         static_node_x (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
+        edge_type (Tensor | None) : Type of relation of each edge event in edge_index [num_edge_events].
+        node_type (Tensor | None) : Type of each node [num_nodes].
 
     Raises:
         InvalidNodeIDError: If an edge or node ID match `PADDED_NODE_ID`.
+        InvalidNodeIDError: If node labels exists with node IDs outside the graph's node ID range.
         ValueError: If any data attributes have non-well defined tensor shapes.
         EmptyGraphError: If attempting to initialize an empty graph.
 
     Notes:
         - Timestamps must be non-negative and sorted; DGData will sort automatically if necessary.
         - Cloning creates a deep copy of tensors to prevent in-place modifications.
+        - Edge type is only applicable for Heterogeneous & Knowledge graph.
+        - Node type is only applicable for Knowledge graph.
     """
 ```
 
@@ -112,10 +120,14 @@ Please consult our documentation for full description of our API. The table belo
 | `edge_src_col`            | Column name in edge file for src nodes                         | `str`                 | Yes                                               | Cannot have ids matching `tgm.constants.PADDED_NODE_ID`  |
 | `edge_dst_col`            | Column name in edge file for dst nodes                         | `str`                 | Yes                                               | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
 | `edge_time_col`           | Column name in edge file for edge times                        | `str`                 | Yes                                               | Time must be non-negative                                |
-| `node_file_path`          | Path to CSV file containing dynamic node data                  | `str \| pathlib.Path` | No                                                | `node_df` is using `from_pandas`                         |
-| `node_x_nids_col`         | Column name in node file for node event node ids               | `str`                 | No, unless `node_file_path` is specified          | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
-| `node_x_time_col`         | Column name in node file for node event node times             | `str`                 | No, unless `node_file_path` is specified          | Time must be non-negative                                |
+| `node_x_file_path`        | Path to CSV file containing dynamic node data                  | `str \| pathlib.Path` | No                                                | `node_x_df` is using `from_pandas`                       |
+| `node_x_nids_col`         | Column name in node file for node event node ids               | `str`                 | No, unless `node_x_file_path` is specified        | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
+| `node_x_time_col`         | Column name in node file for node event node times             | `str`                 | No, unless `node_x_file_path` is specified        | Time must be non-negative                                |
 | `node_x_col`              | Column name in node file for dynamic node features             | `str`                 | No                                                |                                                          |
+| `node_y_file_path`        | Path to CSV file containing dynamic node labels                | `str \| pathlib.Path` | No                                                | `node_y_df` is using `from_pandas`                       |
+| `node_y_nids_col`         | Column name in node file for node label node ids               | `str`                 | No, unless `node_y_file_path` is specified        | Cannot have ids matching  `tgm.constants.PADDED_NODE_ID` |
+| `node_y_time_col`         | Column name in node file for node label node times             | `str`                 | No, unless `node_y_file_path` is specified        | Time must be non-negative                                |
+| `node_y_col`              | Column name in node file for dynamic node labels               | `str`                 | No                                                |                                                          |
 | `static_node_x_file_path` | Path to CSV file containing static node features               | `str \| pathlib.Path` | No                                                | `static_node_x_df` if using `from_pandas`                |
 | `static_node_x_col`       | Column name in static node feats file for static node features | `str`                 | No, unless `static_node_x_file_path` is specified |                                                          |
 | `time_delta`              | Time granularity of the graph data                             | `TimeDeltaDG \| str`  | Yes                                               | Default to *event_ordered* granularity `'r'`             |
@@ -129,8 +141,10 @@ A few key things to know:
   - We expect an `edge_file_path` which is a csv file with `edge_src_col`, `edge_dst_col`, `edge_time_col` as a minimum.
   - Your edge csv file may also contain `edge_x_col` which are the edge features on your data
 - dynamic node data (optional)
-  - If included, we expect a `node_file_path` which is a csv file with `node_x_nids_col`, `node_x_time_col` as a minimum. These are your dynamic node events.
+  - If included, we expect a `node_x_file_path` which is a csv file with `node_x_nids_col`, `node_x_time_col` as a minimum. These are your dynamic node events.
+  - If included, we expect a `node_y_file_path` which is a csv file with `node_y_nids_col`, `node_y_time_col` as a minimum. These are your dynamic node labels.
   - Your dynamic node data csv file may also include `node_x_col`, which are the dynamic node features in your data.
+  - Your dynamic node labels csv file may also include `node_y_col`, which are the dynamic node labels in your data.
 - static node data (optional)
   - If included, we expect a `static_node_x_file_path` which is a csv file with `static_node_x_col`, the static node features for your dataset.
 
@@ -138,7 +152,7 @@ Internally, we perform various checks on the tensors shapes, node ranges, and ti
 
 #### From Pandas
 
-The API largely the same as above, except that we expected `edge_df`, `node_df`, and `static_node_x_df` dataframes for the edge, dynamic node, and static node data respectively, instead of csv files.
+The API largely the same as above, except that we expected `edge_df`, `node_x_df`, and `static_node_x_df` dataframes for the edge, dynamic node, and static node data respectively, instead of csv files.
 
 ```python
 import pandas as pd
@@ -169,7 +183,7 @@ dg = DGraph.from_pandas(
     edge_dst_col='dst',
     edge_time_col='t',
     edge_x_col='edge_feat',
-    node_df=dynamic_node_df,
+    node_x_df=dynamic_node_df,
     node_x_nids_col='node',
     node_x_time_col='t',
     node_x_col='dynamic_node_feat',
@@ -402,6 +416,9 @@ class DGBatch:
         node_x (Tensor | None, optional): Dynamic node features for nodes in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
         node_x_time (Tensor | None, optional): Timestamps corresponding to dynamic node features.
         node_x_nids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
+        node_y (Tensor | None, optional): Dynamic node labels for nodes in the batch. Tensor of shape `(T x V x d_node_labels)`.
+        node_y_time (Tensor | None, optional): Timestamps corresponding to dynamic node labels.
+        node_y_nids (Tensor | None, optional): Node IDs corresponding to dynamic node labels.
     """
 ```
 
