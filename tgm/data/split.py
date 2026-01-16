@@ -262,14 +262,7 @@ class TGBSplit(SplitStrategy):
                 data.time[data.edge_mask] <= edge_end_time
             )
 
-            node_x_mask = None
-            if data.node_x_nids is not None:
-                node_x_times = data.time[data.node_x_mask]
-                if edge_mask.any():
-                    node_x_mask = (node_x_times >= (edge_start_time - 1)) & (
-                        node_x_times < edge_end_time
-                    )
-
+            node_x_mask = None  # TGB has no dynamic node events at the moment
             node_y_mask = None
             if data.node_y_nids is not None:
                 node_y_times = data.time[data.node_y_mask]
