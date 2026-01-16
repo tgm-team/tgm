@@ -144,7 +144,7 @@ def train(
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_labels = batch.node_x
+        y_labels = batch.node_y
         if y_labels is not None:
             z = encoder(batch, static_node_x)
             y_pred = decoder(z)
@@ -172,7 +172,7 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_labels = batch.node_x
+        y_labels = batch.node_y
         if y_labels is not None:
             z = encoder(batch, static_node_x)
             y_pred = decoder(z)
@@ -198,20 +198,20 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-num_classes = train_dg.node_x_dim
+num_classes = train_dg.node_y_dim
 
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
         num_nbrs=args.n_nbrs,
-        seed_nodes_keys=['node_x_nids'],
-        seed_times_keys=['node_x_time'],
+        seed_nodes_keys=['node_y_nids'],
+        seed_times_keys=['node_y_time'],
     )
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=full_data.num_nodes,  # Assuming node ids at test set > train/val set
-        seed_nodes_keys=['node_x_nids'],
-        seed_times_keys=['node_x_time'],
+        seed_nodes_keys=['node_y_nids'],
+        seed_times_keys=['node_y_time'],
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
@@ -224,8 +224,6 @@ train_key, val_key, test_key = hm.keys
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
-
-num_classes = train_dg.node_x_dim
 
 encoder = TGAT(
     node_dim=train_dg.static_node_x_dim,

@@ -72,15 +72,15 @@ def train(
     memory.reset_state()
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_labels = batch.node_x
+        y_labels = batch.node_y
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            num_nbrs = len(nbr_nodes) // (len(batch.node_x_nids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_y_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_x_nids.repeat_interleave(num_nbrs),
+                    batch.node_y_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -96,7 +96,7 @@ def train(
             z, last_update = memory(batch.unique_nids)
             z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-            inv_src = batch.global_to_local(batch.node_x_nids)
+            inv_src = batch.global_to_local(batch.node_y_nids)
             y_pred = decoder(z[inv_src])
             loss = F.cross_entropy(y_pred, y_labels)
             loss.backward()
@@ -137,15 +137,15 @@ def eval(
     perf_list = []
 
     for batch in tqdm(loader):
-        y_labels = batch.node_x
+        y_labels = batch.node_y
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            num_nbrs = len(nbr_nodes) // (len(batch.node_x_nids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_y_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_x_nids.repeat_interleave(num_nbrs),
+                    batch.node_y_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -161,7 +161,7 @@ def eval(
             z, last_update = memory(batch.unique_nids)
             z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-            inv_src = batch.global_to_local(batch.node_x_nids)
+            inv_src = batch.global_to_local(batch.node_y_nids)
             y_pred = decoder(z[inv_src])
 
             input_dict = {
@@ -195,13 +195,13 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-num_classes = train_dg.node_x_dim
+num_classes = train_dg.node_y_dim
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['node_x_nids'],
-    seed_times_keys=['node_x_time'],
+    seed_nodes_keys=['node_y_nids'],
+    seed_times_keys=['node_y_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])

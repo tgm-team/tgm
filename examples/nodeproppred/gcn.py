@@ -100,12 +100,12 @@ def train(
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_true = batch.node_x
+        y_true = batch.node_y
         if y_true is None:
             continue
 
         z = encoder(batch, static_node_x)
-        z_node = z[batch.node_x_nids]
+        z_node = z[batch.node_y_nids]
         y_pred = decoder(z_node)
 
         loss = F.cross_entropy(y_pred, y_true)
@@ -131,12 +131,12 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_true = batch.node_x
+        y_true = batch.node_y
         if y_true is None:
             continue
 
         z = encoder(batch, static_node_x)
-        z_node = z[batch.node_x_nids]
+        z_node = z[batch.node_y_nids]
         y_pred = decoder(z_node)
 
         input_dict = {
@@ -167,7 +167,7 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
 test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
-num_classes = train_dg.node_x_dim
+num_classes = train_dg.node_y_dim
 
 encoder = GCNEncoder(
     in_channels=train_dg.static_node_x_dim,
