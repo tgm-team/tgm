@@ -80,6 +80,57 @@ def data_with_features():
     )
 
 
+@pytest.fixture
+def data_with_labels():
+    edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
+    edge_x = torch.rand(3, 5)
+    node_timestamps = torch.LongTensor([1, 5, 10])
+    node_ids = torch.IntTensor([2, 4, 6])
+    node_y = torch.rand(3, 5)
+    static_node_x = torch.rand(9, 11)
+    node_type = torch.arange(9, dtype=torch.int32)
+    edge_type = torch.IntTensor([0, 1, 2])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_x,
+        node_y_time=node_timestamps,
+        node_y_nids=node_ids,
+        node_y=node_y,
+        static_node_x=static_node_x,
+        edge_type=edge_type,
+        node_type=node_type,
+    )
+
+
+@pytest.fixture
+def data_with_features_and_labels():
+    edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
+    edge_x = torch.rand(3, 5)
+    node_timestamps = torch.LongTensor([1, 5, 10])
+    node_ids = torch.IntTensor([2, 4, 6])
+    node_y = torch.rand(3, 5)
+    static_node_x = torch.rand(9, 11)
+    node_type = torch.arange(9, dtype=torch.int32)
+    edge_type = torch.IntTensor([0, 1, 2])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_x,
+        node_x_time=node_timestamps,
+        node_x_nids=node_ids,
+        node_x=node_y,
+        node_y_time=node_timestamps,
+        node_y_nids=node_ids,
+        node_y=node_y,
+        static_node_x=static_node_x,
+        edge_type=edge_type,
+        node_type=node_type,
+    )
+
+
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
 def test_get_start_time_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
@@ -243,6 +294,51 @@ def test_get_node_events(DGStorageImpl, data, request):
     )
 
 
+@pytest.mark.parametrize('data', ['data_with_labels'])
+def test_get_node_labels(DGStorageImpl, data, request):
+    data = request.getfixturevalue(data)
+    storage = DGStorageImpl(data)
+
+    expected = (
+        torch.tensor([2, 4, 6], dtype=torch.int32),
+        torch.tensor([1, 5, 10], dtype=torch.int64),
+    )
+    torch.testing.assert_close(storage.get_node_labels(DGSliceTracker()), expected)
+
+    expected = (
+        torch.tensor([4, 6], dtype=torch.int32),
+        torch.tensor([5, 10], dtype=torch.int64),
+    )
+    torch.testing.assert_close(
+        storage.get_node_labels(DGSliceTracker(start_time=5)), expected
+    )
+
+    expected = (
+        torch.tensor([2], dtype=torch.int32),
+        torch.tensor([1], dtype=torch.int64),
+    )
+    torch.testing.assert_close(
+        storage.get_node_labels(DGSliceTracker(end_time=4)), expected
+    )
+
+    expected = (
+        torch.tensor([6], dtype=torch.int32),
+        torch.tensor([10], dtype=torch.int64),
+    )
+    torch.testing.assert_close(
+        storage.get_node_labels(DGSliceTracker(start_idx=4, end_idx=5)), expected
+    )
+
+    expected = (
+        torch.tensor([], dtype=torch.int32),
+        torch.tensor([], dtype=torch.int64),
+    )
+    torch.testing.assert_close(
+        storage.get_node_labels(DGSliceTracker(start_idx=4, end_idx=5, end_time=6)),
+        expected,
+    )
+
+
 @pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
 def test_get_num_timestamps_edge_data(DGStorageImpl, data, request):
     data = request.getfixturevalue(data)
@@ -368,6 +464,142 @@ def test_get_dynamic_node_feats(DGStorageImpl, data_with_features):
             DGSliceTracker(start_idx=2, end_idx=5, end_time=6)
         ).to_dense(),
         exp_node_feats,
+    )
+
+
+def test_get_dynamic_node_feats_with_labels(
+    DGStorageImpl, data_with_features_and_labels
+):
+    data = data_with_features_and_labels
+    storage = DGStorageImpl(data)
+
+    exp_node_feats = torch.zeros(21, 8 + 1, 5)
+    exp_node_feats[1, 2] = data.node_x[0]
+    exp_node_feats[5, 4] = data.node_x[1]
+    exp_node_feats[10, 6] = data.node_x[2]
+    assert torch.equal(storage.get_node_x(DGSliceTracker()).to_dense(), exp_node_feats)
+
+    exp_node_feats = torch.zeros(21, 8 + 1, 5)
+    exp_node_feats[5, 4] = data.node_x[1]
+    exp_node_feats[10, 6] = data.node_x[2]
+    assert torch.equal(
+        storage.get_node_x(DGSliceTracker(start_time=5)).to_dense(),
+        exp_node_feats,
+    )
+
+    exp_node_feats = torch.zeros(5, 2 + 1, 5)
+    exp_node_feats[1, 2] = data.node_x[0]
+    assert torch.equal(
+        storage.get_node_x(DGSliceTracker(end_time=4)).to_dense(),
+        exp_node_feats,
+    )
+
+    exp_node_feats = torch.zeros(10, 4 + 1, 5)
+    exp_node_feats[5, 4] = data.node_x[1]
+    assert torch.equal(
+        storage.get_node_x(DGSliceTracker(start_time=5, end_time=9)).to_dense(),
+        exp_node_feats,
+    )
+
+    exp_node_feats = torch.zeros(7, 4 + 1, 5)
+    exp_node_feats[5, 4] = data.node_x[1]
+    assert torch.equal(
+        storage.get_node_x(
+            DGSliceTracker(start_idx=2, end_idx=5, end_time=6)
+        ).to_dense(),
+        exp_node_feats,
+    )
+
+
+@pytest.mark.parametrize('data', ['edge_only_data', 'edge_only_data_with_features'])
+def test_get_dynamic_node_y_no_node_y(DGStorageImpl, data, request):
+    data = request.getfixturevalue(data)
+    storage = DGStorageImpl(data)
+
+    assert storage.get_node_y(DGSliceTracker()) is None
+    assert storage.get_node_y_dim() is None
+
+
+def test_get_dynamic_node_y(DGStorageImpl, data_with_labels):
+    data = data_with_labels
+    storage = DGStorageImpl(data)
+
+    exp_node_y = torch.zeros(21, 8 + 1, 5)
+    exp_node_y[1, 2] = data.node_y[0]
+    exp_node_y[5, 4] = data.node_y[1]
+    exp_node_y[10, 6] = data.node_y[2]
+    assert torch.equal(storage.get_node_y(DGSliceTracker()).to_dense(), exp_node_y)
+
+    exp_node_y = torch.zeros(21, 8 + 1, 5)
+    exp_node_y[5, 4] = data.node_y[1]
+    exp_node_y[10, 6] = data.node_y[2]
+    assert torch.equal(
+        storage.get_node_y(DGSliceTracker(start_time=5)).to_dense(),
+        exp_node_y,
+    )
+
+    exp_node_y = torch.zeros(5, 2 + 1, 5)
+    exp_node_y[1, 2] = data.node_y[0]
+    assert torch.equal(
+        storage.get_node_y(DGSliceTracker(end_time=4)).to_dense(),
+        exp_node_y,
+    )
+
+    exp_node_y = torch.zeros(10, 4 + 1, 5)
+    exp_node_y[5, 4] = data.node_y[1]
+    assert torch.equal(
+        storage.get_node_y(DGSliceTracker(start_time=5, end_time=9)).to_dense(),
+        exp_node_y,
+    )
+
+    exp_node_y = torch.zeros(11, 6 + 1, 5)
+    exp_node_y[5, 4] = data.node_y[1]
+    exp_node_y[10, 6] = data.node_y[2]
+    assert torch.equal(
+        storage.get_node_y(DGSliceTracker(start_idx=2, end_idx=5)).to_dense(),
+        exp_node_y,
+    )
+
+    exp_node_y = torch.zeros(7, 4 + 1, 5)
+    exp_node_y[5, 4] = data.node_y[1]
+    assert torch.equal(
+        storage.get_node_y(
+            DGSliceTracker(start_idx=2, end_idx=5, end_time=6)
+        ).to_dense(),
+        exp_node_y,
+    )
+
+
+def test_get_dynamic_node_y_with_feats(DGStorageImpl, data_with_features_and_labels):
+    data = data_with_features_and_labels
+    storage = DGStorageImpl(data)
+
+    exp_node_y = torch.zeros(21, 8 + 1, 5)
+    exp_node_y[1, 2] = data.node_y[0]
+    exp_node_y[5, 4] = data.node_y[1]
+    exp_node_y[10, 6] = data.node_y[2]
+    assert torch.equal(storage.get_node_y(DGSliceTracker()).to_dense(), exp_node_y)
+
+    exp_node_y = torch.zeros(21, 8 + 1, 5)
+    exp_node_y[5, 4] = data.node_y[1]
+    exp_node_y[10, 6] = data.node_y[2]
+    assert torch.equal(
+        storage.get_node_y(DGSliceTracker(start_time=5)).to_dense(),
+        exp_node_y,
+    )
+
+    exp_node_y = torch.zeros(5, 2 + 1, 5)
+    exp_node_y[1, 2] = data.node_y[0]
+    assert torch.equal(
+        storage.get_node_y(DGSliceTracker(end_time=4)).to_dense(),
+        exp_node_y,
+    )
+
+    exp_node_y = torch.zeros(10, 4 + 1, 5)
+    exp_node_y[5, 4] = data.node_y[1]
+    assert torch.equal(
+        storage.get_node_y(DGSliceTracker(start_time=5, end_time=9)).to_dense(),
+        exp_node_y,
     )
 
 
