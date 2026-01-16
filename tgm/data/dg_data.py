@@ -527,7 +527,7 @@ class DGData:
                 self.node_y_mask,
                 self.node_y_nids,  # type: ignore
             )
-            node_y_time = buckets[self.node_x_mask][node_y_mask]
+            node_y_time = buckets[self.node_y_mask][node_y_mask]
             node_y_nids = self.node_y_nids[node_y_mask]  # type: ignore
             node_y = None
             if self.node_y is not None:
@@ -582,8 +582,6 @@ class DGData:
 
         if self.node_x_nids is not None:
             max_id = max(max_id, int(self.node_x_nids.max()))
-        if self.node_y_nids is not None:
-            max_id = max(max_id, int(self.node_y_nids.max()))
 
         return max_id + 1
 
