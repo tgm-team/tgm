@@ -1021,6 +1021,7 @@ class DGData:
         else:
             edge_x = torch.from_numpy(data['edge_feat']).to(torch.float32)
 
+        # TODO: Are the labels or events
         node_x_time, node_x_nids, node_x = None, None, None
         if name.startswith('tgbn-'):
             if 'node_label_dict' in data:
