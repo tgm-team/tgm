@@ -154,7 +154,6 @@ class TemporalSplit(SplitStrategy):
             if node_x_times is not None:
                 node_x_mask = (node_x_times >= start) & (node_x_times < end)
 
-            # TODO: Double check this is how we want to treat splits
             node_y_mask = None
             if node_y_times is not None:
                 node_y_mask = (node_y_times >= start) & (node_y_times < end)

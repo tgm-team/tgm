@@ -287,9 +287,12 @@ class DGData:
             )  # 0-indexed
 
         if self.node_y_nids is not None:
-            num_nodes = max(
-                num_nodes, torch.max(self.node_y_nids).item() + 1
-            )  # 0-indexed
+            max_node_id_in_labels = torch.max(self.node_y_nids).item() + 1
+            if max_node_id_in_labels > num_nodes:
+                raise ValueError(
+                    "Dynamic node labels (node_y) reference node IDs outside the graph's node ID range. "
+                    f'Max node ID in labels: {max_node_id_in_labels}, max node ID in graph: {num_nodes}.'
+                )
 
         if self.static_node_x is not None:
             _assert_is_tensor(self.static_node_x, 'static_node_x')
@@ -673,10 +676,11 @@ class DGData:
         edge_dst_col: str,
         edge_time_col: str,
         edge_x_col: List[str] | None = None,
-        node_file_path: str | pathlib.Path | None = None,
+        node_x_file_path: str | pathlib.Path | None = None,
         node_x_nids_col: str | None = None,
         node_x_time_col: str | None = None,
         node_x_col: List[str] | None = None,
+        node_y_file_path: str | pathlib.Path | None = None,
         node_y_nids_col: str | None = None,
         node_y_time_col: str | None = None,
         node_y_col: List[str] | None = None,
@@ -694,10 +698,11 @@ class DGData:
             edge_dst_col: Column name for dst nodes.
             edge_time_col: Column name for edge times.
             edge_x_col: Optional edge feature columns.
-            node_file_path: Optional CSV file for dynamic node features.
+            node_x_file_path: Optional CSV file for dynamic node features.
             node_x_nids_col: Column name for dynamic node event node ids. Required if node_file_path is specified.
             node_x_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
             node_x_col: Optional dynamic node feature columns.
+            node_y_file_path: Optional CSV file for dynamic node labels.
             node_y_nids_col: Column name for dynamic node label node ids.
             node_y_time_col: Column name for dynamic node label times.
             node_y_col: Optional dynamic node label feature columns.
@@ -746,15 +751,13 @@ class DGData:
 
         # Read in dynamic node data
         node_x_time, node_x_nids, node_x = None, None, None
-        node_y_time, node_y_nids, node_y = None, None, None
-        # TODO: read the node events
-        if node_file_path is not None:
+        if node_x_file_path is not None:
             if node_x_nids_col is None or node_x_time_col is None:
                 raise ValueError(
-                    'specified node_file_path without specifying node_x_nids_col and node_x_time_col'
+                    'specified node_x_file_path without specifying node_x_nids_col and node_x_time_col'
                 )
-            logger.debug('Reading node_file_path: %s', node_file_path)
-            node_reader = _read_csv(node_file_path)
+            logger.debug('Reading node_x_file_path: %s', node_x_file_path)
+            node_reader = _read_csv(node_x_file_path)
             num_node_events = len(node_reader)
 
             node_x_time = torch.empty(num_node_events, dtype=torch.int64)
@@ -769,6 +772,29 @@ class DGData:
                     for j, col in enumerate(node_x_col):
                         node_x[i, j] = float(row[col])  # type: ignore
 
+        # Read in dynamic node labels
+        node_y_time, node_y_nids, node_y = None, None, None
+        if node_y_file_path is not None:
+            if node_y_nids_col is None or node_y_time_col is None:
+                raise ValueError(
+                    'specified node_y_file_path without specifying node_y_nids_col and node_y_time_col'
+                )
+            logger.debug('Reading node_y_file_path: %s', node_y_file_path)
+            node_reader = _read_csv(node_y_file_path)
+            num_node_events = len(node_reader)
+
+            node_y_time = torch.empty(num_node_events, dtype=torch.int64)
+            node_y_nids = torch.empty(num_node_events, dtype=torch.int32)
+            if node_y_col is not None:
+                node_y = torch.empty((num_node_events, len(node_y_col)))
+
+            for i, row in enumerate(node_reader):
+                node_y_time[i] = int(row[node_y_time_col])
+                node_y_nids[i] = int(row[node_y_nids_col])
+                if node_y_col is not None:
+                    for j, col in enumerate(node_y_col):
+                        node_y[i, j] = float(row[col])  # type: ignore
+
         # Read in static node data
         static_node_x = None
         node_type = None
@@ -777,7 +803,7 @@ class DGData:
                 raise ValueError(
                     'specified static_node_x_file_path without specifying static_node_x_col and node_type_col'
                 )
-            logger.debug('Reading static_node_file_path: %s', node_file_path)
+            logger.debug('Reading static_node_x_file_path: %s', static_node_x_file_path)
             static_node_feats_reader = _read_csv(static_node_x_file_path)
             num_nodes = len(static_node_feats_reader)
             if static_node_x_col is not None:
@@ -816,10 +842,11 @@ class DGData:
         edge_dst_col: str,
         edge_time_col: str,
         edge_x_col: List[str] | None = None,
-        node_df: 'pandas.DataFrame' | None = None,  # type: ignore
+        node_x_df: 'pandas.DataFrame' | None = None,  # type: ignore
         node_x_nids_col: str | None = None,
         node_x_time_col: str | None = None,
         node_x_col: List[str] | None = None,
+        node_y_df: 'pandas.DataFrame' | None = None,  # type: ignore
         node_y_nids_col: str | None = None,
         node_y_time_col: str | None = None,
         node_y_col: List[str] | None = None,
@@ -837,10 +864,11 @@ class DGData:
             edge_dst_col: Column name for dst nodes.
             edge_time_col: Column name for edge times.
             edge_x_col: Optional edge feature columns.
-            node_df: Optional DataFrame of dynamic node events.
+            node_x_df: Optional DataFrame of dynamic node events.
             node_x_nids_col: Column name for dynamic node event node ids. Required if node_file_path is specified.
             node_x_time_col: Column name for dynamic node event times. Required if node_file_path is specified.
             node_x_col: Optional node feature columns.
+            node_y_df: Optional DataFrame of dynamic node labels.
             node_y_nids_col: Column name for dynamic node label node ids.
             node_y_time_col: Column name for dynamic node label times.
             node_y_col: Optional node label feature columns.
@@ -879,17 +907,31 @@ class DGData:
 
         # Read in dynamic node data
         node_x_time, node_x_nids, node_x = None, None, None
-        node_y_time, node_y_nids, node_y = None, None, None
-        # TODO: read node labels in
-        if node_df is not None:
+        if node_x_df is not None:
             if node_x_nids_col is None or node_x_time_col is None:
                 raise ValueError(
-                    'specified node_df without specifying node_x_nids_col and node_x_time_col'
+                    'specified node_x_df without specifying node_x_nids_col and node_x_time_col'
                 )
-            node_x_time = torch.as_tensor(node_df[node_x_time_col].values)
-            node_x_nids = torch.as_tensor(node_df[node_x_nids_col].values)
+            node_x_time = torch.as_tensor(node_x_df[node_x_time_col].values)
+            node_x_nids = torch.as_tensor(node_x_df[node_x_nids_col].values)
             if node_x_col is not None:
-                node_x = torch.stack([torch.tensor(row) for row in node_df[node_x_col]])
+                node_x = torch.stack(
+                    [torch.tensor(row) for row in node_x_df[node_x_col]]
+                )
+
+        # Read in dynamic node labels
+        node_y_time, node_y_nids, node_y = None, None, None
+        if node_y_df is not None:
+            if node_y_nids_col is None or node_y_time_col is None:
+                raise ValueError(
+                    'specified node_y_df without specifying node_y_nids_col and node_y_time_col'
+                )
+            node_y_time = torch.as_tensor(node_y_df[node_y_time_col].values)
+            node_y_nids = torch.as_tensor(node_y_df[node_y_nids_col].values)
+            if node_y_col is not None:
+                node_y = torch.stack(
+                    [torch.tensor(row) for row in node_y_df[node_y_col]]
+                )
 
         # Read in static node data
         static_node_x = None
