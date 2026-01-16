@@ -101,11 +101,11 @@ class TGAT(nn.Module):
             )
 
     def forward(self, batch: DGBatch, static_node_feat: torch.Tensor) -> torch.Tensor:
-        device = batch.src.device
+        device = batch.edge_src.device
         z = {j: {} for j in range(self.num_layers + 1)}  # z[j][i] = z of nbr^i at hop j
 
         # Layer 0 (leaf nodes): z[0][i] = static_node_feat
-        z[0][0] = static_node_feat[batch.nids[0]]
+        z[0][0] = static_node_feat[batch.seed_nids[0]]
         for i in range(1, self.num_layers + 1):
             z[0][i] = static_node_feat[batch.nbr_nids[i - 1].flatten()]
 
@@ -118,10 +118,10 @@ class TGAT(nn.Module):
                     node_feat=z[j - 1][i],
                     time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
                     nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
-                    edge_feat=batch.nbr_feats[i],
+                    edge_feat=batch.nbr_edge_x[i],
                     valid_nbr_mask=batch.nbr_nids[i] != PADDED_NODE_ID,
                     nbr_time_feat=self.time_encoder(
-                        batch.times[i][:, None] - batch.nbr_times[i]
+                        batch.seed_times[i][:, None] - batch.nbr_edge_time[i]
                     ),
                 )
                 z[j][i] = self.merge_layers[j - 1](out, z[0][i])
@@ -144,7 +144,7 @@ def train(
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_x
         if y_labels is not None:
             z = encoder(batch, static_node_x)
             y_pred = decoder(z)
@@ -172,7 +172,7 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_x
         if y_labels is not None:
             z = encoder(batch, static_node_x)
             y_pred = decoder(z)
@@ -203,15 +203,15 @@ num_classes = train_dg.node_x_dim
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
         num_nbrs=args.n_nbrs,
-        seed_nodes_keys=['node_ids'],
-        seed_times_keys=['node_times'],
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
     )
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
         num_nodes=full_data.num_nodes,  # Assuming node ids at test set > train/val set
-        seed_nodes_keys=['node_ids'],
-        seed_times_keys=['node_times'],
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')

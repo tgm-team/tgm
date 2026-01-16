@@ -247,7 +247,15 @@ class HookManager:
         # We cannot guard against this here since determining whether or not a batch has
         # edge/node events can only be inferred during data loading.
         all_produced = set(
-            ['src', 'dst', 'time', 'node_times', 'node_ids', 'edge_type', 'node_type']
+            [
+                'edge_src',
+                'edge_dst',
+                'edge_time',
+                'edge_type',
+                'node_x_time',
+                'node_x_nids',
+                'node_type',
+            ]
         ).union(*(h.produces for h in hooks))
         missing = set()
         for h in hooks:

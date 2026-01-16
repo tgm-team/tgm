@@ -69,7 +69,7 @@ parser.add_argument(
     '--concat-src-dst',
     default=True,
     action=argparse.BooleanOptionalAction,
-    help='if no-concat-src-dst, Random projection avoids concat src and dst in computation',
+    help='if no-concat-src-dst, Random projection avoids concat edge_src and edge_dst in computation',
 )
 parser.add_argument('--node-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
@@ -125,43 +125,43 @@ class TPNet_LinkPrediction(nn.Module):
     def forward(
         self, batch: DGBatch, static_node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        src = batch.src
-        dst = batch.dst
+        edge_src = batch.edge_src
+        edge_dst = batch.edge_dst
         neg = batch.neg
-        time = batch.time
+        time = batch.edge_time
         nbr_nids = batch.nbr_nids[0]
-        nbr_times = batch.nbr_times[0]
-        nbr_feats = batch.nbr_feats[0]
-        src_nbr_idx = batch.seed_node_nbr_mask['src']
-        dst_nbr_idx = batch.seed_node_nbr_mask['dst']
+        nbr_edge_time = batch.nbr_edge_time[0]
+        nbr_edge_x = batch.nbr_edge_x[0]
+        src_nbr_idx = batch.seed_node_nbr_mask['edge_src']
+        dst_nbr_idx = batch.seed_node_nbr_mask['edge_dst']
         neg_nbr_idx = batch.seed_node_nbr_mask['neg']
-        pos_batch_size = dst.shape[0]
+        pos_batch_size = edge_dst.shape[0]
         neg_batch_size = neg.shape[0]
 
         # positive edge
-        edge_idx_pos = torch.stack((src, dst), dim=0)
+        edge_idx_pos = torch.stack((edge_src, edge_dst), dim=0)
         pos_nbr_idx = torch.cat([src_nbr_idx, dst_nbr_idx])
         z_src_pos, z_dst_pos = self.encoder(
             static_node_feat,
             edge_idx_pos,
             time,
             nbr_nids[pos_nbr_idx],
-            nbr_times[pos_nbr_idx],
-            nbr_feats[pos_nbr_idx],
+            nbr_edge_time[pos_nbr_idx],
+            nbr_edge_x[pos_nbr_idx],
         )
         pos_out = self.decoder(z_src_pos, z_dst_pos)
 
         neg_nbr_nids = nbr_nids[
             neg_nbr_idx
         ]  # @TODO: Assume that batch.neg doesn't have duplicated records
-        neg_nbr_times = nbr_times[neg_nbr_idx]
-        neg_nbr_feats = nbr_feats[neg_nbr_idx]
+        neg_nbr_times = nbr_edge_time[neg_nbr_idx]
+        neg_nbr_feats = nbr_edge_x[neg_nbr_idx]
         src_nbr_nids = nbr_nids[src_nbr_idx]
-        src_nbr_times = nbr_times[src_nbr_idx]
-        src_nbr_feats = nbr_feats[src_nbr_idx]
+        src_nbr_times = nbr_edge_time[src_nbr_idx]
+        src_nbr_feats = nbr_edge_x[src_nbr_idx]
 
-        if src.shape[0] != neg_batch_size:
-            src = torch.repeat_interleave(src, repeats=neg_batch_size, dim=0)
+        if edge_src.shape[0] != neg_batch_size:
+            edge_src = torch.repeat_interleave(edge_src, repeats=neg_batch_size, dim=0)
             time = torch.repeat_interleave(time, repeats=neg_batch_size, dim=0)
             src_nbr_nids = torch.repeat_interleave(
                 src_nbr_nids, repeats=neg_batch_size, dim=0
@@ -178,10 +178,10 @@ class TPNet_LinkPrediction(nn.Module):
             neg = neg.repeat(pos_batch_size)
         else:
             src_nbr_nids = nbr_nids[src_nbr_idx]
-            src_nbr_times = nbr_times[src_nbr_idx]
-            src_nbr_feats = nbr_feats[src_nbr_idx]
+            src_nbr_times = nbr_edge_time[src_nbr_idx]
+            src_nbr_feats = nbr_edge_x[src_nbr_idx]
 
-        edge_idx_neg = torch.stack((src, neg), dim=0)
+        edge_idx_neg = torch.stack((edge_src, neg), dim=0)
 
         # negative edge
         z_src_neg, z_dst_neg = self.encoder(
@@ -193,7 +193,7 @@ class TPNet_LinkPrediction(nn.Module):
             torch.cat([src_nbr_feats, neg_nbr_feats], dim=0),
         )
         neg_out = self.decoder(z_src_neg, z_dst_neg)
-        self.rp_module.update(batch.src, batch.dst, time=batch.time)
+        self.rp_module.update(batch.edge_src, batch.edge_dst, time=batch.edge_time)
 
         return pos_out, neg_out
 
@@ -238,15 +238,19 @@ def eval(
         copy_batch = copy.deepcopy(batch)
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             idx = torch.tensor([idx], device=args.device)
-            copy_batch.src = batch.src[idx]
-            copy_batch.dst = batch.dst[idx]
-            copy_batch.time = batch.time[idx]
+            copy_batch.edge_src = batch.edge_src[idx]
+            copy_batch.edge_dst = batch.edge_dst[idx]
+            copy_batch.edge_time = batch.edge_time[idx]
             copy_batch.neg = neg_batch
             neg_idx = (batch.neg == neg_batch[:, None]).nonzero(as_tuple=True)[1]
 
             # Update nbr map to only indices that are used
-            copy_batch.seed_node_nbr_mask['src'] = batch.seed_node_nbr_mask['src'][idx]
-            copy_batch.seed_node_nbr_mask['dst'] = batch.seed_node_nbr_mask['dst'][idx]
+            copy_batch.seed_node_nbr_mask['edge_src'] = batch.seed_node_nbr_mask[
+                'edge_src'
+            ][idx]
+            copy_batch.seed_node_nbr_mask['edge_dst'] = batch.seed_node_nbr_mask[
+                'edge_dst'
+            ][idx]
             copy_batch.seed_node_nbr_mask['neg'] = batch.seed_node_nbr_mask['neg'][
                 neg_idx
             ]
@@ -291,8 +295,8 @@ hm.register_shared(
     RecencyNeighborHook(
         num_nbrs=[args.num_neighbors],
         num_nodes=full_data.num_nodes,
-        seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['time', 'time', 'neg_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
     )
 )
 train_key, val_key, test_key = hm.keys

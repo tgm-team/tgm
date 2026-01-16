@@ -56,7 +56,7 @@ class RecurrentGCN(torch.nn.Module):
         h: torch.Tensor | None = None,
         c: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
 
         h_0, c_0 = self.recurrent(node_feat, edge_index, edge_weight, h, c)
@@ -81,12 +81,12 @@ def train(
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_x
         if y_true is None:
             continue
 
         z, h_0, c_0 = encoder(batch, static_node_x, h_0, c_0)
-        z_node = z[batch.node_ids]
+        z_node = z[batch.node_x_nids]
         y_pred = decoder(z_node)
 
         loss = F.cross_entropy(y_pred, y_true)
@@ -116,12 +116,12 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_x
         if y_true is None:
             continue
 
         z, h_0, c_0 = encoder(batch, static_node_x, h_0, c_0)
-        z_node = z[batch.node_ids]
+        z_node = z[batch.node_x_nids]
         y_pred = decoder(z_node)
 
         input_dict = {

@@ -22,14 +22,14 @@ from tgm.exceptions import (
 
 def test_init_dg_data():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    data = DGData.from_raw(edge_timestamps, edge_index)
+    edge_time = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_time, edge_index)
     torch.testing.assert_close(data.edge_index, edge_index)
-    torch.testing.assert_close(data.time, edge_timestamps)
+    torch.testing.assert_close(data.time, edge_time)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     assert data.edge_x is None
     assert data.node_mask is None
-    assert data.node_ids is None
+    assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
     assert data.edge_type is None
@@ -40,29 +40,29 @@ def test_init_dg_data():
 
 def test_init_dg_data_with_time_delta():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    data = DGData.from_raw(edge_timestamps, edge_index, time_delta=TimeDeltaDG('s'))
+    edge_time = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_time, edge_index, time_delta=TimeDeltaDG('s'))
     assert data.time_delta == TimeDeltaDG('s')
 
 
 def test_init_dg_data_with_string_time_delta():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
+    edge_time = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_time, edge_index, time_delta='s')
     assert data.time_delta == TimeDeltaDG('s')
 
 
 def test_init_dg_data_no_node_events_with_edge_features():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     edge_x = torch.rand(2, 5)
-    data = DGData.from_raw(edge_timestamps, edge_index, edge_x)
+    data = DGData.from_raw(edge_time, edge_index, edge_x)
     torch.testing.assert_close(data.edge_index, edge_index)
-    torch.testing.assert_close(data.time, edge_timestamps)
+    torch.testing.assert_close(data.time, edge_time)
     torch.testing.assert_close(data.edge_x, edge_x)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     assert data.node_mask is None
-    assert data.node_ids is None
+    assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
     assert data.edge_type is None
@@ -72,19 +72,17 @@ def test_init_dg_data_no_node_events_with_edge_features():
 
 def test_init_dg_data_node_events():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     edge_x = torch.rand(2, 5)
-    node_ids = torch.IntTensor([1, 2, 3])
-    node_timestamps = torch.LongTensor([6, 7, 8])
-    data = DGData.from_raw(
-        edge_timestamps, edge_index, edge_x, node_timestamps, node_ids
-    )
+    node_x_nids = torch.IntTensor([1, 2, 3])
+    node_x_time = torch.LongTensor([6, 7, 8])
+    data = DGData.from_raw(edge_time, edge_index, edge_x, node_x_time, node_x_nids)
     torch.testing.assert_close(data.edge_index, edge_index)
     torch.testing.assert_close(data.time, torch.LongTensor([1, 5, 6, 7, 8]))
     torch.testing.assert_close(data.edge_x, edge_x)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.node_mask, torch.IntTensor([2, 3, 4]))
-    torch.testing.assert_close(data.node_ids, node_ids)
+    torch.testing.assert_close(data.node_x_nids, node_x_nids)
     assert data.node_x is None
     assert data.static_node_x is None
     assert data.edge_type is None
@@ -95,18 +93,18 @@ def test_init_dg_data_node_events():
 
 def test_init_dg_data_node_events_and_node_features():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     edge_x = torch.rand(2, 5)
-    node_ids = torch.IntTensor([1, 2, 3])
-    node_timestamps = torch.LongTensor([6, 7, 8])
+    node_x_nids = torch.IntTensor([1, 2, 3])
+    node_x_time = torch.LongTensor([6, 7, 8])
     node_x = torch.rand(3, 7)
     static_node_x = torch.rand(21, 11)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         edge_x,
-        node_timestamps,
-        node_ids,
+        node_x_time,
+        node_x_nids,
         node_x,
         static_node_x,
     )
@@ -115,7 +113,7 @@ def test_init_dg_data_node_events_and_node_features():
     torch.testing.assert_close(data.edge_x, edge_x)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.node_mask, torch.IntTensor([2, 3, 4]))
-    torch.testing.assert_close(data.node_ids, node_ids)
+    torch.testing.assert_close(data.node_x_nids, node_x_nids)
     torch.testing.assert_close(data.node_x, node_x)
     torch.testing.assert_close(data.static_node_x, static_node_x)
     assert data.time_delta == TimeDeltaDG('r')
@@ -123,18 +121,18 @@ def test_init_dg_data_node_events_and_node_features():
 
 def test_init_dg_data_sort_required():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([5, 1])
+    edge_time = torch.LongTensor([5, 1])
     edge_x = torch.rand(2, 5)
-    node_ids = torch.IntTensor([1, 2, 3])
-    node_timestamps = torch.LongTensor([8, 7, 6])
+    node_x_nids = torch.IntTensor([1, 2, 3])
+    node_x_time = torch.LongTensor([8, 7, 6])
     node_x = torch.rand(3, 7)
     static_node_x = torch.rand(21, 11)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         edge_x,
-        node_timestamps,
-        node_ids,
+        node_x_time,
+        node_x_nids,
         node_x,
         static_node_x,
     )
@@ -159,7 +157,7 @@ def test_init_dg_data_sort_required():
             [2, 3, 4],
         ),
     )
-    torch.testing.assert_close(data.node_ids, exp_node_ids)
+    torch.testing.assert_close(data.node_x_nids, exp_node_ids)
     torch.testing.assert_close(data.node_x, exp_node_x)
     torch.testing.assert_close(data.static_node_x, static_node_x)
     assert data.time_delta == TimeDeltaDG('r')
@@ -167,38 +165,38 @@ def test_init_dg_data_sort_required():
 
 def test_init_dg_data_bad_args_invalid_node_id():
     edge_index = torch.IntTensor([[PADDED_NODE_ID, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     with pytest.raises(InvalidNodeIDError):
-        _ = DGData.from_raw(edge_timestamps, edge_index)
+        _ = DGData.from_raw(edge_time, edge_index)
 
     edge_index = torch.IntTensor([[1, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    node_ids = torch.IntTensor([PADDED_NODE_ID])
-    node_timestamps = torch.LongTensor([1])
+    edge_time = torch.LongTensor([1, 5])
+    node_x_nids = torch.IntTensor([PADDED_NODE_ID])
+    node_x_time = torch.LongTensor([1])
     with pytest.raises(InvalidNodeIDError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
-            node_ids=node_ids,
-            node_timestamps=node_timestamps,
+            node_x_nids=node_x_nids,
+            node_x_time=node_x_time,
         )
 
 
 def test_init_dg_data_with_nan_feats():
     edge_index = torch.IntTensor([[0, 0]])
-    edge_timestamps = torch.LongTensor([1])
-    node_ids = torch.IntTensor([0])
-    node_timestamps = torch.LongTensor([2])
+    edge_time = torch.LongTensor([1])
+    node_x_nids = torch.IntTensor([0])
+    node_x_time = torch.LongTensor([2])
 
     edge_x = torch.rand((1, 1)).float()
     edge_x[0][0] = torch.nan
 
     with pytest.raises(ValueError):
         DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
-            node_ids=node_ids,
-            node_timestamps=node_timestamps,
+            node_x_nids=node_x_nids,
+            node_x_time=node_x_time,
             edge_x=edge_x,
         )
 
@@ -207,44 +205,44 @@ def test_init_dg_data_with_nan_feats():
 
     with pytest.raises(ValueError):
         DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
-            node_ids=node_ids,
-            node_timestamps=node_timestamps,
+            node_x_nids=node_x_nids,
+            node_x_time=node_x_time,
             node_x=node_feats,
         )
 
     with pytest.raises(ValueError):
         DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
-            node_ids=node_ids,
-            node_timestamps=node_timestamps,
+            node_x_nids=node_x_nids,
+            node_x_time=node_x_time,
             static_node_x=node_feats,
         )
 
 
 def test_init_dg_data_with_downcast_warning():
     edge_index = torch.IntTensor([[0, 1]])
-    edge_timestamps = torch.LongTensor([1])
-    node_ids = torch.IntTensor([2])
-    node_timestamps = torch.LongTensor([2])
+    edge_time = torch.LongTensor([1])
+    node_x_nids = torch.IntTensor([2])
+    node_x_time = torch.LongTensor([2])
 
     # Fields to test for downcasting
     test_cases = {
         'edge_index': edge_index.long(),
-        'node_ids': node_ids.long(),
+        'node_x_nids': node_x_nids.long(),
         'edge_x': torch.rand((len(edge_index), 1), dtype=torch.float64),
-        'node_x': torch.rand((len(node_ids), 1), dtype=torch.float64),
+        'node_x': torch.rand((len(node_x_nids), 1), dtype=torch.float64),
         'static_node_x': torch.rand((3, 1), dtype=torch.float64),
     }
 
     for field_name, tensor in test_cases.items():
         kwargs = {
-            'edge_timestamps': edge_timestamps,
+            'edge_time': edge_time,
             'edge_index': edge_index,
-            'node_ids': node_ids,
-            'node_timestamps': node_timestamps,
+            'node_x_nids': node_x_nids,
+            'node_x_time': node_x_time,
         }
         kwargs[field_name] = tensor
 
@@ -252,7 +250,7 @@ def test_init_dg_data_with_downcast_warning():
             dg = DGData.from_raw(**kwargs)
 
         assert dg.edge_index.dtype == torch.int32
-        assert dg.node_ids.dtype == torch.int32
+        assert dg.node_x_nids.dtype == torch.int32
         if dg.edge_x is not None:
             assert dg.edge_x.dtype == torch.float32
         if dg.node_x is not None:
@@ -264,42 +262,42 @@ def test_init_dg_data_with_downcast_warning():
 def test_init_dg_data_invalid_node_id_with_id_overflow():
     max_int32 = torch.iinfo(torch.int32).max
 
-    edge_timestamps = torch.LongTensor([0])
+    edge_time = torch.LongTensor([0])
     edge_index = torch.LongTensor([[0, max_int32 + 1]])
     with pytest.raises(InvalidNodeIDError):
-        DGData.from_raw(edge_timestamps, edge_index)
+        DGData.from_raw(edge_time, edge_index)
 
-    edge_timestamps = torch.LongTensor([0])
+    edge_time = torch.LongTensor([0])
     edge_index = torch.IntTensor([[0, 1]])
-    node_timestamps = torch.LongTensor([0])
-    node_ids = torch.LongTensor([max_int32 + 1])
+    node_x_time = torch.LongTensor([0])
+    node_x_nids = torch.LongTensor([max_int32 + 1])
     with pytest.raises(InvalidNodeIDError):
         DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
-            node_timestamps=node_timestamps,
-            node_ids=node_ids,
+            node_x_time=node_x_time,
+            node_x_nids=node_x_nids,
         )
 
 
 def test_init_dg_data_invalid_time_overflow():
     max_int32 = torch.iinfo(torch.int32).max
 
-    edge_timestamps = torch.LongTensor([max_int32 + 1])
+    edge_time = torch.LongTensor([max_int32 + 1])
     edge_index = torch.IntTensor([[0, 1]])
     with pytest.raises(ValueError):
-        DGData.from_raw(edge_timestamps, edge_index)
+        DGData.from_raw(edge_time, edge_index)
 
-    edge_timestamps = torch.LongTensor([0])
+    edge_time = torch.LongTensor([0])
     edge_index = torch.IntTensor([[0, 1]])
-    node_timestamps = torch.LongTensor([max_int32 + 1])
-    node_ids = torch.IntTensor([0])
+    node_x_time = torch.LongTensor([max_int32 + 1])
+    node_x_nids = torch.IntTensor([0])
     with pytest.raises(ValueError):
         DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
-            node_timestamps=node_timestamps,
-            node_ids=node_ids,
+            node_x_time=node_x_time,
+            node_x_nids=node_x_nids,
         )
 
 
@@ -313,24 +311,24 @@ def test_init_dg_data_bad_args_empty_graph():
 
 def test_init_dg_data_bad_args_empty_node_data():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([0, 1])
-    node_ids = torch.empty(0, dtype=torch.int32)
-    node_timestamps = torch.empty(0, dtype=torch.int64)
+    edge_time = torch.LongTensor([0, 1])
+    node_x_nids = torch.empty(0, dtype=torch.int32)
+    node_x_time = torch.empty(0, dtype=torch.int64)
     with pytest.raises(ValueError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
-            node_ids=node_ids,
-            node_timestamps=node_timestamps,
+            node_x_nids=node_x_nids,
+            node_x_time=node_x_time,
         )
 
 
 def test_init_dg_Data_bad_static_node_feats():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([0, 1])
+    edge_time = torch.LongTensor([0, 1])
     static_node_x = torch.rand(0)  # should be 2d
     with pytest.raises(ValueError):
-        _ = DGData.from_raw(edge_timestamps, edge_index, static_node_x=static_node_x)
+        _ = DGData.from_raw(edge_time, edge_index, static_node_x=static_node_x)
 
 
 def test_init_dg_data_bad_args_bad_timestamps():
@@ -345,104 +343,104 @@ def test_init_dg_data_bad_args_bad_timestamps():
 
 
 def test_init_dg_data_bad_args_bad_edge_index():
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     with pytest.raises(TypeError):
-        _ = DGData.from_raw(edge_timestamps, 'foo')
+        _ = DGData.from_raw(edge_time, 'foo')
 
     with pytest.raises(ValueError):
-        _ = DGData.from_raw(edge_timestamps, torch.IntTensor([1, 2]))
+        _ = DGData.from_raw(edge_time, torch.IntTensor([1, 2]))
 
 
 def test_init_dg_data_bad_args_bad_edge_feats():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     with pytest.raises(TypeError):
-        _ = DGData.from_raw(edge_timestamps, edge_index, 'foo')
+        _ = DGData.from_raw(edge_time, edge_index, 'foo')
 
     with pytest.raises(ValueError):
-        _ = DGData.from_raw(edge_timestamps, edge_index, torch.rand(1))
+        _ = DGData.from_raw(edge_time, edge_index, torch.rand(1))
 
 
 def test_init_dg_data_bad_args_bad_node_ids():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     edge_x = torch.rand(2, 5)
-    node_timestamps = torch.LongTensor([6, 7, 8])
+    node_x_time = torch.LongTensor([6, 7, 8])
 
     with pytest.raises(TypeError):
         _ = DGData.from_raw(
-            edge_timestamps, edge_index, edge_x, node_timestamps, node_ids='foo'
+            edge_time, edge_index, edge_x, node_x_time, node_x_nids='foo'
         )
 
     with pytest.raises(ValueError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             edge_x,
-            node_timestamps,
-            node_ids=torch.IntTensor([0]),
+            node_x_time,
+            node_x_nids=torch.IntTensor([0]),
         )
 
 
 def test_init_dg_data_bad_args_non_integral_types():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    node_timestamps = torch.LongTensor([6, 7, 8])
-    node_ids = torch.IntTensor([0, 1, 0])
+    edge_time = torch.LongTensor([1, 5])
+    node_x_time = torch.LongTensor([6, 7, 8])
+    node_x_nids = torch.IntTensor([0, 1, 0])
 
     with pytest.raises(TypeError):
         _ = DGData.from_raw(
-            edge_timestamps.float(),
+            edge_time.float(),
             edge_index,
-            node_timestamps=node_timestamps,
-            node_ids=node_ids,
+            node_x_time=node_x_time,
+            node_x_nids=node_x_nids,
         )
     with pytest.raises(TypeError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index.float(),
-            node_timestamps=node_timestamps,
-            node_ids=node_ids,
+            node_x_time=node_x_time,
+            node_x_nids=node_x_nids,
         )
     with pytest.raises(TypeError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
-            node_timestamps=node_timestamps.float(),
-            node_ids=node_ids,
+            node_x_time=node_x_time.float(),
+            node_x_nids=node_x_nids,
         )
     with pytest.raises(TypeError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
-            node_timestamps=node_timestamps,
-            node_ids=node_ids.float(),
+            node_x_time=node_x_time,
+            node_x_nids=node_x_nids.float(),
         )
 
 
 def test_init_dg_data_bad_args_bad_dynamic_node_feats():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     edge_x = torch.rand(2, 5)
-    node_ids = torch.IntTensor([1, 2, 3])
-    node_timestamps = torch.LongTensor([6, 7, 8])
+    node_x_nids = torch.IntTensor([1, 2, 3])
+    node_x_time = torch.LongTensor([6, 7, 8])
 
     with pytest.raises(TypeError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             edge_x,
-            node_timestamps,
-            node_ids,
+            node_x_time,
+            node_x_nids,
             'foo',
         )
     with pytest.raises(ValueError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             edge_x,
-            node_timestamps,
-            node_ids,
+            node_x_time,
+            node_x_nids,
             torch.rand(1, 7),
         )
 
@@ -450,33 +448,33 @@ def test_init_dg_data_bad_args_bad_dynamic_node_feats():
 def test_init_dg_data_bad_args_bad_static_node_feats():
     # Num nodes = 21
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    node_ids = torch.IntTensor([1, 2, 3])
-    node_timestamps = torch.LongTensor([6, 7, 8])
+    edge_time = torch.LongTensor([1, 5])
+    node_x_nids = torch.IntTensor([1, 2, 3])
+    node_x_time = torch.LongTensor([6, 7, 8])
 
     with pytest.raises(TypeError):
         _ = DGData.from_raw(
-            edge_timestamps, edge_index, None, node_timestamps, node_ids, None, 'foo'
+            edge_time, edge_index, None, node_x_time, node_x_nids, None, 'foo'
         )
 
     with pytest.raises(ValueError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             None,
-            node_timestamps,
-            node_ids,
+            node_x_time,
+            node_x_nids,
             None,
             torch.rand(20, 11),  # should be [21, ...]
         )
 
     # Num nodes = 21
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
 
     with pytest.raises(ValueError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             None,
             None,
@@ -487,13 +485,13 @@ def test_init_dg_data_bad_args_bad_static_node_feats():
 
     # Num nodes = 101
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    node_ids = torch.IntTensor([1, 2, 100])
-    node_timestamps = torch.LongTensor([6, 7, 8])
+    edge_time = torch.LongTensor([1, 5])
+    node_x_nids = torch.IntTensor([1, 2, 100])
+    node_x_time = torch.LongTensor([6, 7, 8])
 
     with pytest.raises(ValueError):
         _ = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             None,
             None,
@@ -507,9 +505,7 @@ def test_from_csv_with_edge_features():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
     timestamps = torch.LongTensor([1, 5])
     edge_x = torch.rand(2, 5)
-    data = DGData.from_raw(
-        edge_timestamps=timestamps, edge_index=edge_index, edge_x=edge_x
-    )
+    data = DGData.from_raw(edge_time=timestamps, edge_index=edge_index, edge_x=edge_x)
 
     edge_x_col = [f'dim_{i}' for i in range(5)]
     col_names = {'edge_src_col': 'src', 'edge_dst_col': 'dst', 'edge_time_col': 't'}
@@ -550,14 +546,14 @@ def test_from_csv_with_edge_features():
 
 def test_from_csv_with_node_events():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 1])
-    node_ids = torch.IntTensor([7, 8])
-    node_timestamps = torch.LongTensor([3, 6])
+    edge_time = torch.LongTensor([1, 1])
+    node_x_nids = torch.IntTensor([7, 8])
+    node_x_time = torch.LongTensor([3, 6])
     data = DGData.from_raw(
-        edge_timestamps=edge_timestamps,
+        edge_time=edge_time,
         edge_index=edge_index,
-        node_ids=node_ids,
-        node_timestamps=node_timestamps,
+        node_x_nids=node_x_nids,
+        node_x_time=node_x_time,
     )
 
     edge_col_names = {
@@ -565,7 +561,7 @@ def test_from_csv_with_node_events():
         'edge_dst_col': 'dst',
         'edge_time_col': 't',
     }
-    node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
+    node_col_names = {'node_x_nids_col': 'node_id', 'node_x_time_col': 'node_time'}
 
     tmp_edge = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
     tmp_name_edge = tmp_edge.name
@@ -583,7 +579,7 @@ def test_from_csv_with_node_events():
                 zip(
                     edge_index[:, 0].tolist(),
                     edge_index[:, 1].tolist(),
-                    edge_timestamps.tolist(),
+                    edge_time.tolist(),
                 )
             )
             edge_file.flush()
@@ -593,8 +589,8 @@ def test_from_csv_with_node_events():
             writer.writerow(list(node_col_names.values()))
             writer.writerows(
                 zip(
-                    node_ids.tolist(),
-                    node_timestamps.tolist(),
+                    node_x_nids.tolist(),
+                    node_x_time.tolist(),
                 )
             )
             node_file.flush()
@@ -608,7 +604,7 @@ def test_from_csv_with_node_events():
 
         torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
         torch.testing.assert_close(data.time, recovered_data.time)
-        torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
+        torch.testing.assert_close(data.node_x_nids, recovered_data.node_x_nids)
         torch.testing.assert_close(data.node_x, recovered_data.node_x)
         assert data.time_delta == TimeDeltaDG('r')
     except Exception as e:
@@ -620,17 +616,17 @@ def test_from_csv_with_node_events():
 
 def test_from_csv_with_node_features():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 1])
-    node_ids = torch.IntTensor([7, 8])
-    node_timestamps = torch.LongTensor([3, 6])
+    edge_time = torch.LongTensor([1, 1])
+    node_x_nids = torch.IntTensor([7, 8])
+    node_x_time = torch.LongTensor([3, 6])
     node_x = torch.rand(2, 5)
     static_node_x = torch.rand(21, 3)
 
     data = DGData.from_raw(
-        edge_timestamps=edge_timestamps,
+        edge_time=edge_time,
         edge_index=edge_index,
-        node_ids=node_ids,
-        node_timestamps=node_timestamps,
+        node_x_nids=node_x_nids,
+        node_x_time=node_x_time,
         node_x=node_x,
         static_node_x=static_node_x,
     )
@@ -640,7 +636,7 @@ def test_from_csv_with_node_features():
         'edge_dst_col': 'dst',
         'edge_time_col': 't',
     }
-    node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
+    node_col_names = {'node_x_nids_col': 'node_id', 'node_x_time_col': 'node_time'}
     node_feats_col = [f'dim_{i}' for i in range(5)]
     static_node_x_col = [f'sdim_{i}' for i in range(3)]
 
@@ -664,7 +660,7 @@ def test_from_csv_with_node_features():
                 zip(
                     edge_index[:, 0].tolist(),
                     edge_index[:, 1].tolist(),
-                    edge_timestamps.tolist(),
+                    edge_time.tolist(),
                 )
             )
             edge_file.flush()
@@ -674,8 +670,8 @@ def test_from_csv_with_node_features():
             writer.writerow(list(node_col_names.values()) + node_feats_col)
             writer.writerows(
                 zip(
-                    node_ids.tolist(),
-                    node_timestamps.tolist(),
+                    node_x_nids.tolist(),
+                    node_x_time.tolist(),
                     node_x[:, 0].tolist(),
                     node_x[:, 1].tolist(),
                     node_x[:, 2].tolist(),
@@ -709,7 +705,7 @@ def test_from_csv_with_node_features():
 
         torch.testing.assert_close(data.edge_index, recovered_data.edge_index)
         torch.testing.assert_close(data.time, recovered_data.time)
-        torch.testing.assert_close(data.node_ids, recovered_data.node_ids)
+        torch.testing.assert_close(data.node_x_nids, recovered_data.node_x_nids)
         torch.testing.assert_close(data.node_x, recovered_data.node_x)
         torch.testing.assert_close(data.static_node_x, recovered_data.static_node_x)
         assert data.time_delta == TimeDeltaDG('r')
@@ -723,9 +719,9 @@ def test_from_csv_with_node_features():
 
 def test_from_csv_bad_node_cols_not_specified():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 1])
-    node_ids = torch.IntTensor([7, 8])
-    node_timestamps = torch.LongTensor([3, 6])
+    edge_time = torch.LongTensor([1, 1])
+    node_x_nids = torch.IntTensor([7, 8])
+    node_x_time = torch.LongTensor([3, 6])
     node_x = torch.rand(2, 5)
 
     edge_col_names = {
@@ -733,7 +729,7 @@ def test_from_csv_bad_node_cols_not_specified():
         'edge_dst_col': 'dst',
         'edge_time_col': 't',
     }
-    node_col_names = {'node_id_col': 'node_id', 'node_time_col': 'node_time'}
+    node_col_names = {'node_x_nids_col': 'node_id', 'node_x_time_col': 'node_time'}
     node_feats_col = [f'dim_{i}' for i in range(5)]
 
     tmp_edge = tempfile.NamedTemporaryFile(mode='w', delete=False, newline='')
@@ -752,7 +748,7 @@ def test_from_csv_bad_node_cols_not_specified():
                 zip(
                     edge_index[:, 0].tolist(),
                     edge_index[:, 1].tolist(),
-                    edge_timestamps.tolist(),
+                    edge_time.tolist(),
                 )
             )
             edge_file.flush()
@@ -762,8 +758,8 @@ def test_from_csv_bad_node_cols_not_specified():
             writer.writerow(list(node_col_names.values()) + node_feats_col)
             writer.writerows(
                 zip(
-                    node_ids.tolist(),
-                    node_timestamps.tolist(),
+                    node_x_nids.tolist(),
+                    node_x_time.tolist(),
                     node_x[:, 0].tolist(),
                     node_x[:, 1].tolist(),
                     node_x[:, 2].tolist(),
@@ -833,13 +829,13 @@ def test_from_pandas_with_node_events():
         edge_dst_col='dst',
         edge_time_col='t',
         node_df=node_df,
-        node_id_col='node',
-        node_time_col='t',
+        node_x_nids_col='node',
+        node_x_time_col='t',
     )
     assert isinstance(data, DGData)
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
     assert data.time.tolist() == [3, 6, 1337, 1338]
-    assert data.node_ids.tolist() == [7, 8]
+    assert data.node_x_nids.tolist() == [7, 8]
     assert data.node_x is None
     assert data.time_delta == TimeDeltaDG('r')
 
@@ -863,14 +859,14 @@ def test_from_pandas_with_node_features():
         edge_dst_col='dst',
         edge_time_col='t',
         node_df=node_df,
-        node_id_col='node',
-        node_time_col='t',
+        node_x_nids_col='node',
+        node_x_time_col='t',
         node_x_col='node_features',
     )
     assert isinstance(data, DGData)
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
     assert data.time.tolist() == [3, 6, 1337, 1338]
-    assert data.node_ids.tolist() == [7, 8]
+    assert data.node_x_nids.tolist() == [7, 8]
     torch.testing.assert_close(data.node_x.tolist(), node_df.node_features.tolist())
     assert data.time_delta == TimeDeltaDG('r')
 
@@ -1196,7 +1192,7 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
         t: v for t, v in full_node_dict.items() if edge_times[0] <= t < edge_times[-1]
     }
     if not len(split_node_dict):
-        assert data.node_ids is None
+        assert data.node_x_nids is None
         assert data.node_x is None
     else:
         exp_node_ids, exp_node_feats = [], []
@@ -1205,7 +1201,7 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
             feats = list(node_dict.values())[0].tolist()
             exp_node_ids.append(nodes)
             exp_node_feats.append(feats)
-        assert data.node_ids.tolist() == exp_node_ids
+        assert data.node_x_nids.tolist() == exp_node_ids
         assert data.node_x.tolist() == exp_node_feats
 
     # Confirm correct dataset instantiation
@@ -1320,9 +1316,9 @@ def test_from_bad_thgl(
 
 def test_discretize_reduce_op_bad():
     edge_index = torch.IntTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
-    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_time = torch.LongTensor([1, 2, 3, 63, 65])
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         time_delta='m',
     )
@@ -1332,13 +1328,13 @@ def test_discretize_reduce_op_bad():
 
 def test_discretize_reduce_op_first():
     edge_index = torch.IntTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
-    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_time = torch.LongTensor([1, 2, 3, 63, 65])
     edge_type = torch.IntTensor([0, 0, 1, 0, 2])
     node_type = torch.arange(6, dtype=torch.int32)
     edge_x = torch.rand(5, 5)
     static_node_x = torch.rand(6, 11)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         edge_x,
         static_node_x=static_node_x,
@@ -1370,27 +1366,27 @@ def test_discretize_reduce_op_first():
     torch.testing.assert_close(coarse_data.node_type, exp_node_type)
 
     assert coarse_data.node_mask is None
-    assert coarse_data.node_ids is None
+    assert coarse_data.node_x_nids is None
     assert coarse_data.node_x is None
 
 
 def test_discretize_with_node_events_reduce_op_first():
     edge_index = torch.IntTensor([[1, 2], [1, 2], [2, 3], [1, 2], [4, 5]])
-    edge_timestamps = torch.LongTensor([1, 2, 3, 63, 65])
+    edge_time = torch.LongTensor([1, 2, 3, 63, 65])
     edge_x = torch.rand(5, 5)
     edge_type = torch.IntTensor([0, 0, 1, 0, 2])
     node_type = torch.arange(8, dtype=torch.int32)
 
-    node_ids = torch.IntTensor([6, 6, 7, 6, 6, 7])
-    node_timestamps = torch.LongTensor([10, 20, 30, 70, 80, 90])
+    node_x_nids = torch.IntTensor([6, 6, 7, 6, 6, 7])
+    node_x_time = torch.LongTensor([10, 20, 30, 70, 80, 90])
     node_x = torch.rand(6, 5)
     static_node_x = torch.rand(8, 11)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         edge_x,
-        node_timestamps,
-        node_ids,
+        node_x_time,
+        node_x_nids,
         node_x,
         static_node_x,
         time_delta='m',
@@ -1432,7 +1428,7 @@ def test_discretize_with_node_events_reduce_op_first():
     torch.testing.assert_close(coarse_data.static_node_x, exp_static_node_feats)
 
     torch.testing.assert_close(coarse_data.node_mask, exp_node_mask)
-    torch.testing.assert_close(coarse_data.node_ids, exp_node_ids)
+    torch.testing.assert_close(coarse_data.node_x_nids, exp_node_ids)
     torch.testing.assert_close(coarse_data.node_x, exp_node_x)
     torch.testing.assert_close(coarse_data.edge_type, exp_edge_type)
     torch.testing.assert_close(coarse_data.node_type, exp_node_type)
@@ -1440,12 +1436,12 @@ def test_discretize_with_node_events_reduce_op_first():
 
 def test_discretize_no_op():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    data = DGData.from_raw(edge_timestamps, edge_index)
+    edge_time = torch.LongTensor([1, 5])
+    data = DGData.from_raw(edge_time, edge_index)
     coarse_data = data.discretize('r')
     assert id(data) != id(coarse_data)  # No Shared memory
 
-    data = DGData.from_raw(edge_timestamps, edge_index, time_delta='s')
+    data = DGData.from_raw(edge_time, edge_index, time_delta='s')
     coarse_data = data.discretize('s')
     assert id(data) != id(coarse_data)  # No Shared memory
 
@@ -1457,10 +1453,10 @@ def test_discretize_with_huge_ids_no_overflow():
         [[1, 2], [1, 2], [2, 3], [1, 2], [max_int32 - 1, max_int32 - 1]]
     )
     edge_type = torch.IntTensor([0, 0, 1, 0, 2])
-    edge_timestamps = torch.LongTensor([1, 2, 3, max_int32 - 1, max_int32 - 1])
+    edge_time = torch.LongTensor([1, 2, 3, max_int32 - 1, max_int32 - 1])
     edge_x = torch.rand(5, 5)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         edge_x,
         time_delta='m',
@@ -1494,13 +1490,13 @@ def test_discretize_with_huge_ids_no_overflow():
 
 def test_discretize_bad_args():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
 
     with pytest.raises(EventOrderedConversionError):
-        data = DGData.from_raw(edge_timestamps, edge_index, time_delta='r')
+        data = DGData.from_raw(edge_time, edge_index, time_delta='r')
         data.discretize('s')  # Cannot reduce from event-ordered
     with pytest.raises(InvalidDiscretizationError):
-        data = DGData.from_raw(edge_timestamps, edge_index, time_delta='h')
+        data = DGData.from_raw(edge_time, edge_index, time_delta='h')
         data.discretize('s')  # Cannot reduce into more granular time
 
 
@@ -1564,9 +1560,9 @@ def test_split_cannot_override_tgb_split():
 
 def test_clone():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
 
-    dg1 = DGData.from_raw(edge_timestamps, edge_index)
+    dg1 = DGData.from_raw(edge_time, edge_index)
     dg2 = dg1.clone()
 
     assert dg1 is not dg2
@@ -1583,20 +1579,20 @@ def test_clone():
 
 def test_init_edge_type():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     edge_type = torch.arange(2, dtype=torch.int32)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         edge_type=edge_type,
     )
     torch.testing.assert_close(data.edge_index, edge_index)
-    torch.testing.assert_close(data.time, edge_timestamps)
+    torch.testing.assert_close(data.time, edge_time)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     assert data.edge_x is None
     assert data.node_mask is None
-    assert data.node_ids is None
+    assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
     assert data.node_type is None
@@ -1605,11 +1601,11 @@ def test_init_edge_type():
 
 def test_init_bad_edge_type():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     edge_type = torch.arange(10, dtype=torch.int32)
     with pytest.raises(ValueError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             edge_type=edge_type,
         )
@@ -1617,7 +1613,7 @@ def test_init_bad_edge_type():
     edge_type = torch.arange(1, dtype=torch.int32)
     with pytest.raises(ValueError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             edge_type=edge_type,
         )
@@ -1625,7 +1621,7 @@ def test_init_bad_edge_type():
     edge_type = torch.arange(2, dtype=torch.float16)
     with pytest.raises(TypeError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             edge_type=edge_type,
         )
@@ -1633,14 +1629,14 @@ def test_init_bad_edge_type():
     edge_type = torch.arange(2, dtype=torch.int32)
     with pytest.raises(TypeError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             edge_type=edge_type.numpy(),
         )
 
     with pytest.raises(ValueError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             edge_type=torch.stack([edge_type, edge_type]),
         )
@@ -1648,7 +1644,7 @@ def test_init_bad_edge_type():
     edge_type = torch.empty(2).fill_(float('nan'))
     with pytest.raises(ValueError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             edge_type=edge_type,
         )
@@ -1656,20 +1652,20 @@ def test_init_bad_edge_type():
 
 def test_init_node_type():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     node_type = torch.arange(21, dtype=torch.int32)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         node_type=node_type,
     )
     torch.testing.assert_close(data.edge_index, edge_index)
-    torch.testing.assert_close(data.time, edge_timestamps)
+    torch.testing.assert_close(data.time, edge_time)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.node_type, node_type)
     assert data.edge_x is None
     assert data.node_mask is None
-    assert data.node_ids is None
+    assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
     assert data.edge_type is None
@@ -1678,11 +1674,11 @@ def test_init_node_type():
 
 def test_init_bad_node_type():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     node_type = torch.arange(2, dtype=torch.int32)
     with pytest.raises(ValueError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             node_type=node_type,
         )
@@ -1690,7 +1686,7 @@ def test_init_bad_node_type():
     node_type = torch.arange(21, dtype=torch.float32)
     with pytest.raises(TypeError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             node_type=node_type,
         )
@@ -1698,7 +1694,7 @@ def test_init_bad_node_type():
     node_type = torch.arange(21, dtype=torch.int32)
     with pytest.raises(TypeError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             node_type=node_type.numpy(),
         )
@@ -1706,7 +1702,7 @@ def test_init_bad_node_type():
     node_type = torch.arange(21, dtype=torch.int32)
     with pytest.raises(ValueError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             node_type=torch.stack([node_type, node_type]),
         )
@@ -1714,7 +1710,7 @@ def test_init_bad_node_type():
     node_type = torch.empty(21).fill_(float('nan'))
     with pytest.raises(ValueError):
         data = DGData.from_raw(
-            edge_timestamps,
+            edge_time,
             edge_index,
             node_type=node_type,
         )
@@ -1722,23 +1718,23 @@ def test_init_bad_node_type():
 
 def test_init_edge_node_types():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     edge_type = torch.arange(2, dtype=torch.int32)
     node_type = torch.arange(21, dtype=torch.int32)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         edge_type=edge_type,
         node_type=node_type,
     )
     torch.testing.assert_close(data.edge_index, edge_index)
-    torch.testing.assert_close(data.time, edge_timestamps)
+    torch.testing.assert_close(data.time, edge_time)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     torch.testing.assert_close(data.node_type, node_type)
     assert data.edge_x is None
     assert data.node_mask is None
-    assert data.node_ids is None
+    assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
     assert data.time_delta == TimeDeltaDG('r')
@@ -1746,25 +1742,25 @@ def test_init_edge_node_types():
 
 def test_init_node_edge_types_with_edge_features():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     edge_x = torch.rand(2, 5)
     edge_type = torch.arange(2, dtype=torch.int32)
     node_type = torch.arange(21, dtype=torch.int32)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         edge_x,
         edge_type=edge_type,
         node_type=node_type,
     )
     torch.testing.assert_close(data.edge_index, edge_index)
-    torch.testing.assert_close(data.time, edge_timestamps)
+    torch.testing.assert_close(data.time, edge_time)
     torch.testing.assert_close(data.edge_x, edge_x)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     torch.testing.assert_close(data.node_type, node_type)
     assert data.node_mask is None
-    assert data.node_ids is None
+    assert data.node_x_nids is None
     assert data.node_x is None
     assert data.static_node_x is None
     assert data.time_delta == TimeDeltaDG('r')
@@ -1772,25 +1768,25 @@ def test_init_node_edge_types_with_edge_features():
 
 def test_init_node_edge_types_with_node_features():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 5])
+    edge_time = torch.LongTensor([1, 5])
     static_node_x = torch.rand(21, 11)
     edge_type = torch.arange(2, dtype=torch.int32)
     node_type = torch.arange(21, dtype=torch.int32)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
         static_node_x=static_node_x,
         edge_type=edge_type,
         node_type=node_type,
     )
     torch.testing.assert_close(data.edge_index, edge_index)
-    torch.testing.assert_close(data.time, edge_timestamps)
+    torch.testing.assert_close(data.time, edge_time)
     torch.testing.assert_close(data.static_node_x, static_node_x)
     torch.testing.assert_close(data.edge_mask, torch.IntTensor([0, 1]))
     torch.testing.assert_close(data.edge_type, edge_type)
     torch.testing.assert_close(data.node_type, node_type)
     assert data.node_mask is None
-    assert data.node_ids is None
+    assert data.node_x_nids is None
     assert data.node_x is None
     assert data.edge_x is None
     assert data.time_delta == TimeDeltaDG('r')
@@ -1801,7 +1797,7 @@ def test_from_csv_with_edge_type():
     timestamps = torch.LongTensor([1, 5])
     edge_type = torch.arange(2, dtype=torch.int32)
     data = DGData.from_raw(
-        edge_timestamps=timestamps, edge_index=edge_index, edge_type=edge_type
+        edge_time=timestamps, edge_index=edge_index, edge_type=edge_type
     )
 
     edge_type_col = 'edge_type'
@@ -1842,14 +1838,14 @@ def test_from_csv_with_edge_type():
 
 def test_from_csv_with_node_type():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
-    edge_timestamps = torch.LongTensor([1, 1])
-    node_ids = torch.IntTensor([7, 8])
+    edge_time = torch.LongTensor([1, 1])
+    node_x_nids = torch.IntTensor([7, 8])
     node_type = torch.arange(21, dtype=torch.int32)
 
     data = DGData.from_raw(
-        edge_timestamps=edge_timestamps,
+        edge_time=edge_time,
         edge_index=edge_index,
-        node_ids=node_ids,
+        node_x_nids=node_x_nids,
         node_type=node_type,
     )
 
@@ -1878,7 +1874,7 @@ def test_from_csv_with_node_type():
                 zip(
                     edge_index[:, 0].tolist(),
                     edge_index[:, 1].tolist(),
-                    edge_timestamps.tolist(),
+                    edge_time.tolist(),
                 )
             )
             edge_file.flush()

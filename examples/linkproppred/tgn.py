@@ -74,11 +74,13 @@ def train(
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-        num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
+        num_nbrs = len(nbr_nodes) // (
+            len(batch.edge_src) + len(batch.edge_dst) + len(batch.neg)
+        )
         src_nodes = torch.cat(
             [
-                batch.src.repeat_interleave(num_nbrs),
-                batch.dst.repeat_interleave(num_nbrs),
+                batch.edge_src.repeat_interleave(num_nbrs),
+                batch.edge_dst.repeat_interleave(num_nbrs),
                 batch.neg.repeat_interleave(num_nbrs),
             ]
         )
@@ -89,14 +91,14 @@ def train(
             ]
         ).to(dtype=torch.int64)
 
-        nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+        nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+        nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
-        z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+        z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-        inv_src = batch.global_to_local(batch.src)
-        inv_dst = batch.global_to_local(batch.dst)
+        inv_src = batch.global_to_local(batch.edge_src)
+        inv_dst = batch.global_to_local(batch.edge_dst)
         inv_neg = batch.global_to_local(batch.neg)
         pos_out = decoder(z[inv_src], z[inv_dst])
         neg_out = decoder(z[inv_src], z[inv_neg])
@@ -105,7 +107,9 @@ def train(
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
+        memory.update_state(
+            batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
+        )
 
         loss.backward()
         opt.step()
@@ -135,11 +139,13 @@ def eval(
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-        num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
+        num_nbrs = len(nbr_nodes) // (
+            len(batch.edge_src) + len(batch.edge_dst) + len(batch.neg)
+        )
         src_nodes = torch.cat(
             [
-                batch.src.repeat_interleave(num_nbrs),
-                batch.dst.repeat_interleave(num_nbrs),
+                batch.edge_src.repeat_interleave(num_nbrs),
+                batch.edge_dst.repeat_interleave(num_nbrs),
                 batch.neg.repeat_interleave(num_nbrs),
             ]
         )
@@ -149,15 +155,15 @@ def eval(
                 batch.global_to_local(nbr_nodes[nbr_mask]),
             ]
         ).to(dtype=torch.int64)
-        nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+        nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+        nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
-        z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+        z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src_ids = batch.src[idx].repeat(len(dst_ids))
+            dst_ids = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.edge_src[idx].repeat(len(dst_ids))
 
             inv_src = batch.global_to_local(src_ids)
             inv_dst = batch.global_to_local(dst_ids)
@@ -171,7 +177,9 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.time, batch.edge_feats.float())
+        memory.update_state(
+            batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
+        )
 
     return float(np.mean(perf_list))
 
@@ -188,8 +196,8 @@ test_dg = DGraph(test_data, device=args.device)
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['src', 'dst', 'neg'],
-    seed_times_keys=['time', 'time', 'neg_time'],
+    seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+    seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(
