@@ -1025,8 +1025,7 @@ class DGData:
         else:
             edge_x = torch.from_numpy(data['edge_feat']).to(torch.float32)
 
-        # TODO: Are the labels or events
-        node_x_time, node_x_nids, node_x = None, None, None
+        node_y_time, node_y_nids, node_y = None, None, None
         if name.startswith('tgbn-'):
             if 'node_label_dict' in data:
                 # in TGB, after passing a batch of edges, you find the nearest node event batch in the past
@@ -1044,26 +1043,26 @@ class DGData:
 
             if len(node_label_dict):
                 # Node events could be missing from the current data split (e.g. validation)
-                num_node_events, node_label_dim = 0, 0
+                num_node_labels, node_label_dim = 0, 0
                 for t in node_label_dict:
                     for node_id, label in node_label_dict[t].items():
-                        num_node_events += 1
+                        num_node_labels += 1
                         node_label_dim = label.shape[0]
-                temp_node_timestamps = np.zeros(num_node_events, dtype=np.int64)
-                temp_node_ids = np.zeros(num_node_events, dtype=np.int32)
-                temp_node_x = np.zeros(
-                    (num_node_events, node_label_dim), dtype=np.float32
+                temp_node_y_timestamps = np.zeros(num_node_labels, dtype=np.int64)
+                temp_node_y_ids = np.zeros(num_node_labels, dtype=np.int32)
+                temp_node_y = np.zeros(
+                    (num_node_labels, node_label_dim), dtype=np.float32
                 )
                 idx = 0
                 for t in node_label_dict:
                     for node_id, label in node_label_dict[t].items():
-                        temp_node_timestamps[idx] = t
-                        temp_node_ids[idx] = node_id
-                        temp_node_x[idx] = label
+                        temp_node_y_timestamps[idx] = t
+                        temp_node_y_ids[idx] = node_id
+                        temp_node_y[idx] = label
                         idx += 1
-                node_x_time = torch.from_numpy(temp_node_timestamps)
-                node_x_nids = torch.from_numpy(temp_node_ids)
-                node_x = torch.from_numpy(temp_node_x)
+                node_y_time = torch.from_numpy(temp_node_y_timestamps)
+                node_y_nids = torch.from_numpy(temp_node_y_ids)
+                node_y = torch.from_numpy(temp_node_y)
 
         # Read static node features if they exist
         static_node_x = None
@@ -1095,9 +1094,9 @@ class DGData:
             edge_time=timestamps,
             edge_index=edge_index,
             edge_x=edge_x,
-            node_x_time=node_x_time,
-            node_x_nids=node_x_nids,
-            node_x=node_x,
+            node_y_time=node_y_time,
+            node_y_nids=node_y_nids,
+            node_y=node_y,
             static_node_x=static_node_x,
             edge_type=edge_type,
             node_type=node_type,

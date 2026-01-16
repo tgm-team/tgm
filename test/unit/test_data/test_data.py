@@ -1198,8 +1198,8 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
         t: v for t, v in full_node_dict.items() if edge_times[0] <= t < edge_times[-1]
     }
     if not len(split_node_dict):
-        assert data.node_x_nids is None
-        assert data.node_x is None
+        assert data.node_y_nids is None
+        assert data.node_y is None
     else:
         exp_node_ids, exp_node_feats = [], []
         for node_dict in split_node_dict.values():
@@ -1207,8 +1207,8 @@ def test_from_tgbn(mock_dataset_cls, tgb_dataset_factory):
             feats = list(node_dict.values())[0].tolist()
             exp_node_ids.append(nodes)
             exp_node_feats.append(feats)
-        assert data.node_x_nids.tolist() == exp_node_ids
-        assert data.node_x.tolist() == exp_node_feats
+        assert data.node_y_nids.tolist() == exp_node_ids
+        assert data.node_y.tolist() == exp_node_feats
 
     # Confirm correct dataset instantiation
     mock_dataset_cls.assert_called_once_with(name='tgbn-trade')
