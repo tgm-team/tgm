@@ -68,6 +68,9 @@ class DGStorageArrayBackend(DGStorageBase):
         return src, dst, time
 
     def get_node_events(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor]:
+        if self._data.node_x_mask is None:
+            return torch.empty(0, dtype=torch.int), torch.empty(0, dtype=torch.long)
+
         lb_idx, ub_idx = self._binary_search(slice)
         node_x_mask = (self._data.node_x_mask >= lb_idx) & (
             self._data.node_x_mask < ub_idx
@@ -80,6 +83,9 @@ class DGStorageArrayBackend(DGStorageBase):
         return node_x_nids, time
 
     def get_node_labels(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor]:
+        if self._data.node_y_mask is None:
+            return (torch.empty(0, dtype=torch.int), torch.empty(0, dtype=torch.long))
+
         lb_idx, ub_idx = self._binary_search(slice)
         node_y_mask = (self._data.node_y_mask >= lb_idx) & (
             self._data.node_y_mask < ub_idx

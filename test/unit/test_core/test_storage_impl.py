@@ -416,6 +416,12 @@ def test_get_dynamic_node_feats_no_node_feats(DGStorageImpl, data, request):
     assert storage.get_node_x(DGSliceTracker()) is None
     assert storage.get_node_x_dim() is None
 
+    ids, time = storage.get_node_events(DGSliceTracker())
+    assert ids.numel() == 0
+    assert time.numel() == 0
+    assert ids.dtype == torch.int32
+    assert time.dtype == torch.int64
+
 
 def test_get_dynamic_node_feats(DGStorageImpl, data_with_features):
     data = data_with_features
@@ -518,6 +524,12 @@ def test_get_dynamic_node_y_no_node_y(DGStorageImpl, data, request):
 
     assert storage.get_node_y(DGSliceTracker()) is None
     assert storage.get_node_y_dim() is None
+
+    ids, time = storage.get_node_labels(DGSliceTracker())
+    assert ids.numel() == 0
+    assert time.numel() == 0
+    assert ids.dtype == torch.int32
+    assert time.dtype == torch.int64
 
 
 def test_get_dynamic_node_y(DGStorageImpl, data_with_labels):

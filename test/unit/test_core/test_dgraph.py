@@ -32,6 +32,30 @@ def data():
 
 
 @pytest.fixture
+def data_with_node_y():
+    edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
+    edge_x = torch.rand(3, 5)
+    node_timestamps = torch.LongTensor([1, 5, 10])
+    node_ids = torch.IntTensor([2, 4, 6])
+    node_y = torch.rand([3, 5])
+    static_node_x = torch.rand(9, 11)
+    edge_type = torch.IntTensor([0, 1, 2])
+    node_type = torch.arange(9, dtype=torch.int32)
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        edge_x,
+        node_y_time=node_timestamps,
+        node_y_nids=node_ids,
+        node_y=node_y,
+        static_node_x=static_node_x,
+        edge_type=edge_type,
+        node_type=node_type,
+    )
+
+
+@pytest.fixture
 def unorder_data():
     edge_index = torch.IntTensor([[2, 3], [10, 20]])
     edge_timestamps = torch.LongTensor([5, 1])
@@ -62,6 +86,7 @@ def test_init_from_data(data):
     assert dg.end_time == 20
     assert dg.num_nodes == 9
     assert dg.num_node_events == 3
+    assert dg.num_node_labels == 0
     assert dg.num_edge_events == 3
     assert dg.num_timestamps == 4
     assert dg.num_events == 6
@@ -91,6 +116,51 @@ def test_init_from_data(data):
     torch.testing.assert_close(dg.node_x_nids, exp_node_ids)
     torch.testing.assert_close(dg.node_x_time, exp_node_time)
 
+    torch.testing.assert_close(dg.node_y_nids, torch.empty(0, dtype=torch.int32))
+    torch.testing.assert_close(dg.node_y_time, torch.empty(0, dtype=torch.int64))
+    assert dg.node_y is None
+    assert dg.node_y_dim is None
+
+
+def test_init_from_data_with_labels(data_with_node_y):
+    data = data_with_node_y
+    dg = DGraph(data)
+
+    assert dg.time_delta.is_event_ordered
+
+    assert len(dg) == 4
+    assert dg.start_time == 1
+    assert dg.end_time == 20
+    assert dg.num_nodes == 9
+    assert dg.num_node_events == 0
+    assert dg.num_node_labels == 3
+    assert dg.num_edge_events == 3
+    assert dg.num_timestamps == 4
+    assert dg.num_events == 6
+    assert dg.static_node_x_dim == 11
+    assert dg.node_x_dim is None
+    assert dg.edge_x_dim == 5
+    assert dg.device == torch.device('cpu')
+
+    exp_src = torch.tensor([2, 2, 1], dtype=torch.int32)
+    exp_dst = torch.tensor([2, 4, 8], dtype=torch.int32)
+    exp_time = torch.tensor([1, 5, 20], dtype=torch.int64)
+    torch.testing.assert_close(dg.edge_src, exp_src)
+    torch.testing.assert_close(dg.edge_dst, exp_dst)
+    torch.testing.assert_close(dg.edge_time, exp_time)
+
+    exp_node_y = torch.zeros(dg.end_time + 1, dg.num_nodes, 5)
+    exp_node_y[1, 2] = data.node_y[0]
+    exp_node_y[5, 4] = data.node_y[1]
+    exp_node_y[10, 6] = data.node_y[2]
+    torch.testing.assert_close(dg.node_y.to_dense(), exp_node_y)
+
+    exp_node_time = torch.tensor([1, 5, 10], dtype=torch.int64)
+    exp_node_ids = torch.tensor([2, 4, 6], dtype=torch.int32)
+    torch.testing.assert_close(dg.node_y_nids, exp_node_ids)
+    torch.testing.assert_close(dg.node_y_time, exp_node_time)
+    assert dg.node_y_dim == 5
+
 
 @pytest.mark.gpu
 def test_init_gpu(data):
@@ -114,6 +184,15 @@ def test_init_gpu(data):
     torch.testing.assert_close(dg.edge_x, data.edge_x.to('cuda'))
     torch.testing.assert_close(dg.edge_type, data.edge_type.to('cuda'))
     torch.testing.assert_close(dg.node_type, data.node_type.to('cuda'))
+
+    torch.testing.assert_close(
+        dg.node_y_nids, torch.empty(0, torch.int32, device='cuda')
+    )
+    torch.testing.assert_close(
+        dg.node_y_time, torch.empty(0, torch.int64, device='cuda')
+    )
+    assert dg.node_y is None
+    assert dg.node_y_dim is None
 
 
 def test_to_cpu(data):
@@ -196,6 +275,7 @@ def test_slice_time_no_upper_bound(data):
     assert dg1.end_time == 20
     assert dg1.num_nodes == 9
     assert dg1.num_node_events == 2
+    assert dg1.num_node_labels == 0
     assert dg1.num_edge_events == 2
     assert dg1.num_timestamps == 3
 
