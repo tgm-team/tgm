@@ -11,17 +11,17 @@ from tgm.hooks.hook_manager import HookManager
 def dg():
     edge_index = torch.IntTensor([[2, 3], [2, 5]])
     edge_time = torch.LongTensor([1, 5])
-    node_x_time = torch.LongTensor([2, 3, 5, 5, 5])
-    node_x_nids = torch.IntTensor([4, 2, 5, 1, 2])
+    node_y_time = torch.LongTensor([2, 3, 5, 5, 5])
+    node_y_nids = torch.IntTensor([4, 2, 5, 1, 2])
 
     # Can't actually get node events without dynamic node feats
-    node_x = torch.rand(5, 3)
+    node_y = torch.rand(5, 3)
     data = DGData.from_raw(
         edge_time,
         edge_index,
-        node_x_time=node_x_time,
-        node_x_nids=node_x_nids,
-        node_x=node_x,
+        node_y_time=node_y_time,
+        node_y_nids=node_y_nids,
+        node_y=node_y,
         time_delta='s',
     )
 

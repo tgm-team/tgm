@@ -363,6 +363,8 @@ class DGData:
             self.edge_mask = inverse_sort_idx[self.edge_mask]
             if self.node_x_mask is not None:
                 self.node_x_mask = inverse_sort_idx[self.node_x_mask]
+            if self.node_y_mask is not None:
+                self.node_y_mask = inverse_sort_idx[self.node_y_mask]
 
             # Reorder edge-specific data
             edge_order = torch.argsort(self.edge_mask)

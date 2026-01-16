@@ -603,7 +603,7 @@ def test_from_csv_with_node_events():
 
         recovered_data = DGData.from_csv(
             edge_file_path=edge_file.name,
-            node_file_path=node_file.name,
+            node_x_file_path=node_file.name,
             **edge_col_names,
             **node_col_names,
         )
@@ -701,7 +701,7 @@ def test_from_csv_with_node_features():
 
         recovered_data = DGData.from_csv(
             edge_file_path=edge_file.name,
-            node_file_path=node_file.name,
+            node_x_file_path=node_file.name,
             static_node_x_file_path=static_node_file.name,
             node_x_col=node_feats_col,
             static_node_x_col=static_node_x_col,
@@ -778,7 +778,7 @@ def test_from_csv_bad_node_cols_not_specified():
         with pytest.raises(ValueError):
             DGData.from_csv(
                 edge_file_path=edge_file.name,
-                node_file_path=node_file.name,
+                node_x_file_path=node_file.name,
                 node_x_col=node_feats_col,
                 **edge_col_names,
             )
@@ -826,15 +826,15 @@ def test_from_pandas_with_node_events():
     edge_df[['src', 'dst', 't']] = edge_df[['src', 'dst', 't']].astype('int32')
 
     node_dict = {'node': [7, 8], 't': [3, 6]}
-    node_df = pd.DataFrame(node_dict)
-    node_df[['node', 't']] = node_df[['node', 't']].astype('int32')
+    node_x_df = pd.DataFrame(node_dict)
+    node_x_df[['node', 't']] = node_x_df[['node', 't']].astype('int32')
 
     data = DGData.from_pandas(
         edge_df=edge_df,
         edge_src_col='src',
         edge_dst_col='dst',
         edge_time_col='t',
-        node_df=node_df,
+        node_x_df=node_x_df,
         node_x_nids_col='node',
         node_x_time_col='t',
     )
@@ -856,15 +856,15 @@ def test_from_pandas_with_node_features():
         't': [3, 6],
         'node_features': [torch.rand(5).tolist(), torch.rand(5).tolist()],
     }
-    node_df = pd.DataFrame(node_dict)
-    node_df[['node', 't']] = node_df[['node', 't']].astype('int32')
+    node_x_df = pd.DataFrame(node_dict)
+    node_x_df[['node', 't']] = node_x_df[['node', 't']].astype('int32')
 
     data = DGData.from_pandas(
         edge_df=edge_df,
         edge_src_col='src',
         edge_dst_col='dst',
         edge_time_col='t',
-        node_df=node_df,
+        node_x_df=node_x_df,
         node_x_nids_col='node',
         node_x_time_col='t',
         node_x_col='node_features',
@@ -873,7 +873,7 @@ def test_from_pandas_with_node_features():
     assert data.edge_index.tolist() == [[2, 3], [10, 20]]
     assert data.time.tolist() == [3, 6, 1337, 1338]
     assert data.node_x_nids.tolist() == [7, 8]
-    torch.testing.assert_close(data.node_x.tolist(), node_df.node_features.tolist())
+    torch.testing.assert_close(data.node_x.tolist(), node_x_df.node_features.tolist())
     assert data.time_delta == TimeDeltaDG('r')
 
 
@@ -885,19 +885,19 @@ def test_from_pandas_with_static_node_features():
     node_dict = {
         'node_features': [torch.rand(5).tolist() for _ in range(21)],
     }
-    node_df = pd.DataFrame(node_dict)
+    node_x_df = pd.DataFrame(node_dict)
 
     data = DGData.from_pandas(
         edge_df=edge_df,
         edge_src_col='src',
         edge_dst_col='dst',
         edge_time_col='t',
-        static_node_x_df=node_df,
+        static_node_x_df=node_x_df,
         static_node_x_col='node_features',
     )
     assert isinstance(data, DGData)
     torch.testing.assert_close(
-        data.static_node_x.tolist(), node_df.node_features.tolist()
+        data.static_node_x.tolist(), node_x_df.node_features.tolist()
     )
 
 
@@ -909,7 +909,7 @@ def test_from_pandas_bad_static_node_features_col_no_specified():
     node_dict = {
         'node_features': [torch.rand(5).tolist() for _ in range(21)],
     }
-    node_df = pd.DataFrame(node_dict)
+    node_x_df = pd.DataFrame(node_dict)
 
     with pytest.raises(ValueError):
         DGData.from_pandas(
@@ -917,7 +917,7 @@ def test_from_pandas_bad_static_node_features_col_no_specified():
             edge_src_col='src',
             edge_dst_col='dst',
             edge_time_col='t',
-            static_node_x_df=node_df,
+            static_node_x_df=node_x_df,
         )
 
 
@@ -931,8 +931,8 @@ def test_from_pandas_bad_node_cols_not_specified():
         't': [3, 6],
         'node_features': [torch.rand(5).tolist(), torch.rand(5).tolist()],
     }
-    node_df = pd.DataFrame(node_dict)
-    node_df[['node', 't']] = node_df[['node', 't']].astype('int32')
+    node_x_df = pd.DataFrame(node_dict)
+    node_x_df[['node', 't']] = node_x_df[['node', 't']].astype('int32')
 
     with pytest.raises(ValueError):
         DGData.from_pandas(
@@ -940,7 +940,7 @@ def test_from_pandas_bad_node_cols_not_specified():
             edge_src_col='src',
             edge_dst_col='dst',
             edge_time_col='t',
-            node_df=node_df,
+            node_x_df=node_x_df,
         )
 
 
@@ -1943,15 +1943,15 @@ def test_from_pandas_with_static_node_type():
     node_dict = {
         'node_type': list(range(21)),
     }
-    node_df = pd.DataFrame(node_dict)
-    node_df[['node_type']] = node_df[['node_type']].astype('int32')
+    node_x_df = pd.DataFrame(node_dict)
+    node_x_df[['node_type']] = node_x_df[['node_type']].astype('int32')
 
     data = DGData.from_pandas(
         edge_df=edge_df,
         edge_src_col='src',
         edge_dst_col='dst',
         edge_time_col='t',
-        static_node_x_df=node_df,
+        static_node_x_df=node_x_df,
         node_type_col='node_type',
     )
     assert isinstance(data, DGData)

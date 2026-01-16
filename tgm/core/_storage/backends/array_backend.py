@@ -194,7 +194,10 @@ class DGStorageArrayBackend(DGStorageBase):
         if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
             max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
 
-        # TODO: Figure out max node id semantics
+        # Note: even though the node label node ids are asserted to be in range
+        # of the graph, this need not hold locally, (i.e., within a graph slice).
+        # Therefore, we have to run the logic below to get the max node id within
+        # the query slice, to return the correctly sized sparse tensor.
         if self._data.node_y_mask is not None:
             node_y_mask = (self._data.node_y_mask >= lb_idx) & (
                 self._data.node_y_mask < ub_idx
@@ -210,7 +213,6 @@ class DGStorageArrayBackend(DGStorageBase):
         return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
 
     def get_node_y(self, slice: DGSliceTracker) -> Optional[Tensor]:
-        # TODO: Consider returning dense tensor
         if self._data.node_y is None:
             return None
         assert self._data.node_y_mask is not None  # for mypy
@@ -234,11 +236,14 @@ class DGStorageArrayBackend(DGStorageBase):
         if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
             max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
 
-        node_x_mask = (self._data.node_x_mask >= lb_idx) & (
-            self._data.node_x_mask < ub_idx
-        )
-        if node_x_mask.sum() != 0 and len(self._data.node_x_nids[node_x_mask]):
-            max_node_id = max(max_node_id, self._data.node_x_nids[node_x_mask].max())
+        if self._data.node_x_mask is not None:
+            node_x_mask = (self._data.node_x_mask >= lb_idx) & (
+                self._data.node_x_mask < ub_idx
+            )
+            if node_x_mask.sum() != 0 and len(self._data.node_x_nids[node_x_mask]):
+                max_node_id = max(
+                    max_node_id, self._data.node_x_nids[node_x_mask].max()
+                )
 
         max_time = slice.end_time or self._data.time[ub_idx - 1]
         node_y_dim = self.get_node_y_dim()
