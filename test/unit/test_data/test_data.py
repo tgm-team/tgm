@@ -225,7 +225,7 @@ def test_init_dg_data_bad_args_invalid_node_id():
             node_y_time=node_x_time,
         )
 
-    # Node label node ids cannot exceed id range of hte graph
+    # Node label node ids cannot exceed id range of the graph
     node_y_nids = torch.IntTensor([1000])
     with pytest.raises(InvalidNodeIDError):
         _ = DGData.from_raw(
