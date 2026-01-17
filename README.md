@@ -135,19 +135,19 @@ class RecurrentGCN(torch.nn.Module):
 
 # Initialize our model and optimizer
 encoder = RecurrentGCN(node_dim=static_node_x.shape[1], embed_dim=128)
-decoder = NodePredictor(in_dim=128, out_dim=train_dg.node_x_dim)
+decoder = NodePredictor(in_dim=128, out_dim=train_dg.node_y_dim)
 opt = torch.optim.Adam(set(encoder.parameters()) | set(decoder.parameters()), lr=0.001)
 
 # Training loop
 h_0 = None
 for batch in train_loader:
     opt.zero_grad()
-    y_true = batch.node_x
+    y_true = batch.node_y
     if y_true is None:
         continue
 
     z, h_0 = encoder(batch, static_node_x, h_0)
-    z_node = z[batch.node_x_nids]
+    z_node = z[batch.node_y_nids]
     y_pred = decoder(z_node)
 
     loss = F.cross_entropy(y_pred, y_true)

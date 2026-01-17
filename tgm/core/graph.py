@@ -87,16 +87,23 @@ class DGraph:
             batch.node_x_time, batch.node_x_nids = self.node_x._indices()
             batch.node_x_nids = batch.node_x_nids.to(torch.int32)  # type: ignore
             batch.node_x = self.node_x._values()
+
         if materialize_features and self.edge_x is not None:
             batch.edge_x = self.edge_x
+
+        if materialize_features and self.node_y is not None:
+            batch.node_y_time, batch.node_y_nids = self.node_y._indices()
+            batch.node_y_nids = batch.node_y_nids.to(torch.int32)  # type: ignore
+            batch.node_y = self.node_y._values()
 
         if self.edge_type is not None:
             batch.edge_type = self.edge_type
 
         logger.debug(
-            'Materialized DGraph slice: %d edge events, %d node events',
+            'Materialized DGraph slice: %d edge events, %d node events, %d node labels',
             batch.edge_src.numel(),
             0 if batch.node_x_nids is None else batch.node_x_nids.numel(),
+            0 if batch.node_y_nids is None else batch.node_y_nids.numel(),
         )
         return batch
 
@@ -197,6 +204,11 @@ class DGraph:
     def num_node_events(self) -> int:
         """The total number of node events in the dynamic graph."""
         return len(self.node_x_time)
+
+    @_logged_cached_property
+    def num_node_labels(self) -> int:
+        """The total number of node labels in the dynamic graph."""
+        return len(self.node_y_time)
 
     @_logged_cached_property
     def num_edge_events(self) -> int:
@@ -312,6 +324,37 @@ class DGraph:
             node_type = node_type.to(self.device)
         return node_type
 
+    @_logged_cached_property
+    def _node_labels_cpu(self) -> Tuple[Tensor, Tensor]:
+        return self._storage.get_node_labels(self._slice)
+
+    @property
+    def node_y_nids(self) -> Tensor:
+        """The node ids for associated with the node labels over the dynamic graph."""
+        node_ids, _ = self._node_labels_cpu
+        return node_ids.to(self.device)
+
+    @property
+    def node_y_time(self) -> Tensor:
+        """The timestamps associated with the node labels over the dynamic graph."""
+        _, node_time = self._node_labels_cpu
+        return node_time.to(self.device)
+
+    @_logged_cached_property
+    def _node_y_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_node_y(self._slice)
+
+    @property
+    def node_y(self) -> Optional[Tensor]:
+        """The aggregated dynamic node labels over the dynamic graph.
+
+        If dynamic node labels exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_label).
+        """
+        feats = self._node_y_cpu
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
+
     @cached_property
     def _static_node_x_cpu(self) -> Optional[Tensor]:
         return self._storage.get_static_node_x()
@@ -337,6 +380,11 @@ class DGraph:
     def node_x_dim(self) -> Optional[int]:
         """Dynamic Node feature dimension or None if not Node features on the Graph."""
         return self._storage.get_node_x_dim()
+
+    @cached_property
+    def node_y_dim(self) -> Optional[int]:
+        """Dynamic Node label feature dimension or None if no Node labels on the Graph."""
+        return self._storage.get_node_y_dim()
 
     @cached_property
     def edge_x_dim(self) -> Optional[int]:

@@ -176,7 +176,7 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        y_true = batch.node_x
+        y_true = batch.node_y
         if len(batch.edge_src) > 0:
             z = encoder(batch, static_node_x)  # [num_nodes, embed_dim]
 
@@ -210,12 +210,12 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_true = batch.node_x
+        y_true = batch.node_y
 
         if batch.edge_src.shape[0] > 0:
             z = encoder(batch, static_node_x)
             if y_true is not None:
-                z_node = z[batch.node_x_nids]
+                z_node = z[batch.node_y_nids]
                 y_pred = decoder(z_node)
                 input_dict = {
                     'y_true': y_true,
@@ -263,7 +263,7 @@ train_loader = DGDataLoader(train_dg, batch_size=args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, batch_size=args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
 
-num_classes = train_dg.node_x_dim
+num_classes = train_dg.node_y_dim
 
 encoder = DyGFormer_NodePrediction(
     num_nodes=full_data.num_nodes,

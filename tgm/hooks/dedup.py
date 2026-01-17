@@ -34,6 +34,10 @@ class DeduplicationHook(StatelessHook):
             batch.node_x_nids.to(batch.edge_src.device)
         ) if batch.node_x_nids is not None else None
 
+        nids.append(
+            batch.node_y_nids.to(batch.edge_src.device)
+        ) if batch.node_y_nids is not None else None
+
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)
 

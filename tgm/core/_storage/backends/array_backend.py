@@ -44,11 +44,11 @@ class DGStorageArrayBackend(DGStorageBase):
         edge_event_nodes = self._data.edge_index[edge_mask].unique().tolist()
         all_nodes.update(edge_event_nodes)
 
-        if self._data.node_mask is not None:
-            node_mask = (self._data.node_mask >= lb_idx) & (
-                self._data.node_mask < ub_idx
+        if self._data.node_x_mask is not None:
+            node_x_mask = (self._data.node_x_mask >= lb_idx) & (
+                self._data.node_x_mask < ub_idx
             )
-            node_x_nids = self._data.node_x_nids[node_mask].unique().tolist()
+            node_x_nids = self._data.node_x_nids[node_x_mask].unique().tolist()
             all_nodes.update(node_x_nids)
         if not all_nodes:
             logger.debug('No events in slice: %s', slice)
@@ -68,14 +68,34 @@ class DGStorageArrayBackend(DGStorageBase):
         return src, dst, time
 
     def get_node_events(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor]:
+        if self._data.node_x_mask is None:
+            return torch.empty(0, dtype=torch.int), torch.empty(0, dtype=torch.long)
+
         lb_idx, ub_idx = self._binary_search(slice)
-        node_mask = (self._data.node_mask >= lb_idx) & (self._data.node_mask < ub_idx)
-        node_x_nids = self._data.node_x_nids[node_mask]
-        time = self._data.time[self._data.node_mask[node_mask]]
+        node_x_mask = (self._data.node_x_mask >= lb_idx) & (
+            self._data.node_x_mask < ub_idx
+        )
+        node_x_nids = self._data.node_x_nids[node_x_mask]
+        time = self._data.time[self._data.node_x_mask[node_x_mask]]
 
         if not node_x_nids.numel():
             logger.debug('No node events in slice: %s', slice)
         return node_x_nids, time
+
+    def get_node_labels(self, slice: DGSliceTracker) -> Tuple[Tensor, Tensor]:
+        if self._data.node_y_mask is None:
+            return (torch.empty(0, dtype=torch.int), torch.empty(0, dtype=torch.long))
+
+        lb_idx, ub_idx = self._binary_search(slice)
+        node_y_mask = (self._data.node_y_mask >= lb_idx) & (
+            self._data.node_y_mask < ub_idx
+        )
+        node_y_nids = self._data.node_y_nids[node_y_mask]
+        time = self._data.time[self._data.node_y_mask[node_y_mask]]
+
+        if not node_y_nids.numel():
+            logger.debug('No node labels in slice: %s', slice)
+        return node_y_nids, time
 
     def get_num_timestamps(self, slice: DGSliceTracker) -> int:
         lb_idx, ub_idx = self._binary_search(slice)
@@ -159,28 +179,81 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_node_x(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.node_x is None:
             return None
-        assert self._data.node_mask is not None  # for mypy
+        assert self._data.node_x_mask is not None  # for mypy
         assert self._data.node_x_nids is not None  # for mypy
 
         lb_idx, ub_idx = self._binary_search(slice)
-        node_mask = (self._data.node_mask >= lb_idx) & (self._data.node_mask < ub_idx)
-        if node_mask.sum() == 0:
+        node_x_mask = (self._data.node_x_mask >= lb_idx) & (
+            self._data.node_x_mask < ub_idx
+        )
+        if node_x_mask.sum() == 0:
             logger.debug(f'No dynamic node features in slice {slice}')
             return None
 
-        time = self._data.time[self._data.node_mask[node_mask]]
-        nodes = self._data.node_x_nids[node_mask]
+        time = self._data.time[self._data.node_x_mask[node_x_mask]]
+        nodes = self._data.node_x_nids[node_x_mask]
         indices = torch.stack([time, nodes], dim=0)
-        values = self._data.node_x[node_mask]
+        values = self._data.node_x[node_x_mask]
 
         max_node_id = nodes.max()
         edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
         if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
             max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
 
+        # Note: even though the node label node ids are asserted to be in range
+        # of the graph, this need not hold locally, (i.e., within a graph slice).
+        # Therefore, we have to run the logic below to get the max node id within
+        # the query slice, to return the correctly sized sparse tensor.
+        if self._data.node_y_mask is not None:
+            node_y_mask = (self._data.node_y_mask >= lb_idx) & (
+                self._data.node_y_mask < ub_idx
+            )
+            if node_y_mask.sum() != 0 and len(self._data.node_y_nids[node_y_mask]):
+                max_node_id = max(
+                    max_node_id, self._data.node_y_nids[node_y_mask].max()
+                )
+
         max_time = slice.end_time or self._data.time[ub_idx - 1]
         node_x_dim = self.get_node_x_dim()
         shape = (max_time + 1, max_node_id + 1, node_x_dim)
+        return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
+
+    def get_node_y(self, slice: DGSliceTracker) -> Optional[Tensor]:
+        if self._data.node_y is None:
+            return None
+        assert self._data.node_y_mask is not None  # for mypy
+        assert self._data.node_y_nids is not None  # for mypy
+
+        lb_idx, ub_idx = self._binary_search(slice)
+        node_y_mask = (self._data.node_y_mask >= lb_idx) & (
+            self._data.node_y_mask < ub_idx
+        )
+        if node_y_mask.sum() == 0:
+            logger.debug(f'No dynamic node labels in slice {slice}')
+            return None
+
+        time = self._data.time[self._data.node_y_mask[node_y_mask]]
+        nodes = self._data.node_y_nids[node_y_mask]
+        indices = torch.stack([time, nodes], dim=0)
+        values = self._data.node_y[node_y_mask]
+
+        max_node_id = nodes.max()
+        edge_mask = (self._data.edge_mask >= lb_idx) & (self._data.edge_mask < ub_idx)
+        if edge_mask.sum() != 0 and len(self._data.edge_index[edge_mask]):
+            max_node_id = max(max_node_id, self._data.edge_index[edge_mask].max())
+
+        if self._data.node_x_mask is not None:
+            node_x_mask = (self._data.node_x_mask >= lb_idx) & (
+                self._data.node_x_mask < ub_idx
+            )
+            if node_x_mask.sum() != 0 and len(self._data.node_x_nids[node_x_mask]):
+                max_node_id = max(
+                    max_node_id, self._data.node_x_nids[node_x_mask].max()
+                )
+
+        max_time = slice.end_time or self._data.time[ub_idx - 1]
+        node_y_dim = self.get_node_y_dim()
+        shape = (max_time + 1, max_node_id + 1, node_y_dim)
         return torch.sparse_coo_tensor(indices, values, shape)  # type: ignore
 
     def get_edge_x(self, slice: DGSliceTracker) -> Optional[Tensor]:
@@ -214,6 +287,11 @@ class DGStorageArrayBackend(DGStorageBase):
         if self._data.node_x is None:
             return None
         return self._data.node_x.shape[1]
+
+    def get_node_y_dim(self) -> Optional[int]:
+        if self._data.node_y is None:
+            return None
+        return self._data.node_y.shape[1]
 
     def get_edge_x_dim(self) -> Optional[int]:
         if self._data.edge_x is None:

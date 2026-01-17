@@ -10,7 +10,7 @@ logger = _get_logger(__name__)
 
 
 class EdgeEventsSeenNodesTrackHook(StatefulHook):
-    """This hook return all nodes appearing in node events of the current batch that have seen in the past edge events.
+    """This hook return all nodes appearing in node labels of the current batch that have seen in the past edge events.
     This hook is for the use case of nodeproppred for models computing node embeddings according to edges such as `DyGFormer` and `TPNet`.
 
     Args:
@@ -36,8 +36,8 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         self._move_to_device_if_needed(dg.device)  # No-op after first batch
 
-        if batch.node_x_nids is not None:
-            batch_nodes = batch.node_x_nids
+        if batch.node_y_nids is not None:
+            batch_nodes = batch.node_y_nids
         else:
             logger.debug('No node event found in the batch')
             batch_nodes = torch.empty(0, device=self._device, dtype=torch.int)

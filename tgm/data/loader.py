@@ -178,4 +178,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         num_node_events = (
             batch.node_x_nids.numel() if batch.node_x_nids is not None else 0
         )
-        return num_edge_events + num_node_events == 0
+        num_node_labels = (
+            batch.node_y_nids.numel() if batch.node_y_nids is not None else 0
+        )
+        return num_edge_events + num_node_events + num_node_labels == 0
