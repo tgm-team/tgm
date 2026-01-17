@@ -54,12 +54,12 @@ class DGData:
         edge_mask (Tensor): Mask of edge events within `time`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_x (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_x_mask (Tensor | None): Indices of node events within `time`.
-        node_x_nids (Tensor | None): Node IDs corresponding to node events [num_node_events].
-        node_x (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
-        node_y_mask (Tensor | None): Indices of node labels within `time`.
+        node_x_mask (Tensor | None): Mask of dynamic node features within `time`.
+        node_x_nids (Tensor | None): Node IDs corresponding to dynamic node features [num_node_events].
+        node_x (Tensor | None): Dynamic Node features over time [num_node_events, D_node_dynamic].
+        node_y_mask (Tensor | None): Mask of node labels within `time`.
         node_y_nids (Tensor | None): Node IDs corresponding to node labels [num_node_labels].
-        node_y (Tensor | None): Node features over time [num_node_labels, D_node_dynamic].
+        node_y (Tensor | None): Node labels over time [num_node_labels, D_node_dynamic].
         static_node_x (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
         edge_type (Tensor | None) : Type of relation of each edge event in edge_index [num_edge_events].
         node_type (Tensor | None) : Type of each node [num_nodes].

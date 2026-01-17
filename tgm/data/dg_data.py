@@ -36,15 +36,15 @@ class DGData:
     Attributes:
         time_delta (TimeDeltaDG | str): Time granularity of the graph.
         time (Tensor): 1D tensor of all event timestamps [num_edge_events + num_node_events + num_node_labels].
-        edge_mask (Tensor): Indices of edge events within `time`.
+        edge_mask (Tensor): Mask of edge events within `time`.
         edge_index (Tensor): Edge connections [num_edge_events, 2].
         edge_x (Tensor | None): Optional edge features [num_edge_events, D_edge].
-        node_x_mask (Tensor | None): Indices of node events within `time`.
-        node_x_nids (Tensor | None): Node IDs corresponding to node events [num_node_events].
-        node_x (Tensor | None): Node features over time [num_node_events, D_node_dynamic].
-        node_y_mask (Tensor | None): Indices of node labels within `time`.
+        node_x_mask (Tensor | None): Mask of dynamic node features within `time`.
+        node_x_nids (Tensor | None): Node IDs corresponding to dynamic node features [num_node_events].
+        node_x (Tensor | None): Dynamic Node features over time [num_node_events, D_node_dynamic].
+        node_y_mask (Tensor | None): Mask of node labels within `time`.
         node_y_nids (Tensor | None): Node IDs corresponding to node labels [num_node_labels].
-        node_y (Tensor | None): Node features over time [num_node_labels, D_node_dynamic].
+        node_y (Tensor | None): Node labels over time [num_node_labels, D_node_dynamic].
         static_node_x (Tensor | None): Node features invariant over time [num_nodes, D_node_static].
         edge_type (Tensor | None) : Type of relation of each edge event in edge_index [num_edge_events].
         node_type (Tensor | None) : Type of each node [num_nodes].
@@ -208,11 +208,11 @@ class DGData:
                 )
             if torch.any(self.node_x_nids == PADDED_NODE_ID):  # type: ignore
                 raise InvalidNodeIDError(
-                    f'Node events contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
+                    f'Dynamic Node features contains node ids matching PADDED_NODE_ID: {PADDED_NODE_ID}, which is used to mark invalid neighbors. Try remapping all node ids to positive integers.'
                 )
             if not torch.all(self.node_x_nids < max_int32_capacity):  # type: ignore
                 raise InvalidNodeIDError(
-                    f'Node events contains node ids that exceed the int32 limit ({max_int32_capacity}). '
+                    f'Dynamic Node features contains node ids that exceed the int32 limit ({max_int32_capacity}). '
                     'TGM does not yet support graphs this large.'
                 )
             self.node_x_nids = _maybe_cast_integral_tensor(
@@ -341,7 +341,7 @@ class DGData:
             or self.time.shape[0] != num_edges + num_node_events + num_node_labels
         ):
             raise ValueError(
-                'timestamps must have shape [num_edges + num_node_events + num_node_labels], '
+                'time must have shape [num_edges + num_node_events + num_node_labels], '
                 f'got {num_edges} edges, {num_node_events} node_events, {num_node_labels} node labels, shape: {self.time.shape}. '
                 'Please double-check the edge and node timestamps you provided. If this is not resolved '
                 'raise an issue and provide instructions on how to reproduce your the error'
