@@ -148,7 +148,7 @@ data = DGData.from_raw(
 
 ## 2. Minimal example with `THGL`
 
-Here’s a basic example demonstrating how to experiment `EdgeBank` for dynamic link property prediction on `thgl-software`:
+Here’s a basic example demonstrating how to run `EdgeBank` for dynamic link property prediction on `thgl-software`:
 
 ```python
 
@@ -224,7 +224,7 @@ with hm.activate('test'):
     test_mrr = eval(test_loader, model, evaluator)
 ```
 
-A complete example can be viewed at [examples/thgl/edgebank.py](../../examples/linkproppred/thgl/edgebank.py)
+A complete example can be viewed at [examples/thgl/edgebank.py](https://github.com/tgm-team/tgm/blob/main/examples/linkproppred/thgl/edgebank.py)
 
 ## References
 

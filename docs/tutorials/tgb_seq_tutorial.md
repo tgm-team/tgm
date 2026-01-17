@@ -38,43 +38,13 @@ train_data, val_data, test_data = full_data.split()
 
 Unlike `TGB`, which downloads dataset to `.env` by default, `TGB-Seq` requires you to explicitly specify the download destination (in this example, `./data`).
 
-## Minimal example
+## `TGB-Seq` custom negative sampler hook
 
-Here’s a basic example demonstrating how to experiment `EdgeBank` for dynamic link property prediction on `GoogleLocal`:
+To evaluate to TGB-Seq on link prediction, we need a custom hook from `TGB-Seq` to sample negative edges:
 
 ```python
-import numpy as np
-import torch
-from tgb_seq.LinkPred.evaluator import Evaluator
-from tqdm import tqdm
+from tgm.hooks import StatelessHook
 
-from tgm import DGBatch, DGraph
-from tgm.data import DGData, DGDataLoader
-from tgm.hooks import HookManager, StatelessHook
-from tgm.nn import EdgeBankPredictor
-
-
-def eval(
-    loader: DGDataLoader,
-    model: EdgeBankPredictor,
-    evaluator: Evaluator,
-) -> float:
-    perf_list = []
-    for batch in tqdm(loader):
-        negs_per_pos = len(batch.neg)
-
-        for idx in range(negs_per_pos):
-            query_src = batch.edge_src[idx].repeat(negs_per_pos + 1)
-            query_dst = torch.cat([batch.edge_dst[idx].unsqueeze(0), batch.neg[idx]])
-
-            y_pred = model(query_src, query_dst)
-            y_pred_pos, y_pred_neg = y_pred[0].unsqueeze(0), y_pred[1:]
-            perf_list.append(evaluator.eval(y_pred_pos, y_pred_neg))
-        model.update(batch.edge_src, batch.edge_dst, batch.edge_time)
-
-    return float(np.mean(perf_list))
-
-# To evaluate to TGB-Seq on link prediction, we need a custom hook from TGB-Seq to sample negative edges.
 class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
     produces = {'neg', 'neg_time'}
 
@@ -109,6 +79,43 @@ class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
 
         batch.neg_time = batch.edge_time.clone()
         return batch
+```
+
+## Minimal example
+
+Here’s a basic example demonstrating how to run `EdgeBank` for dynamic link property prediction on `GoogleLocal`:
+
+```python
+import numpy as np
+import torch
+from tgb_seq.LinkPred.evaluator import Evaluator
+from tqdm import tqdm
+
+from tgm import DGBatch, DGraph
+from tgm.data import DGData, DGDataLoader
+from tgm.hooks import HookManager
+from tgm.nn import EdgeBankPredictor
+
+
+def eval(
+    loader: DGDataLoader,
+    model: EdgeBankPredictor,
+    evaluator: Evaluator,
+) -> float:
+    perf_list = []
+    for batch in tqdm(loader):
+        negs_per_pos = len(batch.neg)
+
+        for idx in range(negs_per_pos):
+            query_src = batch.edge_src[idx].repeat(negs_per_pos + 1)
+            query_dst = torch.cat([batch.edge_dst[idx].unsqueeze(0), batch.neg[idx]])
+
+            y_pred = model(query_src, query_dst)
+            y_pred_pos, y_pred_neg = y_pred[0].unsqueeze(0), y_pred[1:]
+            perf_list.append(evaluator.eval(y_pred_pos, y_pred_neg))
+        model.update(batch.edge_src, batch.edge_dst, batch.edge_time)
+
+    return float(np.mean(perf_list))
 
 evaluator = Evaluator()
 
