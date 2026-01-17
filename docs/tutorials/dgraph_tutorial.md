@@ -80,7 +80,9 @@ You can build datasets in multiple ways. Let's look at each.
 
 This is most likely all you need. The [Temporal Graph Benchmark (TGB)](https://tgb.complexdatalab.com/) provides a suite of temporal graph datasets with diverse scales and properties. We natively support direct construction from all the `tgbl-` and `tgbn-` in TGM.
 
-> **Note**: Temporal knowledge graph (TKG) and temporal hypergraph (THG) are not yet supported in TGM.
+> **Note**: Temporal heterogeneous graph (THG) is supported in TGM. Check out [THG tutorial](./thgl_tutorial.md)
+
+> **Note**: Temporal knowledge graph (TKG) is under construction and not yet supported in TGM.
 
 > **Note**: To load a TGB dataset, you must have the `py-tgb` package in your python env.
 
@@ -163,7 +165,7 @@ static_node_df = pd.DataFrame({
     'static_node_feat': [torch.rand(11).tolist() for _ in range(9)]
 })
 
-dg = DGraph.from_pandas(
+dg = DGData.from_pandas(
     edge_df=edge_df,
     edge_src_col='src',
     edge_dst_col='dst',
