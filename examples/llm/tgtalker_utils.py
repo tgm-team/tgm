@@ -26,9 +26,21 @@ def make_user_prompt(src: int, ts: int, nbr_nids=None, nbr_times=None):
     return user_prompt
 
 
-def make_system_prompt():
+def make_system_prompt(instruct_strs: None, answer_strs: None):
     system_prompt = (
         f'You are an expert temporal graph learning agent. Your task is to predict the next interaction (i.e. Destination Node) given the `Source Node` and `Timestamp`.\n\n'
         f'Description of the temporal graph is provided below, where each line is a tuple of (`Source Node`, `Destination Node`, `Timestamp`).\n\nTEMPORAL GRAPH:\n'
     )
+    if instruct_strs:
+        assert answer_strs is not None, "Answer strings must be provided for ICL."
+        assert len(instruct_strs) == len(answer_strs), "Instruct and answer strings must be the same cardinality"
+        for i in range(len(instruct_strs)):
+            system_prompt += instruct_strs[i]
+            system_prompt += answer_strs[i]
     return system_prompt
+
+def make_answer_prompt(dst):
+    answer_prompt = ("{" + 
+        f'"destination_node":{dst}' + "}"
+    )
+    return answer_prompt

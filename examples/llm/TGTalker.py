@@ -7,7 +7,7 @@ import outlines
 import torch
 from pydantic import BaseModel
 from tgb.linkproppred.evaluate import Evaluator
-from tgtalker_utils import make_system_prompt, make_user_prompt
+from tgtalker_utils import make_system_prompt, make_user_prompt, make_answer_prompt
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -52,6 +52,9 @@ def main():
     )
     parser.add_argument(
         '--n-nbrs', type=int, default=10, help='num sampled nbrs (recency)'
+    )
+    parser.add_argument(
+        '--n-instr', type=int, default=5, help='num instructions (for ICL)'
     )
     parser.add_argument('--log-file-path', type=str, default=None)
 
@@ -108,6 +111,32 @@ def main():
             pass
     logger.info('Registered Train/Val data into Recency neighbor sampler hook')
 
+    icl_instructs = []
+    icl_answers = []
+
+    n_instr = args.n_instr
+
+    with hm.activate(val_key):
+        val_loader = DGDataLoader(val_dg, batch_size=1, hook_manager=hm)
+
+        for batch in val_loader:
+            src = int(batch.src.item())
+            ts = int(batch.times[0].item())
+            dst = int(batch.dst.item())
+
+            nbr_nids = batch.nbr_nids[0][0].cpu().numpy()
+            nbr_times = batch.nbr_times[0][0].cpu().numpy()
+
+            q = make_user_prompt(src, ts, nbr_nids, nbr_times)
+            a = make_answer_prompt(dst)
+
+            icl_instructs.append(q)
+            icl_answers.append(a)
+
+            if len(icl_instructs) == n_instr:
+                break
+
+    print("ICL size:", len(icl_instructs))
     # start TGTalker Inference
     test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
 
@@ -135,17 +164,20 @@ def main():
 
             # Iterate through batch
             for i in range(len(srcs)):
-                src = srcs[i]
-                ts = times[i]
+                src = int(srcs[i])
+                ts = int(times[i])
                 current_nbr_nids = nbr_nids_batch[i]
                 current_nbr_times = nbr_times_batch[i]
 
-                system_prompt = make_system_prompt()
-                print(src)
-                print(ts)
-                print(current_nbr_nids)
-                print(current_nbr_times)
-                quit()
+                system_prompt = make_system_prompt(
+                    instruct_strs=icl_instructs,
+                    answer_strs=icl_answers,
+                )
+                if count == 0:
+                    print(src)
+                    print(ts)
+                    print(current_nbr_nids)
+                    print(current_nbr_times)
                 user_prompt = make_user_prompt(
                     src, ts, current_nbr_nids, current_nbr_times
                 )
@@ -185,9 +217,32 @@ def main():
                     logger.error(f'Generation failed: {e}')
                     logger.info('Generation failed as output: ' + output)
                     perf_list.append(0.0)
+
+                true_dst = int(batch.dst[i].item())
+
+                new_q = make_user_prompt(
+                    src,
+                    ts,
+                    current_nbr_nids,
+                    current_nbr_times,
+                )
+                new_a = make_answer_prompt(true_dst)
+
+                icl_instructs.append(new_q)
+                icl_answers.append(new_a)
+
+                if len(icl_instructs) > n_instr:
+                    icl_instructs = icl_instructs[-n_instr:]
+                    icl_answers = icl_answers[-n_instr:]
+
                 count += 1
 
-    score = np.mean(perf_list)
+                if count % 100 == 0:
+                    print("ICL tail:")
+                    print(icl_instructs[-1])
+                    print(icl_answers[-1])
+
+    score = float(np.mean(perf_list))
     logger.info(f'Test Score (MRR): {score}')
     log_metric('MRR', score)
 
