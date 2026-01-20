@@ -8,9 +8,9 @@ import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
 from torch import Tensor
 from torch_geometric.nn import AntiSymmetricConv, TransformerConv
+from torch_geometric.nn.inits import ones, zeros
 from torch_geometric.nn.models.tgn import TimeEncoder
 from torch_geometric.utils import scatter
-from torch_geometric.nn.inits import zeros, ones
 from torch_scatter import scatter_max
 from tqdm import tqdm
 
@@ -163,7 +163,6 @@ class CTAN(torch.nn.Module):
 @log_latency
 def train(
     loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     memory: nn.Module,
     encoder: nn.Module,
     decoder: nn.Module,
@@ -173,6 +172,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_x = loader.dgraph.static_node_x
 
     memory.reset_state()
 
@@ -183,15 +183,19 @@ def train(
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
         #! run my own deduplication
-        all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
+        all_nids = torch.cat(
+            [batch.edge_src, batch.edge_dst, batch.neg, nbr_nodes[nbr_mask]]
+        )
         batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
         batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
 
-        num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
+        num_nbrs = len(nbr_nodes) // (
+            len(batch.edge_src) + len(batch.edge_dst) + len(batch.neg)
+        )
         src_nodes = torch.cat(
             [
-                batch.src.repeat_interleave(num_nbrs),
-                batch.dst.repeat_interleave(num_nbrs),
+                batch.edge_src.repeat_interleave(num_nbrs),
+                batch.edge_dst.repeat_interleave(num_nbrs),
                 batch.neg.repeat_interleave(num_nbrs),
             ]
         )
@@ -202,15 +206,15 @@ def train(
             ]
         )
 
-        nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+        nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+        nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
-        z = torch.cat([z, static_node_feats[batch.unique_nids]], dim=-1)
-        z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+        z = torch.cat([z, static_node_x[batch.unique_nids]], dim=-1)
+        z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-        inv_src = batch.global_to_local(batch.src)
-        inv_dst = batch.global_to_local(batch.dst)
+        inv_src = batch.global_to_local(batch.edge_src)
+        inv_dst = batch.global_to_local(batch.edge_dst)
         inv_neg = batch.global_to_local(batch.neg)
         pos_out = decoder(z[inv_src], z[inv_dst])
         neg_out = decoder(z[inv_src], z[inv_neg])
@@ -219,7 +223,9 @@ def train(
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.time, z[inv_src], z[inv_dst])
+        memory.update_state(
+            batch.edge_src, batch.edge_dst, batch.edge_time, z[inv_src], z[inv_dst]
+        )
 
         loss.backward()
         opt.step()
@@ -235,7 +241,6 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     memory: nn.Module,
     encoder: nn.Module,
     decoder: nn.Module,
@@ -245,21 +250,26 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
         #! run my own deduplication
-        all_nids = torch.cat([batch.src, batch.dst, batch.neg, nbr_nodes[nbr_mask]])
+        all_nids = torch.cat(
+            [batch.edge_src, batch.edge_dst, batch.neg, nbr_nodes[nbr_mask]]
+        )
         batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
         batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
 
-        num_nbrs = len(nbr_nodes) // (len(batch.src) + len(batch.dst) + len(batch.neg))
+        num_nbrs = len(nbr_nodes) // (
+            len(batch.edge_src) + len(batch.edge_dst) + len(batch.neg)
+        )
         src_nodes = torch.cat(
             [
-                batch.src.repeat_interleave(num_nbrs),
-                batch.dst.repeat_interleave(num_nbrs),
+                batch.edge_src.repeat_interleave(num_nbrs),
+                batch.edge_dst.repeat_interleave(num_nbrs),
                 batch.neg.repeat_interleave(num_nbrs),
             ]
         )
@@ -269,16 +279,16 @@ def eval(
                 batch.global_to_local(nbr_nodes[nbr_mask]),
             ]
         )
-        nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-        nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+        nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+        nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
-        z = torch.cat([z, static_node_feats[batch.unique_nids]], dim=-1)
-        z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+        z = torch.cat([z, static_node_x[batch.unique_nids]], dim=-1)
+        z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src_ids = batch.src[idx].repeat(len(dst_ids))
+            dst_ids = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.edge_src[idx].repeat(len(dst_ids))
 
             inv_src = batch.global_to_local(src_ids)
             inv_dst = batch.global_to_local(dst_ids)
@@ -292,7 +302,9 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # Update memory with ground-truth state.
-        memory.update_state(batch.src, batch.dst, batch.time, z[inv_src], z[inv_dst])
+        memory.update_state(
+            batch.edge_src, batch.edge_dst, batch.edge_time, z[inv_src], z[inv_dst]
+        )
 
     return float(np.mean(perf_list))
 
@@ -300,7 +312,11 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn((full_data.num_nodes, 1), device=args.device)
+
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
@@ -310,7 +326,7 @@ def compute_delta_t_stats(train_dg: DGraph) -> Tuple[float, float]:
     last_timestamp = {}
     delta_times = []
 
-    for src, dst, t in zip(*train_dg.edges):
+    for src, dst, t in zip(train_dg.edge_src, train_dg.edge_dst, train_dg.edge_time):
         src, dst, t = src.item(), dst.item(), t.item()
 
         dt_src = t - last_timestamp.get(src, train_dg.start_time)
@@ -325,16 +341,11 @@ def compute_delta_t_stats(train_dg: DGraph) -> Tuple[float, float]:
 
 mean_delta_t, std_delta_t = compute_delta_t_stats(train_dg)
 
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
-
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-    seed_nodes_keys=['src', 'dst', 'neg'],
-    seed_times_keys=['time', 'time', 'neg_time'],
+    seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+    seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(
@@ -354,10 +365,10 @@ memory = SimpleMemory(
     init_time=train_dg.start_time,
 ).to(args.device)
 encoder = CTAN(
-    edge_dim=train_dg.edge_feats_dim,
-    memory_dim=args.memory_dim,
+    node_dim=train_dg.static_node_x_dim,
+    edge_dim=train_dg.edge_x_dim,
     time_dim=args.time_dim,
-    node_dim=static_node_feats.shape[1],
+    memory_dim=args.memory_dim,
     num_iters=args.n_layers,
     mean_delta_t=mean_delta_t,
     std_delta_t=std_delta_t,
@@ -372,19 +383,16 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        loss = train(train_loader, static_node_feats, memory, encoder, decoder, opt)
+        loss = train(train_loader, memory, encoder, decoder, opt)
 
+    with hm.activate(val_key):
+        val_mrr = eval(val_loader, memory, encoder, decoder, evaluator)
     log_metric('Loss', loss, epoch=epoch)
-    if epoch % 10 == 1:
-        with hm.activate(val_key):
-            val_mrr = eval(
-                val_loader, static_node_feats, memory, encoder, decoder, evaluator
-            )
-        log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
+    log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
 with hm.activate(test_key):
-    test_mrr = eval(test_loader, static_node_feats, memory, encoder, decoder, evaluator)
+    test_mrr = eval(test_loader, memory, encoder, decoder, evaluator)
 log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
