@@ -24,6 +24,11 @@ def test_cat_merge():
     assert torch.equal(expected, merge_result)
 
 
+def test_sum_merge():
+    # TODO:
+    pass
+
+
 def test_output(edge_factory):
     decoder = LinkPredictor(node_dim=128, nlayers=5, hidden_dim=64)
     src, dst = edge_factory

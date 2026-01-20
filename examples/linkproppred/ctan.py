@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
+from tgn.nn import LinkPredictor
 from torch_geometric.nn.inits import ones, zeros
 from torch_geometric.utils import scatter
 from tqdm import tqdm
@@ -96,19 +97,6 @@ class SimpleMemory(torch.nn.Module):
 
     def forward(self, n_id):
         return self.memory[n_id], self.last_update[n_id]
-
-
-class TGBLinkPredictor(torch.nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.lin_src = torch.nn.Linear(in_channels, in_channels)
-        self.lin_dst = torch.nn.Linear(in_channels, in_channels)
-        self.lin_final = torch.nn.Linear(in_channels, 1)
-
-    def forward(self, z_src, z_dst):
-        h = self.lin_src(z_src) + self.lin_dst(z_dst)
-        h = h.relu()
-        return self.lin_final(h).view(-1)
 
 
 @log_gpu
@@ -325,7 +313,7 @@ encoder = CTAN(
     epsilon=args.epsilon,
     gamma=args.gamma,
 ).to(args.device)
-decoder = TGBLinkPredictor(args.memory_dim).to(args.device)
+decoder = LinkPredictor(node_dim=args.memory_dim, merge_op='sum').to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,

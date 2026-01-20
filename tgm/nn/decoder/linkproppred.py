@@ -1,3 +1,5 @@
+from typing import Callable, Dict
+
 import torch
 import torch.nn as nn
 from torch.nn import Sequential
@@ -9,8 +11,21 @@ def cat_merge(z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
     return torch.cat([z_src, z_dst], dim=1)
 
 
-MERGE_OP = {
+class LearnableSumMerge(nn.Module):
+    r"""Sum node-level embeddings after a linear projection."""
+
+    def __init__(self, node_dim: int) -> None:
+        super().__init__()
+        self.lin_src = nn.Linear(node_dim, node_dim)
+        self.lin_dst = nn.Linear(node_dim, node_dim)
+
+    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
+        return self.lin_src(z_src) + self.lin_dst(z_dst)
+
+
+MERGE_OP: Dict[str, Callable] = {
     'concat': cat_merge,
+    'sum': LearnableSumMerge,
 }
 
 
@@ -41,18 +56,21 @@ class LinkPredictor(torch.nn.Module):
             )
 
         if merge_op == 'concat':
-            node_dim = node_dim * 2
+            self.merge = MERGE_OP[merge_op]
+            in_dim = node_dim * 2
+        else:
+            self.merge = MERGE_OP[merge_op](node_dim)
+            in_dim = node_dim
 
         self.model = Sequential()
-        self.model.append(nn.Linear(node_dim, hidden_dim))
+        self.model.append(nn.Linear(in_dim, hidden_dim))
         self.model.append(nn.ReLU())
 
-        for i in range(1, nlayers - 1):
+        for _ in range(1, nlayers - 1):
             self.model.append(nn.Linear(hidden_dim, hidden_dim))
             self.model.append(nn.ReLU())
 
         self.model.append(nn.Linear(hidden_dim, out_dim))
-        self.merge_op = MERGE_OP[merge_op]
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         r"""Forward pass.
@@ -61,4 +79,5 @@ class LinkPredictor(torch.nn.Module):
             z_src (torch.Tensor): embedding of src node
             z_dst (torch.Tensor): embedding of dst node
         """
-        return self.model(self.merge_op(z_src, z_dst)).view(-1)
+        h = self.merge(z_src, z_dst)
+        return self.model(h).view(-1)
