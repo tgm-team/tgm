@@ -68,6 +68,22 @@ class CTANMemory(torch.nn.Module):
         )
         self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
 
+    def reset_parameters(self) -> None:
+        if hasattr(self.aggr_module, 'reset_parameters'):
+            self.aggr_module.reset_parameters()
+        self.reset_state()
+
+    def reset_state(self) -> None:
+        zeros(self.memory)
+        ones(self.last_update)
+        self.last_update *= self.init_time
+
+    def detach(self) -> None:
+        self.memory.detach_()
+
+    def forward(self, n_id: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.memory[n_id], self.last_update[n_id]
+
     def update_state(
         self,
         src: torch.Tensor,
@@ -88,14 +104,3 @@ class CTANMemory(torch.nn.Module):
 
         self.last_update[_idx] = last_update
         self.memory[_idx] = aggr.detach()
-
-    def reset_state(self) -> None:
-        zeros(self.memory)
-        ones(self.last_update)
-        self.last_update *= self.init_time
-
-    def detach(self) -> None:
-        self.memory.detach_()
-
-    def forward(self, n_id: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        return self.memory[n_id], self.last_update[n_id]
