@@ -1,3 +1,4 @@
+from .ctan import CTAN
 from .dygformer import DyGFormer
 from .tpnet import TPNet, RandomProjectionModule
 from .tgcn import TGCN
@@ -13,6 +14,7 @@ from .roland import ROLAND
 
 
 __all__ = [
+    'CTAN',
     'DyGFormer',
     'GCLSTM',
     'MLPMixer',

@@ -1,7 +1,6 @@
-from .encoder import DyGFormer, TPNet, TGCN, GCLSTM, TGNMemory
+from .encoder import CTAN, DyGFormer, TPNet, TGCN, GCLSTM, TGNMemory
 from .decoder import GraphPredictor, NodePredictor, LinkPredictor, NCNPredictor
 from .encoder import DyGFormer, TPNet, TGCN, GCLSTM, RandomProjectionModule, ROLAND
-from .decoder import GraphPredictor, NodePredictor, LinkPredictor
 from .modules import (
     Time2Vec,
     TemporalAttention,
@@ -13,6 +12,7 @@ from .modules import (
 
 
 __all__ = [
+    'CTAN',
     'DyGFormer',
     'EdgeBankPredictor',
     'GCLSTM',

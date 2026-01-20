@@ -6,12 +6,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
-from torch import Tensor
-from torch_geometric.nn import AntiSymmetricConv, TransformerConv
 from torch_geometric.nn.inits import ones, zeros
-from torch_geometric.nn.models.tgn import TimeEncoder
 from torch_geometric.utils import scatter
-from torch_scatter import scatter_max
 from tqdm import tqdm
 
 from tgm import DGraph
@@ -22,6 +18,7 @@ from tgm.constants import (
 )
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
+from tgm.nn.encoder import CTAN, LastAggregator
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -101,15 +98,6 @@ class SimpleMemory(torch.nn.Module):
         return self.memory[n_id], self.last_update[n_id]
 
 
-class LastAggregator(torch.nn.Module):
-    def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
-        _, argmax = scatter_max(t, index, dim=0, dim_size=dim_size)
-        out = msg.new_zeros((dim_size, msg.size(-1)))
-        mask = argmax < msg.size(0)  # Filter items with at least one entry.
-        out[mask] = msg[argmax[mask]]
-        return out
-
-
 class TGBLinkPredictor(torch.nn.Module):
     def __init__(self, in_channels):
         super().__init__()
@@ -121,42 +109,6 @@ class TGBLinkPredictor(torch.nn.Module):
         h = self.lin_src(z_src) + self.lin_dst(z_dst)
         h = h.relu()
         return self.lin_final(h).view(-1)
-
-
-class CTAN(torch.nn.Module):
-    def __init__(
-        self,
-        edge_dim: int,
-        memory_dim: int,
-        time_dim: int,
-        node_dim: int,
-        num_iters: int = 1,
-        mean_delta_t: float = 0.0,
-        std_delta_t: float = 1.0,
-        epsilon: float = 0.1,
-        gamma: float = 0.1,
-    ):
-        super().__init__()
-        self.mean_delta_t = mean_delta_t
-        self.std_delta_t = std_delta_t
-        self.time_enc = TimeEncoder(time_dim)
-        self.enc_x = nn.Linear(memory_dim + node_dim, memory_dim)
-
-        phi = TransformerConv(
-            memory_dim, memory_dim, edge_dim=edge_dim + time_dim, root_weight=False
-        )
-        self.aconv = AntiSymmetricConv(
-            memory_dim, phi, num_iters=num_iters, epsilon=epsilon, gamma=gamma
-        )
-
-    def forward(self, x, last_update, edge_index, t, msg):
-        rel_t = (last_update[edge_index[0]] - t).abs()
-        rel_t = ((rel_t - self.mean_delta_t) / self.std_delta_t).to(x.dtype)
-        enc_x = self.enc_x(x)
-        edge_attr = torch.cat([msg, self.time_enc(rel_t)], dim=-1)
-        z = self.aconv(enc_x, edge_index, edge_attr=edge_attr)
-        z = torch.tanh(z)
-        return z
 
 
 @log_gpu
@@ -182,7 +134,6 @@ def train(
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-        #! run my own deduplication
         all_nids = torch.cat(
             [batch.edge_src, batch.edge_dst, batch.neg, nbr_nodes[nbr_mask]]
         )
@@ -256,7 +207,6 @@ def eval(
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-        #! run my own deduplication
         all_nids = torch.cat(
             [batch.edge_src, batch.edge_dst, batch.neg, nbr_nodes[nbr_mask]]
         )
