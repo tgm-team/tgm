@@ -37,10 +37,10 @@ It provides a unified abstraction for both discrete and continuous-time graphs, 
 
 To request a method for prioritization, please [open an issue](https://github.com/tgm-team/tgm/issues) or [join the discussion](https://github.com/tgm-team/tgm/discussions).
 
-| Status      | Methods                                                                                         |
-| ----------- | ----------------------------------------------------------------------------------------------- |
-| Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8] |
-| Planned     | TNCN[^9], DyGMamba[^10], NAT[^11]                                                               |
+| Status      | Methods                                                                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Implemented | EdgeBank[^1], GCN[^2], GC-LSTM[^3], GraphMixer[^4], TGAT[^5], TGN[^6], DygFormer[^7], TPNet[^8], ROLAND [^13], PopTrack [^14], TNCN[^9], Base3[^15] |
+| Planned     | DyGMamba[^10], NAT[^11]                                                                                                                             |
 
 ## Installation
 
@@ -116,7 +116,7 @@ train_dg = DGraph(train_data)
 train_loader = DGDataLoader(train_dg, batch_unit="Y")
 
 # tgbn-trade has no static node features, so we create Gaussian ones (dim=64)
-static_node_feats = torch.randn((train_dg.num_nodes, 64))
+static_node_x = torch.randn((train_dg.num_nodes, 64))
 
 class RecurrentGCN(torch.nn.Module):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
@@ -127,27 +127,27 @@ class RecurrentGCN(torch.nn.Module):
     def forward(
         self, batch: DGBatch, node_feat: torch.tensor, h: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         h_0 = self.recurrent(node_feat, edge_index, H=h)
         z = F.relu(h_0)
         z = self.linear(z)
         return z, h_0
 
 # Initialize our model and optimizer
-encoder = RecurrentGCN(node_dim=static_node_feats.shape[1], embed_dim=128)
-decoder = NodePredictor(in_dim=128, out_dim=train_dg.dynamic_node_feats_dim)
+encoder = RecurrentGCN(node_dim=static_node_x.shape[1], embed_dim=128)
+decoder = NodePredictor(in_dim=128, out_dim=train_dg.node_y_dim)
 opt = torch.optim.Adam(set(encoder.parameters()) | set(decoder.parameters()), lr=0.001)
 
 # Training loop
 h_0 = None
 for batch in train_loader:
     opt.zero_grad()
-    y_true = batch.dynamic_node_feats
+    y_true = batch.node_y
     if y_true is None:
         continue
 
-    z, h_0 = encoder(batch, static_node_feats, h_0)
-    z_node = z[batch.node_ids]
+    z, h_0 = encoder(batch, static_node_x, h_0)
+    z_node = z[batch.node_y_nids]
     y_pred = decoder(z_node)
 
     loss = F.cross_entropy(y_pred, y_true)
@@ -220,7 +220,13 @@ We welcome contributions. If you encounter problems or would like to propose a n
 
 [^8]: [Improving Temporal Link Prediction via Temporal Walk Matrix Projection](https://arxiv.org/abs/2410.04013)
 
+[^13]: [ROLAND: Graph Learning Framework for Dynamic Graphs](https://arxiv.org/pdf/2208.07239)
+
+[^14]: [Temporal Graph Models Fail to Capture Global Temporal Dynamics](https://openreview.net/pdf?id=9kLDrE5rsW)
+
 [^9]: [Efficient Neural Common Neighbor for Temporal Graph Link Prediction](https://arxiv.org/abs/2406.07926)
+
+[^15]: [Base3: a simple interpolation-based ensemble method for robust dynamic link prediction](https://www.arxiv.org/abs/2506.12764)
 
 [^10]: [DyGMamba: Efficiently Modeling Long-Term Temporal Dependency on Continuous-Time Dynamic Graphs with State Space Models](https://arxiv.org/abs/2408.04713)
 

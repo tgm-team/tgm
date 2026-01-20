@@ -57,7 +57,7 @@ class RecurrentGCN(torch.nn.Module):
         h: torch.Tensor | None = None,
         c: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
 
         h_0, c_0 = self.recurrent(node_feat, edge_index, edge_weight, h, c)
@@ -71,7 +71,6 @@ class RecurrentGCN(torch.nn.Module):
 def train(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -80,29 +79,32 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_x = loader.dgraph.static_node_x
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
-    z, h_0, c_0 = encoder(snapshot_batch, static_node_feats)
+    z, h_0, c_0 = encoder(snapshot_batch, static_node_x)
     z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()
 
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        pos_out = decoder(z[batch.src], z[batch.dst])
-        neg_out = decoder(z[batch.src], z[batch.neg])
+        pos_out = decoder(z[batch.edge_src], z[batch.edge_dst])
+        neg_out = decoder(z[batch.edge_src], z[batch.neg])
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
-        total_loss += float(loss) / batch.src.shape[0]
+        total_loss += float(loss) / batch.edge_src.shape[0]
 
         # update the model if the prediction batch has moved to next snapshot.
-        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+        while (
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+        ):
             try:
                 snapshot_batch = next(snapshots_iterator)
-                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_x, h_0, c_0)
                 z, h_0, c_0 = z.detach(), h_0.detach(), c_0.detach()  # Truncate BPTT
             except StopIteration:
                 pass
@@ -116,7 +118,6 @@ def train(
 def eval(
     loader: DGDataLoader,
     snapshots_loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     z: torch.Tensor,
     h_0: torch.Tensor,
     c_0: torch.Tensor,
@@ -128,6 +129,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+    static_node_x = loader.dgraph.static_node_x
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
@@ -135,8 +137,8 @@ def eval(
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
-            query_src = batch.src[idx].repeat(len(neg_batch) + 1)
-            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            query_src = batch.edge_src[idx].repeat(len(neg_batch) + 1)
+            query_dst = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
 
             y_pred = decoder(z[query_src], z[query_dst]).sigmoid()
             input_dict = {
@@ -147,10 +149,12 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # update the model if the prediction batch has moved to next snapshot.
-        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+        while (
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+        ):
             try:
                 snapshot_batch = next(snapshots_iterator)
-                z, h_0, c_0 = encoder(snapshot_batch, static_node_feats, h_0, c_0)
+                z, h_0, c_0 = encoder(snapshot_batch, static_node_x, h_0, c_0)
             except StopIteration:
                 pass
 
@@ -160,7 +164,13 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
+
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
@@ -192,15 +202,8 @@ val_snapshots_loader = DGDataLoader(val_snapshots, batch_unit=args.snapshot_time
 test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_time_gran)
 
 
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
 encoder = RecurrentGCN(
-    node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
+    node_dim=train_dg.static_node_x_dim, embed_dim=args.embed_dim
 ).to(args.device)
 decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device
@@ -214,7 +217,6 @@ for epoch in range(1, args.epochs + 1):
         loss, z, h_0, c_0 = train(
             train_loader,
             train_snapshots_loader,
-            static_node_feats,
             encoder,
             decoder,
             opt,
@@ -225,7 +227,6 @@ for epoch in range(1, args.epochs + 1):
         val_mrr = eval(
             val_loader,
             val_snapshots_loader,
-            static_node_feats,
             z,
             h_0,
             c_0,
@@ -242,7 +243,6 @@ with hm.activate(test_key):
     test_mrr = eval(
         test_loader,
         test_snapshots_loader,
-        static_node_feats,
         z,
         h_0,
         c_0,

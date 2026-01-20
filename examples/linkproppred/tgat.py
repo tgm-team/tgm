@@ -105,11 +105,11 @@ class TGAT(nn.Module):
             )
 
     def forward(self, batch: DGBatch, static_node_feat: torch.Tensor) -> torch.Tensor:
-        device = batch.src.device
+        device = batch.edge_src.device
         z = {j: {} for j in range(self.num_layers + 1)}  # z[j][i] = z of nbr^i at hop j
 
         # Layer 0 (leaf nodes): z[0][i] = static_node_feat
-        z[0][0] = static_node_feat[batch.nids[0]]
+        z[0][0] = static_node_feat[batch.seed_nids[0]]
         for i in range(1, self.num_layers + 1):
             z[0][i] = static_node_feat[batch.nbr_nids[i - 1].flatten()]
 
@@ -122,10 +122,10 @@ class TGAT(nn.Module):
                     node_feat=z[j - 1][i],
                     time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
                     nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
-                    edge_feat=batch.nbr_feats[i],
+                    edge_feat=batch.nbr_edge_x[i],
                     valid_nbr_mask=batch.nbr_nids[i] != PADDED_NODE_ID,
                     nbr_time_feat=self.time_encoder(
-                        batch.times[i][:, None] - batch.nbr_times[i]
+                        batch.seed_times[i][:, None] - batch.nbr_edge_time[i]
                     ),
                 )
                 z[j][i] = self.merge_layers[j - 1](out, z[0][i])
@@ -137,7 +137,6 @@ class TGAT(nn.Module):
 @log_latency
 def train(
     loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -145,11 +144,12 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        z = encoder(batch, static_node_feats)
+        z = encoder(batch, static_node_x)
         z_src, z_dst, z_neg = torch.chunk(z, 3)
 
         pos_out = decoder(z_src, z_dst)
@@ -168,7 +168,6 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     evaluator: Evaluator,
@@ -176,13 +175,14 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        z = encoder(batch, static_node_feats)
-        id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
+        z = encoder(batch, static_node_x)
+        id_map = {nid.item(): i for i, nid in enumerate(batch.seed_nids[0])}
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src_ids = batch.src[idx].repeat(len(dst_ids))
+            dst_ids = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.edge_src[idx].repeat(len(dst_ids))
 
             src_idx = torch.tensor([id_map[n.item()] for n in src_ids], device=z.device)
             dst_idx = torch.tensor([id_map[n.item()] for n in dst_ids], device=z.device)
@@ -203,28 +203,27 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn((full_data.num_nodes, 1), device=args.device)
+
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.zeros((test_dg.num_nodes, 1), device=args.device)
-
 if args.sampling == 'uniform':
     nbr_hook = NeighborSamplerHook(
         num_nbrs=args.n_nbrs,
-        seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['time', 'time', 'neg_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
     )
 elif args.sampling == 'recency':
     nbr_hook = RecencyNeighborHook(
         num_nbrs=args.n_nbrs,
-        num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-        seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['time', 'time', 'neg_time'],
+        num_nodes=full_data.num_nodes,
+        seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
     )
 else:
     raise ValueError(f'Unknown sampling type: {args.sampling}')
@@ -241,8 +240,8 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 encoder = TGAT(
-    node_dim=static_node_feats.shape[1],
-    edge_dim=train_dg.edge_feats_dim,
+    node_dim=train_dg.static_node_x_dim,
+    edge_dim=train_dg.edge_x_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
     num_layers=len(args.n_nbrs),
@@ -258,10 +257,10 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
-        loss = train(train_loader, static_node_feats, encoder, decoder, opt)
+        loss = train(train_loader, encoder, decoder, opt)
 
     with hm.activate(val_key):
-        val_mrr = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
+        val_mrr = eval(val_loader, encoder, decoder, evaluator)
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
@@ -269,5 +268,5 @@ for epoch in range(1, args.epochs + 1):
         hm.reset_state()
 
 with hm.activate(test_key):
-    test_mrr = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
+    test_mrr = eval(test_loader, encoder, decoder, evaluator)
 log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

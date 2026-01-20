@@ -24,7 +24,7 @@ def setup_dedup_hook(dg, dataset):
 
 
 def setup_random_negs(dg, dataset):
-    _, dst, _ = dg.edges
+    _, dst, _ = dg.edge_events
     hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
     return create_hook_manager(hooks=[hook])
 

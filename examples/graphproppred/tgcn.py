@@ -1,4 +1,5 @@
 import argparse
+import pathlib
 from typing import Callable, Tuple
 
 import pandas as pd
@@ -24,7 +25,9 @@ from tgm.util.seed import seed_everything
 """
 Adapted graph property prediction as proposed in https://openreview.net/forum?id=DZqic2sPTY
 
-Note: `lag` is excluded from this example's setting.
+Note:
+ - `lag` is excluded from this example's setting.
+ - Graph property prediction is always DTDG setting (snapshot-based)
 """
 
 parser = argparse.ArgumentParser(
@@ -45,13 +48,14 @@ parser.add_argument(
     '--node-dim', type=int, default=256, help='node feat dimension if not provided'
 )
 parser.add_argument(
-    '--path-dataset',
+    '--dataset',
     type=str,
     default='examples/graphproppred/tokens_data/test-token.csv',
     help=(
-        'Path to dataset csv file. '
+        'Either Path to dataset csv file. '
         'You can run `./scripts/download_graph_prop_datasets.sh examples/graphproppred` '
         'to download the relevant token data to the default path.'
+        'Or TGB dataset'
     ),
 )
 parser.add_argument(
@@ -71,8 +75,54 @@ args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
+# ETL steps
+def preprocess_raw_data(df: pd.DataFrame) -> pd.DataFrame:
+    # time offset
+    df['timestamp'] = df['timestamp'] - df['timestamp'].min()
+
+    # normalize edge weight
+    max_weight = float(df['value'].max())
+    min_weight = float(df['value'].min())
+    df['value'] = df['value'].apply(
+        lambda x: [1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))]
+    )
+
+    # Key generator
+    node_id_map = {}
+    df['from'] = df['from'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
+    df['to'] = df['to'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
+    return df
+
+
+def load_data(dataset_str: str) -> Tuple[DGData, TemporalRatioSplit | None]:
+    r"""Load full dataset and its corresponding split."""
+    if pathlib.Path(dataset_str).exists() and dataset_str.endswith('.csv'):
+        df = pd.read_csv(dataset_str)
+        df = preprocess_raw_data(df)
+        full_data = DGData.from_pandas(
+            edge_df=df,
+            edge_src_col='from',
+            edge_dst_col='to',
+            edge_time_col='timestamp',
+            edge_x_col='value',
+            time_delta=args.raw_time_gran,
+        )
+        split_strategy = TemporalRatioSplit(
+            train_ratio=args.train_ratio,
+            val_ratio=args.val_ratio,
+            test_ratio=args.test_ratio,
+        )
+        return full_data, split_strategy
+    elif dataset_str.startswith('tgb'):
+        full_data = DGData.from_tgb(args.dataset).discretize(args.batch_time_gran)
+        split_strategy = None  # For TGB dataset, will use TGB split by default
+    else:
+        raise ValueError('This example only supports TGB and test tokens from MiNT.')
+    return full_data, split_strategy
+
+
 def edge_count(snapshot: DGBatch):  # return number of edges of current snapshot
-    return snapshot.src.shape[0]
+    return snapshot.edge_src.shape[0]
 
 
 def node_count(snapshot: DGBatch):  # return number of nodes of current snapshot
@@ -95,25 +145,6 @@ def generate_binary_trend_labels(
     return torch.tensor(labels, dtype=torch.int64)
 
 
-# ETL step
-def preprocess_raw_data(df: pd.DataFrame) -> pd.DataFrame:
-    # time offset
-    df['timestamp'] = df['timestamp'] - df['timestamp'].min()
-
-    # normalize edge weight
-    max_weight = float(df['value'].max())
-    min_weight = float(df['value'].min())
-    df['value'] = df['value'].apply(
-        lambda x: [1 + (9 * ((float(x) - min_weight) / (max_weight - min_weight)))]
-    )
-
-    # Key generator
-    node_id_map = {}
-    df['from'] = df['from'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
-    df['to'] = df['to'].apply(lambda x: node_id_map.setdefault(x, len(node_id_map)))
-    return df
-
-
 class RecurrentGCN(torch.nn.Module):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
@@ -126,7 +157,7 @@ class RecurrentGCN(torch.nn.Module):
         node_feat: torch.tensor,
         h: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
 
         h_0 = self.recurrent(node_feat, edge_index, edge_weight, h)
@@ -140,7 +171,6 @@ class RecurrentGCN(torch.nn.Module):
 def train(
     loader: DGDataLoader,
     labels: torch.Tensor,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -150,13 +180,14 @@ def train(
     decoder.train()
     total_loss = 0
     h_0 = None
+    static_node_x = loader.dgraph.static_node_x
 
     y_pred = torch.zeros_like(labels, dtype=torch.float)
     for i, batch in enumerate(tqdm(loader)):
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
             opt.zero_grad()
-            z, h_0 = encoder(batch, static_node_feats, h_0)
-            z_node = z[torch.cat([batch.src, batch.dst])]
+            z, h_0 = encoder(batch, static_node_x, h_0)
+            z_node = z[torch.cat([batch.edge_src, batch.edge_dst])]
             pred = decoder(z_node)
 
             loss = F.binary_cross_entropy_with_logits(
@@ -181,7 +212,6 @@ def train(
 def eval(
     loader: DGDataLoader,
     y_true: torch.Tensor,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     h_0: torch.Tensor,
@@ -190,11 +220,12 @@ def eval(
     encoder.eval()
     decoder.eval()
     y_pred = torch.zeros_like(y_true, dtype=torch.float)
+    static_node_x = loader.dgraph.static_node_x
 
     for i, batch in enumerate(tqdm(loader)):
         if i != len(loader) - 1:  # Skip last snapshot as we don't have labels for it
-            z, h_0 = encoder(batch, static_node_feats, h_0)
-            z_node = z[torch.cat([batch.src, batch.dst])]
+            z, h_0 = encoder(batch, static_node_x, h_0)
+            z_node = z[torch.cat([batch.edge_src, batch.edge_dst])]
             y_pred[i] = decoder(z_node).sigmoid()
 
     indexes = torch.zeros(y_pred.size(0), dtype=torch.long, device=y_pred.device)
@@ -205,25 +236,17 @@ def eval(
 
 seed_everything(args.seed)
 
-df = pd.read_csv(args.path_dataset)
-df = preprocess_raw_data(df)
+full_data, split_strategy = load_data(args.dataset)
+full_data = full_data.discretize(
+    args.batch_time_gran
+)  # discretize to adapt to graphproppred setting
 
-full_data = DGData.from_pandas(
-    edge_df=df,
-    edge_src_col='from',
-    edge_dst_col='to',
-    edge_time_col='timestamp',
-    edge_feats_col='value',
-    time_delta=args.raw_time_gran,
-).discretize(args.batch_time_gran)
-
-train_data, val_data, test_data = full_data.split(
-    TemporalRatioSplit(
-        train_ratio=args.train_ratio,
-        val_ratio=args.val_ratio,
-        test_ratio=args.test_ratio,
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
     )
-)
+
+train_data, val_data, test_data = full_data.split(split_strategy)
 
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
@@ -233,15 +256,8 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.batch_time_gran, on_empty=
 val_loader = DGDataLoader(val_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 test_loader = DGDataLoader(test_dg, batch_unit=args.batch_time_gran, on_empty='raise')
 
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
 encoder = RecurrentGCN(
-    node_dim=static_node_feats.shape[1], embed_dim=args.embed_dim
+    node_dim=train_dg.static_node_x_dim, embed_dim=args.embed_dim
 ).to(args.device)
 decoder = GraphPredictor(in_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device
@@ -269,21 +285,16 @@ for epoch in range(1, args.epochs + 1):
     loss, h_0, train_results = train(
         train_loader,
         train_labels,
-        static_node_feats,
         encoder,
         decoder,
         opt,
         train_metrics,
     )
 
-    val_results, h_0 = eval(
-        val_loader, val_labels, static_node_feats, encoder, decoder, h_0, val_metrics
-    )
+    val_results, h_0 = eval(val_loader, val_labels, encoder, decoder, h_0, val_metrics)
     log_metric('Loss', loss, epoch=epoch)
     log_metrics_dict(train_results, epoch=epoch)
     log_metrics_dict(val_results, epoch=epoch)
 
-test_results, h_0 = eval(
-    test_loader, test_labels, static_node_feats, encoder, decoder, h_0, test_metrics
-)
+test_results, h_0 = eval(test_loader, test_labels, encoder, decoder, h_0, test_metrics)
 log_metrics_dict(test_results, epoch=args.epochs)

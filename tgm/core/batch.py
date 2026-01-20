@@ -17,24 +17,32 @@ class DGBatch:
     additional attributes to the container transparently during dataloading.
 
     Args:
-        src (Tensor): Source node indices for edges in the batch. Shape `(E,)`.
-        dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
-        time (Tensor): Timestamps of each edge event. Shape `(E,)`.
-        dynamic_node_feats (Tensor | None, optional): Dynamic node features for nodes
-            in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
-        edge_feats (Tensor | None, optional): Edge features for the batch. Tensor
-            of shape `(T x V x V x d_edge)`.
-        node_times (Tensor | None, optional): Timestamps corresponding to dynamic node features.
-        node_ids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
+        edge_src (Tensor): Source node indices for edges in the batch. Shape `(E,)`.
+        edge_dst (Tensor): Destination node indices for edges in the batch. Shape `(E,)`.
+        edge_time (Tensor): Timestamps of each edge event. Shape `(E,)`.
+        edge_x (Tensor | None, optional): Edge features for the batch. Tensor of shape `(T x V x V x d_edge)`.
+        edge_type (Tensor | None, optional): Type of each edge. Shape `(E,)`
+        node_x (Tensor | None, optional): Dynamic node features for nodes in the batch. Tensor of shape `(T x V x d_node_dynamic)`.
+        node_x_time (Tensor | None, optional): Timestamps corresponding to dynamic node features.
+        node_x_nids (Tensor | None, optional): Node IDs corresponding to dynamic node features.
+        node_y (Tensor | None, optional): Dynamic node labels for nodes in the batch. Tensor of shape `(T x V x d_node_labels)`.
+        node_y_time (Tensor | None, optional): Timestamps corresponding to dynamic node labels.
+        node_y_nids (Tensor | None, optional): Node IDs corresponding to dynamic node labels.
     """
 
-    src: Tensor
-    dst: Tensor
-    time: Tensor
-    dynamic_node_feats: Optional[Tensor] = None
-    edge_feats: Optional[Tensor] = None
-    node_times: Optional[Tensor] = None
-    node_ids: Optional[Tensor] = None
+    edge_src: Tensor
+    edge_dst: Tensor
+    edge_time: Tensor
+    edge_x: Optional[Tensor] = None
+    edge_type: Optional[Tensor] = None
+
+    node_x_time: Optional[Tensor] = None
+    node_x_nids: Optional[Tensor] = None
+    node_x: Optional[Tensor] = None
+
+    node_y_time: Optional[Tensor] = None
+    node_y_nids: Optional[Tensor] = None
+    node_y: Optional[Tensor] = None
 
     def __str__(self) -> str:
         def _get_description(object: Any) -> str:

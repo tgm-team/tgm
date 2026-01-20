@@ -78,14 +78,14 @@ from tgm.data import DGData
 # Custom dataset with day granularity
 dg_data = DGData(
     time_delta="D",
-    timestamps=timestamps,
+    time=timestamps,
     ...
 )
 
 # Ordered dataset (relative order only)
 dg_event_ordered = DGData(
     time_delta="r",
-    timestamps=timestamps,
+    time=timestamps,
     ...
 )
 ```
@@ -138,21 +138,21 @@ This is useful for tuning dataset granularity (e.g. converting from continuous t
 ```python
 dg_data_second_wise = DGData.from_raw(
     time_delta="s",
-    edge_timestamps=torch.tensor([15, 30, 45, 60]),
+    edge_time=torch.tensor([15, 30, 45, 60]),
     edge_index=torch.tensor([[0, 1], [2, 3], [0, 1], [0, 1]),
-    edge_feats=torch.tensor([[100, 200, 300, 400]]),
+    edge_x=torch.tensor([[100, 200, 300, 400]]),
 )
 
 # Discretize from second-wise to minutely data
 dg_data_minute_wise = dg_data_second_wise.discretize(time_delta="m", reduce_op="first")
 
 # After discretizing, note that the edge interaction between node 0 and 1 at time 15 and 45 are duplicates
-# after grouping to minute-wise buckets (minute 0). In this case, we keep the first event (edge_feats 100)
-# and drop the second event (edge_feats 400).
+# after grouping to minute-wise buckets (minute 0). In this case, we keep the first event (edge_x 100)
+# and drop the second event (edge_x 400).
 print(dg_data.time_delta) # TimeDeltaDG("m")
-print(dg_data.edge_timestamps) # torch.tensor([0, 0, 1])
+print(dg_data.edge_time) # torch.tensor([0, 0, 1])
 print(dg_data.edge_index) # torch.tensor([[0, 1], [2, 3], [0, 1])
-print(dg_data.edge_feats) # torch.tensor([[[100, 200, 400]])
+print(dg_data.edge_x) # torch.tensor([[[100, 200, 400]])
 ```
 
 > **Note**: Discretization is only defined for time-ordered graphs. Attempting to discretize an even-ordered `DGData` is undefined and will raise `InvalidDiscretizationError`.

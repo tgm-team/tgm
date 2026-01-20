@@ -169,7 +169,16 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
             batch = self._hook_manager.execute_active_hooks(dg, batch)
         return batch
 
+    @property
+    def dgraph(self) -> DGraph:
+        return self._dg
+
     def _is_batch_empty(self, batch: DGBatch) -> bool:
-        num_edge_events = batch.src.numel()
-        num_node_events = batch.node_ids.numel() if batch.node_ids is not None else 0
-        return num_edge_events + num_node_events == 0
+        num_edge_events = batch.edge_src.numel()
+        num_node_events = (
+            batch.node_x_nids.numel() if batch.node_x_nids is not None else 0
+        )
+        num_node_labels = (
+            batch.node_y_nids.numel() if batch.node_y_nids is not None else 0
+        )
+        return num_edge_events + num_node_events + num_node_labels == 0

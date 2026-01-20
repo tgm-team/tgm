@@ -24,14 +24,14 @@ Hooks declare the following information
 
 TGM implements several commonly used hooks. The table below summarizes them:
 
-| Hook Name                    | Type      | `requires` | `produces`                           | Description                                                                                          |
-| ---------------------------- | --------- | ---------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `NegativeEdgeSamplerHook`    | Stateless | None       | `neg`, `neg_time`                    | Generates random negatives for link prediction                                                       |
-| `TGBNegativeEdgeSamplerHook` | Stateless | None       | `neg`, `neg_time`, `neg_batch_list`  | Loads pre-computed negative edges for [TGB](https://tgb.complexdatalab.com/) datasets                |
-| `NeighborSamplerHook`        | Stateless | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Uniform sampler neighbor for a given number of hops                                                  |
-| `RecencyNeighborSamplerHook` | Stateful  | None       | `nbr_nids`, `nbr_times`, `nbr_feats` | Recency neighbor sampler for a given number of hops                                                  |
-| `PinMemoryHook`              | Stateless | None       | None                                 | Pins all `torch.Tensor` in `DGBatch` for fast CPU-GPU transfer                                       |
-| `DeduplicationHook`          | Stateful  | None       | `unique_nids`, `global_to_local`     | Computes unique node ids in `DGBatch` and a mapping from global (graph) to local (batch) coordinates |
+| Hook Name                    | Type      | `requires` | `produces`                                | Description                                                                                          |
+| ---------------------------- | --------- | ---------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `NegativeEdgeSamplerHook`    | Stateless | None       | `neg`, `neg_time`                         | Generates random negatives for link prediction                                                       |
+| `TGBNegativeEdgeSamplerHook` | Stateless | None       | `neg`, `neg_time`, `neg_batch_list`       | Loads pre-computed negative edges for [TGB](https://tgb.complexdatalab.com/) datasets                |
+| `NeighborSamplerHook`        | Stateless | None       | `nbr_nids`, `nbr_edge_time`, `nbr_edge_x` | Uniform sampler neighbor for a given number of hops                                                  |
+| `RecencyNeighborSamplerHook` | Stateful  | None       | `nbr_nids`, `nbr_edge_time`, `nbr_edge_x` | Recency neighbor sampler for a given number of hops                                                  |
+| `PinMemoryHook`              | Stateless | None       | None                                      | Pins all `torch.Tensor` in `DGBatch` for fast CPU-GPU transfer                                       |
+| `DeduplicationHook`          | Stateful  | None       | `unique_nids`, `global_to_local`          | Computes unique node ids in `DGBatch` and a mapping from global (graph) to local (batch) coordinates |
 
 ### Custom Hooks
 
@@ -48,8 +48,8 @@ class MyNegativeHook(StatelessHook):
     requires = set()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        batch.my_neg = torch.randint(10, 100, (len(batch.dst),))
-        batch.my_neg_time = batch.time.clone()
+        batch.my_neg = torch.randint(10, 100, (len(batch.edge_dst),))
+        batch.my_neg_time = batch.edge_time.clone()
         return batch
 ```
 
@@ -112,7 +112,7 @@ with hm.activate('test'):
         assert batch.dst.shape() == batch.my_neg.shape() # True
         assert torch.all(batch.my_neg >= 10) # True
         assert torch.all(batch.my_neg < 100) # True
-        assert torch.equal(batch.my_neg_time, batch.time) # True
+        assert torch.equal(batch.my_neg_time, batch.edge_time) # True
 ```
 
 > **Note**: The context manager is just syntactical sugar for the following:
@@ -182,7 +182,7 @@ class MyNegativeHookWithFoo(StatelessHook):
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.my_neg = torch.randint(10, 100, (len(batch.dst),))
-        batch.my_neg_time = batch.time.clone()
+        batch.my_neg_time = batch.edge_time.clone()
         return batch
 ```
 
@@ -245,7 +245,7 @@ dataset = PyGLinkPropPredDataset(
 
 dataset.load_val_ns()
 dataset.load_test_ns()
-_, dst, _ = train_dg.edges
+dst = train_dg.edge_dst
 neg_sampler = dataset.negative_sampler
 
 hm = HookManager(keys=['train', 'val', 'test'])
@@ -272,7 +272,7 @@ def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
    )
    dataset.load_val_ns()
    dataset.load_test_ns()
-   _, dst, _ = train_dg.edges
+   dst = train_dg.edge_dst
    neg_sampler = dataset.negative_sampler
 
 

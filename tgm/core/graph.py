@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 from functools import cached_property
-from typing import Any, Optional, Set, Tuple
+from typing import Any, Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -35,7 +35,7 @@ class DGraph:
         - Slicing operations (`slice_events` or `slice_time`) return a new `DGraph`
           view sharing the underlying storage; they do not copy data unless
           explicitly materialized via `materialize()`.
-        - Cached properties (e.g., `num_nodes`, `edges`, `static_node_feats`) are
+        - Cached properties (e.g., `num_nodes`, `edges`, `static_node_x`) are
           computed on first access and then stored. Modifying the underlying
           storage does not automatically invalidate these cached values.
         - `materialize()` returns dense tensors for src, dst, time, and optionally
@@ -48,8 +48,8 @@ class DGraph:
         - `num_nodes` counts the maximum node ID in the slice + 1; this may differ
           from the number of nodes in the underlying DGData if slicing excludes
           some nodes.
-        - `static_node_feats` shape is `(num_nodes_global, d_node_static)` and
-          is **independent of slices**, whereas `dynamic_node_feats` reflects the
+        - `static_node_x` shape is `(num_nodes_global, d_node_static)` and
+          is **independent of slices**, whereas `node_x` reflects the
           current slice.
         - Operations such as `.to(device)` or slicing create **views**; data is not
           copied unless explicitly materialized.
@@ -82,18 +82,28 @@ class DGraph:
             DGBatch: A batch containing src, dst, timestamps, and optionally
                 features from the current slice.
         """
-        batch = DGBatch(*self.edges)
-        if materialize_features and self.dynamic_node_feats is not None:
-            batch.node_times, batch.node_ids = self.dynamic_node_feats._indices()
-            batch.node_ids = batch.node_ids.to(torch.int32)  # type: ignore
-            batch.dynamic_node_feats = self.dynamic_node_feats._values()
-        if materialize_features and self.edge_feats is not None:
-            batch.edge_feats = self.edge_feats
+        batch = DGBatch(self.edge_src, self.edge_dst, self.edge_time)
+        if materialize_features and self.node_x is not None:
+            batch.node_x_time, batch.node_x_nids = self.node_x._indices()
+            batch.node_x_nids = batch.node_x_nids.to(torch.int32)  # type: ignore
+            batch.node_x = self.node_x._values()
+
+        if materialize_features and self.edge_x is not None:
+            batch.edge_x = self.edge_x
+
+        if materialize_features and self.node_y is not None:
+            batch.node_y_time, batch.node_y_nids = self.node_y._indices()
+            batch.node_y_nids = batch.node_y_nids.to(torch.int32)  # type: ignore
+            batch.node_y = self.node_y._values()
+
+        if self.edge_type is not None:
+            batch.edge_type = self.edge_type
 
         logger.debug(
-            'Materialized DGraph slice: %d edge events, %d node events',
-            batch.src.numel(),
-            0 if batch.node_ids is None else batch.node_ids.numel(),
+            'Materialized DGraph slice: %d edge events, %d node events, %d node labels',
+            batch.edge_src.numel(),
+            0 if batch.node_x_nids is None else batch.node_x_nids.numel(),
+            0 if batch.node_y_nids is None else batch.node_y_nids.numel(),
         )
         return batch
 
@@ -191,10 +201,19 @@ class DGraph:
         return max(nodes) + 1 if len(nodes) else 0
 
     @_logged_cached_property
-    def num_edges(self) -> int:
-        """The total number of unique edges encountered over the dynamic graph."""
-        src, *_ = self.edges
-        return len(src)
+    def num_node_events(self) -> int:
+        """The total number of node events in the dynamic graph."""
+        return len(self.node_x_time)
+
+    @_logged_cached_property
+    def num_node_labels(self) -> int:
+        """The total number of node labels in the dynamic graph."""
+        return len(self.node_y_time)
+
+    @_logged_cached_property
+    def num_edge_events(self) -> int:
+        """The total number of edge events in the dynamic graph."""
+        return len(self.edge_time)
 
     @_logged_cached_property
     def num_timestamps(self) -> int:
@@ -207,80 +226,170 @@ class DGraph:
         return self._storage.get_num_events(self._slice)
 
     @_logged_cached_property
-    def nodes(self) -> Set[int]:
-        """The set of node ids over the dynamic graph."""
-        return self._storage.get_nodes(self._slice)
-
-    @_logged_cached_property
     def _edges_cpu(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self._storage.get_edges(self._slice)
 
     @property
-    def edges(self) -> Tuple[Tensor, Tensor, Tensor]:
-        """The src, dst, time tensors over the dynamic graph."""
-        src, dst, time = self._edges_cpu
-        return src.to(self.device), dst.to(self.device), time.to(self.device)
-
-    @cached_property
-    def _static_node_feats_cpu(self) -> Optional[Tensor]:
-        return self._storage.get_static_node_feats()
+    def edge_src(self) -> Tensor:
+        """The edge src tensor over the dynamic graph."""
+        src, _, _ = self._edges_cpu
+        return src.to(self.device)
 
     @property
-    def static_node_feats(self) -> Optional[Tensor]:
+    def edge_dst(self) -> Tensor:
+        """The edge dst tensor over the dynamic graph."""
+        _, dst, _ = self._edges_cpu
+        return dst.to(self.device)
+
+    @property
+    def edge_time(self) -> Tensor:
+        """The timestamps associated with the edge events over the dynamic graph."""
+        _, _, time = self._edges_cpu
+        return time.to(self.device)
+
+    @_logged_cached_property
+    def _edge_x_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_edge_x(self._slice)
+
+    @property
+    def edge_x(self) -> Optional[Tensor]:
+        """The aggregated edge features over the dynamic graph.
+
+        If edge features exist, returns a tensor of shape (T x V x V x d_edge).
+        """
+        feats = self._edge_x_cpu
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
+
+    @_logged_cached_property
+    def _edge_type_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_edge_type(self._slice)
+
+    @property
+    def edge_type(self) -> Optional[Tensor]:
+        """The aggregated edge type over the dynamic graph.
+
+        If edge type exist, returns a tensor of shape (T x V x V).
+        """
+        edge_type = self._edge_type_cpu
+        if edge_type is not None:
+            edge_type = edge_type.to(self.device)
+        return edge_type
+
+    @_logged_cached_property
+    def _node_events_cpu(self) -> Tuple[Tensor, Tensor]:
+        return self._storage.get_node_events(self._slice)
+
+    @property
+    def node_x_nids(self) -> Tensor:
+        """The node ids for associated with the node events over the dynamic graph."""
+        node_ids, _ = self._node_events_cpu
+        return node_ids.to(self.device)
+
+    @property
+    def node_x_time(self) -> Tensor:
+        """The timestamps associated with the node events over the dynamic graph."""
+        _, node_time = self._node_events_cpu
+        return node_time.to(self.device)
+
+    @_logged_cached_property
+    def _node_x_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_node_x(self._slice)
+
+    @property
+    def node_x(self) -> Optional[Tensor]:
+        """The aggregated dynamic node features over the dynamic graph.
+
+        If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
+        """
+        feats = self._node_x_cpu
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
+
+    @cached_property
+    def _node_type_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_node_type()
+
+    @property
+    def node_type(self) -> Optional[Tensor]:
+        """If node types exist, returns a dense Tensor(num_nodes_global).
+
+        Note:
+            - num_nodes_global is the global number of nodes from the underlying DGData and it will be independent of the slice.
+        """
+        node_type = self._node_type_cpu
+        if node_type is not None:
+            node_type = node_type.to(self.device)
+        return node_type
+
+    @_logged_cached_property
+    def _node_labels_cpu(self) -> Tuple[Tensor, Tensor]:
+        return self._storage.get_node_labels(self._slice)
+
+    @property
+    def node_y_nids(self) -> Tensor:
+        """The node ids for associated with the node labels over the dynamic graph."""
+        node_ids, _ = self._node_labels_cpu
+        return node_ids.to(self.device)
+
+    @property
+    def node_y_time(self) -> Tensor:
+        """The timestamps associated with the node labels over the dynamic graph."""
+        _, node_time = self._node_labels_cpu
+        return node_time.to(self.device)
+
+    @_logged_cached_property
+    def _node_y_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_node_y(self._slice)
+
+    @property
+    def node_y(self) -> Optional[Tensor]:
+        """The aggregated dynamic node labels over the dynamic graph.
+
+        If dynamic node labels exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_label).
+        """
+        feats = self._node_y_cpu
+        if feats is not None:
+            feats = feats.to(self.device)
+        return feats
+
+    @cached_property
+    def _static_node_x_cpu(self) -> Optional[Tensor]:
+        return self._storage.get_static_node_x()
+
+    @property
+    def static_node_x(self) -> Optional[Tensor]:
         """If static node features exist, returns a dense Tensor(num_nodes_global x d_node_static).
 
         Note:
             - num_nodes_global is the global number of nodes from the underlying DGData and it will be independent of the slice.
         """
-        feats = self._static_node_feats_cpu
-        if feats is not None:
-            feats = feats.to(self.device)
-        return feats
-
-    @_logged_cached_property
-    def _dynamic_node_feats_cpu(self) -> Optional[Tensor]:
-        return self._storage.get_dynamic_node_feats(self._slice)
-
-    @property
-    def dynamic_node_feats(self) -> Optional[Tensor]:
-        """The aggregated dynamic node features over the dynamic graph.
-
-        If dynamic node features exist, returns a Tensor.sparse_coo_tensor(T x V x d_node_dynamic).
-        """
-        feats = self._dynamic_node_feats_cpu
-        if feats is not None:
-            feats = feats.to(self.device)
-        return feats
-
-    @_logged_cached_property
-    def _edge_feats_cpu(self) -> Optional[Tensor]:
-        return self._storage.get_edge_feats(self._slice)
-
-    @property
-    def edge_feats(self) -> Optional[Tensor]:
-        """The aggregated edge features over the dynamic graph.
-
-        If edge features exist, returns a tensor of shape (T x V x V x d_edge).
-        """
-        feats = self._edge_feats_cpu
+        feats = self._static_node_x_cpu
         if feats is not None:
             feats = feats.to(self.device)
         return feats
 
     @cached_property
-    def static_node_feats_dim(self) -> Optional[int]:
+    def static_node_x_dim(self) -> Optional[int]:
         """Static Node feature dimension or None if not Node features on the Graph."""
-        return self._storage.get_static_node_feats_dim()
+        return self._storage.get_static_node_x_dim()
 
     @cached_property
-    def dynamic_node_feats_dim(self) -> Optional[int]:
+    def node_x_dim(self) -> Optional[int]:
         """Dynamic Node feature dimension or None if not Node features on the Graph."""
-        return self._storage.get_dynamic_node_feats_dim()
+        return self._storage.get_node_x_dim()
 
     @cached_property
-    def edge_feats_dim(self) -> Optional[int]:
+    def node_y_dim(self) -> Optional[int]:
+        """Dynamic Node label feature dimension or None if no Node labels on the Graph."""
+        return self._storage.get_node_y_dim()
+
+    @cached_property
+    def edge_x_dim(self) -> Optional[int]:
         """Edge feature dimension or None if not Node features on the Graph."""
-        return self._storage.get_edge_feats_dim()
+        return self._storage.get_edge_x_dim()
 
     @staticmethod
     def _maybe_max(a: Any, b: Any) -> Optional[int]:

@@ -1,24 +1,22 @@
 import argparse
-import copy
-from typing import Callable, Dict, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tgb.nodeproppred.evaluate import Evaluator
-from torch import Tensor
-from torch.nn import GRUCell
-from torch_geometric.nn import TransformerConv
-from torch_geometric.nn.inits import zeros
-from torch_geometric.utils import scatter
 from tqdm import tqdm
 
 from tgm import DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED, PADDED_NODE_ID
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import HookManager, RecencyNeighborHook
-from tgm.nn import NodePredictor, Time2Vec
+from tgm.hooks import DeduplicationHook, HookManager, RecencyNeighborHook
+from tgm.nn import NodePredictor, TGNMemory
+from tgm.nn.encoder.tgn import (
+    GraphAttentionEmbedding,
+    IdentityMessage,
+    LastAggregator,
+)
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -56,196 +54,6 @@ args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
-class GraphAttentionEmbedding(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, msg_dim, time_enc):
-        super().__init__()
-        self.time_enc = time_enc
-        edge_dim = msg_dim + time_enc.time_dim
-        self.conv = TransformerConv(
-            in_channels, out_channels // 2, heads=2, dropout=0.1, edge_dim=edge_dim
-        )
-
-    def forward(self, x, last_update, edge_index, t, msg):
-        rel_t = last_update[edge_index[0]] - t
-        rel_t_enc = self.time_enc(rel_t.to(x.dtype))
-        edge_attr = torch.cat([rel_t_enc, msg], dim=-1)
-        return self.conv(x, edge_index, edge_attr)
-
-
-class LastAggregator(torch.nn.Module):
-    def forward(self, msg: Tensor, index: Tensor, t: Tensor, dim_size: int):
-        out = msg.new_zeros((dim_size, msg.size(-1)))
-
-        if index.numel() > 0:
-            scores = torch.full((dim_size, t.size(0)), float('-inf'), device=t.device)
-            scores[index, torch.arange(t.size(0), device=t.device)] = t.float()
-            argmax = scores.argmax(dim=1)
-            valid = scores.max(dim=1).values > float('-inf')
-            out[valid] = msg[argmax[valid]]
-
-        return out
-
-
-class IdentityMessage(torch.nn.Module):
-    def __init__(self, raw_msg_dim: int, memory_dim: int, time_dim: int):
-        super().__init__()
-        self.out_channels = raw_msg_dim + 2 * memory_dim + time_dim
-
-    def forward(self, z_src: Tensor, z_dst: Tensor, raw_msg: Tensor, t_enc: Tensor):
-        return torch.cat([z_src, z_dst, raw_msg, t_enc], dim=-1)
-
-
-TGNMessageStoreType = Dict[int, Tuple[Tensor, Tensor, Tensor, Tensor]]
-
-
-class TGNMemory(torch.nn.Module):
-    def __init__(
-        self,
-        num_nodes: int,
-        raw_msg_dim: int,
-        memory_dim: int,
-        time_dim: int,
-        message_module: Callable,
-        aggregator_module: Callable,
-    ):
-        super().__init__()
-
-        self.num_nodes = num_nodes
-        self.raw_msg_dim = raw_msg_dim
-        self.memory_dim = memory_dim
-        self.time_dim = time_dim
-
-        self.msg_s_module = message_module
-        self.msg_d_module = copy.deepcopy(message_module)
-        self.aggr_module = aggregator_module
-        self.time_enc = Time2Vec(time_dim=time_dim)
-        self.memory_updater = GRUCell(message_module.out_channels, memory_dim)
-
-        self.register_buffer('memory', torch.empty(num_nodes, memory_dim))
-        self.register_buffer('last_update', torch.empty(num_nodes, dtype=torch.long))
-        self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
-
-        self.msg_s_store = {}
-        self.msg_d_store = {}
-
-        self.reset_parameters()
-
-    @property
-    def device(self) -> torch.device:
-        return self.time_enc.w.weight.device
-
-    def reset_parameters(self):
-        if hasattr(self.msg_s_module, 'reset_parameters'):
-            self.msg_s_module.reset_parameters()
-        if hasattr(self.msg_d_module, 'reset_parameters'):
-            self.msg_d_module.reset_parameters()
-        if hasattr(self.aggr_module, 'reset_parameters'):
-            self.aggr_module.reset_parameters()
-        self.memory_updater.reset_parameters()
-        self.reset_state()
-
-    def reset_state(self):
-        zeros(self.memory)
-        zeros(self.last_update)
-        self._reset_message_store()
-
-    def detach(self):
-        self.memory.detach_()
-
-    def forward(self, n_id: Tensor) -> Tuple[Tensor, Tensor]:
-        if self.training:
-            memory, last_update = self._get_updated_memory(n_id)
-        else:
-            memory, last_update = self.memory[n_id], self.last_update[n_id]
-
-        return memory, last_update
-
-    def update_state(self, src: Tensor, dst: Tensor, t: Tensor, raw_msg: Tensor):
-        n_id = torch.cat([src, dst]).unique()
-
-        if self.training:
-            self._update_memory(n_id)
-            self._update_msg_store(src, dst, t, raw_msg, self.msg_s_store)
-            self._update_msg_store(dst, src, t, raw_msg, self.msg_d_store)
-        else:
-            self._update_msg_store(src, dst, t, raw_msg, self.msg_s_store)
-            self._update_msg_store(dst, src, t, raw_msg, self.msg_d_store)
-            self._update_memory(n_id)
-
-    def _reset_message_store(self):
-        i = self.memory.new_empty((0,), device=self.device, dtype=torch.long)
-        msg = self.memory.new_empty((0, self.raw_msg_dim), device=self.device)
-        # Message store format: (src, dst, t, msg)
-        self.msg_s_store = {j: (i, i, i, msg) for j in range(self.num_nodes)}
-        self.msg_d_store = {j: (i, i, i, msg) for j in range(self.num_nodes)}
-
-    def _update_memory(self, n_id: Tensor):
-        memory, last_update = self._get_updated_memory(n_id)
-        self.memory[n_id] = memory
-        self.last_update[n_id] = last_update
-
-    def _get_updated_memory(self, n_id: Tensor) -> Tuple[Tensor, Tensor]:
-        self._assoc[n_id] = torch.arange(n_id.size(0), device=n_id.device)
-
-        # Compute messages (src -> dst).
-        msg_s, t_s, src_s, _ = self._compute_msg(
-            n_id, self.msg_s_store, self.msg_s_module
-        )
-
-        # Compute messages (dst -> src).
-        msg_d, t_d, src_d, _ = self._compute_msg(
-            n_id, self.msg_d_store, self.msg_d_module
-        )
-
-        # Aggregate messages.
-        idx = torch.cat([src_s, src_d], dim=0)
-        msg = torch.cat([msg_s, msg_d], dim=0)
-        t = torch.cat([t_s, t_d], dim=0)
-        aggr = self.aggr_module(msg, self._assoc[idx], t, n_id.size(0))
-
-        # Get local copy of updated memory.
-        memory = self.memory_updater(aggr, self.memory[n_id])
-
-        # Get local copy of updated `last_update`.
-        dim_size = self.last_update.size(0)
-        last_update = scatter(t, idx.long(), 0, dim_size, reduce='max')[n_id]
-        return memory, last_update
-
-    def _update_msg_store(
-        self,
-        src: Tensor,
-        dst: Tensor,
-        t: Tensor,
-        raw_msg: Tensor,
-        msg_store: TGNMessageStoreType,
-    ):
-        n_id, perm = src.sort()
-        n_id, count = n_id.unique_consecutive(return_counts=True)
-        for i, idx in zip(n_id.tolist(), perm.split(count.tolist())):
-            msg_store[i] = (src[idx], dst[idx], t[idx], raw_msg[idx])
-
-    def _compute_msg(
-        self, n_id: Tensor, msg_store: TGNMessageStoreType, msg_module: Callable
-    ):
-        data = [msg_store[i] for i in n_id.tolist()]
-        src, dst, t, raw_msg = list(zip(*data))
-        src = torch.cat(src, dim=0).to(self.device)
-        dst = torch.cat(dst, dim=0).to(self.device)
-        t = torch.cat(t, dim=0).to(self.device)
-        raw_msg = torch.cat(raw_msg, dim=0).to(self.device)
-        t_rel = t - self.last_update[src]
-        t_enc = self.time_enc(t_rel.to(raw_msg.dtype))
-        msg = msg_module(self.memory[src], self.memory[dst], raw_msg, t_enc)
-        return msg, t, src, dst
-
-    def train(self, mode: bool = True):
-        if self.training and not mode:
-            # Flush message store to memory in case we just entered eval mode.
-            self._update_memory(torch.arange(self.num_nodes, device=self.memory.device))
-            self._reset_message_store()
-        super().train(mode)
-
-
 @log_gpu
 @log_latency
 def train(
@@ -264,20 +72,15 @@ def train(
     memory.reset_state()
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_y
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            #! run my own deduplication
-            all_nids = torch.cat([batch.node_ids, nbr_nodes[nbr_mask]])
-            batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-            batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_y_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_ids.repeat_interleave(num_nbrs),
+                    batch.node_y_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -285,15 +88,15 @@ def train(
                     batch.global_to_local(src_nodes[nbr_mask]),
                     batch.global_to_local(nbr_nodes[nbr_mask]),
                 ]
-            )
+            ).to(dtype=torch.int64)
 
-            nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-            nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+            nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+            nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
             z, last_update = memory(batch.unique_nids)
-            z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+            z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.global_to_local(batch.node_y_nids)
             y_pred = decoder(z[inv_src])
             loss = F.cross_entropy(y_pred, y_labels)
             loss.backward()
@@ -309,9 +112,9 @@ def train(
             perf_list.append(perf)
 
         # Update memory with ground-truth state.
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
         memory.detach()
 
@@ -334,20 +137,15 @@ def eval(
     perf_list = []
 
     for batch in tqdm(loader):
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_y
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            #! run my own deduplication
-            all_nids = torch.cat([batch.node_ids, nbr_nodes[nbr_mask]])
-            batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-            batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_y_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_ids.repeat_interleave(num_nbrs),
+                    batch.node_y_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -355,15 +153,15 @@ def eval(
                     batch.global_to_local(src_nodes[nbr_mask]),
                     batch.global_to_local(nbr_nodes[nbr_mask]),
                 ]
-            )
+            ).to(dtype=torch.int64)
 
-            nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-            nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+            nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+            nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
             z, last_update = memory(batch.unique_nids)
-            z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+            z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.global_to_local(batch.node_y_nids)
             y_pred = decoder(z[inv_src])
 
             input_dict = {
@@ -374,51 +172,48 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
         # Update memory with ground-truth state.
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
 
     return float(np.mean(perf_list))
 
 
 seed_everything(args.seed)
+evaluator = Evaluator(name=args.dataset)
+
+full_data = DGData.from_tgb(args.dataset)
+train_data, val_data, test_data = full_data.split()
 
 if args.time_gran is not None:
-    full_data = DGData.from_tgb(args.dataset)
-    full_graph = DGraph(full_data)
-    train_data, val_data, test_data = full_data.split()
     train_data = train_data.discretize(args.time_gran)
     val_data = val_data.discretize(args.time_gran)
     test_data = test_data.discretize(args.time_gran)
-    train_dg = DGraph(train_data, device=args.device)
-    val_dg = DGraph(val_data, device=args.device)
-    test_dg = DGraph(test_data, device=args.device)
-else:
-    train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
-    train_dg = DGraph(train_data, device=args.device)
-    val_dg = DGraph(val_data, device=args.device)
-    test_dg = DGraph(test_data, device=args.device)
 
-evaluator = Evaluator(name=args.dataset)
-num_classes = train_dg.dynamic_node_feats_dim
+train_dg = DGraph(train_data, device=args.device)
+val_dg = DGraph(val_data, device=args.device)
+test_dg = DGraph(test_data, device=args.device)
+
+num_classes = train_dg.node_y_dim
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
-    num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
-    seed_nodes_keys=['node_ids'],
-    seed_times_keys=['node_times'],
+    num_nodes=full_data.num_nodes,
+    seed_nodes_keys=['node_y_nids'],
+    seed_times_keys=['node_y_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
 hm.register_shared(nbr_hook)
+hm.register_shared(DeduplicationHook())
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 memory = TGNMemory(
-    test_dg.num_nodes,
+    full_data.num_nodes,
     test_dg.edge_feats_dim,
     args.memory_dim,
     args.time_dim,

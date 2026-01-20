@@ -74,7 +74,7 @@ class GCNEncoder(torch.nn.Module):
             bn.reset_parameters()
 
     def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         x = node_feat
         for i, conv in enumerate(self.convs[:-1]):
             x = conv(x, edge_index)
@@ -89,7 +89,6 @@ class GCNEncoder(torch.nn.Module):
 @log_latency
 def train(
     loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
@@ -97,15 +96,16 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_y
         if y_true is None:
             continue
 
-        z = encoder(batch, static_node_feats)
-        z_node = z[batch.node_ids]
+        z = encoder(batch, static_node_x)
+        z_node = z[batch.node_y_nids]
         y_pred = decoder(z_node)
 
         loss = F.cross_entropy(y_pred, y_true)
@@ -121,7 +121,6 @@ def train(
 @torch.no_grad()
 def eval(
     loader: DGDataLoader,
-    static_node_feats: torch.Tensor,
     encoder: nn.Module,
     decoder: nn.Module,
     evaluator: Evaluator,
@@ -129,14 +128,15 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_y
         if y_true is None:
             continue
 
-        z = encoder(batch, static_node_feats)
-        z_node = z[batch.node_ids]
+        z = encoder(batch, static_node_x)
+        z_node = z[batch.node_y_nids]
         y_pred = decoder(z_node)
 
         input_dict = {
@@ -150,8 +150,15 @@ def eval(
 
 
 seed_everything(args.seed)
+evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
+
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
@@ -160,18 +167,10 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
 test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
-if train_dg.static_node_feats is not None:
-    static_node_feats = train_dg.static_node_feats
-else:
-    static_node_feats = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
-evaluator = Evaluator(name=args.dataset)
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_y_dim
 
 encoder = GCNEncoder(
-    in_channels=static_node_feats.shape[1],
+    in_channels=train_dg.static_node_x_dim,
     embed_dim=args.embed_dim,
     out_channels=args.embed_dim,
     num_layers=args.n_layers,
@@ -185,10 +184,10 @@ opt = torch.optim.Adam(
 )
 
 for epoch in range(1, args.epochs + 1):
-    loss = train(train_loader, static_node_feats, encoder, decoder, opt)
-    val_ndcg = eval(val_loader, static_node_feats, encoder, decoder, evaluator)
+    loss = train(train_loader, encoder, decoder, opt)
+    val_ndcg = eval(val_loader, encoder, decoder, evaluator)
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
-test_ndcg = eval(test_loader, static_node_feats, encoder, decoder, evaluator)
+test_ndcg = eval(test_loader, encoder, decoder, evaluator)
 log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)

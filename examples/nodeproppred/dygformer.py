@@ -113,9 +113,9 @@ class DyGFormer_NodePrediction(nn.Module):
     def _update_latest_node_embedding(
         self, batch: DGBatch, z_src: torch.Tensor, z_dst: torch.Tensor
     ):
-        nodes = torch.cat([batch.src, batch.dst])
+        nodes = torch.cat([batch.edge_src, batch.edge_dst])
         z_all = torch.cat([z_src, z_dst])
-        timestamp = torch.cat([batch.time, batch.time])
+        timestamp = torch.cat([batch.edge_time, batch.edge_time])
 
         chronological_order = torch.argsort(timestamp)
         nodes = nodes[chronological_order]
@@ -137,21 +137,23 @@ class DyGFormer_NodePrediction(nn.Module):
     def forward(
         self, batch: DGBatch, static_node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        src = batch.src
-        dst = batch.dst
+        edge_src = batch.edge_src
+        edge_dst = batch.edge_dst
         nbr_nids = batch.nbr_nids[0]
-        nbr_times = batch.nbr_times[0]
-        nbr_feats = batch.nbr_feats[0]
-        edge_idx = torch.stack((src, dst), dim=0)
-        batch_size = src.shape[0]
+        nbr_edge_times = batch.nbr_edge_time[0]
+        nbr_edge_x = batch.nbr_edge_x[0]
+        src_nbr_idx = batch.seed_node_nbr_mask['edge_src']
+        dst_nbr_idx = batch.seed_node_nbr_mask['edge_dst']
+        edge_idx = torch.stack((edge_src, edge_dst), dim=0)
 
+        src_dst_nbr_idx = torch.cat([src_nbr_idx, dst_nbr_idx])
         z_src, z_dst = self.encoder(
             static_node_feat,
             edge_idx,
-            batch.time,
-            nbr_nids[: batch_size * 2],
-            nbr_times[: batch_size * 2],
-            nbr_feats[: batch_size * 2],
+            batch.edge_time,
+            nbr_nids[src_dst_nbr_idx],
+            nbr_edge_times[src_dst_nbr_idx],
+            nbr_edge_x[src_dst_nbr_idx],
         )
         self._update_latest_node_embedding(batch, z_src, z_dst)
 
@@ -165,18 +167,18 @@ def train(
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
-    static_node_feat: torch.Tensor,
 ):
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        y_true = batch.dynamic_node_feats
-        if len(batch.src) > 0:
-            z = encoder(batch, static_node_feat)  # [num_nodes, embed_dim]
+        y_true = batch.node_y
+        if len(batch.edge_src) > 0:
+            z = encoder(batch, static_node_x)  # [num_nodes, embed_dim]
 
         if y_true is not None:
             if len(batch.seen_nodes) == 0:
@@ -201,18 +203,19 @@ def eval(
     encoder: nn.Module,
     decoder: nn.Module,
     evaluator: Evaluator,
-    static_node_feat: torch.Tensor,
 ) -> float:
     encoder.eval()
     decoder.eval()
     perf_list = []
-    for batch in tqdm(loader):
-        y_true = batch.dynamic_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
-        if batch.src.shape[0] > 0:
-            z = encoder(batch, static_node_feat)
+    for batch in tqdm(loader):
+        y_true = batch.node_y
+
+        if batch.edge_src.shape[0] > 0:
+            z = encoder(batch, static_node_x)
             if y_true is not None:
-                z_node = z[batch.node_ids]
+                z_node = z[batch.node_y_nids]
                 y_pred = decoder(z_node)
                 input_dict = {
                     'y_true': y_true,
@@ -225,11 +228,13 @@ def eval(
 
 
 seed_everything(args.seed)
+evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
-full_graph = DGraph(full_data)
-num_nodes = full_graph.num_nodes
-edge_feats_dim = full_graph.edge_feats_dim
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
+        (full_data.num_nodes, args.node_dim), device=args.device
+    )
 
 train_data, val_data, test_data = full_data.split()
 
@@ -241,15 +246,16 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
+
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
-    num_nodes=num_nodes,
-    seed_nodes_keys=['src', 'dst'],
-    seed_times_keys=['time', 'time'],
+    num_nodes=full_data.num_nodes,
+    seed_nodes_keys=['edge_src', 'edge_dst'],
+    seed_times_keys=['edge_time', 'edge_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
-hm.register('train', EdgeEventsSeenNodesTrackHook(num_nodes))
+hm.register('train', EdgeEventsSeenNodesTrackHook(full_data.num_nodes))
 hm.register_shared(DeduplicationHook())
 hm.register_shared(nbr_hook)
 
@@ -257,20 +263,12 @@ train_loader = DGDataLoader(train_dg, batch_size=args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, batch_size=args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
 
-if train_dg.static_node_feats is not None:
-    static_node_feat = train_dg.static_node_feats
-else:
-    static_node_feat = torch.randn(
-        (test_dg.num_nodes, args.node_dim), device=args.device
-    )
-
-evaluator = Evaluator(name=args.dataset)
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_y_dim
 
 encoder = DyGFormer_NodePrediction(
-    num_nodes=num_nodes,
-    node_feat_dim=static_node_feat.shape[1],
-    edge_feat_dim=edge_feats_dim,
+    num_nodes=full_data.num_nodes,
+    node_feat_dim=train_dg.static_node_x_dim,
+    edge_feat_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     channel_embedding_dim=args.channel_embedding_dim,
     output_dim=args.embed_dim,
@@ -292,9 +290,9 @@ opt = torch.optim.Adam(
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
-        loss = train(train_loader, encoder, decoder, opt, static_node_feat)
+        loss = train(train_loader, encoder, decoder, opt)
     with hm.activate('val'):
-        val_ndcg = eval(val_loader, encoder, decoder, evaluator, static_node_feat)
+        val_ndcg = eval(val_loader, encoder, decoder, evaluator)
 
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
@@ -303,5 +301,5 @@ for epoch in range(1, args.epochs + 1):
         hm.reset_state()
 
 with hm.activate('test'):
-    test_ndcg = eval(test_loader, encoder, decoder, evaluator, static_node_feat)
+    test_ndcg = eval(test_loader, encoder, decoder, evaluator)
 log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)

@@ -1,6 +1,25 @@
-from typing import Any, Dict, Literal, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
 import torch
+
+from tgm.util.logging import _get_logger
+
+logger = _get_logger(__name__)
+
+
+class _Event:
+    def __init__(
+        self,
+        edge: Tuple[int, int],
+        ts: int,
+        left: Optional['_Event'] = None,
+        right: Optional['_Event'] = None,
+    ) -> None:
+        """A node of a simple bidirectional linked list with 2 pointers."""
+        self.edge = edge
+        self.ts = ts
+        self.left = left
+        self.right = right
 
 
 class EdgeBankPredictor:
@@ -65,7 +84,25 @@ class EdgeBankPredictor:
         self._window_size = self._window_end - self._window_start
 
         self.memory: Dict[Tuple[int, int], int] = {}
+        # maintain bidirectional linked list with 2 pointers
+        self._head: Optional[_Event] = None
+        self._tail: Optional[_Event] = None
+
+        logger.warning(
+            'EdgeBank will be slow if events are added/updated out of order.'
+        )
+
         self.update(src, dst, ts)
+
+    def _clean_up(self) -> None:
+        """Clean up edges that are out of window in memory."""
+        while self._head and self._head.ts < self._window_start:
+            curr_event = self._head
+            if self.memory.get(curr_event.edge, -1) == curr_event.ts:
+                self.memory.pop(curr_event.edge)
+            self._head = curr_event.right
+            if self._head == None:
+                self._tail = None
 
     def update(self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor) -> None:
         """Update EdgeBank memory with a batch of edges.
@@ -82,9 +119,43 @@ class EdgeBankPredictor:
         self._check_input_data(src, dst, ts)
         self._window_end = torch.max(self._window_end, ts.max())
         self._window_start = self._window_end - self._window_size
+
+        if (
+            self._fixed_memory
+            and self._head is not None
+            and self._tail is not None
+            and self._head.ts < self._window_start
+        ):
+            self._clean_up()
+
         for src_, dst_, ts_ in zip(src, dst, ts):
             src_, dst_, ts_ = src_.item(), dst_.item(), ts_.item()
-            self.memory[(src_, dst_)] = ts_
+            if ts_ >= self._window_start:
+                self.memory[(src_, dst_)] = ts_
+                if self._head == self._tail == None:
+                    self._head = self._tail = _Event((src_, dst_), ts_, None, None)
+                elif self._head is not None and self._tail is not None:
+                    new_event = _Event((src_, dst_), ts_, left=None, right=None)
+                    curr: _Event | None = self._tail
+
+                    # This while loop should never run assuming events added in time-ascending order.
+                    # When events added out of order, time complexity would be O(n)
+                    while curr is not None and ts_ < curr.ts:
+                        curr = curr.left
+
+                    if curr == None:
+                        new_event.right = self._head
+                        if self._head is not None:
+                            self._head.left = new_event
+                        self._head = new_event
+                    else:
+                        new_event.left = curr
+                        new_event.right = curr.right  # type: ignore[union-attr]
+                        if curr.right is not None:  # type: ignore[union-attr]
+                            curr.right.left = new_event  # type: ignore[union-attr]
+                        curr.right = new_event  # type: ignore[union-attr]
+                        if curr == self._tail:
+                            self._tail = new_event
 
     def __call__(
         self, query_src: torch.Tensor, query_dst: torch.Tensor
