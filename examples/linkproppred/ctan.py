@@ -1,5 +1,5 @@
 import argparse
-from typing import Callable, Tuple
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -7,8 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
 from tgn.nn import LinkPredictor
-from torch_geometric.nn.inits import ones, zeros
-from torch_geometric.utils import scatter
 from tqdm import tqdm
 
 from tgm import DGraph
@@ -19,7 +17,7 @@ from tgm.constants import (
 )
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
-from tgm.nn.encoder import CTAN, LastAggregator
+from tgm.nn.encoder import CTAN, CTANMemory, LastAggregator
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -54,49 +52,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
-
-
-class SimpleMemory(torch.nn.Module):
-    def __init__(
-        self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
-    ) -> None:
-        super().__init__()
-
-        self.num_nodes = num_nodes
-        self.memory_dim = memory_dim
-        self.init_time = init_time
-        self.aggr_module = aggr_module
-
-        self.register_buffer('memory', torch.zeros(num_nodes, memory_dim))
-        self.register_buffer(
-            'last_update', torch.ones(self.num_nodes, dtype=torch.long) * init_time
-        )
-        self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
-
-    def update_state(self, src, pos_dst, t, src_emb, pos_dst_emb):
-        idx = torch.cat([src, pos_dst], dim=0)
-        _idx = idx.unique()
-        self._assoc[_idx] = torch.arange(_idx.size(0), device=_idx.device)
-
-        t = torch.cat([t, t], dim=0)
-        last_update = scatter(t, self._assoc[idx], 0, _idx.size(0), reduce='max')
-
-        emb = torch.cat([src_emb, pos_dst_emb], dim=0)
-        aggr = self.aggr_module(emb, self._assoc[idx], t, _idx.size(0))
-
-        self.last_update[_idx] = last_update
-        self.memory[_idx] = aggr.detach()
-
-    def reset_state(self):
-        zeros(self.memory)
-        ones(self.last_update)
-        self.last_update *= self.init_time
-
-    def detach(self):
-        self.memory.detach_()
-
-    def forward(self, n_id):
-        return self.memory[n_id], self.last_update[n_id]
 
 
 @log_gpu
@@ -281,7 +236,7 @@ mean_delta_t, std_delta_t = compute_delta_t_stats(train_dg)
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
-    num_nodes=test_dg.num_nodes,  # Assuming node ids at test set > train/val set
+    num_nodes=full_data.num_nodes,
     seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
     seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
 )
@@ -296,7 +251,7 @@ train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
-memory = SimpleMemory(
+memory = CTANMemory(
     num_nodes=test_dg.num_nodes,
     memory_dim=args.memory_dim,
     aggr_module=LastAggregator(),

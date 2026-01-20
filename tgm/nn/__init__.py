@@ -1,4 +1,4 @@
-from .encoder import CTAN, DyGFormer, TPNet, TGCN, GCLSTM, TGNMemory
+from .encoder import CTAN, CTANMemory, DyGFormer, TPNet, TGCN, GCLSTM, TGNMemory
 from .decoder import GraphPredictor, NodePredictor, LinkPredictor, NCNPredictor
 from .encoder import DyGFormer, TPNet, TGCN, GCLSTM, RandomProjectionModule, ROLAND
 from .modules import (
@@ -13,6 +13,7 @@ from .modules import (
 
 __all__ = [
     'CTAN',
+    'CTANMemory',
     'DyGFormer',
     'EdgeBankPredictor',
     'GCLSTM',

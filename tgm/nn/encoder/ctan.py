@@ -1,7 +1,11 @@
+from typing import Callable, Tuple
+
 import torch
 import torch.nn as nn
 from torch_geometric.nn import AntiSymmetricConv, TransformerConv
+from torch_geometric.nn.inits import ones, zeros
 from torch_geometric.nn.models.tgn import TimeEncoder
+from torch_geometric.utils import scatter
 
 
 class CTAN(torch.nn.Module):
@@ -45,3 +49,53 @@ class CTAN(torch.nn.Module):
         z = self.aconv(enc_x, edge_index, edge_attr=edge_attr)
         z = torch.tanh(z)
         return z
+
+
+class CTANMemory(torch.nn.Module):
+    def __init__(
+        self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
+    ) -> None:
+        super().__init__()
+
+        self.num_nodes = num_nodes
+        self.memory_dim = memory_dim
+        self.init_time = init_time
+        self.aggr_module = aggr_module
+
+        self.register_buffer('memory', torch.zeros(num_nodes, memory_dim))
+        self.register_buffer(
+            'last_update', torch.ones(self.num_nodes, dtype=torch.long) * init_time
+        )
+        self.register_buffer('_assoc', torch.empty(num_nodes, dtype=torch.long))
+
+    def update_state(
+        self,
+        src: torch.Tensor,
+        pos_dst: torch.Tensor,
+        t: torch.Tensor,
+        src_emb: torch.Tensor,
+        pos_dst_emb: torch.Tensor,
+    ) -> None:
+        idx = torch.cat([src, pos_dst], dim=0)
+        _idx = idx.unique()
+        self._assoc[_idx] = torch.arange(_idx.size(0), device=_idx.device)
+
+        t = torch.cat([t, t], dim=0)
+        last_update = scatter(t, self._assoc[idx], 0, _idx.size(0), reduce='max')
+
+        emb = torch.cat([src_emb, pos_dst_emb], dim=0)
+        aggr = self.aggr_module(emb, self._assoc[idx], t, _idx.size(0))
+
+        self.last_update[_idx] = last_update
+        self.memory[_idx] = aggr.detach()
+
+    def reset_state(self) -> None:
+        zeros(self.memory)
+        ones(self.last_update)
+        self.last_update *= self.init_time
+
+    def detach(self) -> None:
+        self.memory.detach_()
+
+    def forward(self, n_id: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.memory[n_id], self.last_update[n_id]
