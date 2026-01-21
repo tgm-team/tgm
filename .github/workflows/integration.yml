@@ -22,7 +22,7 @@ jobs:
   integration-tests-slurm:
     name: Integration testing on a SLURM cluster
     runs-on: self-hosted
-    timeout-minutes: 240
+    timeout-minutes: 300
     if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang' || github.actor == 'benjaminnNgo'
     env:
       REAL_HOME: /home/mila/j/jacob.chmura
