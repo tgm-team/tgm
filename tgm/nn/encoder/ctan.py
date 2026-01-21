@@ -9,6 +9,22 @@ from torch_geometric.utils import scatter
 
 
 class CTAN(torch.nn.Module):
+    """An implementation of CTAN.
+
+    Args:
+        edge_dim (int): Dimension of edge features.
+        memory_dim (int): Dimension of memory embeddings.
+        time_dim (int): Dimension of time encodings.
+        node_dim (int): Dimension of static/dynamic node features.
+        num_iters(int): Number of AntiSymmetricConv layers.
+        mean_delta_t (float): Mean delta time between edge events (used to normalize time signal).
+        std_delta_t (float): Std delta time between edge events (used to normalize time signal).
+        epsilon (float): Discretization step size for AntiSymmetricConv.
+        gamma (float): The strength of the diffusion in the AntiSymmetricConv.
+
+    Reference: https://arxiv.org/abs/2406.02740
+    """
+
     def __init__(
         self,
         edge_dim: int,
@@ -42,6 +58,18 @@ class CTAN(torch.nn.Module):
         t: torch.Tensor,
         msg: torch.Tensor,
     ) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x (PyTorch Float Tensor): Node features.
+            last_update (PyTorch Tensor): Last memory update timestamps.
+            edge_index (PyTorch Tensor): Graph edge indices.
+            t (PyTorch Tensor): Graph edge timestamps.
+            msg (PyTorch Tensor): Memory embeddings.
+
+        Returns:
+            (PyTorch Float Tensor): Embeddings for the batch of node ids.
+        """
         rel_t = (last_update[edge_index[0]] - t).abs()
         rel_t = ((rel_t - self.mean_delta_t) / self.std_delta_t).to(x.dtype)
         enc_x = self.enc_x(x)
@@ -52,6 +80,19 @@ class CTAN(torch.nn.Module):
 
 
 class CTANMemory(torch.nn.Module):
+    """The CTAN Memory model.
+
+    Args:
+        num_nodes (int): The number of nodes to save memories for.
+        memory_dim (int): The hidden memory dimensionality.
+        aggr_module (Callable): The message aggregator function
+            which aggregates messages to the same destination into a single
+            representation.
+        init_time (int): Start time of the graph, used during memory reset.
+
+    Reference: https://arxiv.org/abs/2406.02740
+    """
+
     def __init__(
         self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
     ) -> None:
