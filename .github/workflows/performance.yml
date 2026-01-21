@@ -2,7 +2,7 @@ name: Performance Tests
 
 on: # yamllint disable-line rule:truthy
   schedule:
-    - cron: "30 6 * * 1"  # every Monday at 6:30 AM UTC
+    - cron: "30 6 * * 1" # every Monday at 6:30 AM UTC
   workflow_dispatch:
 
 concurrency:
@@ -24,7 +24,7 @@ jobs:
 
       - name: Set Runtime Environment Variables
         run: |
-          echo "DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
+          echo "TGB_DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
           echo "TGM_CI_PERF_LOG_BASE=$REAL_HOME/tgm_ci_perf" >> $GITHUB_ENV
 
       - name: Set up python
@@ -48,8 +48,8 @@ jobs:
       - name: Download TGB datasets
         id: submit-download
         run: |
-          echo "Preparing TGB datasets in $DATA_ROOT..."
-          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh "$DATA_ROOT")
+          echo "Preparing TGB datasets in $TGB_DATA_ROOT..."
+          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh "$TGB_DATA_ROOT")
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
 
       - name: Wait for Download TGB job to finish

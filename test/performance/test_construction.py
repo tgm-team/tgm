@@ -1,6 +1,7 @@
 import pytest
 
-from tgm.graph import DGData, DGraph
+from tgm import DGraph
+from tgm.data import DGData
 
 from .conftest import DATASETS
 

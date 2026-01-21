@@ -3,6 +3,7 @@ from functools import partial
 import pytest
 from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 
+from tgm.data import DGDataLoader
 from tgm.hooks import (
     HookManager,
     NegativeEdgeSamplerHook,
@@ -10,7 +11,6 @@ from tgm.hooks import (
     RecencyNeighborHook,
     TGBNegativeEdgeSamplerHook,
 )
-from tgm.loader import DGDataLoader
 
 from .conftest import DATASETS
 
