@@ -16,7 +16,7 @@ class CTAN(torch.nn.Module):
         memory_dim (int): Dimension of memory embeddings.
         time_dim (int): Dimension of time encodings.
         node_dim (int): Dimension of static/dynamic node features.
-        num_iters(int): Number of AntiSymmetricConv layers.
+        num_iters (int): Number of AntiSymmetricConv layers.
         mean_delta_t (float): Mean delta time between edge events (used to normalize time signal).
         std_delta_t (float): Std delta time between edge events (used to normalize time signal).
         epsilon (float): Discretization step size for AntiSymmetricConv.
