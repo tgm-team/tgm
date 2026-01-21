@@ -161,7 +161,7 @@ class TemporalSplit(SplitStrategy):
             split_data = self._masked_copy(data, edge_mask, node_x_mask, node_y_mask)
             splits.append(split_data)
             logger.info(
-                '%s split time range: [%s, %s),  %s edge events, %s node events, % node labels',
+                '%s split time range: [%s, %s),  %s edge events, %s node events, %s node labels',
                 split_name,
                 pretty_number_format(start),
                 pretty_number_format(end),
@@ -274,7 +274,7 @@ class TGBSplit(SplitStrategy):
             split_data = self._masked_copy(data, edge_mask, node_x_mask, node_y_mask)
             splits.append(split_data)
             logger.info(
-                'TGB %s split time range [%s, %s], %s edge events, %s node events, % node labels',
+                'TGB %s split time range [%s, %s], %s edge events, %s node events, %s node labels',
                 split_name,
                 pretty_number_format(edge_start_time),
                 pretty_number_format(edge_end_time),

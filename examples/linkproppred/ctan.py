@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
-from tgn.nn import LinkPredictor
 from tqdm import tqdm
 
 from tgm import DGraph
@@ -17,6 +16,7 @@ from tgm.constants import (
 )
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import RecencyNeighborHook, RecipeRegistry
+from tgm.nn import LinkPredictor
 from tgm.nn.encoder import CTAN, CTANMemory, LastAggregator
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
