@@ -15,7 +15,7 @@ from tgm.constants import (
     RECIPE_TGB_LINK_PRED,
 )
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import RecencyNeighborHook, RecipeRegistry
+from tgm.hooks import DeduplicationHook, RecencyNeighborHook, RecipeRegistry
 from tgm.nn import LinkPredictor
 from tgm.nn.encoder import CTAN, CTANMemory, LastAggregator
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
@@ -77,12 +77,6 @@ def train(
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-        all_nids = torch.cat(
-            [batch.edge_src, batch.edge_dst, batch.neg, nbr_nodes[nbr_mask]]
-        )
-        batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-        batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
         num_nbrs = len(nbr_nodes) // (
             len(batch.edge_src) + len(batch.edge_dst) + len(batch.neg)
         )
@@ -98,7 +92,7 @@ def train(
                 batch.global_to_local(src_nodes[nbr_mask]),
                 batch.global_to_local(nbr_nodes[nbr_mask]),
             ]
-        )
+        ).to(dtype=torch.int64)
 
         nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
         nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
@@ -150,12 +144,6 @@ def eval(
         nbr_nodes = batch.nbr_nids[0].flatten()
         nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-        all_nids = torch.cat(
-            [batch.edge_src, batch.edge_dst, batch.neg, nbr_nodes[nbr_mask]]
-        )
-        batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-        batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
         num_nbrs = len(nbr_nodes) // (
             len(batch.edge_src) + len(batch.edge_dst) + len(batch.neg)
         )
@@ -171,7 +159,7 @@ def eval(
                 batch.global_to_local(src_nodes[nbr_mask]),
                 batch.global_to_local(nbr_nodes[nbr_mask]),
             ]
-        )
+        ).to(dtype=torch.int64)
         nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
         nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
@@ -246,6 +234,7 @@ hm = RecipeRegistry.build(
 )
 train_key, val_key, test_key = hm.keys
 hm.register_shared(nbr_hook)
+hm.register_shared(DeduplicationHook())
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
