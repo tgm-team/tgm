@@ -36,8 +36,8 @@ def test_graph_split(benchmark, dataset, preloaded_graphs):
     if dataset not in preloaded_graphs:
         pytest.skip()
 
-    data = preloaded_graphs[dataset]['data']
-    dg = preloaded_graphs[dataset]['dg']
+    data = preloaded_graphs[dataset]
+    dg = DGraph(data)
 
     benchmark(lambda: data.split())
 

@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from tgm import DGraph
 from tgm.data import DGData
 
 DATASETS = [
@@ -39,8 +38,7 @@ def preloaded_graphs(datasets, pytestconfig):
             continue
 
         data = DGData.from_tgb(dataset_name)
-        dg = DGraph(data)
-        graphs[dataset_name] = {'dg': dg, 'data': data}
+        graphs[dataset_name] = data
     return graphs
 
 
