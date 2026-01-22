@@ -242,7 +242,7 @@ def eval(
     for batch in tqdm(loader):
         y_true = batch.node_y
 
-        if batch.src.shape[0] > 0:
+        if batch.edge_src.shape[0] > 0:
             z = encoder(batch, static_node_x)
             if y_true is not None:
                 z_node = z[batch.node_y_nids]
