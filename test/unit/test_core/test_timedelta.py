@@ -179,6 +179,7 @@ def test_tgb_native_time_deltas():
         'tgbl-wiki': TimeDeltaDG('s'),
         'tgbl-subreddit': TimeDeltaDG('s'),
         'tgbl-lastfm': TimeDeltaDG('s'),
+        'tgbl-mooc': TimeDeltaDG('s'),
         'tgbl-review': TimeDeltaDG('s'),
         'tgbl-coin': TimeDeltaDG('s'),
         'tgbl-flight': TimeDeltaDG('s'),
