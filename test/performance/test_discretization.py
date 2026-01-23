@@ -1,5 +1,7 @@
 import pytest
 
+from tgm import DGraph
+
 from .conftest import DATASETS
 
 
@@ -14,8 +16,8 @@ def test_graph_discretization(benchmark, dataset, granularity, preloaded_graphs)
     if dataset not in preloaded_graphs:
         pytest.skip()
 
-    data = preloaded_graphs[dataset]['data']
-    dg = preloaded_graphs[dataset]['dg']
+    data = preloaded_graphs[dataset]
+    dg = DGraph(data)
 
     benchmark(lambda: data.discretize(granularity))
 
