@@ -1,5 +1,6 @@
 ## Encoders
 
+::: tgm.nn.encoder.ctan
 ::: tgm.nn.encoder.dygformer
 ::: tgm.nn.encoder.tpnet
 ::: tgm.nn.encoder.gclstm
@@ -19,3 +20,4 @@
 ::: tgm.nn.modules.time_encoding
 ::: tgm.nn.modules.attention
 ::: tgm.nn.modules.poptrack
+::: tgm.nn.modules.t_comem

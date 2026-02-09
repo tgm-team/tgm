@@ -15,25 +15,31 @@ def dg():
             [2, 3],
         ]
     )
-    edge_timestamps = torch.IntTensor([1, 1, 2])
+    edge_time = torch.IntTensor([1, 1, 2])
 
-    node_timestamps = torch.IntTensor([5, 5, 6])
-    node_ids = torch.IntTensor([2, 2, 3])
-    dynamic_node_feats = torch.rand(3, 3)
+    node_x_time = torch.IntTensor([5, 5, 6])
+    node_x_nids = torch.IntTensor([2, 2, 3])
+    node_x = torch.rand(3, 3)
 
     data = DGData.from_raw(
-        edge_timestamps=edge_timestamps,
+        edge_time=edge_time,
         edge_index=edge_index,
-        node_timestamps=node_timestamps,
-        node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
+        node_x_time=node_x_time,
+        node_x_nids=node_x_nids,
+        node_x=node_x,
     )
     return DGraph(data)
 
 
 def test_hook_dependancies():
     hook = BatchAnalyticsHook()
-    assert hook.requires == set()
+    assert hook.requires == {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'node_x_time',
+        'node_x_nids',
+    }
     assert hook.produces == {
         'num_edge_events',
         'num_node_events',
@@ -54,7 +60,7 @@ def test_basic_analytics_num_events_and_timestamps(dg):
     batch = dg.materialize()
     processed_batch = hook(dg, batch)
 
-    # assert batch.node_ids is not None
+    # assert batch.node_x_nids is not None
 
     # edge and node events
     assert processed_batch.num_edge_events == 3
@@ -96,22 +102,22 @@ def test_basic_analytics_empty_edges_and_nodes(dg):
     batch = dg.materialize()
 
     # Force edges and nodes to be "present but empty"
-    batch.src = torch.empty(0, dtype=batch.src.dtype)
-    batch.dst = torch.empty(0, dtype=batch.dst.dtype)
-    batch.time = torch.empty(0, dtype=batch.time.dtype)
-    batch.node_ids = torch.empty(0, dtype=batch.node_ids.dtype)
-    batch.node_times = torch.empty(0, dtype=batch.node_times.dtype)
+    batch.edge_src = torch.empty(0, dtype=batch.edge_src.dtype)
+    batch.edge_dst = torch.empty(0, dtype=batch.edge_dst.dtype)
+    batch.edge_time = torch.empty(0, dtype=batch.edge_time.dtype)
+    batch.node_x_nids = torch.empty(0, dtype=batch.node_x_nids.dtype)
+    batch.node_x_time = torch.empty(0, dtype=batch.node_x_time.dtype)
 
     processed_batch = hook(dg, batch)
 
     # _compute_unique_nodes: node_tensors is empty -> returns 0
     assert processed_batch.num_unique_nodes == 0
 
-    # _compute_avg_degree: src.numel() == 0 -> 0.0
+    # _compute_avg_degree: edge_src.numel() == 0 -> 0.0
     assert processed_batch.avg_degree == 0.0
 
-    # _count_repeated_edge_events: src.numel() == 0 -> 0
+    # _count_repeated_edge_events: edge_src.numel() == 0 -> 0
     assert processed_batch.num_repeated_edge_events == 0
 
-    # _count_repeated_node_events: node_ids.numel() == 0 -> 0
+    # _count_repeated_node_events: node_x_nids.numel() == 0 -> 0
     assert processed_batch.num_repeated_node_events == 0

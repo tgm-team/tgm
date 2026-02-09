@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from tgm.nn import LinkPredictor
-from tgm.nn.decoder.linkproppred import cat_merge
+from tgm.nn.decoder.linkproppred import LearnableSumMerge, cat_merge
 
 
 @pytest.fixture
@@ -24,8 +24,18 @@ def test_cat_merge():
     assert torch.equal(expected, merge_result)
 
 
-def test_output(edge_factory):
-    decoder = LinkPredictor(node_dim=128, nlayers=5, hidden_dim=64)
+def test_sum_merge():
+    src = torch.tensor([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]).float()
+    dst = torch.tensor([[11, 12, 13, 14, 15], [16, 17, 18, 19, 20]]).float()
+    merge_result = LearnableSumMerge(node_dim=5)(src, dst)
+
+    assert list(merge_result.shape) == [2, 5]
+    assert not torch.isnan(merge_result).any()
+
+
+@pytest.mark.parametrize('merge_op', ['concat', 'sum'])
+def test_output(edge_factory, merge_op):
+    decoder = LinkPredictor(node_dim=128, nlayers=5, hidden_dim=64, merge_op=merge_op)
     src, dst = edge_factory
 
     out = decoder(src, dst)
@@ -35,7 +45,10 @@ def test_output(edge_factory):
     assert list(out.shape) == [200]
 
     # check the first layer
-    assert decoder.model[0].in_features == 128 * 2  # concat 2 nodes embeddings
+    if merge_op == 'concat':
+        assert decoder.model[0].in_features == 128 * 2  # concat 2 nodes embeddings
+    else:
+        assert decoder.model[0].in_features == 128
     assert decoder.model[0].out_features == 64  # concat 2 nodes embeddings
 
     # check the last layer

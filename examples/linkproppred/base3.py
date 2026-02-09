@@ -8,29 +8,31 @@ from tqdm import tqdm
 from tgm import DGraph
 from tgm.constants import METRIC_TGB_LINKPROPPRED
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import HookManager, TGBTKGNegativeEdgeSamplerHook
-from tgm.nn import EdgeBankPredictor
+from tgm.hooks import HookManager, TGBNegativeEdgeSamplerHook
+from tgm.nn import EdgeBankPredictor, tCoMemPredictor
 from tgm.util.logging import enable_logging, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='EdgeBank LinkPropPred Example for knowledge graph',
+    description='Base3 LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
-parser.add_argument(
-    '--dataset', type=str, default='tkgl-smallpedia', help='Dataset name'
-)
+parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
-parser.add_argument('--window-ratio', type=float, default=0.15, help='Window ratio')
-parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
 parser.add_argument(
-    '--memory-mode',
-    type=str,
-    default='unlimited',
-    choices=['unlimited', 'fixed'],
-    help='Memory mode',
+    '--window-ratio', type=float, default=0.15, help='Window ratio (EdgeBank, t-CoMem)'
 )
+parser.add_argument(
+    '--k',
+    type=int,
+    default=50,
+    help='Number of nodes to consider in top popularity ranking (t-CoMem)',
+)
+parser.add_argument(
+    '--co-occur', type=float, default=0.8, help='Co-occurrence weight (t-CoMem)'
+)
+parser.add_argument('--pos-prob', type=float, default=1.0, help='Positive edge prob')
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
@@ -42,7 +44,8 @@ enable_logging(log_file_path=args.log_file_path)
 @log_latency
 def eval(
     loader: DGDataLoader,
-    model: EdgeBankPredictor,
+    edgebank_model: EdgeBankPredictor,
+    tcomem_model: tCoMemPredictor,
     evaluator: Evaluator,
 ) -> float:
     perf_list = []
@@ -51,14 +54,20 @@ def eval(
             query_src = batch.edge_src[idx].repeat(len(neg_batch) + 1)
             query_dst = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
 
-            y_pred = model(query_src, query_dst)
+            eb_pred = edgebank_model(query_src, query_dst)
+            tc_pred = tcomem_model(query_src, query_dst)
+
+            y_pred = (eb_pred + tc_pred) / 2
+
             input_dict = {
                 'y_pred_pos': y_pred[0],
                 'y_pred_neg': y_pred[1:],
                 'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
-        model.update(batch.edge_src, batch.edge_dst, batch.edge_time)
+
+        edgebank_model.update(batch.edge_src, batch.edge_dst, batch.edge_time)
+        tcomem_model.update(batch.edge_src, batch.edge_dst, batch.edge_time)
 
     return float(np.mean(perf_list))
 
@@ -66,54 +75,45 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-data = DGData.from_tgb(args.dataset)
-min_dst_node = data.edge_index[:, 1].min().int()
-max_dst_node = data.edge_index[:, 1].max().int()
-
-train_data, val_data, test_data = data.split()
+train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
 train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
+num_nodes = test_dg.num_nodes
 
 train_data = train_dg.materialize(materialize_features=False)
 
-
 hm = HookManager(keys=['val', 'test'])
-hm.register(
-    'val',
-    TGBTKGNegativeEdgeSamplerHook(
-        args.dataset,
-        split_mode='val',
-        first_dst_id=min_dst_node,
-        last_dst_id=max_dst_node,
-    ),
-)
-hm.register(
-    'test',
-    TGBTKGNegativeEdgeSamplerHook(
-        args.dataset,
-        split_mode='test',
-        first_dst_id=min_dst_node,
-        last_dst_id=max_dst_node,
-    ),
-)
+hm.register('val', TGBNegativeEdgeSamplerHook(args.dataset, split_mode='val'))
+hm.register('test', TGBNegativeEdgeSamplerHook(args.dataset, split_mode='test'))
 
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
-model = EdgeBankPredictor(
+edgebank_model = EdgeBankPredictor(
     train_data.edge_src,
     train_data.edge_dst,
     train_data.edge_time,
-    memory_mode=args.memory_mode,
+    memory_mode='fixed',
     window_ratio=args.window_ratio,
     pos_prob=args.pos_prob,
 )
 
+tcomem_model = tCoMemPredictor(
+    train_data.edge_src,
+    train_data.edge_dst,
+    train_data.edge_time,
+    num_nodes=num_nodes,
+    k=args.k,
+    window_ratio=args.window_ratio,
+    co_occurrence_weight=args.co_occur,
+)
+
+
 with hm.activate('val'):
-    val_mrr = eval(val_loader, model, evaluator)
+    val_mrr = eval(val_loader, edgebank_model, tcomem_model, evaluator)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr)
 
 with hm.activate('test'):
-    test_mrr = eval(test_loader, model, evaluator)
+    test_mrr = eval(test_loader, edgebank_model, tcomem_model, evaluator)
     log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr)

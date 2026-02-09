@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Set
 
 import torch
 
@@ -22,7 +21,7 @@ class NegativeEdgeSamplerHook(StatelessHook):
             to the number of positive destination nodes (default = 1.0).
     """
 
-    requires: Set[str] = set()
+    requires = {'edge_src', 'edge_dst', 'edge_time'}
     produces = {'neg', 'neg_time'}
 
     def __init__(self, low: int, high: int, neg_ratio: float = 1.0) -> None:
@@ -36,7 +35,7 @@ class NegativeEdgeSamplerHook(StatelessHook):
 
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        size = (round(self.neg_ratio * batch.dst.size(0)),)
+        size = (round(self.neg_ratio * batch.edge_dst.size(0)),)
         if size[0] == 0:
             batch.neg = torch.empty(size, dtype=torch.int32, device=dg.device)  # type: ignore
             batch.neg_time = torch.empty(size, dtype=torch.int64, device=dg.device)  # type: ignore
@@ -44,7 +43,7 @@ class NegativeEdgeSamplerHook(StatelessHook):
             batch.neg = torch.randint(  # type: ignore
                 self.low, self.high, size, dtype=torch.int32, device=dg.device
             )
-            batch.neg_time = batch.time.clone()  # type: ignore
+            batch.neg_time = batch.edge_time.clone()  # type: ignore
         return batch
 
 
@@ -60,7 +59,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
-    requires: Set[str] = set()
+    requires = {'edge_src', 'edge_dst', 'edge_time'}
     produces = {'neg', 'neg_batch_list', 'neg_time'}
 
     def __init__(self, dataset_name: str, split_mode: str) -> None:
@@ -103,18 +102,21 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        if batch.src.size(0) == 0:
+        if batch.edge_src.size(0) == 0:
             batch.neg = torch.empty(  # type: ignore
-                batch.src.size(0), dtype=torch.int32, device=dg.device
+                batch.edge_src.size(0), dtype=torch.int32, device=dg.device
             )
             batch.neg_time = torch.empty(  # type: ignore
-                batch.src.size(0), dtype=torch.int64, device=dg.device
+                batch.edge_src.size(0), dtype=torch.int64, device=dg.device
             )
             batch.neg_batch_list = []  # type: ignore
             return batch  # empty batch
         try:
             neg_batch_list = self.neg_sampler.query_batch(
-                batch.src, batch.dst, batch.time, split_mode=self.split_mode
+                batch.edge_src,
+                batch.edge_dst,
+                batch.edge_time,
+                split_mode=self.split_mode,
             )
         except ValueError as e:
             raise ValueError(
@@ -136,8 +138,8 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         gen = torch.Generator(device=dg.device)
         gen.manual_seed(0)
         batch.neg_time = torch.randint(  # type: ignore
-            int(batch.time.min().item()),
-            int(batch.time.max().item()) + 1,
+            int(batch.edge_time.min().item()),
+            int(batch.edge_time.max().item()) + 1,
             (batch.neg.size(0),),  # type: ignore
             device=dg.device,
             generator=gen,
@@ -161,7 +163,7 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
-    requires: Set[str] = set()
+    requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
     produces = {'neg', 'neg_batch_list', 'neg_time'}
 
     def __init__(
@@ -227,20 +229,20 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        if batch.src.size(0) == 0:
+        if batch.edge_src.size(0) == 0:
             batch.neg = torch.empty(  # type: ignore
-                batch.src.size(0), dtype=torch.int32, device=dg.device
+                batch.edge_src.size(0), dtype=torch.int32, device=dg.device
             )
             batch.neg_time = torch.empty(  # type: ignore
-                batch.src.size(0), dtype=torch.int64, device=dg.device
+                batch.edge_src.size(0), dtype=torch.int64, device=dg.device
             )
             batch.neg_batch_list = []  # type: ignore
             return batch  # empty batch
         try:
             neg_batch_list = self.neg_sampler.query_batch(
-                batch.src,
-                batch.dst,
-                batch.time,
+                batch.edge_src,
+                batch.edge_dst,
+                batch.edge_time,
                 batch.edge_type,
                 split_mode=self.split_mode,
             )
@@ -264,8 +266,8 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         gen = torch.Generator(device=dg.device)
         gen.manual_seed(0)
         batch.neg_time = torch.randint(  # type: ignore
-            int(batch.time.min().item()),
-            int(batch.time.max().item()) + 1,
+            int(batch.edge_time.min().item()),
+            int(batch.edge_time.max().item()) + 1,
             (batch.neg.size(0),),  # type: ignore
             device=dg.device,
             generator=gen,
@@ -288,7 +290,7 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
-    requires: Set[str] = set()
+    requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
     produces = {'neg', 'neg_batch_list', 'neg_time'}
 
     def __init__(
@@ -346,20 +348,20 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
         self.split_mode = split_mode
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        if batch.src.size(0) == 0:
+        if batch.edge_src.size(0) == 0:
             batch.neg = torch.empty(  # type: ignore
-                batch.src.size(0), dtype=torch.int32, device=dg.device
+                batch.edge_src.size(0), dtype=torch.int32, device=dg.device
             )
             batch.neg_time = torch.empty(  # type: ignore
-                batch.src.size(0), dtype=torch.int64, device=dg.device
+                batch.edge_src.size(0), dtype=torch.int64, device=dg.device
             )
             batch.neg_batch_list = []  # type: ignore
             return batch  # empty batch
         try:
             neg_batch_list = self.neg_sampler.query_batch(
-                batch.src,
-                batch.dst,
-                batch.time,
+                batch.edge_src,
+                batch.edge_dst,
+                batch.edge_time,
                 batch.edge_type,
                 split_mode=self.split_mode,
             )
@@ -383,8 +385,8 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
         gen = torch.Generator(device=dg.device)
         gen.manual_seed(0)
         batch.neg_time = torch.randint(  # type: ignore
-            int(batch.time.min().item()),
-            int(batch.time.max().item()) + 1,
+            int(batch.edge_time.min().item()),
+            int(batch.edge_time.max().item()) + 1,
             (batch.neg.size(0),),  # type: ignore
             device=dg.device,
             generator=gen,

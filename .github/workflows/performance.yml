@@ -2,7 +2,7 @@ name: Performance Tests
 
 on: # yamllint disable-line rule:truthy
   schedule:
-    - cron: "30 6 * * 1"  # every Monday at 6:30 AM UTC
+    - cron: "30 6 * * 1" # every Monday at 6:30 AM UTC
   workflow_dispatch:
 
 concurrency:
@@ -13,7 +13,7 @@ jobs:
   integration-tests-slurm:
     name: Performance testing on a SLURM cluster
     runs-on: self-hosted
-    timeout-minutes: 10
+    timeout-minutes: 60
     if: github.actor == 'jacob-chmura' || github.actor == 'shenyanghuang' || github.actor == 'benjaminnNgo'
     env:
       REAL_HOME: /home/mila/j/jacob.chmura
@@ -24,7 +24,7 @@ jobs:
 
       - name: Set Runtime Environment Variables
         run: |
-          echo "DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
+          echo "TGB_DATA_ROOT=$REAL_HOME/tgb_datasets" >> $GITHUB_ENV
           echo "TGM_CI_PERF_LOG_BASE=$REAL_HOME/tgm_ci_perf" >> $GITHUB_ENV
 
       - name: Set up python
@@ -48,17 +48,14 @@ jobs:
       - name: Download TGB datasets
         id: submit-download
         run: |
-          echo "Preparing TGB datasets in $DATA_ROOT..."
-          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh "$DATA_ROOT")
+          echo "Preparing TGB datasets in $TGB_DATA_ROOT..."
+          JOB_ID=$(sbatch --parsable .github/scripts/run_download_tgb_job_sbatch.sh "$TGB_DATA_ROOT")
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
 
       - name: Wait for Download TGB job to finish
         run: |
           JOB_ID="${{ steps.submit-download.outputs.job_id }}"
           .github/scripts/poll_slurm_job.sh "$JOB_ID" --timeout 3600 --interval 10
-
-      - name: Install dependencies
-        run: uv sync --group dev
 
       - name: Submit Performance Benchmark Job
         id: submit-bench

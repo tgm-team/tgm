@@ -34,44 +34,62 @@ class SplitStrategy(ABC):
         self,
         data: 'DGData',  # type: ignore
         edge_mask: Tensor,
-        node_mask: Tensor | None = None,
+        node_x_mask: Tensor | None = None,
+        node_y_mask: Tensor | None = None,
     ) -> 'DGData':  # type: ignore
         from tgm.data import DGData  # avoid circular dependency
 
         edge_index = data.edge_index[edge_mask]
-        edge_feats = data.edge_feats[edge_mask] if data.edge_feats is not None else None
+        edge_x = data.edge_x[edge_mask] if data.edge_x is not None else None
         edge_type = data.edge_type[edge_mask] if data.edge_type is not None else None
-        edge_timestamps = data.timestamps[data.edge_event_idx[edge_mask]]
+        edge_time = data.time[data.edge_mask[edge_mask]]
 
-        node_ids, dynamic_node_feats, node_timestamps = None, None, None
-        if data.node_ids is not None:
-            if node_mask is None:
-                node_mask = torch.ones(data.node_ids.shape[0], dtype=torch.bool)
-            node_ids = data.node_ids[node_mask]
-            node_timestamps = data.timestamps[data.node_event_idx[node_mask]]
-            if data.dynamic_node_feats is not None:
-                dynamic_node_feats = data.dynamic_node_feats[node_mask]
+        node_x_nids, node_x, node_x_time = None, None, None
+        node_y_nids, node_y, node_y_time = None, None, None
+        if data.node_x_nids is not None:
+            if node_x_mask is None:
+                node_x_mask = torch.ones(data.node_x_nids.shape[0], dtype=torch.bool)
+            node_x_nids = data.node_x_nids[node_x_mask]
+            node_x_time = data.time[data.node_x_mask[node_x_mask]]
+            if data.node_x is not None:
+                node_x = data.node_x[node_x_mask]
+
+        if data.node_y_nids is not None:
+            if node_y_mask is None:
+                node_y_mask = torch.ones(data.node_y_nids.shape[0], dtype=torch.bool)
+            node_y_nids = data.node_y_nids[node_y_mask]
+            node_y_time = data.time[data.node_y_mask[node_y_mask]]
+            if data.node_y is not None:
+                node_y = data.node_y[node_y_mask]
 
         # Static features and node type are shared across splits, do not clone
-        static_node_feats = data.static_node_feats
+        static_node_x = data.static_node_x
         node_type = data.node_type
 
         # In case we masked out to the point of empty node events, change to None
-        if node_ids is not None and node_ids.numel() == 0:
+        if node_x_nids is not None and node_x_nids.numel() == 0:
             logger.warning(
-                'All nodes masked out, resetting node_ids/node_timestamps/dynamic_node_feats to None'
+                'All nodes masked out, resetting node_x_nids/node_x_time/node_x to None'
             )
-            node_ids = node_timestamps = dynamic_node_feats = None
+            node_x_nids = node_x_time = node_x = None
+        if node_y_nids is not None and node_y_nids.numel() == 0:
+            logger.warning(
+                'All node labels masked out, resetting node_y_nids/node_y_time/node_y to None'
+            )
+            node_y_nids = node_y_time = node_y = None
 
         return DGData.from_raw(
             time_delta=data.time_delta,
-            edge_timestamps=edge_timestamps,
+            edge_time=edge_time,
             edge_index=edge_index,
-            edge_feats=edge_feats,
-            node_timestamps=node_timestamps,
-            node_ids=node_ids,
-            dynamic_node_feats=dynamic_node_feats,
-            static_node_feats=static_node_feats,
+            edge_x=edge_x,
+            node_x_time=node_x_time,
+            node_x_nids=node_x_nids,
+            node_x=node_x,
+            node_y_time=node_y_time,
+            node_y_nids=node_y_nids,
+            node_y=node_y,
+            static_node_x=static_node_x,
             edge_type=edge_type,
             node_type=node_type,
         )
@@ -106,10 +124,13 @@ class TemporalSplit(SplitStrategy):
             )
 
     def apply(self, data: 'DGData') -> Tuple['DGData', ...]:  # type: ignore
-        edge_times = data.timestamps[data.edge_event_idx]
-        node_times = None
-        if data.node_ids is not None:
-            node_times = data.timestamps[data.node_event_idx]
+        edge_times = data.time[data.edge_mask]
+        node_x_times = None
+        node_y_times = None
+        if data.node_x_nids is not None:
+            node_x_times = data.time[data.node_x_mask]
+        if data.node_y_nids is not None:
+            node_y_times = data.time[data.node_y_mask]
 
         ranges = {
             'train': (-float('inf'), self.val_time),
@@ -129,19 +150,31 @@ class TemporalSplit(SplitStrategy):
                 )
                 continue
 
-            node_mask = None
-            if node_times is not None:
-                node_mask = (node_times >= start) & (node_times < end)
-            split_data = self._masked_copy(data, edge_mask, node_mask)
+            node_x_mask = None
+            if node_x_times is not None:
+                node_x_mask = (node_x_times >= start) & (node_x_times < end)
+
+            node_y_mask = None
+            if node_y_times is not None:
+                node_y_mask = (node_y_times >= start) & (node_y_times < end)
+
+            split_data = self._masked_copy(data, edge_mask, node_x_mask, node_y_mask)
             splits.append(split_data)
             logger.info(
-                '%s split time range: [%s, %s),  %s edge events, %s node events',
+                '%s split time range: [%s, %s),  %s edge events, %s node events, %s node labels',
                 split_name,
                 pretty_number_format(start),
                 pretty_number_format(end),
                 pretty_number_format(split_data.edge_index.size(0)),
                 pretty_number_format(
-                    0 if split_data.node_ids is None else split_data.node_ids.size(0)
+                    0
+                    if split_data.node_x_nids is None
+                    else split_data.node_x_nids.size(0)
+                ),
+                pretty_number_format(
+                    0
+                    if split_data.node_y_nids is None
+                    else split_data.node_y_nids.size(0)
                 ),
             )
 
@@ -182,7 +215,7 @@ class TemporalRatioSplit(SplitStrategy):
             )
 
     def apply(self, data: 'DGData') -> Tuple['DGData', ...]:  # type: ignore
-        min_time, max_time = data.timestamps[0], data.timestamps[-1]  # it's sorted
+        min_time, max_time = data.time[0], data.time[-1]  # it's sorted
         total_span = max_time - min_time + 1
 
         val_time = min_time + int(total_span * self.train_ratio)
@@ -225,28 +258,36 @@ class TGBSplit(SplitStrategy):
         splits = []
         for split_name in ['train', 'val', 'test']:
             edge_start_time, edge_end_time = self.split_bounds[split_name]
-            edge_mask = (data.timestamps[data.edge_event_idx] >= edge_start_time) & (
-                data.timestamps[data.edge_event_idx] <= edge_end_time
+            edge_mask = (data.time[data.edge_mask] >= edge_start_time) & (
+                data.time[data.edge_mask] <= edge_end_time
             )
 
-            node_mask = None
-            if data.node_ids is not None:
-                node_times = data.timestamps[data.node_event_idx]
+            node_x_mask = None  # TGB has no dynamic node events at the moment
+            node_y_mask = None
+            if data.node_y_nids is not None:
+                node_y_times = data.time[data.node_y_mask]
                 if edge_mask.any():
-                    node_mask = (node_times >= (edge_start_time - 1)) & (
-                        node_times < edge_end_time
+                    node_y_mask = (node_y_times >= (edge_start_time - 1)) & (
+                        node_y_times < edge_end_time
                     )
 
-            split_data = self._masked_copy(data, edge_mask, node_mask)
+            split_data = self._masked_copy(data, edge_mask, node_x_mask, node_y_mask)
             splits.append(split_data)
             logger.info(
-                'TGB %s split time range [%s, %s], %s edge events, %s node events',
+                'TGB %s split time range [%s, %s], %s edge events, %s node events, %s node labels',
                 split_name,
                 pretty_number_format(edge_start_time),
                 pretty_number_format(edge_end_time),
                 pretty_number_format(split_data.edge_index.size(0)),
                 pretty_number_format(
-                    0 if split_data.node_ids is None else split_data.node_ids.size(0)
+                    0
+                    if split_data.node_x_nids is None
+                    else split_data.node_x_nids.size(0)
+                ),
+                pretty_number_format(
+                    0
+                    if split_data.node_y_nids is None
+                    else split_data.node_y_nids.size(0)
                 ),
             )
 

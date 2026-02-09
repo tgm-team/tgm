@@ -120,6 +120,7 @@ TGB_TIME_DELTAS: Final[Dict[str, TimeDeltaDG]] = {
     'tgbl-lastfm': TimeDeltaDG('s'),
     'tgbl-review': TimeDeltaDG('s'),
     'tgbl-coin': TimeDeltaDG('s'),
+    'tgbl-mooc': TimeDeltaDG('s'),
     'tgbl-flight': TimeDeltaDG('s'),
     'tgbl-comment': TimeDeltaDG('s'),
     'tgbn-trade': TimeDeltaDG('Y'),

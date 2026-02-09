@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tgm import DGData, DGraph
+from tgm.data import DGData
 
 DATASETS = [
     pytest.param('tgbl-wiki', marks=pytest.mark.small),
@@ -38,8 +38,7 @@ def preloaded_graphs(datasets, pytestconfig):
             continue
 
         data = DGData.from_tgb(dataset_name)
-        dg = DGraph(data)
-        graphs[dataset_name] = {'dg': dg, 'data': data}
+        graphs[dataset_name] = data
     return graphs
 
 
@@ -63,3 +62,8 @@ def ci_run_context():
     # Save the log directory path for easy parsing in the Github action
     latest_path_file = log_base / 'latest_path.txt'
     latest_path_file.write_text(f'{log_dir}\n{ci_run_dir}')
+
+    return {
+        'log_dir': log_dir,
+        'project_root': Path(__file__).resolve().parents[2],
+    }

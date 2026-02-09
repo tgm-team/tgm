@@ -52,12 +52,12 @@ def eval(
     perf_list = []
 
     for batch in tqdm(loader):
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_y
         if y_true is None:
             continue
 
         y_pred = torch.zeros_like(y_true)
-        for i, node_id in enumerate(batch.node_ids.tolist()):
+        for i, node_id in enumerate(batch.node_y_nids.tolist()):
             y_pred[i] = model(node_id)
             model.update(node_id, y_true[i])
 
@@ -83,7 +83,7 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
 test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_y_dim
 model = PersistantForecaster(num_classes=num_classes)
 
 eval(train_loader, model, evaluator)

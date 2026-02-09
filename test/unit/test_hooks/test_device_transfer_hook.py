@@ -34,9 +34,9 @@ def test_device_transfer_hook_cpu_cpu(dg):
 
     processed_batch = hook(dg, batch)
     assert batch == processed_batch
-    assert processed_batch.src.device.type == 'cpu'
-    assert processed_batch.dst.device.type == 'cpu'
-    assert processed_batch.time.device.type == 'cpu'
+    assert processed_batch.edge_src.device.type == 'cpu'
+    assert processed_batch.edge_dst.device.type == 'cpu'
+    assert processed_batch.edge_time.device.type == 'cpu'
 
 
 @pytest.mark.gpu
@@ -49,9 +49,9 @@ def test_device_transfer_hook_cpu_gpu(dg):
 
     processed_batch = hook(dg, batch)
     assert batch == processed_batch
-    assert processed_batch.src.device.type == 'cuda'
-    assert processed_batch.dst.device.type == 'cuda'
-    assert processed_batch.time.device.type == 'cuda'
+    assert processed_batch.edge_src.device.type == 'cuda'
+    assert processed_batch.edge_dst.device.type == 'cuda'
+    assert processed_batch.edge_time.device.type == 'cuda'
     assert processed_batch.foo.device.type == 'cuda'
 
 
@@ -59,16 +59,16 @@ def test_device_transfer_hook_cpu_gpu(dg):
 def test_device_transfer_hook_gpu_gpu(dg):
     hook = DeviceTransferHook('cuda')
     batch = dg.materialize()
-    batch.src = batch.src.to('cuda')
-    batch.dst = batch.dst.to('cuda')
-    batch.time = batch.time.to('cuda')
+    batch.edge_src = batch.edge_src.to('cuda')
+    batch.edge_dst = batch.edge_dst.to('cuda')
+    batch.edge_time = batch.edge_time.to('cuda')
 
     # Add a custom field and ensure it's also moved
     batch.foo = torch.rand(1, 2, device='cuda')
 
     processed_batch = hook(dg, batch)
     assert batch == processed_batch
-    assert processed_batch.src.device.type == 'cuda'
-    assert processed_batch.dst.device.type == 'cuda'
-    assert processed_batch.time.device.type == 'cuda'
+    assert processed_batch.edge_src.device.type == 'cuda'
+    assert processed_batch.edge_dst.device.type == 'cuda'
+    assert processed_batch.edge_time.device.type == 'cuda'
     assert processed_batch.foo.device.type == 'cuda'

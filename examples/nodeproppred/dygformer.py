@@ -113,9 +113,9 @@ class DyGFormer_NodePrediction(nn.Module):
     def _update_latest_node_embedding(
         self, batch: DGBatch, z_src: torch.Tensor, z_dst: torch.Tensor
     ):
-        nodes = torch.cat([batch.src, batch.dst])
+        nodes = torch.cat([batch.edge_src, batch.edge_dst])
         z_all = torch.cat([z_src, z_dst])
-        timestamp = torch.cat([batch.time, batch.time])
+        timestamp = torch.cat([batch.edge_time, batch.edge_time])
 
         chronological_order = torch.argsort(timestamp)
         nodes = nodes[chronological_order]
@@ -137,23 +137,23 @@ class DyGFormer_NodePrediction(nn.Module):
     def forward(
         self, batch: DGBatch, static_node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        src = batch.src
-        dst = batch.dst
+        edge_src = batch.edge_src
+        edge_dst = batch.edge_dst
         nbr_nids = batch.nbr_nids[0]
-        nbr_times = batch.nbr_times[0]
-        nbr_feats = batch.nbr_feats[0]
-        src_nbr_idx = batch.seed_node_nbr_mask['src']
-        dst_nbr_idx = batch.seed_node_nbr_mask['dst']
-        edge_idx = torch.stack((src, dst), dim=0)
+        nbr_edge_times = batch.nbr_edge_time[0]
+        nbr_edge_x = batch.nbr_edge_x[0]
+        src_nbr_idx = batch.seed_node_nbr_mask['edge_src']
+        dst_nbr_idx = batch.seed_node_nbr_mask['edge_dst']
+        edge_idx = torch.stack((edge_src, edge_dst), dim=0)
 
         src_dst_nbr_idx = torch.cat([src_nbr_idx, dst_nbr_idx])
         z_src, z_dst = self.encoder(
             static_node_feat,
             edge_idx,
-            batch.time,
+            batch.edge_time,
             nbr_nids[src_dst_nbr_idx],
-            nbr_times[src_dst_nbr_idx],
-            nbr_feats[src_dst_nbr_idx],
+            nbr_edge_times[src_dst_nbr_idx],
+            nbr_edge_x[src_dst_nbr_idx],
         )
         self._update_latest_node_embedding(batch, z_src, z_dst)
 
@@ -171,14 +171,14 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        y_true = batch.dynamic_node_feats
-        if len(batch.src) > 0:
-            z = encoder(batch, static_node_feats)  # [num_nodes, embed_dim]
+        y_true = batch.node_y
+        if len(batch.edge_src) > 0:
+            z = encoder(batch, static_node_x)  # [num_nodes, embed_dim]
 
         if y_true is not None:
             if len(batch.seen_nodes) == 0:
@@ -207,15 +207,15 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_y
 
-        if batch.src.shape[0] > 0:
-            z = encoder(batch, static_node_feats)
+        if batch.edge_src.shape[0] > 0:
+            z = encoder(batch, static_node_x)
             if y_true is not None:
-                z_node = z[batch.node_ids]
+                z_node = z[batch.node_y_nids]
                 y_pred = decoder(z_node)
                 input_dict = {
                     'y_true': y_true,
@@ -231,8 +231,8 @@ seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
-if full_data.static_node_feats is None:
-    full_data.static_node_feats = torch.randn(
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
         (full_data.num_nodes, args.node_dim), device=args.device
     )
 
@@ -250,8 +250,8 @@ test_dg = DGraph(test_data, device=args.device)
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # Keep 1 slot for seed node itself
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['src', 'dst'],
-    seed_times_keys=['time', 'time'],
+    seed_nodes_keys=['edge_src', 'edge_dst'],
+    seed_times_keys=['edge_time', 'edge_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
@@ -263,12 +263,12 @@ train_loader = DGDataLoader(train_dg, batch_size=args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, batch_size=args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_y_dim
 
 encoder = DyGFormer_NodePrediction(
     num_nodes=full_data.num_nodes,
-    node_feat_dim=train_dg.static_node_feats_dim,
-    edge_feat_dim=train_dg.edge_feats_dim,
+    node_feat_dim=train_dg.static_node_x_dim,
+    edge_feat_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     channel_embedding_dim=args.channel_embedding_dim,
     output_dim=args.embed_dim,

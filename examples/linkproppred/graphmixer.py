@@ -33,13 +33,21 @@ parser.add_argument('--epochs', type=int, default=3, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0002, help='learning rate')
 parser.add_argument('--dropout', type=str, default=0.1, help='dropout rate')
 parser.add_argument('--n-nbrs', type=int, default=20, help='num sampled nbrs')
-parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
+parser.add_argument(
+    '--time-dim',
+    type=int,
+    default=100,
+    help='time encoding dimension',
+)
 parser.add_argument('--embed-dim', type=int, default=128, help='embedding dimension')
 parser.add_argument(
     '--node-dim', type=int, default=100, help='node feat dimension if not provided'
 )
 parser.add_argument(
-    '--time-gap', type=int, default=2000, help='graphmixer time slot size'
+    '--time-gap',
+    type=int,
+    default=2000,
+    help='graphmixer time slot size',
 )
 parser.add_argument(
     '--token-dim-expansion',
@@ -76,7 +84,7 @@ class GraphMixerEncoder(nn.Module):
     ) -> None:
         super().__init__()
 
-        # GraphMixer time encoding function is not trainable
+        # GraphMixer edge_time encoding function is not trainable
         self.time_encoder = Time2Vec(time_dim=time_dim)
         for param in self.time_encoder.parameters():
             param.requires_grad = False
@@ -100,8 +108,10 @@ class GraphMixerEncoder(nn.Module):
 
     def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
         # Link Encoder
-        edge_feat = batch.nbr_feats[0]
-        nbr_time_feat = self.time_encoder(batch.times[0][:, None] - batch.nbr_times[0])
+        edge_feat = batch.nbr_edge_x[0]
+        nbr_time_feat = self.time_encoder(
+            batch.seed_times[0][:, None] - batch.nbr_edge_time[0]
+        )
         z_link = self.projection_layer(torch.cat([edge_feat, nbr_time_feat], dim=-1))
         for mixer in self.mlp_mixers:
             z_link = mixer(z_link)
@@ -119,7 +129,10 @@ class GraphMixerEncoder(nn.Module):
             if batch.time_gap_nbrs[i]:
                 time_gap_feat[i] = node_feat[batch.time_gap_nbrs[i]].mean(dim=0)
 
-        z_node = time_gap_feat + node_feat[torch.cat([batch.src, batch.dst, batch.neg])]
+        z_node = (
+            time_gap_feat
+            + node_feat[torch.cat([batch.edge_src, batch.edge_dst, batch.neg])]
+        )
         z = self.output_layer(torch.cat([z_link, z_node], dim=1))
         return z
 
@@ -135,12 +148,12 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        z = encoder(batch, static_node_feats)
+        z = encoder(batch, static_node_x)
         z_src, z_dst, z_neg = torch.chunk(z, 3)
 
         pos_out = decoder(z_src, z_dst)
@@ -163,14 +176,14 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        z = encoder(batch, static_node_feats)
-        id_map = {nid.item(): i for i, nid in enumerate(batch.nids[0])}
+        z = encoder(batch, static_node_x)
+        id_map = {nid.item(): i for i, nid in enumerate(batch.seed_nids[0])}
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            dst_ids = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
-            src_ids = batch.src[idx].repeat(len(dst_ids))
+            dst_ids = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
+            src_ids = batch.edge_src[idx].repeat(len(dst_ids))
 
             src_idx = torch.tensor([id_map[n.item()] for n in src_ids], device=z.device)
             dst_idx = torch.tensor([id_map[n.item()] for n in dst_ids], device=z.device)
@@ -192,8 +205,8 @@ seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
-if full_data.static_node_feats is None:
-    full_data.static_node_feats = torch.randn(
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
         (full_data.num_nodes, args.node_dim), device=args.device
     )
 
@@ -220,7 +233,7 @@ class GraphMixerHook(StatelessHook):
         # Construct a the time_gap slice
         time_gap_slice = replace(dg._slice)
         time_gap_slice.start_idx = max(dg._slice.end_idx - self._time_gap, 0)
-        time_gap_slice.end_time = int(batch.time.min()) - 1
+        time_gap_slice.end_time = int(batch.edge_time.min()) - 1
         time_gap_src, time_gap_dst, _ = dg._storage.get_edges(time_gap_slice)
 
         nbr_index = defaultdict(list)
@@ -228,7 +241,9 @@ class GraphMixerHook(StatelessHook):
             nbr_index[u].append(v)
             nbr_index[v].append(u)  # undirected
 
-        seed_nodes = torch.cat([batch.src, batch.dst, batch.neg.to(dg.device)])
+        seed_nodes = torch.cat(
+            [batch.edge_src, batch.edge_dst, batch.neg.to(dg.device)]
+        )
         batch.time_gap_nbrs = [nbr_index.get(nid, []) for nid in seed_nodes.tolist()]  # type: ignore
         return batch
 
@@ -242,8 +257,8 @@ hm.register_shared(
     RecencyNeighborHook(
         num_nbrs=[args.n_nbrs],
         num_nodes=full_data.num_nodes,
-        seed_nodes_keys=['src', 'dst', 'neg'],
-        seed_times_keys=['time', 'time', 'neg_time'],
+        seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+        seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
     )
 )
 
@@ -252,8 +267,8 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 encoder = GraphMixerEncoder(
-    node_dim=train_dg.static_node_feats_dim,
-    edge_dim=train_dg.edge_feats_dim,
+    node_dim=train_dg.static_node_x_dim,
+    edge_dim=train_dg.edge_x_dim,
     time_dim=args.time_dim,
     embed_dim=args.embed_dim,
     num_tokens=args.n_nbrs,

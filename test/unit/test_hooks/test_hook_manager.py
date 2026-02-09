@@ -14,13 +14,18 @@ class MockHook(StatelessHook):
     produces = {'foo'}
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        batch.time *= 2
+        batch.edge_time *= 2
         return batch
 
 
 class MockHookRequires(StatelessHook):
     requires = {'foo'}
 
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        return batch
+
+
+class DeduplicationMockHook(StatelessHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         return batch
 
@@ -32,7 +37,7 @@ class MockHookWithState(StatefulHook):
         self.x = 0
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        batch.time *= 2
+        batch.edge_time *= 2
         return batch
 
     def reset_state(self) -> None:
@@ -284,7 +289,7 @@ def execute_active_hooks_empty(dg):
     hm = HookManager(keys=['train'])
     batch = hm.execute_active_hooks(dg, dg.materialize())
     assert isinstance(batch, DGBatch)
-    assert batch.src.device == torch.device('cpu')
+    assert batch.edge_src.device == torch.device('cpu')
 
 
 def test_execute_active_hooks_keyed(dg):
@@ -293,7 +298,7 @@ def test_execute_active_hooks_keyed(dg):
     hm.register('train', hook)
     hm.set_active_hooks('train')
     exp_batch = dg.materialize()
-    exp_batch.time *= 2
+    exp_batch.edge_time *= 2
     batch = hm.execute_active_hooks(dg, dg.materialize())
     assert batch == exp_batch
 
@@ -307,7 +312,7 @@ def test_execute_active_hooks_keyed_and_shared(dg):
     hm.set_active_hooks('train')
     assert len(hm._key_to_hooks['train']) == 1
     exp_batch = dg.materialize()
-    exp_batch.time *= 4
+    exp_batch.edge_time *= 4
     batch = hm.execute_active_hooks(dg, dg.materialize())
     assert batch == exp_batch
 
@@ -374,3 +379,27 @@ def test_topo_sort_neg_before_nbr():
     # Ensure negatives precede nbrs in both cases
     assert foo_hooks.index(mock_neg_hook) < foo_hooks.index(mock_nbr_hook)
     assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)
+
+
+def test_force_last_dedup_hook():
+    # @TODO: Dedup hook is temporarily forced to run at the end.
+    # This test potentially needs to be updated once instance-level require is introduced to DGHook.
+    h1 = MockHook()
+    h2 = MockHookRequires()
+    h3 = DeduplicationMockHook()
+
+    hm = HookManager(keys=['train', 'val'])
+    hm.register('train', h3)
+    hm.register('train', h2)
+    hm.register('train', h1)
+    hm.register('val', h3)
+    hm.register('val', h2)
+    hm.register('val', h1)
+
+    hm.resolve_hooks()
+    assert len(hm._key_to_hooks['train']) == 3
+    assert len(hm._key_to_hooks['val']) == 3
+    assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)
+    assert hm._key_to_hooks['val'].index(h1) < hm._key_to_hooks['val'].index(h2)
+    assert hm._key_to_hooks['train'].index(h2) < hm._key_to_hooks['train'].index(h3)
+    assert hm._key_to_hooks['val'].index(h2) < hm._key_to_hooks['val'].index(h3)

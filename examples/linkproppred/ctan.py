@@ -1,4 +1,5 @@
 import argparse
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -15,35 +16,36 @@ from tgm.constants import (
 )
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import DeduplicationHook, RecencyNeighborHook, RecipeRegistry
-from tgm.nn import LinkPredictor, TGNMemory
-from tgm.nn.encoder.tgn import (
-    GraphAttentionEmbedding,
-    IdentityMessage,
-    LastAggregator,
-)
+from tgm.nn import LinkPredictor
+from tgm.nn.encoder import CTAN, CTANMemory, LastAggregator
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
 parser = argparse.ArgumentParser(
-    description='TGN LinkPropPred Example',
+    description='CTAN LinkPropPred Example',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument('--seed', type=int, default=1337, help='random seed to use')
 parser.add_argument('--dataset', type=str, default='tgbl-wiki', help='Dataset name')
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
-parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
-parser.add_argument('--lr', type=str, default=0.0001, help='learning rate')
-parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
-parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
-parser.add_argument('--memory-dim', type=int, default=100, help='memory dimension')
+parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
+parser.add_argument('--n-layers', type=int, default=3, help='number of GNN layers')
+parser.add_argument(
+    '--epsilon', type=float, default=0.5, help='discretization step size'
+)
+parser.add_argument('--gamma', type=float, default=0.1, help='diffusion strength')
+parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument(
     '--n-nbrs',
     type=int,
     nargs='+',
-    default=[10],
+    default=[32],
     help='num sampled nbrs at each hop',
 )
+parser.add_argument('--time-dim', type=int, default=256, help='time encoding dimension')
+parser.add_argument('--embed-dim', type=int, default=256, help='attention dimension')
+parser.add_argument('--memory-dim', type=int, default=256, help='memory dimension')
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
@@ -65,6 +67,7 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
+    static_node_x = loader.dgraph.static_node_x
 
     memory.reset_state()
 
@@ -95,6 +98,7 @@ def train(
         nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
+        z = torch.cat([z, static_node_x[batch.unique_nids]], dim=-1)
         z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
         inv_src = batch.global_to_local(batch.edge_src)
@@ -108,7 +112,7 @@ def train(
 
         # Update memory with ground-truth state.
         memory.update_state(
-            batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
+            batch.edge_src, batch.edge_dst, batch.edge_time, z[inv_src], z[inv_dst]
         )
 
         loss.backward()
@@ -134,6 +138,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         nbr_nodes = batch.nbr_nids[0].flatten()
@@ -159,6 +164,7 @@ def eval(
         nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
         z, last_update = memory(batch.unique_nids)
+        z = torch.cat([z, static_node_x[batch.unique_nids]], dim=-1)
         z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
         for idx, neg_batch in enumerate(batch.neg_batch_list):
@@ -178,7 +184,7 @@ def eval(
 
         # Update memory with ground-truth state.
         memory.update_state(
-            batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
+            batch.edge_src, batch.edge_dst, batch.edge_time, z[inv_src], z[inv_dst]
         )
 
     return float(np.mean(perf_list))
@@ -188,10 +194,33 @@ seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn((full_data.num_nodes, 1), device=args.device)
+
 train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
+
+
+def compute_delta_t_stats(train_dg: DGraph) -> Tuple[float, float]:
+    last_timestamp = {}
+    delta_times = []
+
+    for src, dst, t in zip(train_dg.edge_src, train_dg.edge_dst, train_dg.edge_time):
+        src, dst, t = src.item(), dst.item(), t.item()
+
+        dt_src = t - last_timestamp.get(src, train_dg.start_time)
+        dt_dst = t - last_timestamp.get(dst, train_dg.start_time)
+        delta_times.extend([dt_src, dt_dst])
+
+        last_timestamp[src] = t
+        last_timestamp[dst] = t
+
+    return np.mean(delta_times), np.std(delta_times)
+
+
+mean_delta_t, std_delta_t = compute_delta_t_stats(train_dg)
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
@@ -211,23 +240,24 @@ train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
-memory = TGNMemory(
-    full_data.num_nodes,
-    test_dg.edge_x_dim,
-    args.memory_dim,
-    args.time_dim,
-    message_module=IdentityMessage(test_dg.edge_x_dim, args.memory_dim, args.time_dim),
-    aggregator_module=LastAggregator(),
+memory = CTANMemory(
+    num_nodes=test_dg.num_nodes,
+    memory_dim=args.memory_dim,
+    aggr_module=LastAggregator(),
+    init_time=train_dg.start_time,
 ).to(args.device)
-encoder = GraphAttentionEmbedding(
-    in_channels=args.memory_dim,
-    out_channels=args.embed_dim,
-    msg_dim=test_dg.edge_x_dim,
-    time_enc=memory.time_enc,
+encoder = CTAN(
+    node_dim=train_dg.static_node_x_dim,
+    edge_dim=train_dg.edge_x_dim,
+    time_dim=args.time_dim,
+    memory_dim=args.memory_dim,
+    num_iters=args.n_layers,
+    mean_delta_t=mean_delta_t,
+    std_delta_t=std_delta_t,
+    epsilon=args.epsilon,
+    gamma=args.gamma,
 ).to(args.device)
-decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
-    args.device
-)
+decoder = LinkPredictor(node_dim=args.memory_dim, merge_op='sum').to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,
@@ -244,7 +274,6 @@ for epoch in range(1, args.epochs + 1):
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
-
 
 with hm.activate(test_key):
     test_mrr = eval(test_loader, memory, encoder, decoder, evaluator)
