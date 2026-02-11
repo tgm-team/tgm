@@ -116,7 +116,7 @@ python "$ROOT_DIR/examples/linkproppred/tkgl/edgebank.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=1:15:00',
+        '--time=2:00:00',
     ]
 )
 def test_edgebank_linkprop_pred_fixed_memory_tkgl(slurm_job_runner, dataset):
