@@ -374,6 +374,9 @@ class DGData:
             if self.edge_x is not None:
                 self.edge_x = self.edge_x[edge_order]
 
+            if self.edge_type is not None:
+                self.edge_type = self.edge_type[edge_order]
+
             # Reorder node-specific data
             if self.node_x_mask is not None:
                 node_order = torch.argsort(self.node_x_mask)
@@ -1000,7 +1003,7 @@ class DGData:
         elif name.startswith('tgbn-'):
             dataset = NodePropPredDataset(name=name, **kwargs)
         elif name.startswith('tkgl-'):
-            raise NotImplementedError('TGB Temporal Knowledge Graphs not yet supported')
+            dataset = LinkPropPredDataset(name=name, **kwargs)
         elif name.startswith('thgl-'):
             dataset = LinkPropPredDataset(name=name, **kwargs)
         else:
@@ -1022,6 +1025,8 @@ class DGData:
             edge_x = None
         else:
             edge_x = torch.from_numpy(data['edge_feat']).to(torch.float32)
+            if name.startswith('tkgl-'):
+                edge_x = torch.cat([edge_x, edge_x])
 
         node_y_time, node_y_nids, node_y = None, None, None
         if name.startswith('tgbn-'):
@@ -1076,6 +1081,13 @@ class DGData:
                 )
             edge_type = torch.from_numpy(data['edge_type']).to(torch.int32)
             node_type = torch.from_numpy(dataset.node_type).to(torch.int32)
+
+        if name.startswith('tkgl'):
+            if 'edge_type' not in data:
+                raise ValueError(
+                    f'Failed to construct TGB dataset. Try updating your TGB package: `pip install --upgrade py-tgb`'
+                )
+            edge_type = torch.from_numpy(data['edge_type']).to(torch.int32)
 
         raw_times = torch.from_numpy(data['timestamps'])
         split_bounds = {}

@@ -61,7 +61,7 @@ def test_device_transfer_hook_gpu_gpu(dg):
     batch = dg.materialize()
     batch.edge_src = batch.edge_src.to('cuda')
     batch.edge_dst = batch.edge_dst.to('cuda')
-    batch.time = batch.time.to('cuda')
+    batch.edge_time = batch.edge_time.to('cuda')
 
     # Add a custom field and ensure it's also moved
     batch.foo = torch.rand(1, 2, device='cuda')

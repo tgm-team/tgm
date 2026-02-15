@@ -11,6 +11,7 @@ DATASETS=(
     "tgbl_wiki"
     "tgbn_trade"
     "thgl_software"
+    "tkgl-smallpedia"
     #"tgbn_genre"
     #"tgbl_coin"
     #"tgbl_flight" TODO: Start working with the large graphs
@@ -67,7 +68,7 @@ download_dataset() {
     local dataset_name="${dataset//_/-}" # 'tgbl_wiki' -> 'tgbl-wiki'
     echo "Downloading dataset: $dataset_name"
 
-    if [[ "$dataset" == tgbl_* || "$dataset" == thgl_* ]]; then
+    if [[ "$dataset" == tgbl_* || "$dataset" == thgl_* || "$dataset" == tkgl_* ]]; then
         .venv/bin/python -c "from tgb.linkproppred.dataset import LinkPropPredDataset as DS; DS(name='$dataset_name')"
     elif [[ "$dataset" == tgbn_* ]]; then
         .venv/bin/python -c "from tgb.nodeproppred.dataset import NodePropPredDataset as DS; DS(name='$dataset_name')"
