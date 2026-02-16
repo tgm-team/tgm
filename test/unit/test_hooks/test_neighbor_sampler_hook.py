@@ -19,8 +19,13 @@ def data():
 
 
 def test_hook_dependancies():
-    assert NeighborSamplerHook.requires == {'edge_src', 'edge_dst', 'edge_time'}
-    assert NeighborSamplerHook.produces == {
+    hook = NeighborSamplerHook(
+        num_nbrs=[1],
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
+    )
+    assert hook.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook.produces == {
         'seed_nids',
         'seed_times',
         'nbr_nids',

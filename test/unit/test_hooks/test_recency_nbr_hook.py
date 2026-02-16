@@ -49,6 +49,12 @@ def basic_sample_graph():
 
 
 def test_hook_dependancies():
+    hook = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=1,
+        seed_nodes_keys=['edge_src'],
+        seed_times_keys=['edge_time'],
+    )
     assert RecencyNeighborHook.requires == {'edge_src', 'edge_dst', 'edge_time'}
     assert RecencyNeighborHook.produces == {
         'seed_nids',

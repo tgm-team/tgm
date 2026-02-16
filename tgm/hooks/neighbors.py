@@ -34,16 +34,6 @@ class NeighborSamplerHook(StatelessHook):
         ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
     """
 
-    requires = {'edge_src', 'edge_dst', 'edge_time'}
-    produces = {
-        'seed_nids',
-        'seed_times',
-        'nbr_nids',
-        'nbr_edge_time',
-        'nbr_edge_x',
-        'seed_node_nbr_mask',
-    }
-
     def __init__(
         self,
         num_nbrs: List[int],
@@ -51,6 +41,16 @@ class NeighborSamplerHook(StatelessHook):
         seed_times_keys: List[str],
         directed: bool = False,
     ) -> None:
+        self.requires = {'edge_src', 'edge_dst', 'edge_time'}
+        self.produces = {
+            'seed_nids',
+            'seed_times',
+            'nbr_nids',
+            'nbr_edge_time',
+            'nbr_edge_x',
+            'seed_node_nbr_mask',
+        }
+
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):

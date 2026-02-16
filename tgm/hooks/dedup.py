@@ -16,8 +16,10 @@ class DeduplicationHook(StatelessHook):
     Note: Supports batches with or without negative samples and multi-hop neighbors.
     """
 
-    requires = {'edge_src', 'edge_dst'}
-    produces = {'unique_nids', 'global_to_local'}
+    def __init__(self) -> None:
+        super().__init__()
+        self.requires = {'edge_src', 'edge_dst'}
+        self.produces = {'unique_nids', 'global_to_local'}
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         nids = [batch.edge_src, batch.edge_dst]

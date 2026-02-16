@@ -163,9 +163,6 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
-    requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
-    produces = {'neg', 'neg_batch_list', 'neg_time'}
-
     def __init__(
         self,
         dataset_name: str,
@@ -174,6 +171,9 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         last_node_id: int,
         node_type: torch.Tensor,
     ) -> None:
+        self.requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
+        self.produces = {'neg', 'neg_batch_list', 'neg_time'}
+
         if split_mode not in ['val', 'test']:
             raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
 

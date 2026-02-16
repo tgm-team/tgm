@@ -16,8 +16,9 @@ def dg():
 
 
 def test_hook_dependancies():
-    assert DeduplicationHook.requires == {'edge_src', 'edge_dst'}
-    assert DeduplicationHook.produces == {'unique_nids', 'global_to_local'}
+    hook = DeduplicationHook()
+    assert hook.requires == {'edge_src', 'edge_dst'}
+    assert hook.produces == {'unique_nids', 'global_to_local'}
 
 
 def test_hook_reset_state():

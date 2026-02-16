@@ -30,8 +30,9 @@ def dg():
 
 
 def test_hook_dependancies():
-    assert EdgeEventsSeenNodesTrackHook.requires == {'edge_src', 'edge_dst'}
-    assert EdgeEventsSeenNodesTrackHook.produces == {'seen_nodes', 'batch_nodes_mask'}
+    hook = EdgeEventsSeenNodesTrackHook(1)
+    assert hook.requires == {'edge_src', 'edge_dst'}
+    assert hook.produces == {'seen_nodes', 'batch_nodes_mask'}
 
 
 def test_seen_nodes_track_hook(dg):

@@ -20,10 +20,10 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
         ValueError: If the num_nodes list is negative.
     """
 
-    requires = {'edge_src', 'edge_dst'}
-    produces = {'seen_nodes', 'batch_nodes_mask'}
-
     def __init__(self, num_nodes: int) -> None:
+        self.requires = {'edge_src', 'edge_dst'}
+        self.produces = {'seen_nodes', 'batch_nodes_mask'}
+
         if num_nodes < 0:
             raise ValueError('num_nodes must be non-negative')
         self._seen_mask = torch.zeros(num_nodes, dtype=torch.bool)
