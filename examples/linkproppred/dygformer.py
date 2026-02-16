@@ -288,6 +288,8 @@ model = DyGFormer_LinkPrediction(
 
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
+best_val = 0.0
+
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
         loss = train(train_loader, model, opt)
@@ -296,11 +298,12 @@ for epoch in range(1, args.epochs + 1):
 
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
+    if val_mrr > best_val:
+        best_val = val_mrr
+        with hm.activate(test_key):
+            test_mrr = eval(evaluator, test_loader, model)
+        log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
 
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
         hm.reset_state()
-
-with hm.activate(test_key):
-    test_mrr = eval(evaluator, test_loader, model)
-log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

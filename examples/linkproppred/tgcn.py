@@ -156,7 +156,9 @@ def eval(
             except StopIteration:
                 pass
 
-    return float(np.mean(perf_list))
+    z = z.detach()
+    h_0 = h_0.detach()
+    return float(np.mean(perf_list)), z, h_0
 
 
 seed_everything(args.seed)
@@ -214,6 +216,8 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
+best_val = 0.0
+
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
         loss, z, h_0 = train(
@@ -226,7 +230,7 @@ for epoch in range(1, args.epochs + 1):
         )
 
     with hm.activate(val_key):
-        val_mrr = eval(
+        val_mrr, z, h_0 = eval(
             val_loader,
             val_snapshots_loader,
             z,
@@ -239,15 +243,17 @@ for epoch in range(1, args.epochs + 1):
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
-with hm.activate(test_key):
-    test_mrr = eval(
-        test_loader,
-        test_snapshots_loader,
-        z,
-        h_0,
-        encoder,
-        decoder,
-        evaluator,
-        conversion_rate,
-    )
-log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
+    if val_mrr > best_val:
+        best_val = val_mrr
+        with hm.activate(test_key):
+            test_mrr, z, h_0 = eval(
+                test_loader,
+                test_snapshots_loader,
+                z,
+                h_0,
+                encoder,
+                decoder,
+                evaluator,
+                conversion_rate,
+            )
+        log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

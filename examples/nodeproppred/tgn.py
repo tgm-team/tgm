@@ -236,6 +236,8 @@ opt = torch.optim.Adam(
     lr=args.lr,
 )
 
+best_val = 0.0
+
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         loss, train_metric = train(train_loader, memory, encoder, decoder, opt)
@@ -247,9 +249,11 @@ for epoch in range(1, args.epochs + 1):
     log_metric(f'Train {METRIC_TGB_NODEPROPPRED}', train_metric, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_metric, epoch=epoch)
 
+    if val_metric > best_val:
+        best_val = val_metric
+        with hm.activate('test'):
+            test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=args.epochs)
+
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
-
-with hm.activate('test'):
-    test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
-log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=args.epochs)

@@ -183,11 +183,14 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
+best_val = 0.0
+
 for epoch in range(1, args.epochs + 1):
     loss = train(train_loader, encoder, decoder, opt)
     val_ndcg = eval(val_loader, encoder, decoder, evaluator)
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
-
-test_ndcg = eval(test_loader, encoder, decoder, evaluator)
-log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
+    if val_ndcg > best_val:
+        best_val = val_ndcg
+        test_ndcg = eval(test_loader, encoder, decoder, evaluator)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
