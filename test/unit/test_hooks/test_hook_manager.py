@@ -11,7 +11,11 @@ from tgm.hooks import HookManager, StatefulHook, StatelessHook
 
 
 class MockHook(StatelessHook):
-    produces = {'foo'}
+    def __init__(self, id: str = None):
+        super().__init__()
+        self.id = id
+        self.produces = {'foo'}
+        self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.edge_time *= 2
@@ -19,16 +23,32 @@ class MockHook(StatelessHook):
 
 
 class MockHookRequires(StatelessHook):
-    requires = {'foo'}
+    def __init__(self, id: str = None):
+        super().__init__()
+        self.id = id
+        self.requires = {'foo'}
+        self.__post_init__()
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        return batch
+
+
+class MockHookRequiresWoof(StatelessHook):
+    def __init__(self, id: str = None):
+        super().__init__()
+        self.id = id
+        self.requires = {'foo_woof'}
+        self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         return batch
 
 
 class MockHookWithState(StatefulHook):
-    has_state: bool = True
-
-    def __init__(self) -> None:
+    def __init__(self, id: str = None) -> None:
+        super().__init__()
+        self.id = id
+        self.has_state = True
         self.x = 0
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
@@ -375,3 +395,15 @@ def test_topo_sort_neg_before_nbr():
     assert foo_hooks.index(mock_neg_hook) < foo_hooks.index(mock_nbr_hook)
     assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)
 
+
+def test_resolve_hooks_with_id_by_key():
+    h1 = MockHook(id='woof')  # MockHook produces with _woof suffix
+    h2 = MockHookRequiresWoof()
+
+    hm = HookManager(keys=['train'])
+    hm.register('train', h2)
+    hm.register('train', h1)
+
+    hm.resolve_hooks('train')
+    assert len(hm._key_to_hooks['train']) == 2
+    assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)

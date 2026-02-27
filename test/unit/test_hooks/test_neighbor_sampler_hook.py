@@ -24,7 +24,7 @@ def test_hook_dependancies():
         seed_nodes_keys=['node_x_nids'],
         seed_times_keys=['node_x_time'],
     )
-    assert hook.requires == {'edge_src', 'edge_dst', 'edge_time','node_x_nids'}
+    assert hook.requires == {'edge_src', 'edge_dst', 'edge_time', 'node_x_nids'}
     assert hook.produces == {
         'seed_nids',
         'seed_times',
@@ -32,6 +32,22 @@ def test_hook_dependancies():
         'nbr_edge_time',
         'nbr_edge_x',
         'seed_node_nbr_mask',
+    }
+
+    hook_with_id = NeighborSamplerHook(
+        num_nbrs=[1],
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
+        id='foo',
+    )
+    assert hook_with_id.requires == {'edge_src', 'edge_dst', 'edge_time', 'node_x_nids'}
+    assert hook_with_id.produces == {
+        'seed_nids_foo',
+        'seed_times_foo',
+        'nbr_nids_foo',
+        'nbr_edge_time_foo',
+        'nbr_edge_x_foo',
+        'seed_node_nbr_mask_foo',
     }
 
 

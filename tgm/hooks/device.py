@@ -29,6 +29,7 @@ class DeviceTransferHook(StatelessHook):
     """Moves all tensors in the DGBatch to the specified device."""
 
     def __init__(self, device: str | torch.device) -> None:
+        super().__init__()
         self.device = torch.device(device)
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:

@@ -18,6 +18,10 @@ def test_hook_dependancies():
     assert hook.requires == {'edge_src', 'edge_dst', 'edge_time'}
     assert hook.produces == {'neg', 'neg_time'}
 
+    hook_with_id = NegativeEdgeSamplerHook(low=0, high=10, id='foo')
+    assert hook_with_id.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook_with_id.produces == {'neg_foo', 'neg_time_foo'}
+
 
 def test_hook_reset_state():
     assert NegativeEdgeSamplerHook.has_state == False

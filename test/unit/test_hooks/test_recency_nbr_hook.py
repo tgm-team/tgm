@@ -65,6 +65,23 @@ def test_hook_dependancies():
         'seed_node_nbr_mask',
     }
 
+    hook_with_id = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=1,
+        seed_nodes_keys=['edge_src'],
+        seed_times_keys=['edge_time'],
+        id='foo',
+    )
+    assert hook_with_id.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook_with_id.produces == {
+        'seed_nids_foo',
+        'nbr_nids_foo',
+        'nbr_edge_time_foo',
+        'nbr_edge_x_foo',
+        'seed_times_foo',
+        'seed_node_nbr_mask_foo',
+    }
+
 
 def test_mock_move_queues_to_device(basic_sample_graph):
     dg = DGraph(basic_sample_graph)

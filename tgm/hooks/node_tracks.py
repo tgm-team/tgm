@@ -15,19 +15,22 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
 
     Args:
         num_nodes (int): Total number of nodes to track.
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
     Raises:
         ValueError: If the num_nodes list is negative.
     """
 
-    def __init__(self, num_nodes: int) -> None:
-        self.requires = {'edge_src', 'edge_dst'}
-        self.produces = {'seen_nodes', 'batch_nodes_mask'}
-
+    def __init__(self, num_nodes: int, id: str | None = None) -> None:
         if num_nodes < 0:
             raise ValueError('num_nodes must be non-negative')
         self._seen_mask = torch.zeros(num_nodes, dtype=torch.bool)
         self._device = torch.device('cpu')
+
+        self.id = id
+        self.requires = {'edge_src', 'edge_dst'}
+        self.produces = {'seen_nodes', 'batch_nodes_mask'}
+        self.__post_init__()
 
     def reset_state(self) -> None:
         logger.debug('Reset state of the hook')

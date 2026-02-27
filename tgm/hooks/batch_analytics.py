@@ -11,8 +11,9 @@ logger = _get_logger(__name__)
 class BatchAnalyticsHook(StatelessHook):
     """Compute simple batch-level statistics."""
 
-    def __init__(self) -> None:
+    def __init__(self, id: str | None = None) -> None:
         super().__init__()
+        self.id = id
         self.requires = {
             'edge_src',
             'edge_dst',
@@ -29,6 +30,7 @@ class BatchAnalyticsHook(StatelessHook):
             'num_repeated_edge_events',
             'num_repeated_node_events',
         }
+        self.__post_init__()
 
     def _count_edge_events(self, batch: DGBatch) -> int:
         return int(batch.edge_src.numel()) if batch.edge_src is not None else 0

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import torch
 from typing import List
+
+import torch
 
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
@@ -17,24 +18,29 @@ class DeduplicationHook(StatelessHook):
     Note: Supports batches with or without negative samples and multi-hop neighbors.
     """
 
-    def __init__(self, seed_nodes_keys: List[str] = []) -> None:
+    def __init__(self, seed_nodes_keys: List[str] = [], id: str | None = None) -> None:
         super().__init__()
+        self.id = id
         self.requires = {'edge_src', 'edge_dst'} | set(seed_nodes_keys)
         self.produces = {'unique_nids', 'global_to_local'}
+        self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        nids = [batch.edge_src, batch.edge_dst] # TODO: Need to retrieve seed nodes. Have NodeSeedable?
+        nids = [
+            batch.edge_src,
+            batch.edge_dst,
+        ]  # TODO: Need to retrieve seed nodes. Have NodeSeedable?
         for node_attr in self.requires:
-            if not hasattr(batch,node_attr):
+            if not hasattr(batch, node_attr):
                 raise ValueError(f'Missing seed node attribut {node_attr}')
-            
-            if  'nbr_nids' in node_attr :
-                for hop in range(len(batch.nbr_nids)):
-                    nbr_nodes = batch.nbr_nids[hop].flatten()
+
+            if 'nbr_nids' in node_attr:
+                for hop in range(len(batch.nbr_nids)):  # type: ignore[attr-defined]
+                    nbr_nodes = batch.nbr_nids[hop].flatten()  # type: ignore[attr-defined]
                     nbr_mask = nbr_nodes != PADDED_NODE_ID
                     nids.append(nbr_nodes[nbr_mask].flatten().to(batch.edge_src.device))
             else:
-                seed_node = getattr(batch,node_attr)
+                seed_node = getattr(batch, node_attr)
                 if seed_node is not None:
                     nids.append(seed_node)
 

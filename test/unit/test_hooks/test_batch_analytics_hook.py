@@ -50,6 +50,24 @@ def test_hook_dependancies():
         'num_repeated_node_events',
     }
 
+    hook_with_id = BatchAnalyticsHook(id='foo')
+    assert hook_with_id.requires == {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'node_x_time',
+        'node_x_nids',
+    }
+    assert hook_with_id.produces == {
+        'num_edge_events_foo',
+        'num_node_events_foo',
+        'num_unique_timestamps_foo',
+        'num_unique_nodes_foo',
+        'avg_degree_foo',
+        'num_repeated_edge_events_foo',
+        'num_repeated_node_events_foo',
+    }
+
 
 def test_hook_reset_state():
     assert BatchAnalyticsHook.has_state is False

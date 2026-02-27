@@ -15,8 +15,9 @@ def dg():
 
 
 def test_hook_dependancies():
-    assert DeviceTransferHook.requires == set()
-    assert DeviceTransferHook.produces == set()
+    hook = DeviceTransferHook('cpu')
+    assert hook.requires == set()
+    assert hook.produces == set()
 
 
 def test_hook_reset_state():

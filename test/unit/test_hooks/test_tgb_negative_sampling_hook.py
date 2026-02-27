@@ -58,6 +58,12 @@ def test_hook_dependancies_tgbl(MockNegSampler):
     assert hook.requires == {'edge_src', 'edge_dst', 'edge_time'}
     assert hook.produces == {'neg', 'neg_batch_list', 'neg_time'}
 
+    hook_with_id = TGBNegativeEdgeSamplerHook(
+        dataset_name='tgbl-foo', split_mode='val', id='foo'
+    )
+    assert hook_with_id.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook_with_id.produces == {'neg_foo', 'neg_batch_list_foo', 'neg_time_foo'}
+
 
 @patch('tgb.linkproppred.thg_negative_sampler.THGNegativeEdgeSampler')
 def test_hook_dependancies_thgl(MockNegSampler):
@@ -89,6 +95,26 @@ def test_hook_dependancies_thgl(MockNegSampler):
         'neg_time',
     }
 
+    hook_with_id = TGBTHGNegativeEdgeSamplerHook(
+        dataset_name='thgl-foo',
+        split_mode='val',
+        first_node_id=min_id,
+        last_node_id=max_id,
+        node_type=node_type,
+        id='foo',
+    )
+    assert hook_with_id.requires == {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'edge_type',
+    }
+    assert hook_with_id.produces == {
+        'neg_foo',
+        'neg_batch_list_foo',
+        'neg_time_foo',
+    }
+
 
 @patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
 def test_hook_dependancies_tkgl(MockNegSampler):
@@ -116,6 +142,25 @@ def test_hook_dependancies_tkgl(MockNegSampler):
         'neg',
         'neg_batch_list',
         'neg_time',
+    }
+
+    hook_with_id = TGBTKGNegativeEdgeSamplerHook(
+        dataset_name='tkgl-foo',
+        split_mode='val',
+        first_dst_id=min_id,
+        last_dst_id=max_id,
+        id='foo',
+    )
+    assert hook_with_id.requires == {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'edge_type',
+    }
+    assert hook_with_id.produces == {
+        'neg_foo',
+        'neg_batch_list_foo',
+        'neg_time_foo',
     }
 
 

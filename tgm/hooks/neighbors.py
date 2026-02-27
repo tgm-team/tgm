@@ -22,6 +22,8 @@ class NeighborSamplerHook(StatelessHook):
         directed (bool): If true, aggregates interactions in edge_src->edge_dst direction only (default=False).
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
         seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
+
 
     Note:
         The order of the output tensors respect the order of seed_nodes_keys.
@@ -40,17 +42,8 @@ class NeighborSamplerHook(StatelessHook):
         seed_nodes_keys: List[str],
         seed_times_keys: List[str],
         directed: bool = False,
+        id: str | None = None,
     ) -> None:
-        self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
-        self.produces = {
-            'seed_nids',
-            'seed_times',
-            'nbr_nids',
-            'nbr_edge_time',
-            'nbr_edge_x',
-            'seed_node_nbr_mask',
-        }
-
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
@@ -73,6 +66,17 @@ class NeighborSamplerHook(StatelessHook):
             self._seed_times_keys,
         )
         self._warned_seed_None = False
+        self.id = id
+        self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
+        self.produces = {
+            'seed_nids',
+            'seed_times',
+            'nbr_nids',
+            'nbr_edge_time',
+            'nbr_edge_x',
+            'seed_node_nbr_mask',
+        }
+        self.__post_init__()
 
     @property
     def num_nbrs(self) -> List[int]:
@@ -200,8 +204,6 @@ class NeighborSamplerHook(StatelessHook):
 
 
 class RecencyNeighborHook(StatefulHook):
-    
-
     """Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
@@ -212,6 +214,7 @@ class RecencyNeighborHook(StatefulHook):
                                                If not specified, defaults to batch seed_times: ['time', 'time']
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
         seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
     Note:
         The order of the output tensors respect the order of seed_nodes_keys.
@@ -231,16 +234,8 @@ class RecencyNeighborHook(StatefulHook):
         seed_nodes_keys: List[str],
         seed_times_keys: List[str],
         directed: bool = False,
+        id: str | None = None,
     ) -> None:
-        self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
-        self.produces = {
-            'seed_nids',
-            'seed_times',
-            'nbr_nids',
-            'nbr_edge_time',
-            'nbr_edge_x',
-            'seed_node_nbr_mask',
-        }
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
@@ -278,6 +273,17 @@ class RecencyNeighborHook(StatefulHook):
         self._need_to_initialize_nbr_feats = True
         self._edge_x_dim = None
         self._nbr_feats = None
+        self.id = id
+        self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
+        self.produces = {
+            'seed_nids',
+            'seed_times',
+            'nbr_nids',
+            'nbr_edge_time',
+            'nbr_edge_x',
+            'seed_node_nbr_mask',
+        }
+        self.__post_init__()
 
     @property
     def num_nbrs(self) -> List[int]:

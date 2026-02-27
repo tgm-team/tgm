@@ -19,12 +19,12 @@ class NegativeEdgeSamplerHook(StatelessHook):
         high (int) : The maximum node id to sample
         neg_ratio (float): The ratio of sampled negative destination nodes
             to the number of positive destination nodes (default = 1.0).
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
     """
 
-    requires = {'edge_src', 'edge_dst', 'edge_time'}
-    produces = {'neg', 'neg_time'}
-
-    def __init__(self, low: int, high: int, neg_ratio: float = 1.0) -> None:
+    def __init__(
+        self, low: int, high: int, neg_ratio: float = 1.0, id: str | None = None
+    ) -> None:
         if not 0 < neg_ratio <= 1:
             raise ValueError(f'neg_ratio must be in (0, 1], got: {neg_ratio}')
         if not low < high:
@@ -32,6 +32,10 @@ class NegativeEdgeSamplerHook(StatelessHook):
         self.low = low
         self.high = high
         self.neg_ratio = neg_ratio
+        self.id = id
+        self.requires = {'edge_src', 'edge_dst', 'edge_time'}
+        self.produces = {'neg', 'neg_time'}
+        self.__post_init__()
 
     # TODO: Historical vs. random
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
@@ -54,6 +58,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
     Args:
         dataset_name (str): The name of the TGB dataset to produce sampler for.
         split_mode (str): The split mode to use for sampling, either 'val' or 'test'.
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
     Raises:
         ValueError: If neg_sampler is not provided.
@@ -62,7 +67,9 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
     requires = {'edge_src', 'edge_dst', 'edge_time'}
     produces = {'neg', 'neg_batch_list', 'neg_time'}
 
-    def __init__(self, dataset_name: str, split_mode: str) -> None:
+    def __init__(
+        self, dataset_name: str, split_mode: str, id: str | None = None
+    ) -> None:
         if split_mode not in ['val', 'test']:
             raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
 
@@ -100,6 +107,10 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
 
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
+        self.id = id
+        self.requires = {'edge_src', 'edge_dst', 'edge_time'}
+        self.produces = {'neg', 'neg_batch_list', 'neg_time'}
+        self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         if batch.edge_src.size(0) == 0:
@@ -157,6 +168,8 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         first_node_id (int): identity of the first node
         last_node_id (int): identity of the last destination node
         node_type (Tensor): the node type of each node
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
+
 
 
     Raises:
@@ -170,10 +183,8 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         first_node_id: int,
         last_node_id: int,
         node_type: torch.Tensor,
+        id: str | None = None,
     ) -> None:
-        self.requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
-        self.produces = {'neg', 'neg_batch_list', 'neg_time'}
-
         if split_mode not in ['val', 'test']:
             raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
 
@@ -227,6 +238,12 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
 
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
+
+        self.id = id
+        self.requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
+        self.produces = {'neg', 'neg_batch_list', 'neg_time'}
+
+        self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         if batch.edge_src.size(0) == 0:
@@ -284,14 +301,12 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
         split_mode (str): The split mode to use for sampling, either 'val' or 'test'.
         first_dst_id (int): identity of the first destination node
         last_dst_id (int): identity of the last destination node
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
 
     Raises:
         ValueError: If neg_sampler is not provided.
     """
-
-    requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
-    produces = {'neg', 'neg_batch_list', 'neg_time'}
 
     def __init__(
         self,
@@ -299,6 +314,7 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
         split_mode: str,
         first_dst_id: int,
         last_dst_id: int,
+        id: str | None = None,
     ) -> None:
         if split_mode not in ['val', 'test']:
             raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
@@ -346,6 +362,10 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
 
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
+        self.id = id
+        self.requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
+        self.produces = {'neg', 'neg_batch_list', 'neg_time'}
+        self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         if batch.edge_src.size(0) == 0:

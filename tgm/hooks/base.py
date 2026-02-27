@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Protocol, Set, runtime_checkable
-from dataclasses import dataclass
+
 from tgm import DGBatch, DGraph
 
 
@@ -18,26 +20,26 @@ class DGHook(Protocol):
     def reset_state(self) -> None: ...
 
 
-@dataclass
-class BaseDGHook:
-    requires: Set[str]
-    produces: Set[str]
-    has_state: bool
+@dataclass(eq=False)
+class BaseDGHook(ABC):
+    """Base class for hooks."""
+
+    requires: Set[str] = field(default_factory=set)
+    produces: Set[str] = field(default_factory=set)
     id: str | None = None
-
-    def __post_init__(self):
-        if self.id and self.id.strip():
-            self.produces = {
-                f"{p}_{self.id}" for p in self.produces
-            }
-
-class StatelessHook:
-    """Base class for hooks without internal state."""
-
-    requires: Set[str] = set()
-    produces: Set[str] = set()
     has_state: bool = False
 
+    def __post_init__(self) -> None:
+        if self.id:
+            self.produces = {f'{p}_{self.id}' for p in self.produces}
+
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        if self.id:
+            cls_name = f'{cls_name}_{self.id}'
+        return cls_name
+
+    @abstractmethod
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         raise NotImplementedError
 
@@ -45,9 +47,13 @@ class StatelessHook:
         pass
 
 
-class StatefulHook:
+class StatelessHook(BaseDGHook):
+    """Base class for hooks without internal state."""
+
+    has_state: bool = False
+
+
+class StatefulHook(BaseDGHook):
     """Base class for hooks that maintain internal state."""
 
-    requires: Set[str] = set()
-    produces: Set[str] = set()
     has_state: bool = True
