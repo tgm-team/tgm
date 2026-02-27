@@ -41,7 +41,7 @@ class NeighborSamplerHook(StatelessHook):
         seed_times_keys: List[str],
         directed: bool = False,
     ) -> None:
-        self.requires = {'edge_src', 'edge_dst', 'edge_time'}
+        self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
         self.produces = {
             'seed_nids',
             'seed_times',
@@ -200,15 +200,7 @@ class NeighborSamplerHook(StatelessHook):
 
 
 class RecencyNeighborHook(StatefulHook):
-    requires = {'edge_src', 'edge_dst', 'edge_time'}
-    produces = {
-        'seed_nids',
-        'seed_times',
-        'nbr_nids',
-        'nbr_edge_time',
-        'nbr_edge_x',
-        'seed_node_nbr_mask',
-    }
+    
 
     """Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
@@ -240,6 +232,15 @@ class RecencyNeighborHook(StatefulHook):
         seed_times_keys: List[str],
         directed: bool = False,
     ) -> None:
+        self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
+        self.produces = {
+            'seed_nids',
+            'seed_times',
+            'nbr_nids',
+            'nbr_edge_time',
+            'nbr_edge_x',
+            'seed_node_nbr_mask',
+        }
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):

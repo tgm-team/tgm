@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Protocol, Set, runtime_checkable
-
+from dataclasses import dataclass
 from tgm import DGBatch, DGraph
 
 
@@ -17,6 +17,19 @@ class DGHook(Protocol):
 
     def reset_state(self) -> None: ...
 
+
+@dataclass
+class BaseDGHook:
+    requires: Set[str]
+    produces: Set[str]
+    has_state: bool
+    id: str | None = None
+
+    def __post_init__(self):
+        if self.id and self.id.strip():
+            self.produces = {
+                f"{p}_{self.id}" for p in self.produces
+            }
 
 class StatelessHook:
     """Base class for hooks without internal state."""

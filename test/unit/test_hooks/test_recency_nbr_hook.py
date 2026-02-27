@@ -55,8 +55,8 @@ def test_hook_dependancies():
         seed_nodes_keys=['edge_src'],
         seed_times_keys=['edge_time'],
     )
-    assert RecencyNeighborHook.requires == {'edge_src', 'edge_dst', 'edge_time'}
-    assert RecencyNeighborHook.produces == {
+    assert hook.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook.produces == {
         'seed_nids',
         'nbr_nids',
         'nbr_edge_time',

@@ -41,7 +41,7 @@ def test_dedup(dg):
 
 
 def test_dedup_with_negatives(dg):
-    hook = DeduplicationHook()
+    hook = DeduplicationHook(seed_nodes_keys=['neg'])
     batch = dg.materialize()
     batch.neg = torch.IntTensor([1, 5, 10])  # add some mock negatives
 
@@ -61,7 +61,7 @@ def test_dedup_with_negatives(dg):
 
 
 def test_dedup_with_nbrs(dg):
-    hook = DeduplicationHook()
+    hook = DeduplicationHook(seed_nodes_keys=['nbr_nids'])
     batch = dg.materialize()
     batch.nbr_nids = [  # add some mock neighbours
         torch.IntTensor([1, 5]),  # First hop
@@ -108,7 +108,7 @@ def node_only_graph():
 
 def test_dedup_node_only_batch(node_only_graph):
     hm = HookManager(keys=['unit'])
-    hm.register('unit', DeduplicationHook())
+    hm.register('unit', DeduplicationHook(seed_nodes_keys=['node_x_nids']))
     loader = DGDataLoader(node_only_graph, batch_size=3, hook_manager=hm)
     with hm.activate('unit'):
         batch_iter = iter(loader)
