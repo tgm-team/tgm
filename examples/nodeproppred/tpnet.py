@@ -112,7 +112,7 @@ class TPNet_NodePrediction(nn.Module):
     def __init__(
         self,
         node_feat_dim: int,
-        edge_feat_dim: int,
+        edge_x_dim: int,
         time_feat_dim: int,
         output_dim: int,
         dropout: float,
@@ -126,7 +126,7 @@ class TPNet_NodePrediction(nn.Module):
         super().__init__()
         self.encoder = TPNet(
             node_feat_dim=node_feat_dim,
-            edge_feat_dim=edge_feat_dim,
+            edge_x_dim=edge_x_dim,
             time_feat_dim=time_feat_dim,
             output_dim=output_dim,
             dropout=dropout,
@@ -309,7 +309,7 @@ random_projection_module = RandomProjectionModule(
 
 encoder = TPNet_NodePrediction(
     node_feat_dim=train_dg.static_node_x_dim,
-    edge_feat_dim=train_dg.edge_x_dim,
+    edge_x_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     output_dim=args.embed_dim,
     dropout=args.dropout,

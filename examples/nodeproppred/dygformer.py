@@ -77,7 +77,7 @@ class DyGFormer_NodePrediction(nn.Module):
         self,
         num_nodes: int,
         node_feat_dim: int,
-        edge_feat_dim: int,
+        edge_x_dim: int,
         time_feat_dim: int,
         channel_embedding_dim: int,
         output_dim: int = 172,
@@ -93,7 +93,7 @@ class DyGFormer_NodePrediction(nn.Module):
         super().__init__()
         self.encoder = DyGFormer(
             node_feat_dim,
-            edge_feat_dim,
+            edge_x_dim,
             time_feat_dim,
             channel_embedding_dim,
             output_dim,
@@ -268,7 +268,7 @@ num_classes = train_dg.node_y_dim
 encoder = DyGFormer_NodePrediction(
     num_nodes=full_data.num_nodes,
     node_feat_dim=train_dg.static_node_x_dim,
-    edge_feat_dim=train_dg.edge_x_dim,
+    edge_x_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     channel_embedding_dim=args.channel_embedding_dim,
     output_dim=args.embed_dim,

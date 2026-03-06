@@ -66,7 +66,7 @@ class DyGFormer_LinkPrediction(nn.Module):
     def __init__(
         self,
         node_feat_dim: int,
-        edge_feat_dim: int,
+        edge_x_dim: int,
         time_feat_dim: int,
         channel_embedding_dim: int,
         output_dim: int = 172,
@@ -82,7 +82,7 @@ class DyGFormer_LinkPrediction(nn.Module):
         super().__init__()
         self.encoder = DyGFormer(
             node_feat_dim,
-            edge_feat_dim,
+            edge_x_dim,
             time_feat_dim,
             channel_embedding_dim,
             output_dim,
@@ -273,7 +273,7 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = DyGFormer_LinkPrediction(
     node_feat_dim=train_dg.static_node_x_dim,
-    edge_feat_dim=train_dg.edge_x_dim,
+    edge_x_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     channel_embedding_dim=args.channel_embedding_dim,
     output_dim=args.embed_dim,
