@@ -98,7 +98,9 @@ def compute_summary(
             idx = (p / 100.0) * (n - 1)
             lo = int(idx)
             hi = min(lo + 1, n - 1)
-            pct[f'p{p:g}'] = sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (idx - lo)
+            pct[f'p{p:g}'] = sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (
+                idx - lo
+            )
     return MetricSummary(
         metric=metric,
         count=n,
@@ -139,7 +141,9 @@ def reduce_metrics(
     if reduction == 'full' or percentile_points:
         include_values = reduction == 'full'
         return {
-            metric: compute_summary(metric, values, percentile_points).to_dict(include_values=include_values)
+            metric: compute_summary(metric, values, percentile_points).to_dict(
+                include_values=include_values
+            )
             for metric, values in raw.items()
         }
 
