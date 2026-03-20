@@ -9,7 +9,7 @@ def test_tpnet():
     node_dim, edge_dim, time_dim = 16, 17, 18
     tpnet = TPNet(
         node_feat_dim=node_dim,
-        edge_feat_dim=edge_dim,
+        edge_x_dim=edge_dim,
         time_feat_dim=time_dim,
         output_dim=edge_dim,
         num_neighbors=D,

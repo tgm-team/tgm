@@ -112,7 +112,7 @@ class TPNet_NodePrediction(nn.Module):
     def __init__(
         self,
         node_feat_dim: int,
-        edge_feat_dim: int,
+        edge_x_dim: int,
         time_feat_dim: int,
         output_dim: int,
         dropout: float,
@@ -126,7 +126,7 @@ class TPNet_NodePrediction(nn.Module):
         super().__init__()
         self.encoder = TPNet(
             node_feat_dim=node_feat_dim,
-            edge_feat_dim=edge_feat_dim,
+            edge_x_dim=edge_x_dim,
             time_feat_dim=time_feat_dim,
             output_dim=output_dim,
             dropout=dropout,
@@ -309,7 +309,7 @@ random_projection_module = RandomProjectionModule(
 
 encoder = TPNet_NodePrediction(
     node_feat_dim=train_dg.static_node_x_dim,
-    edge_feat_dim=train_dg.edge_x_dim,
+    edge_x_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     output_dim=args.embed_dim,
     dropout=args.dropout,
@@ -328,6 +328,8 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
+best_val = 0.0
+
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         loss = train(train_loader, encoder, decoder, opt)
@@ -337,11 +339,12 @@ for epoch in range(1, args.epochs + 1):
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
+    if val_ndcg > best_val:
+        best_val = val_ndcg
+        with hm.activate('test'):
+            test_ndcg = eval(test_loader, encoder, decoder, evaluator)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
+
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
         encoder.rp_module.reset_random_projections()
-
-
-with hm.activate('test'):
-    test_ndcg = eval(test_loader, encoder, decoder, evaluator)
-log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
