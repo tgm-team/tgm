@@ -39,6 +39,11 @@ def test_hook_dependancies():
     assert hook_with_id.produces == {'seen_nodes_foo', 'batch_nodes_mask_foo'}
 
 
+def test_hook_repre():
+    hook_with_id = EdgeEventsSeenNodesTrackHook(1, id='foo')
+    assert 'foo' in hook_with_id.__repr__()
+
+
 def test_seen_nodes_track_hook(dg):
     hm = HookManager(keys=['unit'])
     seen_nodes_track_hook = EdgeEventsSeenNodesTrackHook(6)

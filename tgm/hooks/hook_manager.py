@@ -51,7 +51,9 @@ class HookManager:
 
     def __str__(self) -> str:
         def _stringify_hook(h: DGHook) -> str:
-            return f'    - {h.__class__.__name__} (requires={h.requires}, produces={h.produces})'
+            return (
+                f'    - {h.__repr__()} (requires={h.requires}, produces={h.produces})'
+            )
 
         lines = ['HookManager:']
         lines.append('  Shared hooks:')

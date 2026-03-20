@@ -69,6 +69,11 @@ def test_hook_dependancies():
     }
 
 
+def test_hook_repre():
+    hook_with_id = BatchAnalyticsHook(id='foo')
+    assert 'foo' in hook_with_id.__repr__()
+
+
 def test_hook_reset_state():
     assert BatchAnalyticsHook.has_state is False
 

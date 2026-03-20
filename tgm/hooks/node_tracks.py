@@ -49,8 +49,10 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
 
         self._seen_mask[edge_event_nodes] = True
         previous_seen = self._seen_mask[batch_nodes]
-        batch.batch_nodes_mask = torch.nonzero(previous_seen, as_tuple=True)[0]  # type: ignore[attr-defined]
-        batch.seen_nodes = batch_nodes[previous_seen]  # type: ignore[attr-defined]
+        self.add_attribute_to_batch(
+            batch, 'batch_nodes_mask', torch.nonzero(previous_seen, as_tuple=True)[0]
+        )
+        self.add_attribute_to_batch(batch, 'seen_nodes', batch_nodes[previous_seen])
         return batch
 
     def _move_to_device_if_needed(self, device: torch.device) -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Protocol, Set, runtime_checkable
+from typing import Any, Protocol, Set, runtime_checkable
 
 from tgm import DGBatch, DGraph
 
@@ -45,6 +45,15 @@ class BaseDGHook(ABC):
 
     def reset_state(self) -> None:
         pass
+
+    def add_attribute_to_batch(self, batch: DGBatch, name: str, value: Any) -> None:
+        """Add a new attribute to providede batch.
+
+        If `id` is specified, the new attribute name will be appended with the given `id` as a suffix.
+        """
+        if self.id:
+            name = f'{name}_{self.id}'
+        setattr(batch, name, value)
 
 
 class StatelessHook(BaseDGHook):

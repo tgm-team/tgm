@@ -25,6 +25,11 @@ def test_hook_dependancies():
     assert hook_with_id.produces == {'unique_nids_foo', 'global_to_local_foo'}
 
 
+def test_hook_repre():
+    hook_with_id = DeduplicationHook(id='foo')
+    assert 'foo' in hook_with_id.__repr__()
+
+
 def test_hook_reset_state():
     assert DeduplicationHook.has_state == False
 

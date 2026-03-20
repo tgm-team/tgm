@@ -41,13 +41,23 @@ class NegativeEdgeSamplerHook(StatelessHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.edge_dst.size(0)),)
         if size[0] == 0:
-            batch.neg = torch.empty(size, dtype=torch.int32, device=dg.device)  # type: ignore
-            batch.neg_time = torch.empty(size, dtype=torch.int64, device=dg.device)  # type: ignore
-        else:
-            batch.neg = torch.randint(  # type: ignore
-                self.low, self.high, size, dtype=torch.int32, device=dg.device
+            self.add_attribute_to_batch(
+                batch, 'neg', torch.empty(size, dtype=torch.int32, device=dg.device)
             )
-            batch.neg_time = batch.edge_time.clone()  # type: ignore
+            self.add_attribute_to_batch(
+                batch,
+                'neg_time',
+                torch.empty(size, dtype=torch.int64, device=dg.device),
+            )
+        else:
+            self.add_attribute_to_batch(
+                batch,
+                'neg',
+                torch.randint(
+                    self.low, self.high, size, dtype=torch.int32, device=dg.device
+                ),
+            )
+            self.add_attribute_to_batch(batch, 'neg_time', batch.edge_time.clone())
         return batch
 
 

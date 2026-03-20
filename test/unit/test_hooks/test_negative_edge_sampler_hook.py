@@ -23,6 +23,11 @@ def test_hook_dependancies():
     assert hook_with_id.produces == {'neg_foo', 'neg_time_foo'}
 
 
+def test_hook_repre():
+    hook_with_id = NegativeEdgeSamplerHook(low=0, high=10, id='foo')
+    assert 'foo' in hook_with_id.__repr__()
+
+
 def test_hook_reset_state():
     assert NegativeEdgeSamplerHook.has_state == False
 

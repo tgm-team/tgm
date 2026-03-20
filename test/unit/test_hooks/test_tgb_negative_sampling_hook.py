@@ -65,6 +65,19 @@ def test_hook_dependancies_tgbl(MockNegSampler):
     assert hook_with_id.produces == {'neg_foo', 'neg_batch_list_foo', 'neg_time_foo'}
 
 
+@patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
+def test_tgb_hook_repre(MockNegSampler):
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    hook_with_id = TGBNegativeEdgeSamplerHook(
+        dataset_name='tgbl-foo', split_mode='val', id='foo'
+    )
+    assert 'foo' in hook_with_id.__repr__()
+
+
 @patch('tgb.linkproppred.thg_negative_sampler.THGNegativeEdgeSampler')
 def test_hook_dependancies_thgl(MockNegSampler):
     mock_sampler = Mock()
@@ -116,6 +129,29 @@ def test_hook_dependancies_thgl(MockNegSampler):
     }
 
 
+@patch('tgb.linkproppred.thg_negative_sampler.THGNegativeEdgeSampler')
+def test_thg_hook_repre(MockNegSampler):
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+    node_type = torch.arange(max_id + 1, dtype=torch.int32)
+
+    hook_with_id = TGBTHGNegativeEdgeSamplerHook(
+        dataset_name='thgl-foo',
+        split_mode='val',
+        first_node_id=min_id,
+        last_node_id=max_id,
+        node_type=node_type,
+        id='foo',
+    )
+
+    assert 'foo' in hook_with_id.__repr__()
+
+
 @patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
 def test_hook_dependancies_tkgl(MockNegSampler):
     mock_sampler = Mock()
@@ -162,6 +198,26 @@ def test_hook_dependancies_tkgl(MockNegSampler):
         'neg_batch_list_foo',
         'neg_time_foo',
     }
+
+
+@patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
+def test_tkg_hook_repre(MockNegSampler):
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+
+    hook_with_id = TGBTKGNegativeEdgeSamplerHook(
+        dataset_name='tkgl-foo',
+        split_mode='val',
+        first_dst_id=min_id,
+        last_dst_id=max_id,
+        id='foo',
+    )
+    assert 'foo' in hook_with_id.__repr__()
 
 
 def test_hook_reset_state():

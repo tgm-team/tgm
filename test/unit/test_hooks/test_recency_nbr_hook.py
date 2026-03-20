@@ -83,6 +83,17 @@ def test_hook_dependancies():
     }
 
 
+def test_hook_repre():
+    hook_with_id = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=1,
+        seed_nodes_keys=['edge_src'],
+        seed_times_keys=['edge_time'],
+        id='foo',
+    )
+    assert 'foo' in hook_with_id.__repr__()
+
+
 def test_mock_move_queues_to_device(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     hook = RecencyNeighborHook(

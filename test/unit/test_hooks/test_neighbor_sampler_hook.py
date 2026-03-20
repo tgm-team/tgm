@@ -51,6 +51,16 @@ def test_hook_dependancies():
     }
 
 
+def test_hook_repre():
+    hook_with_id = NeighborSamplerHook(
+        num_nbrs=[1],
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
+        id='foo',
+    )
+    assert 'foo' in hook_with_id.__repr__()
+
+
 def test_hook_reset_state():
     assert NeighborSamplerHook.has_state == False
 
