@@ -6,30 +6,34 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
-from tgm.hooks import StatelessHook
+from tgm.hooks import SeedableHook, StatelessHook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
-class DeduplicationHook(StatelessHook):
+class DeduplicationHook(StatelessHook, SeedableHook):
     """Deduplicate node IDs from batch fields and create index mappings to unique node embeddings.
 
     Note: Supports batches with or without negative samples and multi-hop neighbors.
     """
 
-    def __init__(self, seed_nodes_keys: List[str] = [], id: str | None = None) -> None:
+    _cls_requires = {'edge_src', 'edge_dst'}
+    _cls_produces = {'unique_nids', 'global_to_local'}
+
+    def __init__(
+        self, seed_nodes_keys: List[str] | None = None, id: str | None = None
+    ) -> None:
         super().__init__()
-        self.id = id
-        self.requires = {'edge_src', 'edge_dst'} | set(seed_nodes_keys)
-        self.produces = {'unique_nids', 'global_to_local'}
+        self._id = id
+        self.seed_keys = seed_nodes_keys
         self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         nids = [
             batch.edge_src,
             batch.edge_dst,
-        ]  # TODO: Need to retrieve seed nodes. Have NodeSeedable?
+        ]
         for node_attr in self.requires:
             if not hasattr(batch, node_attr):
                 raise ValueError(f'Missing seed node attribut {node_attr}')

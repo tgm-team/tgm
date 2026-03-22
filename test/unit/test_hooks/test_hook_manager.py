@@ -11,10 +11,11 @@ from tgm.hooks import HookManager, StatefulHook, StatelessHook
 
 
 class MockHook(StatelessHook):
+    _cls_produces = {'foo'}
+
     def __init__(self, id: str = None):
         super().__init__()
-        self.id = id
-        self.produces = {'foo'}
+        self._id = id
         self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
@@ -23,10 +24,11 @@ class MockHook(StatelessHook):
 
 
 class MockHookRequires(StatelessHook):
+    _cls_requires = {'foo'}
+
     def __init__(self, id: str = None):
         super().__init__()
-        self.id = id
-        self.requires = {'foo'}
+        self._id = id
         self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
@@ -34,10 +36,11 @@ class MockHookRequires(StatelessHook):
 
 
 class MockHookRequiresWoof(StatelessHook):
+    _cls_requires = {'foo_woof'}
+
     def __init__(self, id: str = None):
         super().__init__()
-        self.id = id
-        self.requires = {'foo_woof'}
+        self._id = id
         self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
@@ -47,7 +50,7 @@ class MockHookRequiresWoof(StatelessHook):
 class MockHookWithState(StatefulHook):
     def __init__(self, id: str = None) -> None:
         super().__init__()
-        self.id = id
+        self._id = id
         self.has_state = True
         self.x = 0
 
@@ -180,8 +183,8 @@ def test_resolve_hooks_by_key():
 def test_resolve_hooks_no_solution_no_dag():
     h1 = MockHook()
     h2 = MockHook()
-    h1.requires, h1.produces = {'x'}, {'y'}
-    h2.requires, h2.produces = {'y'}, {'x'}
+    h1._requires, h1._produces = {'x'}, {'y'}
+    h2._requires, h2._produces = {'y'}, {'x'}
 
     # Cycle-like missing dependency
     hm = HookManager(keys=['train'])
@@ -225,8 +228,8 @@ def test_topo_sort_cached(dg, monkeypatch):
     hm = HookManager(keys=['train'])
 
     h1, h2 = MockHook(), MockHook()
-    h1.requires, h1.produces = set(), {'x'}
-    h2.requires, h2.produces = {'x'}, {'y'}
+    h1._requires, h1._produces = set(), {'x'}
+    h2._requires, h2._produces = {'x'}, {'y'}
 
     hm.register('train', h1)
     hm.register('train', h2)
@@ -252,7 +255,7 @@ def test_topo_sort_cached_invalidated(dg, monkeypatch):
     hm = HookManager(keys=['train'])
 
     h1 = MockHook()
-    h1.requires, h1.produces = set(), {'x'}
+    h1._requires, h1._produces = set(), {'x'}
 
     hm.register('train', h1)
     call_count = {'n': 0}
@@ -281,8 +284,8 @@ def test_topo_sort_cached_invalidated(dg, monkeypatch):
 def test_topo_sort_no_solution_no_dag(dg):
     h1 = MockHook()
     h2 = MockHook()
-    h1.requires, h1.produces = {'x'}, {'y'}
-    h2.requires, h2.produces = {'y'}, {'x'}
+    h1._requires, h1._produces = {'x'}, {'y'}
+    h2._requires, h2._produces = {'y'}, {'x'}
 
     # Cycle-like missing dependency
     hm = HookManager(keys=['train'])
@@ -377,8 +380,8 @@ def test_activate_ctx():
 
 def test_topo_sort_neg_before_nbr():
     mock_neg_hook, mock_nbr_hook = MockHook(), MockHook()
-    mock_neg_hook.requires, mock_neg_hook.produces = set(), {'neg'}
-    mock_nbr_hook.requires, mock_nbr_hook.produces = set(), {'nbr_nids'}
+    mock_neg_hook._requires, mock_neg_hook._produces = set(), {'neg'}
+    mock_nbr_hook._requires, mock_nbr_hook._produces = set(), {'nbr_nids'}
 
     # Register neg first in foo, nbr first in bar
     hm = HookManager(keys=['foo', 'bar'])

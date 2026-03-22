@@ -22,9 +22,13 @@ class NegativeEdgeSamplerHook(StatelessHook):
         id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
     """
 
+    _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
+    _cls_produces = {'neg', 'neg_time'}
+
     def __init__(
         self, low: int, high: int, neg_ratio: float = 1.0, id: str | None = None
     ) -> None:
+        super().__init__()
         if not 0 < neg_ratio <= 1:
             raise ValueError(f'neg_ratio must be in (0, 1], got: {neg_ratio}')
         if not low < high:
@@ -32,9 +36,7 @@ class NegativeEdgeSamplerHook(StatelessHook):
         self.low = low
         self.high = high
         self.neg_ratio = neg_ratio
-        self.id = id
-        self.requires = {'edge_src', 'edge_dst', 'edge_time'}
-        self.produces = {'neg', 'neg_time'}
+        self._id = id
         self.__post_init__()
 
     # TODO: Historical vs. random
@@ -74,12 +76,13 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
-    requires = {'edge_src', 'edge_dst', 'edge_time'}
-    produces = {'neg', 'neg_batch_list', 'neg_time'}
+    _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
+    _cls_produces = {'neg', 'neg_batch_list', 'neg_time'}
 
     def __init__(
         self, dataset_name: str, split_mode: str, id: str | None = None
     ) -> None:
+        super().__init__()
         if split_mode not in ['val', 'test']:
             raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
 
@@ -117,9 +120,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
 
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
-        self.id = id
-        self.requires = {'edge_src', 'edge_dst', 'edge_time'}
-        self.produces = {'neg', 'neg_batch_list', 'neg_time'}
+        self._id = id
         self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
@@ -186,6 +187,9 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
+    _cls_requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
+    _cls_produces = {'neg', 'neg_batch_list', 'neg_time'}
+
     def __init__(
         self,
         dataset_name: str,
@@ -195,6 +199,7 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         node_type: torch.Tensor,
         id: str | None = None,
     ) -> None:
+        super().__init__()
         if split_mode not in ['val', 'test']:
             raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
 
@@ -249,9 +254,7 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
 
-        self.id = id
-        self.requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
-        self.produces = {'neg', 'neg_batch_list', 'neg_time'}
+        self._id = id
 
         self.__post_init__()
 
@@ -318,6 +321,9 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
         ValueError: If neg_sampler is not provided.
     """
 
+    _cls_requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
+    _cls_produces = {'neg', 'neg_batch_list', 'neg_time'}
+
     def __init__(
         self,
         dataset_name: str,
@@ -326,6 +332,7 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
         last_dst_id: int,
         id: str | None = None,
     ) -> None:
+        super().__init__()
         if split_mode not in ['val', 'test']:
             raise ValueError(f'split_mode must be "val" or "test", got: {split_mode}')
 
@@ -372,9 +379,7 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
 
         self.neg_sampler = neg_sampler
         self.split_mode = split_mode
-        self.id = id
-        self.requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
-        self.produces = {'neg', 'neg_batch_list', 'neg_time'}
+        self._id = id
         self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:

@@ -8,13 +8,13 @@ import torch
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
 from tgm.core._storage import DGSliceTracker
-from tgm.hooks import StatefulHook, StatelessHook
+from tgm.hooks import SeedableHook, StatefulHook, StatelessHook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
-class NeighborSamplerHook(StatelessHook):
+class NeighborSamplerHook(StatelessHook, SeedableHook):
     """Load data from DGraph using a memory based sampling function.
 
     Args:
@@ -36,6 +36,16 @@ class NeighborSamplerHook(StatelessHook):
         ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
     """
 
+    _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
+    _cls_produces = {
+        'seed_nids',
+        'seed_times',
+        'nbr_nids',
+        'nbr_edge_time',
+        'nbr_edge_x',
+        'seed_node_nbr_mask',
+    }
+
     def __init__(
         self,
         num_nbrs: List[int],
@@ -44,6 +54,7 @@ class NeighborSamplerHook(StatelessHook):
         directed: bool = False,
         id: str | None = None,
     ) -> None:
+        super().__init__()
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
@@ -66,16 +77,17 @@ class NeighborSamplerHook(StatelessHook):
             self._seed_times_keys,
         )
         self._warned_seed_None = False
-        self.id = id
-        self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
-        self.produces = {
-            'seed_nids',
-            'seed_times',
-            'nbr_nids',
-            'nbr_edge_time',
-            'nbr_edge_x',
-            'seed_node_nbr_mask',
-        }
+        self._id = id
+        self.seed_keys = seed_nodes_keys
+        # self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
+        # self.produces = {
+        #     'seed_nids',
+        #     'seed_times',
+        #     'nbr_nids',
+        #     'nbr_edge_time',
+        #     'nbr_edge_x',
+        #     'seed_node_nbr_mask',
+        # }
         self.__post_init__()
 
     @property
@@ -203,7 +215,7 @@ class NeighborSamplerHook(StatelessHook):
         return seed_nodes, seed_times, seed_node_mask  # type: ignore
 
 
-class RecencyNeighborHook(StatefulHook):
+class RecencyNeighborHook(StatefulHook, SeedableHook):
     """Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
     Args:
@@ -227,6 +239,16 @@ class RecencyNeighborHook(StatefulHook):
         ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
     """
 
+    _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
+    _cls_produces = {
+        'seed_nids',
+        'seed_times',
+        'nbr_nids',
+        'nbr_edge_time',
+        'nbr_edge_x',
+        'seed_node_nbr_mask',
+    }
+
     def __init__(
         self,
         num_nodes: int,
@@ -236,6 +258,7 @@ class RecencyNeighborHook(StatefulHook):
         directed: bool = False,
         id: str | None = None,
     ) -> None:
+        super().__init__()
         if not len(num_nbrs):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
@@ -273,16 +296,17 @@ class RecencyNeighborHook(StatefulHook):
         self._need_to_initialize_nbr_feats = True
         self._edge_x_dim = None
         self._nbr_feats = None
-        self.id = id
-        self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
-        self.produces = {
-            'seed_nids',
-            'seed_times',
-            'nbr_nids',
-            'nbr_edge_time',
-            'nbr_edge_x',
-            'seed_node_nbr_mask',
-        }
+        self._id = id
+        self.seed_keys = seed_nodes_keys
+        # self.requires = {'edge_src', 'edge_dst', 'edge_time'} | set(seed_nodes_keys)
+        # self.produces = {
+        #     'seed_nids',
+        #     'seed_times',
+        #     'nbr_nids',
+        #     'nbr_edge_time',
+        #     'nbr_edge_x',
+        #     'seed_node_nbr_mask',
+        # }
         self.__post_init__()
 
     @property

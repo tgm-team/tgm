@@ -39,9 +39,19 @@ class NodeAnalyticsHook(StatefulHook):
             - new_edge_count: Number of new edges in the batch, that is not seen in previous batches.
     """
 
+    _cls_requires = {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'node_x_time',
+        'node_x_nids',
+    }
+    _cls_produces = {'node_stats', 'node_macro_stats', 'edge_stats'}
+
     def __init__(
         self, tracked_nodes: Tensor, num_nodes: int, id: str | None = None
     ) -> None:
+        super().__init__()
         if num_nodes <= 0:
             raise ValueError('num_nodes must be positive')
         self.tracked_nodes = tracked_nodes.unique()
@@ -69,15 +79,7 @@ class NodeAnalyticsHook(StatefulHook):
         # Edge tracking
         self._seen_edges: Set[tuple] = set()
 
-        self.id = id
-        self.requires = {
-            'edge_src',
-            'edge_dst',
-            'edge_time',
-            'node_x_time',
-            'node_x_nids',
-        }
-        self.produces = {'node_stats', 'node_macro_stats', 'edge_stats'}
+        self._id = id
         self.__post_init__()
 
     def _compute_node_degrees(self, batch: DGBatch, nodes: Tensor) -> Dict[int, int]:
