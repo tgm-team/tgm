@@ -95,6 +95,22 @@ def test_sample_with_node_events_seeds(node_only_data):
     torch.testing.assert_close(batch.seed_times[0], batch.node_x_time)
 
 
+def test_sample_with_id(node_only_data):
+    dg = DGraph(node_only_data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[1],
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
+        id='foo',
+    )
+    batch = dg.materialize()
+    batch = hook(dg, batch)
+    assert len(batch.seed_nids_foo) == 1
+    assert len(batch.seed_times_foo) == 1
+    torch.testing.assert_close(batch.seed_nids_foo[0], batch.node_x_nids)
+    torch.testing.assert_close(batch.seed_times_foo[0], batch.node_x_time)
+
+
 def test_bad_sample_with_non_existent_seeds(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
@@ -190,6 +206,27 @@ def test_neighbor_sampler_hook_link_pred(data):
     assert hasattr(batch, 'nbr_edge_x')
 
 
+def test_neighbor_sampler_hook_link_pred_with_hook_id(data):
+    dg = DGraph(data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[2],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
+        id='foo',
+    )
+    batch = dg.materialize()
+
+    # Link Prediction will add negative edges to seed nodes for sampling
+    batch.neg = torch.IntTensor([0] * len(batch.edge_dst))
+    batch.neg_time = torch.IntTensor([0] * len(batch.edge_dst))
+    batch = hook(dg, batch)
+    assert isinstance(batch, DGBatch)
+    assert hasattr(batch, 'seed_nids_foo')
+    assert hasattr(batch, 'nbr_nids_foo')
+    assert hasattr(batch, 'nbr_edge_time_foo')
+    assert hasattr(batch, 'nbr_edge_x_foo')
+
+
 def test_neighbor_sampler_hook_node_pred(data):
     dg = DGraph(data)
     hook = NeighborSamplerHook(
@@ -203,6 +240,22 @@ def test_neighbor_sampler_hook_node_pred(data):
     assert hasattr(batch, 'nbr_nids')
     assert hasattr(batch, 'nbr_edge_time')
     assert hasattr(batch, 'nbr_edge_x')
+
+
+def test_neighbor_sampler_hook_node_pred_with_hook_id(data):
+    dg = DGraph(data)
+    hook = NeighborSamplerHook(
+        num_nbrs=[2],
+        seed_nodes_keys=['edge_src', 'edge_dst'],
+        seed_times_keys=['edge_time', 'edge_time'],
+        id='foo',
+    )
+    batch = hook(dg, dg.materialize())
+    assert isinstance(batch, DGBatch)
+    assert hasattr(batch, 'seed_nids_foo')
+    assert hasattr(batch, 'nbr_nids_foo')
+    assert hasattr(batch, 'nbr_edge_time_foo')
+    assert hasattr(batch, 'nbr_edge_x_foo')
 
 
 def _nbrs_2_np(batch: DGBatch) -> List[np.ndarray]:

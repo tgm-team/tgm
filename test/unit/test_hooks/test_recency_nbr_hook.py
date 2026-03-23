@@ -230,6 +230,23 @@ def test_sample_with_node_events_seeds(node_only_data):
     torch.testing.assert_close(batch.seed_times[0], batch.node_x_time)
 
 
+def test_sample_with_node_events_seeds_with_hook_id(node_only_data):
+    dg = DGraph(node_only_data)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
+        id='foo',
+    )
+    batch = dg.materialize()
+    batch = hook(dg, batch)
+    assert len(batch.seed_nids_foo) == 1
+    assert len(batch.seed_times_foo) == 1
+    torch.testing.assert_close(batch.seed_nids_foo[0], batch.node_x_nids)
+    torch.testing.assert_close(batch.seed_times_foo[0], batch.node_x_time)
+
+
 def test_bad_sample_with_non_existent_seeds(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     hook = RecencyNeighborHook(

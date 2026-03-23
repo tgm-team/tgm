@@ -49,6 +49,21 @@ def test_dedup(dg):
     )
 
 
+def test_dedup_with_id(dg):
+    hook = DeduplicationHook(id='foo')
+    batch = dg.materialize()
+    processed_batch = hook(dg, batch)
+    torch.testing.assert_close(
+        processed_batch.unique_nids_foo, torch.IntTensor([1, 2, 4, 8])
+    )
+    torch.testing.assert_close(
+        processed_batch.global_to_local_foo(batch.edge_src), torch.IntTensor([1, 1, 0])
+    )
+    torch.testing.assert_close(
+        processed_batch.global_to_local_foo(batch.edge_dst), torch.IntTensor([1, 2, 3])
+    )
+
+
 def test_dedup_with_negatives(dg):
     hook = DeduplicationHook(seed_nodes_keys=['neg'])
     batch = dg.materialize()

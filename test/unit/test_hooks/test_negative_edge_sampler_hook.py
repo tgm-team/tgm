@@ -52,6 +52,17 @@ def test_negative_edge_sampler(data):
     assert batch.neg_time.shape == batch.neg.shape
 
 
+def test_negative_edge_sampler_with_id(data):
+    dg = DGraph(data)
+    hook = NegativeEdgeSamplerHook(low=0, high=10, id='foo')
+    batch = hook(dg, dg.materialize())
+    assert isinstance(batch, DGBatch)
+    assert torch.is_tensor(batch.neg_foo)
+    assert torch.is_tensor(batch.neg_time_foo)
+    assert batch.neg_foo.shape == batch.edge_dst.shape
+    assert batch.neg_time_foo.shape == batch.neg_foo.shape
+
+
 @pytest.fixture
 def node_only_data():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
