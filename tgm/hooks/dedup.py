@@ -36,7 +36,7 @@ class DeduplicationHook(StatelessHook, SeedableHook):
         ]
         for node_attr in self.requires:
             if not hasattr(batch, node_attr):
-                raise ValueError(f'Missing seed node attribut {node_attr}')
+                raise ValueError(f'Missing seed node attribute {node_attr}')
 
             if 'nbr_nids' in node_attr:
                 for hop in range(len(batch.nbr_nids)):  # type: ignore[attr-defined]
