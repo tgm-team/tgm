@@ -138,13 +138,17 @@ def encode_table(
     if stype.numerical in tf.col_names_dict:
         stype_encoder_dict[stype.numerical] = LinearEncoder(
             out_channels=target_dim,
-            stats_list=dataset.col_stats[stype.numerical],
+            stats_list=[
+                dataset.col_stats[col] for col in tf.col_names_dict[stype.numerical]
+            ],
             stype=stype.numerical,
         )
     if stype.categorical in tf.col_names_dict:
         stype_encoder_dict[stype.categorical] = EmbeddingEncoder(
             out_channels=target_dim,
-            stats_list=dataset.col_stats[stype.categorical],
+            stats_list=[
+                dataset.col_stats[col] for col in tf.col_names_dict[stype.categorical]
+            ],
             stype=stype.categorical,
         )
 
@@ -156,7 +160,7 @@ def encode_table(
     )
     encoder.eval()
     with torch.no_grad():
-        out = encoder(tf)  # [N, num_cols, target_dim]
+        out, _ = encoder(tf)  # [N, num_cols, target_dim]
 
     # Pool across columns dimension → [N, target_dim]
     emb = out.mean(dim=1).float()

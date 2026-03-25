@@ -573,6 +573,11 @@ class DGData:
         return replace(self, **cloned_fields)  # type: ignore
 
     @property
+    def num_edges(self) -> int:
+        """Number of edges in the dataset."""
+        return self.edge_index.shape[0]
+
+    @property
     def num_nodes(self) -> int:
         """Global number of nodes in the dataset.
 

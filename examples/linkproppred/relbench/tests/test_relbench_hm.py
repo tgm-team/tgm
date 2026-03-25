@@ -73,7 +73,7 @@ def _make_transactions_df(n_art=N_ART, n_cust=N_CUST, n=N_EDGES) -> pd.DataFrame
     rng = np.random.default_rng(2)
     # Use integer unix timestamps (seconds) to avoid timezone complications
     base_ts = 1_546_300_800  # 2019-01-01 00:00:00 UTC
-    timestamps = sorted(base_ts + rng.integers(0, 86400 * 365, n).tolist())
+    timestamps = sorted((base_ts + rng.integers(0, 86400 * 365, n)).tolist())
     return pd.DataFrame(
         {
             't_dat': pd.to_datetime(timestamps, unit='s'),
