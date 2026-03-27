@@ -360,8 +360,8 @@ class NodeAnalyticsHook(StatefulHook):
         node_batch_stats = self._compute_node_statistics(batch)
         edge_batch_stats = self._compute_edge_statistics(batch)
 
-        self.add_attribute_to_batch(batch, 'node_stats', node_stats)
-        self.add_attribute_to_batch(batch, 'node_macro_stats', node_batch_stats)
-        self.add_attribute_to_batch(batch, 'edge_stats', edge_batch_stats)
+        self.add_batch_attribute(batch, 'node_stats', node_stats)
+        self.add_batch_attribute(batch, 'node_macro_stats', node_batch_stats)
+        self.add_batch_attribute(batch, 'edge_stats', edge_batch_stats)
 
         return batch

@@ -51,8 +51,8 @@ class DeduplicationHook(StatelessHook, SeedableHook):
         all_nids = torch.cat(nids, dim=0)
         unique_nids = torch.unique(all_nids, sorted=True)
 
-        self.add_attribute_to_batch(batch, 'unique_nids', unique_nids)
-        self.add_attribute_to_batch(
+        self.add_batch_attribute(batch, 'unique_nids', unique_nids)
+        self.add_batch_attribute(
             batch, 'global_to_local', lambda x: torch.searchsorted(unique_nids, x).int()
         )
         logger.debug(

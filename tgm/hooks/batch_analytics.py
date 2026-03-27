@@ -101,25 +101,23 @@ class BatchAnalyticsHook(StatelessHook):
         return int((node_counts - 1).clamp(min=0).sum().item())
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        self.add_attribute_to_batch(
+        self.add_batch_attribute(
             batch, 'num_edge_events', self._count_edge_events(batch)
         )
-        self.add_attribute_to_batch(
+        self.add_batch_attribute(
             batch, 'num_node_events', self._count_node_events(batch)
         )
-        self.add_attribute_to_batch(
+        self.add_batch_attribute(
             batch, 'num_unique_timestamps', self._count_unique_timestamps(batch)
         )
-        self.add_attribute_to_batch(
+        self.add_batch_attribute(
             batch, 'num_unique_nodes', self._compute_unique_nodes(batch)
         )
-        self.add_attribute_to_batch(
-            batch, 'avg_degree', self._compute_avg_degree(batch)
-        )
-        self.add_attribute_to_batch(
+        self.add_batch_attribute(batch, 'avg_degree', self._compute_avg_degree(batch))
+        self.add_batch_attribute(
             batch, 'num_repeated_edge_events', self._count_repeated_edge_events(batch)
         )
-        self.add_attribute_to_batch(
+        self.add_batch_attribute(
             batch, 'num_repeated_node_events', self._count_repeated_node_events(batch)
         )
 

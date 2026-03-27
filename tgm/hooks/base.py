@@ -66,8 +66,8 @@ class BaseDGHook(ABC):
     def reset_state(self) -> None:
         pass
 
-    def add_attribute_to_batch(self, batch: DGBatch, name: str, value: Any) -> None:
-        """Add a new attribute to providede batch.
+    def add_batch_attribute(self, batch: DGBatch, name: str, value: Any) -> None:
+        """Add a new attribute to provided batch.
 
         If `_id` is specified, the new attribute name will be appended with the given `id` as a suffix.
         """
@@ -90,6 +90,12 @@ class StatefulHook(BaseDGHook):
 
 @dataclass(eq=False)
 class SeedableHook(BaseDGHook):
+    """Base class for hooks that can take additional attributes.
+
+    Example hooks that are `seedable`: `DeduplicationHook` which finds set of unique nodes ID on `seed_keys` beyond `src` and `dst`.
+    `SeedableHook` are compatible with both `StatelessHook` and `StatefulHook`.
+    """
+
     seed_keys: List[str] | None = field(default_factory=list)
 
     def __post_init__(self) -> None:

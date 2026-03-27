@@ -43,23 +43,23 @@ class NegativeEdgeSamplerHook(StatelessHook):
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.edge_dst.size(0)),)
         if size[0] == 0:
-            self.add_attribute_to_batch(
+            self.add_batch_attribute(
                 batch, 'neg', torch.empty(size, dtype=torch.int32, device=dg.device)
             )
-            self.add_attribute_to_batch(
+            self.add_batch_attribute(
                 batch,
                 'neg_time',
                 torch.empty(size, dtype=torch.int64, device=dg.device),
             )
         else:
-            self.add_attribute_to_batch(
+            self.add_batch_attribute(
                 batch,
                 'neg',
                 torch.randint(
                     self.low, self.high, size, dtype=torch.int32, device=dg.device
                 ),
             )
-            self.add_attribute_to_batch(batch, 'neg_time', batch.edge_time.clone())
+            self.add_batch_attribute(batch, 'neg_time', batch.edge_time.clone())
         return batch
 
 
@@ -168,9 +168,9 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
                 generator=gen,
             )
 
-        self.add_attribute_to_batch(batch, 'neg', batch_neg)
-        self.add_attribute_to_batch(batch, 'neg_batch_list', batch_neg_batch_list)
-        self.add_attribute_to_batch(batch, 'neg_time', batch_neg_time)
+        self.add_batch_attribute(batch, 'neg', batch_neg)
+        self.add_batch_attribute(batch, 'neg_batch_list', batch_neg_batch_list)
+        self.add_batch_attribute(batch, 'neg_time', batch_neg_time)
         return batch
 
 
@@ -308,9 +308,9 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
                 generator=gen,
             )
 
-        self.add_attribute_to_batch(batch, 'neg', batch_neg)
-        self.add_attribute_to_batch(batch, 'neg_batch_list', batch_neg_batch_list)
-        self.add_attribute_to_batch(batch, 'neg_time', batch_neg_time)
+        self.add_batch_attribute(batch, 'neg', batch_neg)
+        self.add_batch_attribute(batch, 'neg_batch_list', batch_neg_batch_list)
+        self.add_batch_attribute(batch, 'neg_time', batch_neg_time)
         return batch
 
 
@@ -435,7 +435,7 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
                 generator=gen,
             )
 
-        self.add_attribute_to_batch(batch, 'neg', batch_neg)
-        self.add_attribute_to_batch(batch, 'neg_batch_list', batch_neg_batch_list)
-        self.add_attribute_to_batch(batch, 'neg_time', batch_neg_time)
+        self.add_batch_attribute(batch, 'neg', batch_neg)
+        self.add_batch_attribute(batch, 'neg_batch_list', batch_neg_batch_list)
+        self.add_batch_attribute(batch, 'neg_time', batch_neg_time)
         return batch

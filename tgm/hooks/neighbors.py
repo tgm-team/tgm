@@ -133,12 +133,12 @@ class NeighborSamplerHook(StatelessHook, SeedableHook):
                 batch_nbr_edge_time.append(nbr_edge_time)
                 batch_nbr_edge_x.append(nbr_edge_x)
 
-        self.add_attribute_to_batch(batch, 'seed_nids', batch_seed_nids)
-        self.add_attribute_to_batch(batch, 'seed_times', batch_seed_times)
-        self.add_attribute_to_batch(batch, 'nbr_nids', batch_nbr_nids)
-        self.add_attribute_to_batch(batch, 'nbr_edge_time', batch_nbr_edge_time)
-        self.add_attribute_to_batch(batch, 'nbr_edge_x', batch_nbr_edge_x)
-        self.add_attribute_to_batch(batch, 'seed_node_nbr_mask', seed_node_nbr_mask)
+        self.add_batch_attribute(batch, 'seed_nids', batch_seed_nids)
+        self.add_batch_attribute(batch, 'seed_times', batch_seed_times)
+        self.add_batch_attribute(batch, 'nbr_nids', batch_nbr_nids)
+        self.add_batch_attribute(batch, 'nbr_edge_time', batch_nbr_edge_time)
+        self.add_batch_attribute(batch, 'nbr_edge_x', batch_nbr_edge_x)
+        self.add_batch_attribute(batch, 'seed_node_nbr_mask', seed_node_nbr_mask)
 
         return batch
 
@@ -354,12 +354,12 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
                 logger.debug('Updating circular buffers')
                 self._update(batch)
 
-        self.add_attribute_to_batch(batch, 'seed_nids', batch_seed_nids)
-        self.add_attribute_to_batch(batch, 'seed_times', batch_seed_times)
-        self.add_attribute_to_batch(batch, 'nbr_nids', batch_nbr_nids)
-        self.add_attribute_to_batch(batch, 'nbr_edge_time', batch_nbr_edge_time)
-        self.add_attribute_to_batch(batch, 'nbr_edge_x', batch_nbr_edge_x)
-        self.add_attribute_to_batch(batch, 'seed_node_nbr_mask', seed_node_mask)
+        self.add_batch_attribute(batch, 'seed_nids', batch_seed_nids)
+        self.add_batch_attribute(batch, 'seed_times', batch_seed_times)
+        self.add_batch_attribute(batch, 'nbr_nids', batch_nbr_nids)
+        self.add_batch_attribute(batch, 'nbr_edge_time', batch_nbr_edge_time)
+        self.add_batch_attribute(batch, 'nbr_edge_x', batch_nbr_edge_x)
+        self.add_batch_attribute(batch, 'seed_node_nbr_mask', seed_node_mask)
         return batch
 
     def _get_seed_tensors(
