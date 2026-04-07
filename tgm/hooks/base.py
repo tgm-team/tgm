@@ -17,6 +17,10 @@ class DGHook(Protocol):
 
     def reset_state(self) -> None: ...
 
+    def state_dict(self) -> dict: ...
+
+    def load_state_dict(self, state: dict) -> None: ...
+
 
 class StatelessHook:
     """Base class for hooks without internal state."""
@@ -31,6 +35,12 @@ class StatelessHook:
     def reset_state(self) -> None:
         pass
 
+    def state_dict(self) -> dict:
+        return {}
+
+    def load_state_dict(self, state: dict) -> None:
+        pass
+
 
 class StatefulHook:
     """Base class for hooks that maintain internal state."""
@@ -38,3 +48,19 @@ class StatefulHook:
     requires: Set[str] = set()
     produces: Set[str] = set()
     has_state: bool = True
+
+    def state_dict(self) -> dict:
+        """Return the hook's state as a serializable dict."""
+        raise NotImplementedError(
+            f'{self.__class__.__name__} has has_state=True '
+            f'but did not implement state_dict(). '
+            f'implement state_dict() to support checkpointing.'
+        )
+
+    def load_state_dict(self, state: dict) -> None:
+        """Restore the hook's state from a dict returned by state_dict()."""
+        raise NotImplementedError(
+            f'{self.__class__.__name__} has has_state=True '
+            f'but did not implement load_state_dict(). '
+            f'implement load_state_dict() to support checkpointing.'
+        )

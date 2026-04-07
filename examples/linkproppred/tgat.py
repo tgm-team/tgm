@@ -1,4 +1,6 @@
 import argparse
+import os
+import random
 
 import numpy as np
 import torch
@@ -140,15 +142,19 @@ def train(
     encoder: nn.Module,
     decoder: nn.Module,
     opt: torch.optim.Optimizer,
+    epoch: int,
+    hm: object,
+    nbr_hook: object,
+    start_batch: int = -1,
 ) -> float:
     encoder.train()
     decoder.train()
     total_loss = 0
     static_node_x = loader.dgraph.static_node_x
 
-    for batch in tqdm(loader):
+    for local_idx, batch in enumerate(tqdm(loader)):
+        batch_idx = local_idx + start_batch + 1
         opt.zero_grad()
-
         z = encoder(batch, static_node_x)
         z_src, z_dst, z_neg = torch.chunk(z, 3)
 
@@ -160,6 +166,14 @@ def train(
         loss.backward()
         opt.step()
         total_loss += float(loss)
+
+        print(f'epoch {epoch} batch {batch_idx} loss {float(loss):.6f}')
+        print(
+            f'epoch {epoch} batch {batch_idx} write_pos_sum {nbr_hook._write_pos.sum().item():.0f}'
+        )
+
+        if batch_idx % 100 == 0:
+            save_checkpoint(epoch, batch_idx, encoder, decoder, opt, hm)
     return total_loss
 
 
@@ -235,7 +249,6 @@ hm = RecipeRegistry.build(
 train_key, val_key, test_key = hm.keys
 hm.register_shared(nbr_hook)
 
-train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
@@ -252,14 +265,80 @@ decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device
 )
 opt = torch.optim.Adam(
-    set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
+    list(encoder.parameters()) + list(decoder.parameters()), lr=float(args.lr)
 )
 
 best_val = 0.0
 
-for epoch in range(1, args.epochs + 1):
+
+def save_checkpoint(epoch, batch_idx, encoder, decoder, opt, hm):
+    os.makedirs('outputs/checkpoints', exist_ok=True)
+    path = f'outputs/checkpoints/ckpt_e{epoch}_b{batch_idx}.pt'
+    torch.save(
+        {
+            'epoch': epoch,
+            'batch_idx': batch_idx,
+            'encoder': encoder.state_dict(),
+            'decoder': decoder.state_dict(),
+            'opt': opt.state_dict(),
+            'hm': hm.state_dict(),
+            'rng_torch': torch.get_rng_state(),
+            'rng_numpy': np.random.get_state(),
+            'rng_python': random.getstate(),
+        },
+        path,
+    )
+
+
+def load_checkpoint(path, encoder, decoder, opt, hm):
+    ckpt = torch.load(path, weights_only=False)
+    encoder.load_state_dict(ckpt['encoder'])
+    decoder.load_state_dict(ckpt['decoder'])
+    try:
+        opt.load_state_dict(ckpt['opt'])
+    except (ValueError, RuntimeError) as e:
+        print(
+            f'Warning: skipping optimizer state (shape mismatch — delete outputs/checkpoints/ and rerun): {e}'
+        )
+    hm.load_state_dict(ckpt['hm'])
+    torch.set_rng_state(ckpt['rng_torch'])
+    np.random.set_state(ckpt['rng_numpy'])
+    return ckpt['epoch'], ckpt['batch_idx']
+
+
+def find_latest_checkpoint(directory):
+    if not os.path.isdir(directory):
+        return None
+    pts = [
+        os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.pt')
+    ]
+    if not pts:
+        return None
+    return max(pts, key=os.path.getmtime)
+
+
+start_epoch = 1
+start_batch = -1
+ckpt_path = find_latest_checkpoint('outputs/checkpoints')
+if ckpt_path is not None:
+    start_epoch, start_batch = load_checkpoint(ckpt_path, encoder, decoder, opt, hm)
+
+for epoch in range(start_epoch, args.epochs + 1):
+    skip = (start_batch + 1) if epoch == start_epoch else 0
+    train_loader = DGDataLoader(
+        train_dg, args.bsize, hook_manager=hm, skip_batches=skip
+    )
     with hm.activate(train_key):
-        loss = train(train_loader, encoder, decoder, opt)
+        loss = train(
+            train_loader,
+            encoder,
+            decoder,
+            opt,
+            epoch,
+            hm,
+            nbr_hook,
+            start_batch if epoch == start_epoch else -1,
+        )
 
     with hm.activate(val_key):
         val_mrr = eval(val_loader, encoder, decoder, evaluator)

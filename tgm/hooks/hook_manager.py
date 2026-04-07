@@ -168,6 +168,60 @@ class HookManager:
                 logger.debug('Resetting state for keyed hook: %s', h.__class__.__name__)
                 h.reset_state()
 
+    def state_dict(self, key: str | None = None) -> Dict[str, Any]:
+        """Returns the state of all stateful hooks for the given key as a single dict.
+
+        Calls resolve_hooks(key) first to ensure the merged execution list is up to date.
+        Uses id() to avoid saving the same hook instance twice (e.g. shared hooks that also
+        appear in _key_to_hooks[key] after resolution).
+
+        Args:
+            key (str | None): The split key whose hooks to save. Defaults to the first
+                registered key (typically 'train').
+
+        Returns:
+            Dict[str, Any]: A dict mapping hook keys to their state dicts.
+        """
+        key = key if key is not None else self._registered_key[0]
+        self._ensure_valid_key(key)
+        if self._dirty[key]:
+            self.resolve_hooks(key)
+
+        states: Dict[str, Any] = {}
+        seen: set = set()
+        for i, hook in enumerate(self._key_to_hooks[key]):
+            if id(hook) in seen:
+                continue
+            seen.add(id(hook))
+            if hook.has_state:
+                states[f'{i}_{hook.__class__.__name__}'] = hook.state_dict()
+        return states
+
+    def load_state_dict(self, states: Dict[str, Any], key: str | None = None) -> None:
+        """Restores the state of all stateful hooks from a dict produced by state_dict().
+
+        Calls resolve_hooks(key) first to ensure the merged execution list is up to date.
+
+        Args:
+            states (Dict[str, Any]): A dict mapping hook keys to their state dicts.
+            key (str | None): The split key whose hooks to restore. Defaults to the first
+                registered key (typically 'train').
+        """
+        key = key if key is not None else self._registered_key[0]
+        self._ensure_valid_key(key)
+        if self._dirty[key]:
+            self.resolve_hooks(key)
+
+        seen: set = set()
+        for i, hook in enumerate(self._key_to_hooks[key]):
+            if id(hook) in seen:
+                continue
+            seen.add(id(hook))
+            if hook.has_state:
+                hook_key = f'{i}_{hook.__class__.__name__}'
+                if hook_key in states:
+                    hook.load_state_dict(states[hook_key])
+
     def resolve_hooks(self, key: str | None = None) -> None:
         """Resolves hook execution order by topologically sorting them based on dependencies.
 
