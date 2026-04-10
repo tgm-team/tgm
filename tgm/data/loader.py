@@ -172,14 +172,19 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):
             batch = self._hook_manager.execute_active_hooks(dg, batch)
         return batch
 
+    def _get_iterator(self) -> Any:
+        # PyTorch's _BaseDataLoaderIter.__init__ consumes 2 global RNG samples for
+        # an internal base_seed (used only for worker processes). Save and restore
+        # around iterator creation so the global RNG state is unaffected, making
+        # checkpoint resume produce identical results to an uninterrupted run.
+        rng_state = torch.get_rng_state()
+        iterator = super()._get_iterator()
+        torch.set_rng_state(rng_state)
+        return iterator
+
     def __iter__(self) -> Iterator[DGBatch]:  # type: ignore[override]
         self._batch_idx = 0
-
-        rng_state = torch.get_rng_state()  # remember position before
-        iterator = super().__iter__()  # DataLoader consumes 2 positions here
-        torch.set_rng_state(rng_state)  # rewind back to before
-
-        for batch in iterator:
+        for batch in super().__iter__():
             if self._batch_idx < self._skip_batches:
                 self._batch_idx += 1
                 continue

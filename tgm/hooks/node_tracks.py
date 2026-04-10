@@ -30,7 +30,7 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
         self._device = torch.device('cpu')
 
     def state_dict(self) -> dict:
-        return {'_seen_mask': self._seen_mask.cpu()}
+        return {'_seen_mask': self._seen_mask.cpu().clone()}
 
     def load_state_dict(self, state: dict) -> None:
         self._seen_mask = state['_seen_mask'].to(self._device)

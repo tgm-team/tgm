@@ -222,7 +222,7 @@ class NodeAnalyticsHook(StatefulHook):
             '_all_neighbors': self._all_neighbors,
             '_engagement_sum': self._engagement_sum,
             '_seen_edges': self._seen_edges,
-            '_tracked_mask': self._tracked_mask.cpu(),
+            '_tracked_mask': self._tracked_mask.cpu().clone(),
         }
 
     def load_state_dict(self, state: dict) -> None:

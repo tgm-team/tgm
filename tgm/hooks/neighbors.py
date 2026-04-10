@@ -577,14 +577,14 @@ class RecencyNeighborHook(StatefulHook):
 
     def state_dict(self) -> dict:
         if self._nbr_feats is not None:
-            nbr_feats: torch.Tensor | None = self._nbr_feats.cpu()
+            nbr_feats: torch.Tensor | None = self._nbr_feats.cpu().clone()
         else:
             nbr_feats = None
         return {
-            '_nbr_ids': self._nbr_ids.cpu(),
-            '_nbr_times': self._nbr_times.cpu(),
+            '_nbr_ids': self._nbr_ids.cpu().clone(),
+            '_nbr_times': self._nbr_times.cpu().clone(),
             '_nbr_feats': nbr_feats,
-            '_write_pos': self._write_pos.cpu(),
+            '_write_pos': self._write_pos.cpu().clone(),
             '_edge_x_dim': self._edge_x_dim,
             '_need_to_initialize_nbr_feats': self._need_to_initialize_nbr_feats,
         }
