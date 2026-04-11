@@ -52,6 +52,18 @@ parser.add_argument(
 parser.add_argument(
     '--log-file-path', type=str, default=None, help='Optional path to write logs'
 )
+parser.add_argument(
+    '--checkpoint-dir',
+    type=str,
+    default='outputs/checkpoints',
+    help='Directory to save checkpoints',
+)
+parser.add_argument(
+    '--resume',
+    type=str,
+    default=None,
+    help='Path to a specific checkpoint to resume from',
+)
 
 args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
@@ -167,9 +179,8 @@ def train(
         opt.step()
         total_loss += float(loss)
 
-        print(f'epoch {epoch} batch {batch_idx} loss {float(loss):.6f}')
         print(
-            f'epoch {epoch} batch {batch_idx} write_pos_sum {nbr_hook._write_pos.sum().item():.0f}'
+            f'epoch {epoch} batch {batch_idx} loss {float(loss):.6f} write_pos_sum {nbr_hook._write_pos.sum().item():.0f}'
         )
 
         if batch_idx % 100 == 0:
@@ -272,8 +283,8 @@ best_val = 0.0
 
 
 def save_checkpoint(epoch, batch_idx, encoder, decoder, opt, hm):
-    os.makedirs('outputs/checkpoints', exist_ok=True)
-    path = f'outputs/checkpoints/ckpt_e{epoch}_b{batch_idx}.pt'
+    os.makedirs(args.checkpoint_dir, exist_ok=True)
+    path = os.path.join(args.checkpoint_dir, f'ckpt_e{epoch}_b{batch_idx}.pt')
     torch.save(
         {
             'epoch': epoch,
@@ -285,6 +296,7 @@ def save_checkpoint(epoch, batch_idx, encoder, decoder, opt, hm):
             'rng_torch': torch.get_rng_state(),
             'rng_numpy': np.random.get_state(),
             'rng_python': random.getstate(),
+            'best_val': best_val,
         },
         path,
     )
@@ -303,7 +315,7 @@ def load_checkpoint(path, encoder, decoder, opt, hm):
     hm.load_state_dict(ckpt['hm'])
     torch.set_rng_state(ckpt['rng_torch'])
     np.random.set_state(ckpt['rng_numpy'])
-    return ckpt['epoch'], ckpt['batch_idx']
+    return ckpt['epoch'], ckpt['batch_idx'], ckpt.get('best_val', 0.0)
 
 
 def find_latest_checkpoint(directory):
@@ -319,9 +331,15 @@ def find_latest_checkpoint(directory):
 
 start_epoch = 1
 start_batch = -1
-ckpt_path = find_latest_checkpoint('outputs/checkpoints')
+ckpt_path = (
+    find_latest_checkpoint(args.resume)
+    if args.resume and os.path.isdir(args.resume)
+    else args.resume
+)
 if ckpt_path is not None:
-    start_epoch, start_batch = load_checkpoint(ckpt_path, encoder, decoder, opt, hm)
+    start_epoch, start_batch, best_val = load_checkpoint(
+        ckpt_path, encoder, decoder, opt, hm
+    )
 
 for epoch in range(start_epoch, args.epochs + 1):
     skip = (start_batch + 1) if epoch == start_epoch else 0
@@ -347,6 +365,7 @@ for epoch in range(start_epoch, args.epochs + 1):
 
     if val_mrr > best_val:
         best_val = val_mrr
+        log_metric('Best Validation', best_val, epoch=epoch)
         with hm.activate(test_key):
             test_mrr = eval(test_loader, encoder, decoder, evaluator)
         log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
