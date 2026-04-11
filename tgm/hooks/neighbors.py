@@ -574,3 +574,29 @@ class RecencyNeighborHook(StatefulHook):
                 (self._num_nodes, self._max_nbrs, self._edge_x_dim)  # type: ignore
             )
             self._need_to_initialize_nbr_feats = False
+
+    def state_dict(self) -> dict:
+        if self._nbr_feats is not None:
+            nbr_feats: torch.Tensor | None = self._nbr_feats.cpu().clone()
+        else:
+            nbr_feats = None
+        return {
+            '_nbr_ids': self._nbr_ids.cpu().clone(),
+            '_nbr_times': self._nbr_times.cpu().clone(),
+            '_nbr_feats': nbr_feats,
+            '_write_pos': self._write_pos.cpu().clone(),
+            '_edge_x_dim': self._edge_x_dim,
+            '_need_to_initialize_nbr_feats': self._need_to_initialize_nbr_feats,
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        self._nbr_ids = state['_nbr_ids'].to(self._device)
+        self._nbr_times = state['_nbr_times'].to(self._device)
+        self._nbr_feats = (
+            state['_nbr_feats'].to(self._device)
+            if state['_nbr_feats'] is not None
+            else None
+        )
+        self._write_pos = state['_write_pos'].to(self._device)
+        self._edge_x_dim = state['_edge_x_dim']
+        self._need_to_initialize_nbr_feats = state['_need_to_initialize_nbr_feats']

@@ -61,7 +61,7 @@ class _SkippableDataLoaderMixin(ABC):
             yield batch
 
 
-class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # type: ignore
+class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):
     """Iterate and materialize batches from a `DGraph`.
 
     This DataLoader supports both event-ordered and time-ordered temporal graphs.
@@ -105,6 +105,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         batch_unit: str = 'r',
         on_empty: Literal['skip', 'raise', None] = 'skip',
         hook_manager: HookManager | None = None,
+        skip_batches: int = 0,
         **kwargs: Any,
     ) -> None:
         if batch_size <= 0:
@@ -138,6 +139,8 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         self._dg = dg
         self._batch_size = batch_size
         self._hook_manager = hook_manager
+        self._skip_batches = skip_batches
+        self._batch_idx = 0
 
         if batch_time_delta.is_event_ordered:
             self._slice_op = dg.slice_events
@@ -159,7 +162,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         slice_end = slice_start[0] + self._batch_size
         dg = self._slice_op(slice_start[0], slice_end)
         batch = dg.materialize()
-        if self._hook_manager is not None:
+        if self._hook_manager is not None and self._batch_idx >= self._skip_batches:
             logger.debug(
                 'Applying hooks to batch %s [%d:%d)',
                 self._slice_op.__name__,
@@ -168,6 +171,25 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
             )
             batch = self._hook_manager.execute_active_hooks(dg, batch)
         return batch
+
+    def _get_iterator(self) -> Any:
+        # PyTorch's _BaseDataLoaderIter.__init__ consumes 2 global RNG samples for
+        # an internal base_seed (used only for worker processes). Save and restore
+        # around iterator creation so the global RNG state is unaffected, making
+        # checkpoint resume produce identical results to an uninterrupted run.
+        rng_state = torch.get_rng_state()
+        iterator = super()._get_iterator()
+        torch.set_rng_state(rng_state)
+        return iterator
+
+    def __iter__(self) -> Iterator[DGBatch]:  # type: ignore[override]
+        self._batch_idx = 0
+        for batch in super().__iter__():
+            if self._batch_idx < self._skip_batches:
+                self._batch_idx += 1
+                continue
+            self._batch_idx += 1
+            yield batch
 
     @property
     def dgraph(self) -> DGraph:

@@ -56,6 +56,7 @@ class NodeAnalyticsHook(StatefulHook):
         # Create a mask for fast lookup of tracked nodes
         self._tracked_mask = torch.zeros(num_nodes, dtype=torch.bool)
         self._tracked_mask[self.tracked_nodes] = True
+        self._device = torch.device('cpu')
 
         # State dictionaries for each tracked node
         self._first_seen: Dict[int, float] = {}
@@ -211,6 +212,30 @@ class NodeAnalyticsHook(StatefulHook):
 
         return edge_stats
 
+    def state_dict(self) -> dict:
+        return {
+            '_first_seen': self._first_seen,
+            '_last_seen': self._last_seen,
+            '_appearances': self._appearances,
+            '_total_timesteps': self._total_timesteps,
+            '_node_timesteps': self._node_timesteps,
+            '_all_neighbors': self._all_neighbors,
+            '_engagement_sum': self._engagement_sum,
+            '_seen_edges': self._seen_edges,
+            '_tracked_mask': self._tracked_mask.cpu().clone(),
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        self._first_seen = state['_first_seen']
+        self._last_seen = state['_last_seen']
+        self._appearances = state['_appearances']
+        self._total_timesteps = state['_total_timesteps']
+        self._node_timesteps = state['_node_timesteps']
+        self._all_neighbors = state['_all_neighbors']
+        self._engagement_sum = state['_engagement_sum']
+        self._seen_edges = state['_seen_edges']
+        self._tracked_mask = state['_tracked_mask'].to(self._device)
+
     def reset_state(self) -> None:
         """Reset internal state."""
         self._first_seen.clear()
@@ -224,8 +249,14 @@ class NodeAnalyticsHook(StatefulHook):
         self._engagement_sum.clear()
         self._seen_edges.clear()
 
+    def _move_to_device_if_needed(self, device: torch.device) -> None:
+        if device != self._device:
+            self._device = device
+            self._tracked_mask = self._tracked_mask.to(device)
+
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         """Compute node-centric statistics for tracked nodes in the batch."""
+        self._move_to_device_if_needed(dg.device)
         # Get current timestamp
         current_time = self._get_batch_timestamp(batch)
 
