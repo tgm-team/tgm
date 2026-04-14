@@ -30,8 +30,18 @@ def dg():
 
 
 def test_hook_dependancies():
-    assert EdgeEventsSeenNodesTrackHook.requires == {'edge_src', 'edge_dst'}
-    assert EdgeEventsSeenNodesTrackHook.produces == {'seen_nodes', 'batch_nodes_mask'}
+    hook = EdgeEventsSeenNodesTrackHook(1)
+    assert hook.requires == {'edge_src', 'edge_dst'}
+    assert hook.produces == {'seen_nodes', 'batch_nodes_mask'}
+
+    hook_with_id = EdgeEventsSeenNodesTrackHook(1, id='foo')
+    assert hook_with_id.requires == {'edge_src', 'edge_dst'}
+    assert hook_with_id.produces == {'seen_nodes_foo', 'batch_nodes_mask_foo'}
+
+
+def test_hook_repre():
+    hook_with_id = EdgeEventsSeenNodesTrackHook(1, id='foo')
+    assert 'foo' in hook_with_id.__repr__()
 
 
 def test_seen_nodes_track_hook(dg):
@@ -57,6 +67,31 @@ def test_seen_nodes_track_hook(dg):
     assert batch_4.seen_nodes[0].item() == 5
     assert batch_4.seen_nodes[1].item() == 2
     assert torch.equal(batch_4.batch_nodes_mask, torch.Tensor([0, 2]))
+
+
+def test_seen_nodes_track_hook_with_hook_id(dg):
+    hm = HookManager(keys=['unit'])
+    seen_nodes_track_hook = EdgeEventsSeenNodesTrackHook(6, id='foo')
+    hm.register('unit', seen_nodes_track_hook)
+    hm.set_active_hooks('unit')
+
+    loader = DGDataLoader(dg, batch_unit='s', hook_manager=hm)
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    assert len(batch_1.seen_nodes_foo) == 0
+
+    batch_2 = next(batch_iter)
+    assert len(batch_2.seen_nodes_foo) == 0
+
+    batch_3 = next(batch_iter)
+    assert len(batch_3.seen_nodes_foo) == 1
+    assert batch_3.seen_nodes_foo[0].item() == 2
+
+    batch_4 = next(batch_iter)
+    assert len(batch_4.seen_nodes_foo) == 2
+    assert batch_4.seen_nodes_foo[0].item() == 5
+    assert batch_4.seen_nodes_foo[1].item() == 2
+    assert torch.equal(batch_4.batch_nodes_mask_foo, torch.Tensor([0, 2]))
 
 
 def test_reset_state_seen_nodes_track_hook():

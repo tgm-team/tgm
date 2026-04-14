@@ -205,7 +205,7 @@ hm = RecipeRegistry.build(
 )
 train_key, val_key, test_key = hm.keys
 hm.register_shared(nbr_hook)
-hm.register_shared(DeduplicationHook())
+hm.register_shared(DeduplicationHook(seed_nodes_keys=['neg', 'nbr_nids']))
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)

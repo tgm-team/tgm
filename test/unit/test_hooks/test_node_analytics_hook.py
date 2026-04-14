@@ -454,3 +454,15 @@ def test_node_analytics_hook_multiple_batches_neighbor_accumulation(simple_dgrap
 
     # Should have new neighbor(s) since it's a different connection
     assert batch4.node_stats[0]['new_neighbors'] > 0
+
+
+def test_hook_with_id(simple_dgraph):
+    tracked_nodes = torch.tensor([0])
+    hook = NodeAnalyticsHook(tracked_nodes=tracked_nodes, num_nodes=5, id='foo')
+    batch1 = simple_dgraph.slice_events(0, 2).materialize()
+    processed_batch = hook(simple_dgraph, batch1)
+
+    expected_produce = ['node_stats_foo', 'node_macro_stats_foo', 'edge_stats_foo']
+
+    for produce in expected_produce:
+        assert hasattr(processed_batch, produce)

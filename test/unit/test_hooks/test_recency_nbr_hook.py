@@ -49,8 +49,14 @@ def basic_sample_graph():
 
 
 def test_hook_dependancies():
-    assert RecencyNeighborHook.requires == {'edge_src', 'edge_dst', 'edge_time'}
-    assert RecencyNeighborHook.produces == {
+    hook = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=1,
+        seed_nodes_keys=['edge_src'],
+        seed_times_keys=['edge_time'],
+    )
+    assert hook.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook.produces == {
         'seed_nids',
         'nbr_nids',
         'nbr_edge_time',
@@ -58,6 +64,34 @@ def test_hook_dependancies():
         'seed_times',
         'seed_node_nbr_mask',
     }
+
+    hook_with_id = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=1,
+        seed_nodes_keys=['edge_src'],
+        seed_times_keys=['edge_time'],
+        id='foo',
+    )
+    assert hook_with_id.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook_with_id.produces == {
+        'seed_nids_foo',
+        'nbr_nids_foo',
+        'nbr_edge_time_foo',
+        'nbr_edge_x_foo',
+        'seed_times_foo',
+        'seed_node_nbr_mask_foo',
+    }
+
+
+def test_hook_repre():
+    hook_with_id = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=1,
+        seed_nodes_keys=['edge_src'],
+        seed_times_keys=['edge_time'],
+        id='foo',
+    )
+    assert 'foo' in hook_with_id.__repr__()
 
 
 def test_mock_move_queues_to_device(basic_sample_graph):
@@ -194,6 +228,23 @@ def test_sample_with_node_events_seeds(node_only_data):
     assert len(batch.seed_times) == 1
     torch.testing.assert_close(batch.seed_nids[0], batch.node_x_nids)
     torch.testing.assert_close(batch.seed_times[0], batch.node_x_time)
+
+
+def test_sample_with_node_events_seeds_with_hook_id(node_only_data):
+    dg = DGraph(node_only_data)
+    hook = RecencyNeighborHook(
+        num_nbrs=[1],
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['node_x_nids'],
+        seed_times_keys=['node_x_time'],
+        id='foo',
+    )
+    batch = dg.materialize()
+    batch = hook(dg, batch)
+    assert len(batch.seed_nids_foo) == 1
+    assert len(batch.seed_times_foo) == 1
+    torch.testing.assert_close(batch.seed_nids_foo[0], batch.node_x_nids)
+    torch.testing.assert_close(batch.seed_times_foo[0], batch.node_x_time)
 
 
 def test_bad_sample_with_non_existent_seeds(basic_sample_graph):

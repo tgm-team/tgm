@@ -11,14 +11,14 @@ logger = _get_logger(__name__)
 class BatchAnalyticsHook(StatelessHook):
     """Compute simple batch-level statistics."""
 
-    requires = {
+    _cls_requires = {
         'edge_src',
         'edge_dst',
         'edge_time',
         'node_x_time',
         'node_x_nids',
     }
-    produces = {
+    _cls_produces = {
         'num_edge_events',
         'num_node_events',
         'num_unique_timestamps',
@@ -27,6 +27,11 @@ class BatchAnalyticsHook(StatelessHook):
         'num_repeated_edge_events',
         'num_repeated_node_events',
     }
+
+    def __init__(self, id: str | None = None) -> None:
+        super().__init__()
+        self._id = id
+        self.__post_init__()
 
     def _count_edge_events(self, batch: DGBatch) -> int:
         return int(batch.edge_src.numel()) if batch.edge_src is not None else 0
@@ -96,12 +101,24 @@ class BatchAnalyticsHook(StatelessHook):
         return int((node_counts - 1).clamp(min=0).sum().item())
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
-        batch.num_edge_events = self._count_edge_events(batch)  # type: ignore[attr-defined]
-        batch.num_node_events = self._count_node_events(batch)  # type: ignore[attr-defined]
-        batch.num_unique_timestamps = self._count_unique_timestamps(batch)  # type: ignore[attr-defined]
-        batch.num_unique_nodes = self._compute_unique_nodes(batch)  # type: ignore[attr-defined]
-        batch.avg_degree = self._compute_avg_degree(batch)  # type: ignore[attr-defined]
-        batch.num_repeated_edge_events = self._count_repeated_edge_events(batch)  # type: ignore[attr-defined]
-        batch.num_repeated_node_events = self._count_repeated_node_events(batch)  # type: ignore[attr-defined]
+        self.add_batch_attribute(
+            batch, 'num_edge_events', self._count_edge_events(batch)
+        )
+        self.add_batch_attribute(
+            batch, 'num_node_events', self._count_node_events(batch)
+        )
+        self.add_batch_attribute(
+            batch, 'num_unique_timestamps', self._count_unique_timestamps(batch)
+        )
+        self.add_batch_attribute(
+            batch, 'num_unique_nodes', self._compute_unique_nodes(batch)
+        )
+        self.add_batch_attribute(batch, 'avg_degree', self._compute_avg_degree(batch))
+        self.add_batch_attribute(
+            batch, 'num_repeated_edge_events', self._count_repeated_edge_events(batch)
+        )
+        self.add_batch_attribute(
+            batch, 'num_repeated_node_events', self._count_repeated_node_events(batch)
+        )
 
         return batch

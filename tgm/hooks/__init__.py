@@ -1,4 +1,4 @@
-from .base import DGHook, StatelessHook, StatefulHook
+from .base import DGHook, StatelessHook, StatefulHook, BaseDGHook, SeedableHook
 from .dedup import DeduplicationHook
 from .device import DeviceTransferHook, PinMemoryHook
 from .negatives import (
