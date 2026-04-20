@@ -119,7 +119,7 @@ class TGAT(nn.Module):
                 num_nodes = z[j - 1][i].size(0)
                 num_nbr = batch.nbr_nids[j - 1].shape[-1]
                 out = self.attn[j - 1](
-                    node_feat=z[j - 1][i],
+                    X=z[j - 1][i],
                     time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
                     nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
                     edge_feat=batch.nbr_edge_x[i],
