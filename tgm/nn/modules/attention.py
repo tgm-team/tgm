@@ -57,7 +57,7 @@ class TemporalAttention(torch.nn.Module):
 
     def forward(
         self,
-        node_feat: torch.Tensor,
+        X: torch.Tensor,
         time_feat: torch.Tensor,
         edge_feat: torch.Tensor,
         nbr_node_feat: torch.Tensor,
@@ -70,7 +70,7 @@ class TemporalAttention(torch.nn.Module):
         features, followed by a residual connection, dropout, and layer normalization.
 
         Args:
-            node_feat (torch.Tensor): Node features of shape (B, node_dim).
+            X (torch.Tensor): Node features of shape (B, node_dim).
             time_feat (torch.Tensor): Node time features of shape (B, time_dim).
             edge_feat (torch.Tensor): Edge features for each neighbor of shape
                 (B, num_nbrs, edge_dim).
@@ -90,9 +90,9 @@ class TemporalAttention(torch.nn.Module):
             - The output dimension is padded if necessary to be divisible by the number
               of heads.
         """
-        node_feat = F.pad(node_feat, (0, self.pad_dim)) if self.pad_dim else node_feat
+        X = F.pad(X, (0, self.pad_dim)) if self.pad_dim else X
 
-        Q = R = torch.cat([node_feat, time_feat], dim=1).unsqueeze(1)  # (B, 1, out_dim)
+        Q = R = torch.cat([X, time_feat], dim=1).unsqueeze(1)  # (B, 1, out_dim)
         Q = self.W_Q(Q)  # (B, out_dim)
 
         Z = torch.cat([nbr_node_feat, edge_feat, nbr_time_feat], dim=-1)

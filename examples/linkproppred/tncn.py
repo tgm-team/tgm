@@ -122,10 +122,21 @@ def train(
         inv_neg = batch.global_to_local(batch.neg)
         inv_edge_idx_pos = torch.stack([inv_src, inv_dst], dim=0).long()
         inv_edge_idx_neg = torch.stack([inv_src, inv_neg], dim=0).long()
-        time_info = (last_update, batch.edge_time)
 
-        pos_out = decoder(z, nbr_edge_index, inv_edge_idx_pos, time_info=time_info)
-        neg_out = decoder(z, nbr_edge_index, inv_edge_idx_neg, time_info=time_info)
+        pos_out = decoder(
+            z,
+            nbr_edge_index,
+            inv_edge_idx_pos,
+            last_update=last_update,
+            edge_time=batch.edge_time,
+        )
+        neg_out = decoder(
+            z,
+            nbr_edge_index,
+            inv_edge_idx_neg,
+            last_update=last_update,
+            edge_time=batch.edge_time,
+        )
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
@@ -199,16 +210,13 @@ def eval(
             inv_src = batch.global_to_local(src_ids)
             inv_dst = batch.global_to_local(dst_ids)
             inv_edge_idx = torch.stack([inv_src, inv_dst], dim=0)
-            time_info = (
-                last_update,
-                batch.edge_time.repeat(len(inv_src)),
-            )  # We can move this outside of the inner loop
 
             y_pred = decoder(
                 z,
                 nbr_edge_index,
                 inv_edge_idx,
-                time_info=time_info,
+                last_update=last_update,
+                edge_time=batch.edge_time.repeat(len(inv_src)),
             ).sigmoid()
 
             input_dict = {

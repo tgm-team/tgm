@@ -63,12 +63,26 @@ class ROLAND(torch.nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
+        X: torch.Tensor,
         edge_index: torch.Tensor,
         previous_embeddings: List[torch.Tensor] | None = None,
         num_current_edges: int | None = None,
         num_previous_edges: int | None = None,
     ) -> List[torch.Tensor]:
+        r"""Forward pass.
+
+        Args:
+            X (PyTorch Float Tensor): Node features.
+            edge_index (PyTorch Long Tensor): Graph edge indices.
+            previous_embeddings (List[torch.Tensor]): 2 previous hidden states.
+            num_current_edges (int): number of edge in the current snapshot.
+            num_previous_edges (int): number of edge in the previous snapshot.
+
+        Returns:
+            (H_{t-1}, H_{t}) (PyTorch Float Tensor): 2 Hidden state matrices for all nodes.
+
+        Note: The last hidden state is considered as the embeddings.
+        """
         if previous_embeddings is not None:
             self.previous_embeddings = [
                 previous_embeddings[0].clone(),
@@ -86,7 +100,7 @@ class ROLAND(torch.nn.Module):
         current_embeddings = [torch.Tensor([]), torch.Tensor([])]
 
         # GraphConv1
-        h = self.conv1(x, edge_index)
+        h = self.conv1(X, edge_index)
         h = F.relu(h)
         h = F.dropout(h, p=self.dropout, training=self.training)
         # Embedding Update after first layer
@@ -100,7 +114,7 @@ class ROLAND(torch.nn.Module):
             )
             h = torch.Tensor(self.mlp1(hin).detach())  # .numpy()
         else:
-            self.tau.to(x.device)
+            self.tau.to(X.device)
             h = torch.Tensor(
                 (
                     self.tau * self.previous_embeddings[0].clone()

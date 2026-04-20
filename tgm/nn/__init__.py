@@ -9,6 +9,7 @@ from .modules import (
     tCoMemPredictor,
     PopTrackPredictor,
 )
+from .base import BaseNN, NNModule
 
 
 __all__ = [
@@ -29,4 +30,6 @@ __all__ = [
     'TGNMemory',
     'NCNPredictor',
     'PopTrackPredictor',
+    'BaseNN',
+    'NNModule',
 ]

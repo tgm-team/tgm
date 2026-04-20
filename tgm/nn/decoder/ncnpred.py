@@ -101,7 +101,7 @@ class NCNPredictor(
         x: torch.Tensor,
         edge_index: torch.Tensor,
         tar_ei: torch.Tensor,
-        time_info: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        time_info: Tuple[torch.Tensor | None, torch.Tensor | None],
     ) -> torch.Tensor:
         r"""Obtain the CNs embeddings for each node pair in a batch (Torch version).
 
@@ -113,11 +113,12 @@ class NCNPredictor(
         """
         tar_i, tar_j = tar_ei[0], tar_ei[1]
         if self.cn_time_decay:
-            if time_info is None:
+            last_update, pos_t = time_info
+            if last_update is None or pos_t is None:
                 raise RuntimeError(
                     'Please provide time_information to perform time decay'
                 )
-            last_update, pos_t = time_info
+
             last_update = last_update.unsqueeze(0)  # 1*N
             pos_t = pos_t.unsqueeze(1)  # B*1
             time_decay_matrix = (pos_t - last_update) / 10000  # time scale
@@ -320,7 +321,8 @@ class NCNPredictor(
         x: torch.Tensor,
         edge_index: torch.Tensor,
         tar_ei: torch.Tensor,
-        time_info: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        last_update: Optional[torch.Tensor] = None,
+        edge_time: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         r"""Forward pass.
 
@@ -328,12 +330,14 @@ class NCNPredictor(
             x (torch.Tensor): node features,
             edge_index (torch.Tensor): edges list of subgraph,
             tar_ei (torch.Tensor): edges list for prediction ,
-            time_info (Optional[Tuple[torch.Tensor, torch.Tensor]]): A tuple of last update and current time of each edge
+            last_update (torch.Tensor): Last update timestamps,
+            edge_time (torch.Tensor): Timestamps of current edge,
         """
         xi = x[tar_ei[0]]
         xj = x[tar_ei[1]]
 
         xij = torch.mul(xi, xj).reshape(-1, x.size(1))
+        time_info = (last_update, edge_time)
         cn_emb = self.get_cn_emb(x, edge_index, tar_ei, time_info)
         xs = torch.cat([xij, cn_emb], dim=-1)
 
