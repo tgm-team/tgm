@@ -50,6 +50,29 @@ def test_hook_dependancies():
         'num_repeated_node_events',
     }
 
+    hook_with_id = BatchAnalyticsHook(id='foo')
+    assert hook_with_id.requires == {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'node_x_time',
+        'node_x_nids',
+    }
+    assert hook_with_id.produces == {
+        'num_edge_events_foo',
+        'num_node_events_foo',
+        'num_unique_timestamps_foo',
+        'num_unique_nodes_foo',
+        'avg_degree_foo',
+        'num_repeated_edge_events_foo',
+        'num_repeated_node_events_foo',
+    }
+
+
+def test_hook_repre():
+    hook_with_id = BatchAnalyticsHook(id='foo')
+    assert 'foo' in hook_with_id.__repr__()
+
 
 def test_hook_reset_state():
     assert BatchAnalyticsHook.has_state is False
@@ -59,8 +82,6 @@ def test_basic_analytics_num_events_and_timestamps(dg):
     hook = BatchAnalyticsHook()
     batch = dg.materialize()
     processed_batch = hook(dg, batch)
-
-    # assert batch.node_x_nids is not None
 
     # edge and node events
     assert processed_batch.num_edge_events == 3
@@ -121,3 +142,24 @@ def test_basic_analytics_empty_edges_and_nodes(dg):
 
     # _count_repeated_node_events: node_x_nids.numel() == 0 -> 0
     assert processed_batch.num_repeated_node_events == 0
+
+
+def test_hook_with_id(dg):
+    hook = BatchAnalyticsHook(id='foo')
+    batch = dg.materialize()
+
+    batch = dg.materialize()
+    processed_batch = hook(dg, batch)
+
+    expected_produce = [
+        'num_edge_events_foo',
+        'num_node_events_foo',
+        'num_unique_timestamps_foo',
+        'num_unique_nodes_foo',
+        'avg_degree_foo',
+        'num_repeated_edge_events_foo',
+        'num_repeated_node_events_foo',
+    ]
+
+    for produce in expected_produce:
+        assert hasattr(processed_batch, produce)

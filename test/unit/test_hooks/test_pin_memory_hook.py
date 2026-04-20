@@ -17,8 +17,9 @@ def dg():
 
 
 def test_hook_dependancies():
-    assert PinMemoryHook.requires == set()
-    assert PinMemoryHook.produces == set()
+    hook = PinMemoryHook()
+    assert hook.requires == set()
+    assert hook.produces == set()
 
 
 def test_hook_reset_state():

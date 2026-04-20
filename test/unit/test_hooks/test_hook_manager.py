@@ -11,7 +11,12 @@ from tgm.hooks import HookManager, StatefulHook, StatelessHook
 
 
 class MockHook(StatelessHook):
-    produces = {'foo'}
+    _cls_produces = {'foo'}
+
+    def __init__(self, id: str = None):
+        super().__init__()
+        self._id = id
+        self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         batch.edge_time *= 2
@@ -19,21 +24,34 @@ class MockHook(StatelessHook):
 
 
 class MockHookRequires(StatelessHook):
-    requires = {'foo'}
+    _cls_requires = {'foo'}
+
+    def __init__(self, id: str = None):
+        super().__init__()
+        self._id = id
+        self.__post_init__()
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         return batch
 
 
-class DeduplicationMockHook(StatelessHook):
+class MockHookRequiresWoof(StatelessHook):
+    _cls_requires = {'foo_woof'}
+
+    def __init__(self, id: str = None):
+        super().__init__()
+        self._id = id
+        self.__post_init__()
+
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         return batch
 
 
 class MockHookWithState(StatefulHook):
-    has_state: bool = True
-
-    def __init__(self) -> None:
+    def __init__(self, id: str = None) -> None:
+        super().__init__()
+        self._id = id
+        self.has_state = True
         self.x = 0
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
@@ -165,8 +183,8 @@ def test_resolve_hooks_by_key():
 def test_resolve_hooks_no_solution_no_dag():
     h1 = MockHook()
     h2 = MockHook()
-    h1.requires, h1.produces = {'x'}, {'y'}
-    h2.requires, h2.produces = {'y'}, {'x'}
+    h1._requires, h1._produces = {'x'}, {'y'}
+    h2._requires, h2._produces = {'y'}, {'x'}
 
     # Cycle-like missing dependency
     hm = HookManager(keys=['train'])
@@ -210,8 +228,8 @@ def test_topo_sort_cached(dg, monkeypatch):
     hm = HookManager(keys=['train'])
 
     h1, h2 = MockHook(), MockHook()
-    h1.requires, h1.produces = set(), {'x'}
-    h2.requires, h2.produces = {'x'}, {'y'}
+    h1._requires, h1._produces = set(), {'x'}
+    h2._requires, h2._produces = {'x'}, {'y'}
 
     hm.register('train', h1)
     hm.register('train', h2)
@@ -237,7 +255,7 @@ def test_topo_sort_cached_invalidated(dg, monkeypatch):
     hm = HookManager(keys=['train'])
 
     h1 = MockHook()
-    h1.requires, h1.produces = set(), {'x'}
+    h1._requires, h1._produces = set(), {'x'}
 
     hm.register('train', h1)
     call_count = {'n': 0}
@@ -266,8 +284,8 @@ def test_topo_sort_cached_invalidated(dg, monkeypatch):
 def test_topo_sort_no_solution_no_dag(dg):
     h1 = MockHook()
     h2 = MockHook()
-    h1.requires, h1.produces = {'x'}, {'y'}
-    h2.requires, h2.produces = {'y'}, {'x'}
+    h1._requires, h1._produces = {'x'}, {'y'}
+    h2._requires, h2._produces = {'y'}, {'x'}
 
     # Cycle-like missing dependency
     hm = HookManager(keys=['train'])
@@ -362,8 +380,8 @@ def test_activate_ctx():
 
 def test_topo_sort_neg_before_nbr():
     mock_neg_hook, mock_nbr_hook = MockHook(), MockHook()
-    mock_neg_hook.requires, mock_neg_hook.produces = set(), {'neg'}
-    mock_nbr_hook.requires, mock_nbr_hook.produces = set(), {'nbr_nids'}
+    mock_neg_hook._requires, mock_neg_hook._produces = set(), {'neg'}
+    mock_nbr_hook._requires, mock_nbr_hook._produces = set(), {'nbr_nids'}
 
     # Register neg first in foo, nbr first in bar
     hm = HookManager(keys=['foo', 'bar'])
@@ -381,25 +399,14 @@ def test_topo_sort_neg_before_nbr():
     assert bar_hooks.index(mock_neg_hook) < bar_hooks.index(mock_nbr_hook)
 
 
-def test_force_last_dedup_hook():
-    # @TODO: Dedup hook is temporarily forced to run at the end.
-    # This test potentially needs to be updated once instance-level require is introduced to DGHook.
-    h1 = MockHook()
-    h2 = MockHookRequires()
-    h3 = DeduplicationMockHook()
+def test_resolve_hooks_with_id_by_key():
+    h1 = MockHook(id='woof')  # MockHook produces with _woof suffix
+    h2 = MockHookRequiresWoof()
 
-    hm = HookManager(keys=['train', 'val'])
-    hm.register('train', h3)
+    hm = HookManager(keys=['train'])
     hm.register('train', h2)
     hm.register('train', h1)
-    hm.register('val', h3)
-    hm.register('val', h2)
-    hm.register('val', h1)
 
-    hm.resolve_hooks()
-    assert len(hm._key_to_hooks['train']) == 3
-    assert len(hm._key_to_hooks['val']) == 3
+    hm.resolve_hooks('train')
+    assert len(hm._key_to_hooks['train']) == 2
     assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)
-    assert hm._key_to_hooks['val'].index(h1) < hm._key_to_hooks['val'].index(h2)
-    assert hm._key_to_hooks['train'].index(h2) < hm._key_to_hooks['train'].index(h3)
-    assert hm._key_to_hooks['val'].index(h2) < hm._key_to_hooks['val'].index(h3)

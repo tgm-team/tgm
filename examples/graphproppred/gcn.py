@@ -304,6 +304,8 @@ test_labels = generate_binary_trend_labels(
     test_loader, snapshot_measurement=edge_count
 ).to(args.device)
 
+best_val = 0.0
+
 for epoch in range(1, args.epochs + 1):
     loss, train_results = train(
         train_loader, train_labels, encoder, decoder, opt, train_metrics
@@ -315,5 +317,8 @@ for epoch in range(1, args.epochs + 1):
     log_metrics_dict(train_results, epoch=epoch)
     log_metrics_dict(val_results, epoch=epoch)
 
-test_results = eval(test_loader, test_labels, encoder, decoder, test_metrics)
-log_metrics_dict(test_results, epoch=args.epochs)
+    val_score = val_results['BinaryAUROC']
+    if val_score > best_val:
+        best_val = val_score
+        test_results = eval(test_loader, test_labels, encoder, decoder, test_metrics)
+        log_metrics_dict(test_results, epoch=args.epochs)

@@ -131,7 +131,10 @@ def eval(
         }
         perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
-    return float(np.mean(perf_list))
+    h_0 = h_0.detach()
+    c_0 = c_0.detach()
+
+    return float(np.mean(perf_list)), h_0, c_0
 
 
 seed_everything(args.seed)
@@ -164,11 +167,15 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
+best_val = 0.0
+
 for epoch in range(1, args.epochs + 1):
     loss, h_0, c_0 = train(train_loader, encoder, decoder, opt)
-    val_ndcg = eval(val_loader, encoder, decoder, h_0, c_0, evaluator)
+    val_ndcg, h_0, c_0 = eval(val_loader, encoder, decoder, h_0, c_0, evaluator)
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
-test_ndcg = eval(test_loader, encoder, decoder, h_0, c_0, evaluator)
-log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
+    if val_ndcg > best_val:
+        best_val = val_ndcg
+        test_ndcg, h_0, c_0 = eval(test_loader, encoder, decoder, h_0, c_0, evaluator)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)

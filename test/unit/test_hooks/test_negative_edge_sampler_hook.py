@@ -14,8 +14,18 @@ def data():
 
 
 def test_hook_dependancies():
-    assert NegativeEdgeSamplerHook.requires == {'edge_src', 'edge_dst', 'edge_time'}
-    assert NegativeEdgeSamplerHook.produces == {'neg', 'neg_time'}
+    hook = NegativeEdgeSamplerHook(low=0, high=10)
+    assert hook.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook.produces == {'neg', 'neg_time'}
+
+    hook_with_id = NegativeEdgeSamplerHook(low=0, high=10, id='foo')
+    assert hook_with_id.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook_with_id.produces == {'neg_foo', 'neg_time_foo'}
+
+
+def test_hook_repre():
+    hook_with_id = NegativeEdgeSamplerHook(low=0, high=10, id='foo')
+    assert 'foo' in hook_with_id.__repr__()
 
 
 def test_hook_reset_state():
@@ -40,6 +50,17 @@ def test_negative_edge_sampler(data):
     assert torch.is_tensor(batch.neg_time)
     assert batch.neg.shape == batch.edge_dst.shape
     assert batch.neg_time.shape == batch.neg.shape
+
+
+def test_negative_edge_sampler_with_id(data):
+    dg = DGraph(data)
+    hook = NegativeEdgeSamplerHook(low=0, high=10, id='foo')
+    batch = hook(dg, dg.materialize())
+    assert isinstance(batch, DGBatch)
+    assert torch.is_tensor(batch.neg_foo)
+    assert torch.is_tensor(batch.neg_time_foo)
+    assert batch.neg_foo.shape == batch.edge_dst.shape
+    assert batch.neg_time_foo.shape == batch.neg_foo.shape
 
 
 @pytest.fixture

@@ -15,19 +15,24 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
 
     Args:
         num_nodes (int): Total number of nodes to track.
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
     Raises:
         ValueError: If the num_nodes list is negative.
     """
 
-    requires = {'edge_src', 'edge_dst'}
-    produces = {'seen_nodes', 'batch_nodes_mask'}
+    _cls_requires = {'edge_src', 'edge_dst'}
+    _cls_produces = {'seen_nodes', 'batch_nodes_mask'}
 
-    def __init__(self, num_nodes: int) -> None:
+    def __init__(self, num_nodes: int, id: str | None = None) -> None:
+        super().__init__()
         if num_nodes < 0:
             raise ValueError('num_nodes must be non-negative')
         self._seen_mask = torch.zeros(num_nodes, dtype=torch.bool)
         self._device = torch.device('cpu')
+
+        self._id = id
+        self.__post_init__()
 
     def reset_state(self) -> None:
         logger.debug('Reset state of the hook')
@@ -46,8 +51,10 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
 
         self._seen_mask[edge_event_nodes] = True
         previous_seen = self._seen_mask[batch_nodes]
-        batch.batch_nodes_mask = torch.nonzero(previous_seen, as_tuple=True)[0]  # type: ignore[attr-defined]
-        batch.seen_nodes = batch_nodes[previous_seen]  # type: ignore[attr-defined]
+        self.add_batch_attribute(
+            batch, 'batch_nodes_mask', torch.nonzero(previous_seen, as_tuple=True)[0]
+        )
+        self.add_batch_attribute(batch, 'seen_nodes', batch_nodes[previous_seen])
         return batch
 
     def _move_to_device_if_needed(self, device: torch.device) -> None:

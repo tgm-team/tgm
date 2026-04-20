@@ -148,7 +148,7 @@ class DyGFormer(nn.Module):
 
     Args:
         node_feat_dim (int): Dimension of static/dynamic node features (`d_N`).
-        edge_feat_dim (int): Dimension of edge features (`d_E`).
+        edge_x_dim (int): Dimension of edge features (`d_E`).
         time_feat_dim (int): Dimension of time encodings (`d_T`).
         channel_embedding_dim (int): Dimension of each channel embedding.
         output_dim (int): Dimension of output embedding.
@@ -166,7 +166,7 @@ class DyGFormer(nn.Module):
     def __init__(
         self,
         node_feat_dim: int,
-        edge_feat_dim: int,
+        edge_x_dim: int,
         time_feat_dim: int,
         channel_embedding_dim: int,
         output_dim: int = 172,
@@ -184,7 +184,7 @@ class DyGFormer(nn.Module):
             raise ValueError('Max sequence length must be a multiple of path size')
 
         self.node_feat_dim = node_feat_dim
-        self.edge_feat_dim = edge_feat_dim
+        self.edge_x_dim = edge_x_dim
         self.time_feat_dim = time_feat_dim
         self.channel_embedding_dim = channel_embedding_dim
         self.patch_size = patch_size
@@ -207,7 +207,7 @@ class DyGFormer(nn.Module):
                     bias=True,
                 ),
                 'edge': nn.Linear(
-                    in_features=self.patch_size * self.edge_feat_dim,
+                    in_features=self.patch_size * self.edge_x_dim,
                     out_features=self.channel_embedding_dim,
                     bias=True,
                 ),

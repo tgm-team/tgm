@@ -205,7 +205,7 @@ hm = RecipeRegistry.build(
 )
 train_key, val_key, test_key = hm.keys
 hm.register_shared(nbr_hook)
-hm.register_shared(DeduplicationHook())
+hm.register_shared(DeduplicationHook(seed_nodes_keys=['neg', 'nbr_nids']))
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
@@ -233,6 +233,8 @@ opt = torch.optim.Adam(
     lr=args.lr,
 )
 
+best_val = 0.0
+
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
         loss = train(train_loader, memory, encoder, decoder, opt)
@@ -242,10 +244,11 @@ for epoch in range(1, args.epochs + 1):
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
 
+    if val_mrr > best_val:
+        best_val = val_mrr
+        with hm.activate(test_key):
+            test_mrr = eval(test_loader, memory, encoder, decoder, evaluator)
+        log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
+
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
-
-
-with hm.activate(test_key):
-    test_mrr = eval(test_loader, memory, encoder, decoder, evaluator)
-log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

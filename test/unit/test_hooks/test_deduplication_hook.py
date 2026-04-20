@@ -16,8 +16,18 @@ def dg():
 
 
 def test_hook_dependancies():
-    assert DeduplicationHook.requires == {'edge_src', 'edge_dst'}
-    assert DeduplicationHook.produces == {'unique_nids', 'global_to_local'}
+    hook = DeduplicationHook()
+    assert hook.requires == {'edge_src', 'edge_dst'}
+    assert hook.produces == {'unique_nids', 'global_to_local'}
+
+    hook_with_id = DeduplicationHook(id='foo')
+    assert hook_with_id.requires == {'edge_src', 'edge_dst'}
+    assert hook_with_id.produces == {'unique_nids_foo', 'global_to_local_foo'}
+
+
+def test_hook_repre():
+    hook_with_id = DeduplicationHook(id='foo')
+    assert 'foo' in hook_with_id.__repr__()
 
 
 def test_hook_reset_state():
@@ -39,8 +49,23 @@ def test_dedup(dg):
     )
 
 
+def test_dedup_with_id(dg):
+    hook = DeduplicationHook(id='foo')
+    batch = dg.materialize()
+    processed_batch = hook(dg, batch)
+    torch.testing.assert_close(
+        processed_batch.unique_nids_foo, torch.IntTensor([1, 2, 4, 8])
+    )
+    torch.testing.assert_close(
+        processed_batch.global_to_local_foo(batch.edge_src), torch.IntTensor([1, 1, 0])
+    )
+    torch.testing.assert_close(
+        processed_batch.global_to_local_foo(batch.edge_dst), torch.IntTensor([1, 2, 3])
+    )
+
+
 def test_dedup_with_negatives(dg):
-    hook = DeduplicationHook()
+    hook = DeduplicationHook(seed_nodes_keys=['neg'])
     batch = dg.materialize()
     batch.neg = torch.IntTensor([1, 5, 10])  # add some mock negatives
 
@@ -60,7 +85,7 @@ def test_dedup_with_negatives(dg):
 
 
 def test_dedup_with_nbrs(dg):
-    hook = DeduplicationHook()
+    hook = DeduplicationHook(seed_nodes_keys=['nbr_nids'])
     batch = dg.materialize()
     batch.nbr_nids = [  # add some mock neighbours
         torch.IntTensor([1, 5]),  # First hop
@@ -107,7 +132,7 @@ def node_only_graph():
 
 def test_dedup_node_only_batch(node_only_graph):
     hm = HookManager(keys=['unit'])
-    hm.register('unit', DeduplicationHook())
+    hm.register('unit', DeduplicationHook(seed_nodes_keys=['node_x_nids']))
     loader = DGDataLoader(node_only_graph, batch_size=3, hook_manager=hm)
     with hm.activate('unit'):
         batch_iter = iter(loader)

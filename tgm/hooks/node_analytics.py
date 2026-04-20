@@ -20,6 +20,7 @@ class NodeAnalyticsHook(StatefulHook):
     Args:
         tracked_nodes (Tensor): 1D tensor of node IDs to track statistics for.
         num_nodes (int): Total number of nodes in the graph.
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
     Produces:
         node_stats (Dict[int, Dict[str, float]]): Dictionary mapping node_id to statistics:
@@ -38,16 +39,19 @@ class NodeAnalyticsHook(StatefulHook):
             - new_edge_count: Number of new edges in the batch, that is not seen in previous batches.
     """
 
-    requires = {
+    _cls_requires = {
         'edge_src',
         'edge_dst',
         'edge_time',
         'node_x_time',
         'node_x_nids',
     }
-    produces = {'node_stats', 'node_macro_stats', 'edge_stats'}
+    _cls_produces = {'node_stats', 'node_macro_stats', 'edge_stats'}
 
-    def __init__(self, tracked_nodes: Tensor, num_nodes: int) -> None:
+    def __init__(
+        self, tracked_nodes: Tensor, num_nodes: int, id: str | None = None
+    ) -> None:
+        super().__init__()
         if num_nodes <= 0:
             raise ValueError('num_nodes must be positive')
         self.tracked_nodes = tracked_nodes.unique()
@@ -74,6 +78,9 @@ class NodeAnalyticsHook(StatefulHook):
 
         # Edge tracking
         self._seen_edges: Set[tuple] = set()
+
+        self._id = id
+        self.__post_init__()
 
     def _compute_node_degrees(self, batch: DGBatch, nodes: Tensor) -> Dict[int, int]:
         """Compute degree for each node in the given set."""
@@ -353,8 +360,8 @@ class NodeAnalyticsHook(StatefulHook):
         node_batch_stats = self._compute_node_statistics(batch)
         edge_batch_stats = self._compute_edge_statistics(batch)
 
-        batch.node_stats = node_stats  # type: ignore[attr-defined]
-        batch.node_macro_stats = node_batch_stats  # type: ignore[attr-defined]
-        batch.edge_stats = edge_batch_stats  # type: ignore[attr-defined]
+        self.add_batch_attribute(batch, 'node_stats', node_stats)
+        self.add_batch_attribute(batch, 'node_macro_stats', node_batch_stats)
+        self.add_batch_attribute(batch, 'edge_stats', edge_batch_stats)
 
         return batch
