@@ -1,15 +1,10 @@
 import numpy as np
 import torch
 from relbench.datasets import get_dataset, get_dataset_names
-
+from relbench.modeling.graph import get_node_train_table_input
 from relbench.modeling.utils import get_stype_proposal
-
-from relbench.tasks import get_task_names, get_task
-
+from relbench.tasks import get_task
 from torch_frame.config.text_embedder import TextEmbedderConfig
-from relbench.modeling.graph import make_pkey_fkey_graph, get_node_train_table_input
-
-
 
 # All available datasets
 dataset_list = get_dataset_names()
@@ -19,7 +14,6 @@ print(dataset_list)
 def data_loader(dataset_name='rel-hm'):
     dataset = get_dataset(name=dataset_name, download=True)
     db = dataset.get_db()
-
 
     col_to_stype_dict = get_stype_proposal(db)
     print(col_to_stype_dict)
@@ -99,33 +93,34 @@ def data_loader(dataset_name='rel-hm'):
     print('==' * 60)
 
 
-
 from typing import List, Optional
+
 from sentence_transformers import SentenceTransformer
 from torch import Tensor
-import os
+
 
 class GloveTextEmbedding:
     def __init__(self, device: Optional[torch.device] = None):
         self.model = SentenceTransformer(
-            "sentence-transformers/average_word_embeddings_glove.6B.300d",
+            'sentence-transformers/average_word_embeddings_glove.6B.300d',
             device=device,
         )
 
     def __call__(self, sentences: List[str]) -> Tensor:
         return torch.from_numpy(self.model.encode(sentences))
 
+
 def load_data_from_relbench():
-    dataset = get_dataset("rel-hm", download=True)
-    task = get_task("rel-hm", 'user-churn', download=True)
+    dataset = get_dataset('rel-hm', download=True)
+    task = get_task('rel-hm', 'user-churn', download=True)
 
     db = dataset.get_db()
     col_to_stype_dict = get_stype_proposal(db)
     col_to_stype_dict
 
-    train_table = task.get_table("train")
-    val_table = task.get_table("val")
-    test_table = task.get_table("test")
+    train_table = task.get_table('train')
+    task.get_table('val')
+    task.get_table('test')
 
     table_input = get_node_train_table_input(
         table=train_table,
@@ -138,7 +133,8 @@ def load_data_from_relbench():
     exit()
 
     text_embedder_cfg = TextEmbedderConfig(
-    text_embedder=GloveTextEmbedding(device='cpu'), batch_size=256)
+        text_embedder=GloveTextEmbedding(device='cpu'), batch_size=256
+    )
 
     for table_name, table in db.table_dict.items():
         df = table.df
@@ -162,7 +158,5 @@ def load_data_from_relbench():
     #     print(tf.col_names_dict[stype])  # column names
     #     print(tensor)
 
+
 load_data_from_relbench()
-
-    
-
