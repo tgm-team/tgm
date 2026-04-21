@@ -4,6 +4,7 @@ from .edgebank import EdgeBankPredictor
 from .t_comem import tCoMemPredictor
 from .mlp_mixer import MLPMixer
 from .poptrack import PopTrackPredictor
+from .text_embedding import GloveTextEmbedding
 
 __all__ = [
     'Time2Vec',
@@ -12,4 +13,5 @@ __all__ = [
     'MLPMixer',
     'tCoMemPredictor',
     'PopTrackPredictor',
+    'GloveTextEmbedding'
 ]

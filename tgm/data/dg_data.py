@@ -21,6 +21,7 @@ from tgm.exceptions import (
     InvalidDiscretizationError,
     InvalidNodeIDError,
 )
+from tgm.nn.modules import GloveTextEmbedding
 from tgm.util.logging import _get_logger, log_latency
 
 logger = _get_logger(__name__)
@@ -1186,6 +1187,123 @@ class DGData:
         data._split_strategy = TGBSplit(split_bounds)
         logger.debug('Finished loading DGData from TGB-SEQ dataset: %s', name)
         return data
+    
+    @classmethod
+    def from_relbench(cls, name: str, task, text_embedding : Any = GloveTextEmbedding('cpu'), **kwargs: Any) -> DGData:
+        """
+        Load dataset and task from RelBench
+
+        Args:
+            name (str): Name of RelBench dataset.
+            task (str): Desire task to perform on the dataset
+            text_embedding (Any) : text embedder to convert texts into embedding
+            kwargs: Additional dataset-specific arguments.
+                `root` (str) is defined to store cache file from RelBench
+
+        Notes:
+
+        """
+        logger.debug("Loading DGData from RelBench dataset.")
+        try:
+            from relbench.datasets import get_dataset, get_dataset_names
+            from relbench.modeling.graph import get_node_train_table_input
+            from relbench.tasks import get_task, get_task_names
+            from torch_frame.config.text_embedder import TextEmbedderConfig
+            import torch_frame
+            import transformers
+            import sentence_transformers 
+            from relbench.modeling.utils import get_stype_proposal, remove_pkey_fkey
+
+        except ImportError:
+            raise ImportError(
+                'RelBench requires additional dependencies, please install following dependencies and try again:\n' \
+                '- `pip install relbench`\n'\
+                '- `pip install pytorch_frame\n' \
+                '- `pip install sentence-transformers`\n' \
+                '- `pip install transformers`'
+            )
+        
+        valid_relbench_datasets = [dataset_name for dataset_name in get_dataset_names() if dataset_name.startswith('rel-')]
+        if name not in valid_relbench_datasets:
+            raise ValueError(f"{name} is not available in RelBench. Please select from {valid_relbench_datasets}")
+        dataset = get_dataset(name, download=True)
+        db = dataset.get_db()
+        col_to_stype_dict = get_stype_proposal(db)
+
+        valid_task = get_task_names(name)
+        if task not in get_task_names(name):
+            raise ValueError(f"{task} is not supported in dataset {name}. Please select from {valid_task}")
+        task = get_task(name, task, download=True)
+
+        root = kwargs.get("root","./data")
+        logger.debug(f"Cached files from RelBench is stored at {root}")
+
+        # Problem 1: node id from different table.
+        # To solve this problem and make it work with TGM.
+        # We need to go through all the table.
+        #   if the table have primary key, update it to make sure there is no ID overlap
+        #   if the table have no primary key, we need to add primary and ensure node ID is continuous
+        # In this case, we treat each table as a node type
+
+        # Problem 2: misalign between node features
+        # Different tables/node type, has different featrue dimension. Padding may work but not
+        # very memory efficient
+
+        # Make node ids continuous
+        key_offset = dict()
+        number_nodes = 0
+        for table_name, table in db.table_dict.items():
+            if table.pkey_col in col_to_stype_dict[table_name]:
+                key_offset[table.pkey_col] = number_nodes
+                number_nodes += table.df[table.pkey_col].max() + 1
+        
+        for table_name, table in db.table_dict.items():
+            if table.pkey_col in col_to_stype_dict[table_name]:
+                table.df[table.pkey_col] += key_offset[table.pkey_col]
+            for fkey in table.fkey_col_to_pkey_table.keys():
+                if fkey in col_to_stype_dict[table_name]:
+                    table.df[fkey] += key_offset[fkey]
+        #@TODO: Since we update node id from this step. We need to return node mapper (or at least key_offset for ths user to look up later)
+        for table_name, table in db.table_dict.items():
+        # Materialize the tables into tensor frames:
+            df = table.df
+
+            # Ensure that pkey is consecutive.
+            if table.pkey_col is not None:
+                assert (df[table.pkey_col].values == np.arange(len(df)) + key_offset[table.pkey_col]).all()
+
+            col_to_stype = col_to_stype_dict[table_name]
+
+            # Remove pkey, fkey columns since they will not be used as input
+            # feature.
+            remove_pkey_fkey(col_to_stype, table)
+
+            # Add edges. 
+            # Adapt from make_pkey_fkey_graph: https://github.com/snap-stanford/relbench/blob/main/relbench/modeling/graph.py
+            for fkey_name, pkey_table_name in table.fkey_col_to_pkey_table.items():
+                pkey_index = df[fkey_name]
+                # Filter out dangling foreign keys
+                mask = ~pkey_index.isna()
+                fkey_index = torch.arange(len(pkey_index))
+                # Filter dangling foreign keys:
+                pkey_index = torch.from_numpy(pkey_index[mask].astype(int).values)
+                fkey_index = fkey_index[torch.from_numpy(mask.values)]
+                print(fkey_index)
+
+                # fkey -> pkey edges
+                edge_index = torch.stack([fkey_index, pkey_index], dim=0)
+                edge_type = (table_name, f"f2p_{fkey_name}", pkey_table_name)
+                # data[edge_type].edge_index = sort_edge_index(edge_index)
+
+                # pkey -> fkey edges.
+                # "rev_" is added so that PyG loader recognizes the reverse edges
+                edge_index = torch.stack([pkey_index, fkey_index], dim=0)
+                edge_type = (pkey_table_name, f"rev_f2p_{fkey_name}", table_name)
+            #     data[edge_type].edge_index = sort_edge_index(edge_index)
+
+
+            
+
 
 
 def _log_tensor_args(**kwargs: Any) -> None:
