@@ -2,51 +2,13 @@ import numpy as np
 import torch
 from relbench.datasets import get_dataset, get_dataset_names
 
-schema_hm = {  # We need to maintain this ourselves. If RelBench changes it, we need to udpate this
-    'article': {
-        'article_id': 'numerical',
-        'product_code': 'numerical',
-        'prod_name': 'text',
-        'product_type_no': 'numerical',
-        'product_type_name': 'categorical',
-        'product_group_name': 'categorical',
-        'graphical_appearance_no': 'categorical',
-        'graphical_appearance_name': 'categorical',
-        'colour_group_code': 'categorical',
-        'colour_group_name': 'categorical',
-        'perceived_colour_value_id': 'categorical',
-        'perceived_colour_value_name': 'categorical',
-        'perceived_colour_master_id': 'numerical',
-        'perceived_colour_master_name': 'categorical',
-        'department_no': 'numerical',
-        'department_name': 'categorical',
-        'index_code': 'categorical',
-        'index_name': 'categorical',
-        'index_group_no': 'categorical',
-        'index_group_name': 'categorical',
-        'section_no': 'numerical',
-        'section_name': 'text',
-        'garment_group_no': 'categorical',
-        'garment_group_name': 'categorical',
-        'detail_desc': 'text',
-    },
-    'customer': {
-        'customer_id': 'text',
-        'FN': 'categorical',
-        'Active': 'categorical',
-        'club_member_status': 'categorical',
-        'fashion_news_frequency': 'categorical',
-        'age': 'numerical',
-        'postal_code': 'categorical',
-    },
-    'transactions': {
-        't_dat': 'timestamp',
-        'price': 'numerical',
-        'sales_channel_id': 'categorical',
-        'customer_id': 'numerical',
-        'article_id': 'numerical',
-    },
-}
+from relbench.modeling.utils import get_stype_proposal
+
+from relbench.tasks import get_task_names, get_task
+
+from torch_frame.config.text_embedder import TextEmbedderConfig
+from relbench.modeling.graph import make_pkey_fkey_graph, get_node_train_table_input
+
 
 
 # All available datasets
@@ -57,6 +19,12 @@ print(dataset_list)
 def data_loader(dataset_name='rel-hm'):
     dataset = get_dataset(name=dataset_name, download=True)
     db = dataset.get_db()
+
+
+    col_to_stype_dict = get_stype_proposal(db)
+    print(col_to_stype_dict)
+    print(col_to_stype_dict.keys())
+    exit()
     all_schema = db.table_dict.keys()
     print(all_schema)
 
@@ -131,4 +99,70 @@ def data_loader(dataset_name='rel-hm'):
     print('==' * 60)
 
 
-data_loader()
+
+from typing import List, Optional
+from sentence_transformers import SentenceTransformer
+from torch import Tensor
+import os
+
+class GloveTextEmbedding:
+    def __init__(self, device: Optional[torch.device] = None):
+        self.model = SentenceTransformer(
+            "sentence-transformers/average_word_embeddings_glove.6B.300d",
+            device=device,
+        )
+
+    def __call__(self, sentences: List[str]) -> Tensor:
+        return torch.from_numpy(self.model.encode(sentences))
+
+def load_data_from_relbench():
+    dataset = get_dataset("rel-hm", download=True)
+    task = get_task("rel-hm", 'user-churn', download=True)
+
+    db = dataset.get_db()
+    col_to_stype_dict = get_stype_proposal(db)
+    col_to_stype_dict
+
+    train_table = task.get_table("train")
+    val_table = task.get_table("val")
+    test_table = task.get_table("test")
+
+    table_input = get_node_train_table_input(
+        table=train_table,
+        task=task,
+    )
+
+    print(table_input)
+
+    # print(test_table)
+    exit()
+
+    text_embedder_cfg = TextEmbedderConfig(
+    text_embedder=GloveTextEmbedding(device='cpu'), batch_size=256)
+
+    for table_name, table in db.table_dict.items():
+        df = table.df
+        print(table_name)
+        print(df)
+
+    # data, col_stats_dict = make_pkey_fkey_graph(
+    #     db,
+    #     col_to_stype_dict=col_to_stype_dict,  # speficied column types
+    #     text_embedder_cfg=text_embedder_cfg,  # our chosen text encoder
+    #     cache_dir=os.path.join(
+    #         './', f"rel-f1_materialized_cache"
+    #     ),  # store materialized graph for convenience
+    # )
+
+    # print(data['transactions']['tf'])
+    # # print(data['transactions']['tf'].feat_dict['sales_channel_id'])
+    # tf = data['transactions']['tf']
+    # for stype, tensor in tf.feat_dict.items():
+    #     print(f"--- {stype} ---")
+    #     print(tf.col_names_dict[stype])  # column names
+    #     print(tensor)
+
+load_data_from_relbench()
+
+    
+
