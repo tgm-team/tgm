@@ -63,6 +63,11 @@ parser.add_argument(
     action='store_true',
     help='Embed article/customer tables and prepend to TGN memory',
 )
+parser.add_argument(
+    '--joint-static',
+    action='store_true',
+    help='Make static node embeddings trainable (requires --use-static-features)',
+)
 parser.add_argument('--log-file-path', type=str, default=None)
 
 
@@ -99,7 +104,14 @@ def compute_ap_ndcg(scores: np.ndarray, labels: np.ndarray, k: int = 10):
 
 
 class StaticAugmentedEncoder(nn.Module):
-    """Wraps GraphAttentionEmbedding, fusing static node features into memory."""
+    """Wraps GraphAttentionEmbedding, fusing static node features into memory.
+
+    Args:
+        trainable_static: If True, ``static_node_x`` is registered as an
+            ``nn.Parameter`` so its values are updated during back-prop
+            (jointly-trained ablation).  If False (default) it is a frozen
+            buffer.
+    """
 
     def __init__(
         self,
@@ -107,10 +119,14 @@ class StaticAugmentedEncoder(nn.Module):
         static_node_x: torch.Tensor,
         static_dim: int,
         memory_dim: int,
+        trainable_static: bool = False,
     ) -> None:
         super().__init__()
         self.base_encoder = base_encoder
-        self.register_buffer('static_node_x', static_node_x)
+        if trainable_static:
+            self.static_node_x = nn.Parameter(static_node_x)
+        else:
+            self.register_buffer('static_node_x', static_node_x)
         self.proj = nn.Linear(memory_dim + static_dim, memory_dim)
 
     def forward(
@@ -212,17 +228,25 @@ def train(loader, memory, encoder, decoder, opt, use_static=False):
 def evaluate(
     loader, memory, encoder, decoder, meta, split_table, device, use_static=False
 ):
-    """Evaluate using AP and NDCG@10.
+    """Evaluate using AP, NDCG@10, and per-customer AP (RelBench protocol).
 
-    For each batch event we score the positive dst and one random negative dst,
-    then aggregate over all events for a macro AP.
+    For each batch event we score the positive dst and one random negative dst.
+    Three metrics are returned:
+
+    - *Global AP*: average precision computed over all (score, label) pairs.
+    - *NDCG@10*: computed from the globally ranked scores.
+    - *Per-customer AP*: for each customer, AP is computed over only that
+      customer's positive/negative pairs, then averaged across customers.
+      This matches the RelBench eval protocol.
     """
     memory.eval()
     encoder.eval()
     decoder.eval()
 
-    all_scores = []
-    all_labels = []
+    all_scores: list = []
+    all_labels: list = []
+    # per_cust maps customer_id -> {'scores': [...], 'labels': [...]}
+    per_cust: dict = {}
 
     for batch in tqdm(loader, desc='eval'):
         nbr_nodes = batch.nbr_nids[0].flatten()
@@ -265,10 +289,16 @@ def evaluate(
 
         pos_scores = decoder(z[inv_src], z[inv_dst]).sigmoid().cpu().numpy()
         neg_scores = decoder(z[inv_src], z[inv_neg]).sigmoid().cpu().numpy()
+        cust_ids = batch.edge_src.cpu().numpy()
 
-        for ps, ns in zip(pos_scores, neg_scores):
+        for cid, ps, ns in zip(cust_ids, pos_scores, neg_scores):
             all_scores.extend([float(ps), float(ns)])
             all_labels.extend([1, 0])
+            cid = int(cid)
+            if cid not in per_cust:
+                per_cust[cid] = {'scores': [], 'labels': []}
+            per_cust[cid]['scores'].extend([float(ps), float(ns)])
+            per_cust[cid]['labels'].extend([1, 0])
 
         memory.update_state(
             batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
@@ -277,7 +307,16 @@ def evaluate(
     scores = np.array(all_scores)
     labels = np.array(all_labels)
     ap, ndcg = compute_ap_ndcg(scores, labels)
-    return ap, ndcg
+
+    # Per-customer AP (RelBench protocol)
+    per_cust_aps = [
+        float(average_precision_score(v['labels'], v['scores']))
+        for v in per_cust.values()
+        if sum(v['labels']) > 0
+    ]
+    mean_per_cust_ap = float(np.mean(per_cust_aps)) if per_cust_aps else 0.0
+
+    return ap, ndcg, mean_per_cust_ap
 
 
 # ---------------------------------------------------------------------------
@@ -322,7 +361,7 @@ def main():
     hm.register('val', NegativeEdgeSamplerHook(low=0, high=meta.n_articles))
     hm.register('test', NegativeEdgeSamplerHook(low=0, high=meta.n_articles))
     hm.register_shared(nbr_hook)
-    hm.register_shared(DeduplicationHook())
+    hm.register_shared(DeduplicationHook(seed_nodes_keys=['neg', 'nbr_nids']))
 
     train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
     val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
@@ -355,6 +394,7 @@ def main():
             static_node_x=static_node_x.to(args.device),
             static_dim=TARGET_DIM,
             memory_dim=args.memory_dim,
+            trainable_static=args.joint_static,
         ).to(args.device)
     else:
         encoder = _base_encoder
@@ -385,7 +425,7 @@ def main():
             )
 
         with hm.activate(val_key):
-            val_ap, val_ndcg = evaluate(
+            val_ap, val_ndcg, val_pc_ap = evaluate(
                 val_loader,
                 memory,
                 encoder,
@@ -399,19 +439,21 @@ def main():
         log_metric('Loss', loss, epoch=epoch)
         log_metric('Val AP', val_ap, epoch=epoch)
         log_metric('Val NDCG@10', val_ndcg, epoch=epoch)
+        log_metric('Val Per-Customer AP', val_pc_ap, epoch=epoch)
         logger.info(
-            'Epoch %d — loss=%.4f  val_AP=%.4f  val_NDCG@10=%.4f',
+            'Epoch %d — loss=%.4f  val_AP=%.4f  val_NDCG@10=%.4f  val_PerCustAP=%.4f',
             epoch,
             loss,
             val_ap,
             val_ndcg,
+            val_pc_ap,
         )
 
         if epoch < args.epochs:
             hm.reset_state()
 
     with hm.activate(test_key):
-        test_ap, test_ndcg = evaluate(
+        test_ap, test_ndcg, test_pc_ap = evaluate(
             test_loader,
             memory,
             encoder,
@@ -424,7 +466,13 @@ def main():
 
     log_metric('Test AP', test_ap, epoch=args.epochs)
     log_metric('Test NDCG@10', test_ndcg, epoch=args.epochs)
-    logger.info('Test — AP=%.4f  NDCG@10=%.4f', test_ap, test_ndcg)
+    log_metric('Test Per-Customer AP', test_pc_ap, epoch=args.epochs)
+    logger.info(
+        'Test — AP=%.4f  NDCG@10=%.4f  PerCustAP=%.4f',
+        test_ap,
+        test_ndcg,
+        test_pc_ap,
+    )
 
 
 if __name__ == '__main__':

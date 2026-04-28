@@ -22,7 +22,7 @@ from tgm.data.split import TemporalSplit
 logger = logging.getLogger(__name__)
 
 DATASET_NAME = 'rel-hm'
-TASK_NAME = 'rel-hm-user-item-purchase'
+TASK_NAME = 'user-item-purchase'
 TIME_DELTA = 'D'  # daily granularity matches H&M purchase data
 
 
@@ -90,28 +90,22 @@ def load_raw_tables(dataset_name: str = DATASET_NAME):
 
 
 def load_task_splits(dataset, task_name: str = TASK_NAME):
-    """Return (task, train_table, val_table, test_table) from RelBench task."""
+    """Return (task, train_table, val_table, test_table) from RelBench task.
+
+    relbench 2.x API:
+      - get_task(dataset_name, task_name) with the short task name
+      - split tables accessed via task.get_table('train'/'val'/'test')
+      - timestamp column identified by task.time_col
+    """
     from relbench.tasks import get_task
 
-    task = get_task(dataset, task_name, download=True)
+    task = get_task(DATASET_NAME, task_name, download=True)
 
-    train_table = (
-        task.train_table.df.copy()
-        if hasattr(task.train_table, 'df')
-        else task.train_table.copy()
-    )
-    val_table = (
-        task.val_table.df.copy()
-        if hasattr(task.val_table, 'df')
-        else task.val_table.copy()
-    )
-    test_table = (
-        task.test_table.df.copy()
-        if hasattr(task.test_table, 'df')
-        else task.test_table.copy()
-    )
+    train_table = task.get_table('train').df.copy()
+    val_table = task.get_table('val').df.copy()
+    test_table = task.get_table('test').df.copy()
 
-    ts_col = task.timestamp_col
+    ts_col = task.time_col  # 'timestamp' in relbench 2.x
 
     t_val_end = _unix_seconds(val_table[ts_col]).max()
     t_test_end = _unix_seconds(test_table[ts_col]).max()

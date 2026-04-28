@@ -560,3 +560,172 @@ class TestModelComponents:
         hook = NegativeEdgeSamplerHook(low=0, high=N_ART)
         assert hook.low == 0
         assert hook.high == N_ART
+
+    def test_static_augmented_encoder_trainable(self, model_setup):
+        """Joint-static flag registers static_node_x as nn.Parameter."""
+        from examples.linkproppred.relbench.train import StaticAugmentedEncoder
+
+        memory, base_encoder, _, n_nodes, mem_dim, _ = model_setup
+        static = torch.randn(n_nodes, TARGET_DIM)
+        aug_enc = StaticAugmentedEncoder(
+            base_encoder=base_encoder,
+            static_node_x=static,
+            static_dim=TARGET_DIM,
+            memory_dim=mem_dim,
+            trainable_static=True,
+        )
+        param_names = {n for n, _ in aug_enc.named_parameters()}
+        assert 'static_node_x' in param_names
+
+    def test_static_augmented_encoder_frozen(self, model_setup):
+        """Default (frozen) mode registers static_node_x as buffer, not parameter."""
+        from examples.linkproppred.relbench.train import StaticAugmentedEncoder
+
+        memory, base_encoder, _, n_nodes, mem_dim, _ = model_setup
+        static = torch.randn(n_nodes, TARGET_DIM)
+        aug_enc = StaticAugmentedEncoder(
+            base_encoder=base_encoder,
+            static_node_x=static,
+            static_dim=TARGET_DIM,
+            memory_dim=mem_dim,
+            trainable_static=False,
+        )
+        param_names = {n for n, _ in aug_enc.named_parameters()}
+        buf_names = {n for n, _ in aug_enc.named_buffers()}
+        assert 'static_node_x' not in param_names
+        assert 'static_node_x' in buf_names
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 Tests — per-customer AP (RelBench eval protocol)
+# ---------------------------------------------------------------------------
+
+
+class TestPerCustomerAP:
+    """Task 6.3: per-customer AP aggregation."""
+
+    def _build_mock_data(self, n_customers=3, events_per_cust=4):
+        """Return (scores, labels, cust_ids) with known per-customer AP."""
+        np.random.default_rng(42)
+        scores, labels, cust_ids = [], [], []
+        for cid in range(n_customers):
+            for _ in range(events_per_cust):
+                # Alternate pos/neg so each customer has events
+                scores.extend([0.9, 0.1])
+                labels.extend([1, 0])
+                cust_ids.extend([cid, cid])
+        return np.array(scores), np.array(labels), np.array(cust_ids)
+
+    def test_per_cust_ap_computation(self):
+        from sklearn.metrics import average_precision_score
+
+        scores, labels, cust_ids = self._build_mock_data()
+        per_cust = {}
+        for cid, s, lbl in zip(cust_ids, scores, labels):
+            cid = int(cid)
+            if cid not in per_cust:
+                per_cust[cid] = {'scores': [], 'labels': []}
+            per_cust[cid]['scores'].append(float(s))
+            per_cust[cid]['labels'].append(int(lbl))
+
+        per_cust_aps = [
+            float(average_precision_score(v['labels'], v['scores']))
+            for v in per_cust.values()
+            if sum(v['labels']) > 0
+        ]
+        mean_pc_ap = float(np.mean(per_cust_aps))
+        # All customers have perfectly ranked positives → AP = 1.0
+        assert mean_pc_ap == pytest.approx(1.0)
+
+    def test_per_cust_ap_differs_from_global(self):
+        """Per-customer AP and global AP can diverge when customers have
+        different score distributions.
+        """
+        from sklearn.metrics import average_precision_score
+
+        # Customer 0: positive always ranked above negative → AP = 1.0
+        # Customer 1: negative always ranked above positive → AP < 1.0
+        scores = np.array([0.9, 0.1, 0.1, 0.9])
+        labels = np.array([1, 0, 1, 0])
+        cust_ids = np.array([0, 0, 1, 1])
+
+        per_cust = {}
+        for cid, s, lbl in zip(cust_ids, scores, labels):
+            cid = int(cid)
+            if cid not in per_cust:
+                per_cust[cid] = {'scores': [], 'labels': []}
+            per_cust[cid]['scores'].append(float(s))
+            per_cust[cid]['labels'].append(int(lbl))
+
+        per_cust_aps = [
+            float(average_precision_score(v['labels'], v['scores']))
+            for v in per_cust.values()
+            if sum(v['labels']) > 0
+        ]
+        mean_pc_ap = float(np.mean(per_cust_aps))
+        global_ap = float(average_precision_score(labels, scores))
+
+        # Customer 0: positive ranks 1st → AP = 1.0
+        # Customer 1: positive ranks 2nd of 2 → AP = 0.5
+        # Mean per-customer AP = (1.0 + 0.5) / 2 = 0.75
+        assert mean_pc_ap == pytest.approx(0.75, abs=1e-6)
+        # Global AP differs from per-customer AP for these distributions
+        assert mean_pc_ap != pytest.approx(global_ap, abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 Tests — hook pipeline (regression: global_to_local must not OOB)
+# ---------------------------------------------------------------------------
+
+
+class TestHookPipeline:
+    """Ensure DeduplicationHook includes neg and nbr nodes in unique_nids.
+
+    Without seed_nodes_keys=['neg', 'nbr_nids'], torch.searchsorted returns
+    insertion positions beyond unique_nids for nodes absent from the dict,
+    causing IndexError in the TGN encoder's TransformerConv.
+    """
+
+    def test_global_to_local_in_bounds(self):
+        from tgm import DGraph
+        from tgm.constants import PADDED_NODE_ID
+        from tgm.data import DGDataLoader
+        from tgm.hooks import (
+            DeduplicationHook,
+            HookManager,
+            RecencyNeighborHook,
+        )
+        from tgm.hooks.negatives import NegativeEdgeSamplerHook
+
+        data, n_art, n_cust, n_nodes = _make_full_data()
+        train_data, _, _ = data.split()
+        dg = DGraph(train_data)
+
+        neg_hook = NegativeEdgeSamplerHook(low=0, high=n_art)
+        nbr_hook = RecencyNeighborHook(
+            num_nbrs=[2],
+            num_nodes=n_nodes,
+            seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+            seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
+        )
+        hm = HookManager(keys=['train'])
+        hm.register('train', neg_hook)
+        hm.register_shared(nbr_hook)
+        hm.register_shared(DeduplicationHook(seed_nodes_keys=['neg', 'nbr_nids']))
+
+        loader = DGDataLoader(dg, batch_size=10, hook_manager=hm)
+        with hm.activate('train'):
+            batch = next(iter(loader))
+
+        n_unique = len(batch.unique_nids)
+
+        # neg nodes must map to valid local indices
+        neg_local = batch.global_to_local(batch.neg)
+        assert int(neg_local.max()) < n_unique
+
+        # neighbor nodes must map to valid local indices
+        nbr_nodes = batch.nbr_nids[0].flatten()
+        nbr_mask = nbr_nodes != PADDED_NODE_ID
+        if nbr_mask.any():
+            nbr_local = batch.global_to_local(nbr_nodes[nbr_mask])
+            assert int(nbr_local.max()) < n_unique

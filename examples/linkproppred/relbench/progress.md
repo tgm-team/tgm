@@ -163,13 +163,28 @@ ______________________________________________________________________
   projects back to `memory_dim`, then calls base `GraphAttentionEmbedding`.
 - Enabled via `--use-static-features` flag.
 
-### Task 6.2 — Ablation table
+### Task 6.2 — Ablation table ✅
 
-| Config            | Flag                    | Status |
-| ----------------- | ----------------------- | ------ |
-| Baseline          | (default)               | Ready  |
-| + Static (frozen) | `--use-static-features` | Ready  |
-| + Static (joint)  | (extend optimizer)      | TODO   |
+| Config            | Flag                                   | Status |
+| ----------------- | -------------------------------------- | ------ |
+| Baseline          | (default)                              | Ready  |
+| + Static (frozen) | `--use-static-features`                | Ready  |
+| + Static (joint)  | `--use-static-features --joint-static` | Ready  |
+
+**Implementation:** `--joint-static` passes `trainable_static=True` to
+`StaticAugmentedEncoder`, which registers `static_node_x` as `nn.Parameter`
+instead of a frozen buffer. Gradients flow through the static embeddings during
+back-prop; the existing optimizer already covers `encoder.parameters()`.
+
+### Task 6.3 — Per-customer AP aggregation ✅
+
+**File:** `train.py` → `evaluate()`
+
+- `evaluate()` now returns `(ap, ndcg, mean_per_cust_ap)`.
+- Per-customer AP: events are grouped by `edge_src` (customer ID); AP is
+  computed independently per customer, then averaged across customers.
+- Matches the RelBench eval protocol (one AP value per user, then macro-average).
+- Logged as `Val/Test Per-Customer AP` alongside global AP and NDCG@10.
 
 ______________________________________________________________________
 
@@ -197,6 +212,4 @@ Tests that require `torch_frame` are skipped automatically if it is not installe
 ## Next Steps
 
 - [ ] Run a smoke test end-to-end with the actual downloaded dataset.
-- [ ] Complete the jointly-trained ablation (Task 6.2 third row).
-- [ ] Add per-customer AP aggregation in `evaluate()` for the full RelBench eval protocol.
 - [ ] Profile memory usage for the 31.8M-edge transactions table.
