@@ -34,6 +34,110 @@ from tgm.nn.encoder.tgn import (
     IdentityMessage,
     LastAggregator,
 )
+
+# ---------------------------------------------------------------------------
+# Memory-efficient replacements for TGNMemory internals
+# ---------------------------------------------------------------------------
+
+
+class _MemoryEfficientLastAggregator(LastAggregator):
+    """Replaces the O(N×M) scores matrix in LastAggregator with an O(M log M) sort.
+
+    The original implementation allocates a [dim_size, num_messages] float tensor.
+    When memory.eval() flushes all 1.48 M nodes at once, this is ~8.7 TB → OOM.
+    The sort-based approach uses O(M) space only.
+    """
+
+    def forward(
+        self,
+        msg: torch.Tensor,
+        index: torch.Tensor,
+        t: torch.Tensor,
+        dim_size: int,
+    ) -> torch.Tensor:
+        out = msg.new_zeros((dim_size, msg.size(-1)))
+        if index.numel() > 0:
+            # Double stable sort: (index asc, t asc) → last element per group = max t.
+            perm = torch.argsort(t, stable=True)
+            perm = perm[torch.argsort(index[perm], stable=True)]
+            sorted_idx = index[perm]
+            node_ids, counts = torch.unique_consecutive(sorted_idx, return_counts=True)
+            last_pos = counts.cumsum(0) - 1
+            out[node_ids] = msg[perm[last_pos]]
+        return out
+
+
+def _patch_memory_for_large_graphs(memory: TGNMemory) -> None:
+    """Patch a TGNMemory instance to reduce memory usage with large node counts.
+
+    Applies three changes without modifying tgm library code:
+    1. Sparse msg_store: uses a plain dict + sentinel instead of pre-populating
+       1.48 M entries (saves ~300 MB of Python objects per epoch reset).
+    2. Cloned msg_store entries: stored tensors are clones, not views of batch
+       tensors, so old batch GPU storage is freed between batches.
+    3. Safe dict access: _compute_msg uses .get() with the sentinel.
+    """
+    import types
+
+    # Create the empty sentinel once.
+    _i = memory.memory.new_empty((0,), device=memory.device, dtype=torch.long)
+    _msg = memory.memory.new_empty((0, memory.raw_msg_dim), device=memory.device)
+    sentinel = (_i, _i, _i, _msg)
+    memory._msg_sentinel = sentinel  # type: ignore[attr-defined]
+
+    def _reset_message_store(self: TGNMemory) -> None:
+        _i2 = self.memory.new_empty((0,), device=self.device, dtype=torch.long)
+        _m2 = self.memory.new_empty((0, self.raw_msg_dim), device=self.device)
+        self._msg_sentinel = (_i2, _i2, _i2, _m2)  # type: ignore[attr-defined]
+        self.msg_s_store = {}
+        self.msg_d_store = {}
+
+    def _update_msg_store(
+        self: TGNMemory,
+        src: torch.Tensor,
+        dst: torch.Tensor,
+        t: torch.Tensor,
+        raw_msg: torch.Tensor,
+        msg_store: dict,
+    ) -> None:
+        n_id, perm = src.sort()
+        n_id, count = n_id.unique_consecutive(return_counts=True)
+        for i, idx in zip(n_id.tolist(), perm.split(count.tolist())):
+            # Clone so the store doesn't hold views into the batch tensor; otherwise
+            # the batch's GPU storage stays live until every node from that batch is
+            # updated again (potentially thousands of batches later).
+            msg_store[i] = (
+                src[idx].clone(),
+                dst[idx].clone(),
+                t[idx].clone(),
+                raw_msg[idx].clone(),
+            )
+
+    def _compute_msg(
+        self: TGNMemory,
+        n_id: torch.Tensor,
+        msg_store: dict,
+        msg_module: nn.Module,
+    ) -> tuple:
+        sent = self._msg_sentinel  # type: ignore[attr-defined]
+        data = [msg_store.get(i, sent) for i in n_id.tolist()]
+        src, dst, t, raw_msg = list(zip(*data))
+        src = torch.cat(src, dim=0).to(self.device)
+        dst = torch.cat(dst, dim=0).to(self.device)
+        t = torch.cat(t, dim=0).to(self.device)
+        raw_msg = torch.cat(raw_msg, dim=0).to(self.device)
+        t_rel = t - self.last_update[src]
+        t_enc = self.time_enc(t_rel.to(raw_msg.dtype))
+        msg = msg_module(self.memory[src], self.memory[dst], raw_msg, t_enc)
+        return msg, t, src, dst
+
+    memory._reset_message_store = types.MethodType(_reset_message_store, memory)  # type: ignore[method-assign]
+    memory._update_msg_store = types.MethodType(_update_msg_store, memory)  # type: ignore[method-assign]
+    memory._compute_msg = types.MethodType(_compute_msg, memory)  # type: ignore[method-assign]
+    # Re-initialise with the new (sparse) reset method.
+    memory.reset_state()
+
+
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -225,9 +329,7 @@ def train(loader, memory, encoder, decoder, opt, use_static=False):
 @log_gpu
 @log_latency
 @torch.no_grad()
-def evaluate(
-    loader, memory, encoder, decoder, meta, split_table, device, use_static=False
-):
+def evaluate(loader, memory, encoder, decoder, device, use_static=False):
     """Evaluate using AP, NDCG@10, and per-customer AP (RelBench protocol).
 
     For each batch event we score the positive dst and one random negative dst.
@@ -376,8 +478,12 @@ def main():
         args.memory_dim,
         args.time_dim,
         message_module=IdentityMessage(edge_x_dim, args.memory_dim, args.time_dim),
-        aggregator_module=LastAggregator(),
+        # Use memory-efficient aggregator: avoids the O(N×M) scores matrix that
+        # would be ~8.7 TB when flushing all 1.48 M nodes at memory.eval() time.
+        aggregator_module=_MemoryEfficientLastAggregator(),
     ).to(args.device)
+    # Patch msg_store internals for large-graph efficiency (sparse dict, clones).
+    _patch_memory_for_large_graphs(memory)
 
     _base_encoder = GraphAttentionEmbedding(
         in_channels=args.memory_dim,
@@ -430,8 +536,6 @@ def main():
                 memory,
                 encoder,
                 decoder,
-                meta,
-                meta.val_table,
                 args.device,
                 use_static=args.use_static_features,
             )
@@ -458,8 +562,6 @@ def main():
             memory,
             encoder,
             decoder,
-            meta,
-            meta.test_table,
             args.device,
             use_static=args.use_static_features,
         )

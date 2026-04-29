@@ -39,9 +39,6 @@ class RelHMMetadata:
     edge_x_dim: int  # 2: [price, sales_channel_id]
     t_val_unix: int  # Unix-second boundary separating train / val
     t_test_unix: int  # Unix-second boundary separating val / test
-    train_table: object  # raw pandas DataFrame (with shifted customer_id)
-    val_table: object
-    test_table: object
 
 
 def _unix_seconds(ts_series) -> np.ndarray:
@@ -281,9 +278,6 @@ def build_relbench_hm_data(
         edge_x_dim=edge_x.shape[1],
         t_val_unix=t_val_unix,
         t_test_unix=t_test_unix,
-        train_table=train_table,
-        val_table=val_table,
-        test_table=test_table,
     )
 
     logger.info(
