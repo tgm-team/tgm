@@ -8,7 +8,7 @@
 #SBATCH --time=48:00:00    #48:00:00                   # The job will run for 1 day
 
 module load python/3.10
-source /home/mila/h/huangshe/scratch/my_venv/bin/activate
+source /home/mila/h/huangshe/scratch/tgm/.venv/bin/activate
 export UV_CACHE_DIR="/home/mila/h/huangshe/scratch/.cache"
 pwd
 

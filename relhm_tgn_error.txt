@@ -1,0 +1,29 @@
+[=== Module python/3.10 loaded ===]
+Error processing line 1 of /network/scratch/h/huangshe/my_venv/lib/python3.10/site-packages/distutils-precedence.pth:
+
+  Traceback (most recent call last):
+    File "/cvmfs/ai.mila.quebec/apps/arch/distro/python/3.10/lib/python3.10/site.py", line 186, in addpackage
+      exec(line)
+    File "<string>", line 1, in <module>
+  AttributeError: module '_distutils_hack' has no attribute 'add_shim'
+
+Remainder of file ignored
+Error processing line 1 of /network/scratch/h/huangshe/my_venv/lib/python3.10/site-packages/distutils-precedence.pth:
+
+  Traceback (most recent call last):
+    File "/cvmfs/ai.mila.quebec/apps/arch/distro/python/3.10/lib/python3.10/site.py", line 186, in addpackage
+      exec(line)
+    File "<string>", line 1, in <module>
+  AttributeError: module '_distutils_hack' has no attribute 'add_shim'
+
+Remainder of file ignored
+Traceback (most recent call last):
+  File "/cvmfs/ai.mila.quebec/apps/arch/distro/python/3.10/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/cvmfs/ai.mila.quebec/apps/arch/distro/python/3.10/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/network/scratch/h/huangshe/tgm/examples/linkproppred/relbench/train.py", line 20, in <module>
+    import torch
+  File "/network/scratch/h/huangshe/my_venv/lib/python3.10/site-packages/torch/__init__.py", line 34, in <module>
+    from typing_extensions import ParamSpec as _ParamSpec
+ModuleNotFoundError: No module named 'typing_extensions'
