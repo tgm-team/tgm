@@ -1,6 +1,14 @@
 from .encoder import CTAN, CTANMemory, DyGFormer, TPNet, TGCN, GCLSTM, TGNMemory
 from .decoder import GraphPredictor, NodePredictor, LinkPredictor, NCNPredictor
-from .encoder import DyGFormer, TPNet, TGCN, GCLSTM, RandomProjectionModule, ROLAND
+from .encoder import (
+    DyGFormer,
+    TPNet,
+    TGCN,
+    GCLSTM,
+    RandomProjectionModule,
+    ROLAND,
+    TGAT,
+)
 from .modules import (
     Time2Vec,
     TemporalAttention,
@@ -32,4 +40,6 @@ __all__ = [
     'PopTrackPredictor',
     'BaseNN',
     'NNModule',
+    'ROLAND',
+    'TGAT',
 ]

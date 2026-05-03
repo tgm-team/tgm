@@ -11,6 +11,7 @@ from .tgn import (
     TGNMemory,
 )
 from .roland import ROLAND
+from .tgat import TGAT
 
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     'IdentityMessage',
     'TGNMemory',
     'ROLAND',
+    'TGAT',
 ]
