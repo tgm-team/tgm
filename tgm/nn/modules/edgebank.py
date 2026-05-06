@@ -1,4 +1,4 @@
-from typing import Any, Dict, Literal, Optional, Tuple
+from typing import Any, Literal, Optional, Tuple
 
 import torch
 
@@ -28,6 +28,7 @@ class EdgeBankPredictor:
         src: torch.Tensor,
         dst: torch.Tensor,
         ts: torch.Tensor,
+        N: int,
         memory_mode: Literal['unlimited', 'fixed'] = 'unlimited',
         window_ratio: float = 0.15,
         pos_prob: float = 1.0,
@@ -46,6 +47,7 @@ class EdgeBankPredictor:
             src (torch.Tensor): Source node IDs of edges used for initialization.
             dst (torch.Tensor): Destination node IDs of edges used for initialization.
             ts (torch.Tensor): Timestamps of edges used for initialization.
+            N (int): total number of nodes in the graph.
             memory_mode (Literal['unlimited', 'fixed'], optional):
                 - ``'unlimited'``: Keeps all observed edges in memory.
                 - ``'fixed'``: Keeps only edges within a sliding window of time.
@@ -83,26 +85,9 @@ class EdgeBankPredictor:
             self._window_start = ts.max() - window_ratio * (ts.max() - ts.min())
         self._window_size = self._window_end - self._window_start
 
-        self.memory: Dict[Tuple[int, int], int] = {}
-        # maintain bidirectional linked list with 2 pointers
-        self._head: Optional[_Event] = None
-        self._tail: Optional[_Event] = None
-
-        logger.warning(
-            'EdgeBank will be slow if events are added/updated out of order.'
-        )
+        self._memory = torch.zeros((N, N), dtype=ts.dtype, device=ts.device)
 
         self.update(src, dst, ts)
-
-    def _clean_up(self) -> None:
-        """Clean up edges that are out of window in memory."""
-        while self._head and self._head.ts < self._window_start:
-            curr_event = self._head
-            if self.memory.get(curr_event.edge, -1) == curr_event.ts:
-                self.memory.pop(curr_event.edge)
-            self._head = curr_event.right
-            if self._head == None:
-                self._tail = None
 
     def update(self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor) -> None:
         """Update EdgeBank memory with a batch of edges.
@@ -119,43 +104,7 @@ class EdgeBankPredictor:
         self._check_input_data(src, dst, ts)
         self._window_end = torch.max(self._window_end, ts.max())
         self._window_start = self._window_end - self._window_size
-
-        if (
-            self._fixed_memory
-            and self._head is not None
-            and self._tail is not None
-            and self._head.ts < self._window_start
-        ):
-            self._clean_up()
-
-        for src_, dst_, ts_ in zip(src, dst, ts):
-            src_, dst_, ts_ = src_.item(), dst_.item(), ts_.item()
-            if ts_ >= self._window_start:
-                self.memory[(src_, dst_)] = ts_
-                if self._head == self._tail == None:
-                    self._head = self._tail = _Event((src_, dst_), ts_, None, None)
-                elif self._head is not None and self._tail is not None:
-                    new_event = _Event((src_, dst_), ts_, left=None, right=None)
-                    curr: _Event | None = self._tail
-
-                    # This while loop should never run assuming events added in time-ascending order.
-                    # When events added out of order, time complexity would be O(n)
-                    while curr is not None and ts_ < curr.ts:
-                        curr = curr.left
-
-                    if curr == None:
-                        new_event.right = self._head
-                        if self._head is not None:
-                            self._head.left = new_event
-                        self._head = new_event
-                    else:
-                        new_event.left = curr
-                        new_event.right = curr.right  # type: ignore[union-attr]
-                        if curr.right is not None:  # type: ignore[union-attr]
-                            curr.right.left = new_event  # type: ignore[union-attr]
-                        curr.right = new_event  # type: ignore[union-attr]
-                        if curr == self._tail:
-                            self._tail = new_event
+        self._memory[src, dst] = torch.maximum(self._memory[src, dst], ts)
 
     def __call__(
         self, query_src: torch.Tensor, query_dst: torch.Tensor
@@ -172,15 +121,9 @@ class EdgeBankPredictor:
                   its probability is ``self.pos_prob``.
                 - Otherwise, the probability is ``0.0``.
         """
-        pred = torch.zeros_like(query_src)
-        src_list = query_src.tolist()
-        dst_list = query_dst.tolist()
-        for i, (s, d) in enumerate(zip(src_list, dst_list)):
-            mem_val = self.memory.get((s, d))
-            if mem_val is not None:
-                if not self._fixed_memory or mem_val >= self.window_start:
-                    pred[i] = self.pos_prob
-        return pred
+        return (
+            self._memory[query_src, query_dst] >= self.window_start
+        ).float() * self.pos_prob
 
     @property
     def window_start(self) -> int | float:
