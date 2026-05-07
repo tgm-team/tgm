@@ -94,7 +94,7 @@ class TGAT(nn.Module):
 
     def forward(
         self,
-        X: torch.Tensor,
+        node_x: torch.Tensor,
         seed_nids: List[torch.Tensor],
         seed_times: List[torch.Tensor],
         nbr_nids: List[torch.Tensor],
@@ -104,7 +104,7 @@ class TGAT(nn.Module):
         """Forward pass.
 
         Args:
-            X (torch.Tensor): Node feature matrix of shape (num_nodes, node_dim).
+            node_x (torch.Tensor): Node feature matrix of shape (num_nodes, node_dim).
             seed_nids (List[torch.Tensor]): Seed node IDs for each hop, where
                 seed_nids[i] contains node IDs of shape (num_seeds,).
             nbr_nids (List[torch.Tensor]): Neighbor node IDs for each hop, where
@@ -119,15 +119,15 @@ class TGAT(nn.Module):
         Returns:
             torch.Tensor: Output embeddings of seed nodes of shape (num_seeds, embed_dim).
         """
-        device = X.device
+        device = node_x.device
         z: Dict[int, Dict[int, torch.Tensor]] = {
             j: {} for j in range(self.num_layers + 1)
         }  # z[j][i] = z of nbr^i at hop j
 
         # Layer 0 (leaf nodes): z[0][i] = static_node_feat
-        z[0][0] = X[seed_nids[0]]
+        z[0][0] = node_x[seed_nids[0]]
         for i in range(1, self.num_layers + 1):
-            z[0][i] = X[nbr_nids[i - 1].flatten()]
+            z[0][i] = node_x[nbr_nids[i - 1].flatten()]
 
         # Layers 1..H: aggregate z[j][i] = agg(z[j - 1][i], z[j - 1][i + 1])
         for j in range(1, self.num_layers + 1):

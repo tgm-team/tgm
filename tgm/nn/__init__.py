@@ -17,8 +17,6 @@ from .modules import (
     tCoMemPredictor,
     PopTrackPredictor,
 )
-from .base import BaseNN, NNModule
-
 
 __all__ = [
     'CTAN',

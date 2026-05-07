@@ -71,7 +71,7 @@ class GCLSTM(torch.nn.Module):
 
     def forward(
         self,
-        X: torch.Tensor,
+        node_x: torch.Tensor,
         edge_index: torch.Tensor,
         edge_weight: torch.Tensor | None = None,
         H: torch.Tensor | None = None,
@@ -81,7 +81,7 @@ class GCLSTM(torch.nn.Module):
         f"""Forward pass.
 
         Args:
-            X (PyTorch Float Tensor): Node features.
+            node_x (PyTorch Float Tensor): Node features.
             edge_index (PyTorch Long Tensor): Graph edge indices.
             edge_weight (PyTorch Long Tensor, optional): Edge weight vector.
             H (PyTorch Float Tensor, optional): Hidden state matrix for all nodes.
@@ -95,12 +95,14 @@ class GCLSTM(torch.nn.Module):
         Note: If edge weights are not present the forward pass defaults to an unweighted graph.
         """
         edge_index = edge_index.to(torch.int64)
-        H = self._set_hidden_state(X, H)
-        C = self._set_cell_state(X, C)
-        I = self._compute_input_gate(X, edge_index, edge_weight, H, lambda_max)
-        F = self._compute_forget_gate(X, edge_index, edge_weight, H, lambda_max)
-        C = self._compute_cell_state(X, edge_index, edge_weight, H, C, I, F, lambda_max)
-        O = self._compute_output_gate(X, edge_index, edge_weight, H, lambda_max)
+        H = self._set_hidden_state(node_x, H)
+        C = self._set_cell_state(node_x, C)
+        I = self._compute_input_gate(node_x, edge_index, edge_weight, H, lambda_max)
+        F = self._compute_forget_gate(node_x, edge_index, edge_weight, H, lambda_max)
+        C = self._compute_cell_state(
+            node_x, edge_index, edge_weight, H, C, I, F, lambda_max
+        )
+        O = self._compute_output_gate(node_x, edge_index, edge_weight, H, lambda_max)
         H = self._compute_hidden_state(O, C)
         return H, C
 

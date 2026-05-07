@@ -34,7 +34,7 @@ def test_tgat():
         num_layers=num_hop,
     )
     z = model(
-        X=node_feat,
+        node_x=node_feat,
         seed_nids=seed_nodes,
         seed_times=seed_times,
         nbr_nids=nbr_nids,
