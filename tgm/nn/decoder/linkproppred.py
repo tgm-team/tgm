@@ -1,32 +1,8 @@
-from typing import Callable, Dict
-
 import torch
 import torch.nn as nn
 from torch.nn import Sequential
 
-
-def cat_merge(z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-    r"""Default merging operation: Concat."""
-    # @TODO: we can define this in different module and have a base class for this
-    return torch.cat([z_src, z_dst], dim=1)
-
-
-class LearnableSumMerge(nn.Module):
-    r"""Sum node-level embeddings after a linear projection."""
-
-    def __init__(self, node_dim: int) -> None:
-        super().__init__()
-        self.lin_src = nn.Linear(node_dim, node_dim)
-        self.lin_dst = nn.Linear(node_dim, node_dim)
-
-    def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-        return self.lin_src(z_src) + self.lin_dst(z_dst)
-
-
-MERGE_OP: Dict[str, Callable] = {
-    'concat': cat_merge,
-    'sum': LearnableSumMerge,
-}
+from ..modules import BaseMerge, ConcatMerge
 
 
 class LinkPredictor(torch.nn.Module):
@@ -37,7 +13,10 @@ class LinkPredictor(torch.nn.Module):
         out_dim (int): Dimension of output
         nlayers (int): Number of layers
         hidden_dim (int): Size of each hidden embedding
-        merge_op (str): Operation to merge 2 node embeddings (concat)
+        merge_op (MergeBase): Operation to merge 2 node embeddings (ConcatMerge by default)
+
+    Note:
+        merge_op can be selected from [ConcatMerge, LearnableSumMerge] or any custom merging operation, provided it subclasses `BaseMerge`.
     """
 
     def __init__(
@@ -46,21 +25,15 @@ class LinkPredictor(torch.nn.Module):
         out_dim: int = 1,
         nlayers: int = 2,
         hidden_dim: int = 64,
-        merge_op: str = 'concat',
+        merge_op: BaseMerge | None = None,
     ) -> None:
         super().__init__()
 
-        if merge_op not in MERGE_OP:
-            raise ValueError(
-                f'{merge_op} merge operations is not support. Please choose from {list(MERGE_OP.keys())}'
-            )
+        self.merge = (
+            merge_op if merge_op is not None else ConcatMerge(node_dim=node_dim)
+        )
 
-        if merge_op == 'concat':
-            self.merge = MERGE_OP[merge_op]
-            in_dim = node_dim * 2
-        else:
-            self.merge = MERGE_OP[merge_op](node_dim)
-            in_dim = node_dim
+        in_dim = self.merge.out_channels
 
         self.model = Sequential()
         self.model.append(nn.Linear(in_dim, hidden_dim))

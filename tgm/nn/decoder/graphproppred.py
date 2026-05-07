@@ -2,20 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import Sequential
 
-
-def mean_pooling(z: torch.Tensor) -> torch.Tensor:
-    r"""Default graph pooling: Mean pooling."""
-    # @TODO: we can define this in different module and have a base class for this
-    return torch.mean(z, dim=0).squeeze()
-
-
-def sum_pooling(z: torch.Tensor) -> torch.Tensor:
-    r"""Default graph pooling: Sunm pooling."""
-    # @TODO: we can define this in different module and have a base class for this
-    return torch.sum(z, dim=0).squeeze()
-
-
-POOLING_OP = {'mean': mean_pooling, 'sum': sum_pooling}
+from ..modules import BaseEmbdPooling, MeanEmbdPooling
 
 
 class GraphPredictor(torch.nn.Module):
@@ -26,7 +13,10 @@ class GraphPredictor(torch.nn.Module):
         out_dim (int): Dimension of output
         nlayers (int): Number of layers
         hidden_dim (int): Size of each hidden embeddings
-        graph_pooling (str): graph pooling operation (mean, sum.)
+        graph_pooling (BaseEmbdPooling): graph pooling operation (MeanEmbdPooling by default)
+
+    Note:
+        graph_pooling can be selected from [MeanEmbdPooling, SumEmbdPooling] or any custom merging operation, provided it subclasses `BaseEmbdPooling`.
     """
 
     def __init__(
@@ -35,13 +25,9 @@ class GraphPredictor(torch.nn.Module):
         out_dim: int = 1,
         nlayers: int = 2,
         hidden_dim: int = 64,
-        graph_pooling: str = 'mean',
+        graph_pooling: BaseEmbdPooling | None = None,
     ) -> None:
         super().__init__()
-        if graph_pooling not in POOLING_OP:
-            raise ValueError(
-                f'{graph_pooling} pooling operations is not supported. Please choose from {list(POOLING_OP.keys())}'
-            )
 
         self.model = Sequential()
         self.model.append(nn.Linear(in_dim, hidden_dim))
@@ -52,7 +38,9 @@ class GraphPredictor(torch.nn.Module):
             self.model.append(nn.ReLU())
 
         self.model.append(nn.Linear(hidden_dim, out_dim))
-        self.graph_pooling = POOLING_OP[graph_pooling]
+        self.graph_pooling = (
+            graph_pooling if graph_pooling is not None else MeanEmbdPooling()
+        )
 
     def forward(self, z_nodes: torch.Tensor) -> torch.Tensor:
         r"""Forward pass.
