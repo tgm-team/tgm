@@ -11,8 +11,8 @@ from tqdm import tqdm
 from tgm import DGBatch, DGraph, TimeDeltaDG
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import RecipeRegistry
-from tgm.nn import TGCN, LinkPredictor
+from tgm.hooks import HookManager, RecipeRegistry
+from tgm.nn import TGCN, BaseNN, LinkPredictor
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -44,9 +44,14 @@ args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
-class RecurrentGCN(torch.nn.Module):
+class RecurrentGCN(BaseNN):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
+
+        self._requires = {
+            'edge_src',
+            'edge_dst',
+        }
         self.recurrent = TGCN(in_channels=node_dim, out_channels=embed_dim)
         self.linear = nn.Linear(embed_dim, embed_dim)
 
@@ -188,7 +193,7 @@ test_snapshots = DGraph(test_data_discretized, device=args.device)
 
 edge_dst = train_dg.edge_dst
 
-hm = RecipeRegistry.build(
+hm: HookManager = RecipeRegistry.build(
     RECIPE_TGB_LINK_PRED, dataset_name=args.dataset, train_dg=train_dg
 )
 train_key, val_key, test_key = hm.keys
@@ -207,7 +212,6 @@ test_snapshots_loader = DGDataLoader(
     test_snapshots, batch_unit=args.snapshot_time_gran, on_empty='raise'
 )
 
-
 encoder = RecurrentGCN(
     node_dim=train_dg.static_node_x_dim, embed_dim=args.embed_dim
 ).to(args.device)
@@ -215,6 +219,8 @@ decoder = LinkPredictor(args.embed_dim).to(args.device)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
+
+hm.validate_nnmodule_requirement(encoder)
 
 best_val = 0.0
 

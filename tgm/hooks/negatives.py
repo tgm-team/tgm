@@ -6,11 +6,13 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.hooks import StatelessHook
+from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
+@hook
 class NegativeEdgeSamplerHook(StatelessHook):
     """Sample negative edges for dynamic link prediction.
 
@@ -20,6 +22,8 @@ class NegativeEdgeSamplerHook(StatelessHook):
         neg_ratio (float): The ratio of sampled negative destination nodes
             to the number of positive destination nodes (default = 1.0).
         id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
+
+    Key words: negative sampler, training, link prediction.
     """
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
@@ -63,6 +67,7 @@ class NegativeEdgeSamplerHook(StatelessHook):
         return batch
 
 
+@hook
 class TGBNegativeEdgeSamplerHook(StatelessHook):
     """Load data from DGraph using pre-generated TGB negative samples.
     Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
@@ -74,6 +79,8 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
 
     Raises:
         ValueError: If neg_sampler is not provided.
+
+    Key words: negative sampler, evaluation, tgbl, link prediction.
     """
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
@@ -174,6 +181,7 @@ class TGBNegativeEdgeSamplerHook(StatelessHook):
         return batch
 
 
+@hook
 class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
     """Load data from DGraph using pre-generated TGB negative samples for heterogeneous graph.
     Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
@@ -190,6 +198,8 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
 
     Raises:
         ValueError: If neg_sampler is not provided.
+
+    Key words: heterogeneous graph, link prediction, evaluation, negative sampler, thgl.
     """
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}
@@ -314,6 +324,7 @@ class TGBTHGNegativeEdgeSamplerHook(StatelessHook):
         return batch
 
 
+@hook
 class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
     """Load data from DGraph using pre-generated TGB negative samples for knowledge graph.
     Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
@@ -328,6 +339,8 @@ class TGBTKGNegativeEdgeSamplerHook(StatelessHook):
 
     Raises:
         ValueError: If neg_sampler is not provided.
+
+    Key words: heterogeneous graph, link prediction, evaluation, negative sampler, tkgl.
     """
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time', 'edge_type'}

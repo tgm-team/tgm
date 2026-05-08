@@ -7,13 +7,18 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.hooks import StatelessHook
+from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
+@hook
 class PinMemoryHook(StatelessHook):
-    """Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers."""
+    r"""Pin all tensors in the DGBatch to page-locked memory for faster async CPU-GPU transfers.
+
+    Key words: cpu, gpu, cuda, non-pageable memory.
+    """
 
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         if torch.cuda.is_available():
@@ -25,8 +30,12 @@ class PinMemoryHook(StatelessHook):
         return batch
 
 
+@hook
 class DeviceTransferHook(StatelessHook):
-    """Moves all tensors in the DGBatch to the specified device."""
+    r"""Moves all tensors in the DGBatch to the specified device.
+
+    Key words: cpu, gpu, cuda, device transfer.
+    """
 
     def __init__(self, device: str | torch.device) -> None:
         super().__init__()
