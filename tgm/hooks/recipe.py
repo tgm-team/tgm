@@ -62,7 +62,7 @@ def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
     dst = train_dg.edge_dst
     hm = HookManager(keys=['train', 'val', 'test'])
     hm.register(
-        'train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+        'train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()), strategy='rnd')
     )
     hm.register('val', TGBNegativeEdgeSamplerHook(dataset_name, split_mode='val'))
     hm.register('test', TGBNegativeEdgeSamplerHook(dataset_name, split_mode='test'))

@@ -5,13 +5,15 @@ from pathlib import Path
 import torch
 
 from tgm import DGBatch, DGraph
-from tgm.hooks import StatelessHook
+from tgm.hooks import StatelessHook, StatefulHook
 from tgm.util.logging import _get_logger
+from typing import Literal, Tuple
+from tgm.constants import PADDED_NODE_ID
 
 logger = _get_logger(__name__)
 
 
-class NegativeEdgeSamplerHook(StatelessHook):
+class NegativeEdgeSamplerHook(StatefulHook):
     """Sample negative edges for dynamic link prediction.
 
     Args:
@@ -24,11 +26,19 @@ class NegativeEdgeSamplerHook(StatelessHook):
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
     _cls_produces = {'neg', 'neg_time'}
+    VALID_STRATEGY = ['rnd', 'hist_rnd']
 
     def __init__(
-        self, low: int, high: int, neg_ratio: float = 1.0, id: str | None = None
+        self, 
+        low: int, 
+        high: int, 
+        neg_ratio: float = 1.0, 
+        id: str | None = None,
+        strategy : Literal['rnd', 'hist_rnd'] = 'rnd'
     ) -> None:
         super().__init__()
+        if strategy not in self.VALID_STRATEGY:
+            raise ValueError(f'{strategy} is not supported. Valid sampling strategies: {self.VALID_STRATEGY}')
         if not 0 < neg_ratio <= 1:
             raise ValueError(f'neg_ratio must be in (0, 1], got: {neg_ratio}')
         if not low < high:
@@ -37,30 +47,108 @@ class NegativeEdgeSamplerHook(StatelessHook):
         self.high = high
         self.neg_ratio = neg_ratio
         self._id = id
+        self.strategy = strategy
+
+        if strategy == 'hist_rnd':
+            self.memory = None
+            self.count = 0
         self.__post_init__()
 
-    # TODO: Historical vs. random
+    def reset_state(self):
+        self.memory = None
+        self.count = 0
+
     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
         size = (round(self.neg_ratio * batch.edge_dst.size(0)),)
+
         if size[0] == 0:
-            self.add_batch_attribute(
-                batch, 'neg', torch.empty(size, dtype=torch.int32, device=dg.device)
-            )
-            self.add_batch_attribute(
-                batch,
-                'neg_time',
-                torch.empty(size, dtype=torch.int64, device=dg.device),
-            )
-        else:
-            self.add_batch_attribute(
-                batch,
-                'neg',
-                torch.randint(
-                    self.low, self.high, size, dtype=torch.int32, device=dg.device
-                ),
-            )
-            self.add_batch_attribute(batch, 'neg_time', batch.edge_time.clone())
+            neg = torch.empty(size, dtype=torch.int32, device=dg.device)
+            neg_time = torch.empty(size, dtype=torch.int64, device=dg.device)
+        elif self.strategy == 'rnd':
+            neg, neg_time = self._random_sampling(dg, batch)
+
+            neg, neg_time = neg[:size[0]], neg_time[:size[0]]
+        
+        elif self.strategy == 'hist_rnd':
+            if self.count == 0:
+                neg, neg_time = self._random_sampling(dg, batch)
+                neg, neg_time = neg[:size[0]], neg_time[:size[0]]
+                
+            else:
+                rnd_size = round(size[0] * 0.5)
+                hst_size = size[0] - rnd_size
+                neg_rnd, neg_time_rnd = self._random_sampling(dg, batch)
+                neg_hst, neg_time_hst = self._random_hist_sampling(dg,batch)
+
+                neg_hst_valid_mask =  neg_hst != PADDED_NODE_ID
+                valid_idx = torch.where(neg_hst_valid_mask)[0]
+                cutoff = min (hst_size,valid_idx.size(0))
+
+                neg_hst_valid_mask[cutoff:] = False
+
+
+                neg = torch.cat([neg_rnd[~neg_hst_valid_mask],neg_hst[neg_hst_valid_mask]],dim=0)
+                neg_time = torch.cat([neg_time_rnd[~neg_hst_valid_mask],neg_time_hst[neg_hst_valid_mask]],dim=0)
+
+            self._update_hst_memory(dg,batch)
+        
+
+        self.add_batch_attribute(batch,'neg',neg)
+        self.add_batch_attribute(batch,'neg_time',neg_time)
         return batch
+    
+    def _random_sampling(self, dg: DGraph, batch: DGBatch) -> Tuple[torch.Tensor, torch.Tensor]:
+        size = (batch.edge_dst.size(0),)
+        neg = torch.randint(self.low, self.high, size, dtype=torch.int32, device=dg.device)
+        neg_time = batch.edge_time.clone()
+        
+        return neg, neg_time
+    
+    def _random_hist_sampling(self, dg: DGraph, batch: DGBatch ) -> Tuple[torch.Tensor, torch.Tensor]:
+        batch_size = batch.edge_src.size(0)
+        mask = torch.isin(self.memory[0], batch.edge_src)
+        sampling_edges = self.memory[:,mask]
+
+        src_to_idx = torch.zeros((batch.edge_src.max() + 1,), dtype=torch.long, device=dg.device) 
+        src_to_idx[batch.edge_src] = torch.arange(batch_size, device=dg.device)
+        edge_to_src_idx = src_to_idx[sampling_edges[0]]
+        sampling_edges_random_weights = torch.rand(sampling_edges.size(1), device= dg.device)
+        best_weights = torch.full((batch.edge_src.size(0),), -1.0, device=dg.device)
+
+        # Select a random interactions for each src from the past by picking the edge having the highest edge weight
+        best_weights.scatter_reduce_(0, edge_to_src_idx, sampling_edges_random_weights, reduce="amax")
+        best_edge_mask = sampling_edges_random_weights == best_weights[edge_to_src_idx]
+
+        neg = torch.full((batch_size,),PADDED_NODE_ID, dtype=sampling_edges.dtype, device=dg.device)
+        neg[edge_to_src_idx[best_edge_mask]] = sampling_edges[1, best_edge_mask]
+
+        neg_time = batch.edge_time.clone()
+
+        return neg, neg_time
+
+    def _update_hst_memory(self, dg: DGraph, batch: DGBatch) -> None:
+        batch_size = batch.edge_src.size(0)
+
+        if self.memory is None:
+            self.memory = torch.zeros((2, batch_size * 2), dtype=torch.int32, device=dg.device)
+
+        if self.count + batch_size > self.memory.size(1):
+            new_size = max(self.memory.size(1) * 2, (self.count + batch_size) * 2)
+            
+            edge_buffer = torch.zeros((2, new_size - self.memory.size(1)), dtype=torch.int32, device=dg.device)
+            self.memory = torch.cat([self.memory, edge_buffer], dim=1)
+        
+
+
+        self.memory[0, self.count: self.count + batch_size] = batch.edge_src
+        self.memory[1, self.count: self.count + batch_size] = batch.edge_dst
+
+        self.count += batch_size        
+
+
+
+
+
 
 
 class TGBNegativeEdgeSamplerHook(StatelessHook):
