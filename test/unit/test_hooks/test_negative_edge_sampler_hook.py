@@ -1,7 +1,10 @@
+from unittest.mock import patch
+
 import pytest
 import torch
 
 from tgm import DGBatch, DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, NegativeEdgeSamplerHook
 
@@ -29,7 +32,7 @@ def test_hook_repre():
 
 
 def test_hook_reset_state():
-    assert NegativeEdgeSamplerHook.has_state == False
+    assert NegativeEdgeSamplerHook.has_state == True
 
 
 def test_bad_negative_edge_sampler_init():
@@ -97,3 +100,59 @@ def test_node_only_batch_negative_edge_sampler(node_only_data):
         assert isinstance(batch_2, DGBatch)
         assert batch_2.neg.shape == (0,)
         assert batch_2.neg_time.shape == (0,)
+
+
+@pytest.fixture
+def data_test_hst_rnd():
+    edge_index = torch.IntTensor(
+        [
+            [1, 5],
+            [7, 6],
+            [2, 8],
+            [7, 8],  # 1st batch
+            [1, 7],
+            [2, 9],
+            [3, 10],
+            [4, 5],  # 2nd batch
+            [3, 11],  # 3rd batch
+        ]
+    )
+    edge_time = torch.arange(edge_index.size(0))
+    return DGData.from_raw(edge_time, edge_index)
+
+
+def test_hst_rnd(data_test_hst_rnd):
+    dg = DGraph(data_test_hst_rnd)
+
+    hm = HookManager(keys=['unit'])
+    sampler = NegativeEdgeSamplerHook(low=0, high=6, strategy='hist_rnd')
+
+    def mock_random_sampling(dg: DGraph, batch: DGBatch):
+        neg = torch.full((batch.edge_src.size(0),), PADDED_NODE_ID, dtype=torch.int32)
+        neg_time = batch.edge_time.clone()
+        return neg, neg_time
+
+    hm.register('unit', sampler)
+    loader = DGDataLoader(dg, batch_size=4, hook_manager=hm)
+
+    with patch.object(sampler, '_random_sampling', mock_random_sampling):
+        with hm.activate('unit'):
+            batch_iter = iter(loader)
+            batch_1 = next(batch_iter)
+            assert batch_1.neg.shape == (4,)
+            assert torch.equal(
+                batch_1.neg,
+                torch.Tensor(
+                    [PADDED_NODE_ID, PADDED_NODE_ID, PADDED_NODE_ID, PADDED_NODE_ID]
+                ),
+            )
+
+            batch_2 = next(batch_iter)
+            assert batch_2.neg.shape == (4,)
+            assert torch.equal(
+                batch_2.neg, torch.Tensor([5, 8, PADDED_NODE_ID, PADDED_NODE_ID])
+            )
+
+            batch_3 = next(batch_iter)
+            assert batch_3.neg.shape == (1,)
+            assert torch.equal(batch_3.neg, torch.Tensor([10]))
