@@ -214,6 +214,8 @@ class NegativeEdgeSamplerHook(StatefulHook):
             back-to-back resizes even for large batches.
             - Only source and destination nodes are stored; edge timestamps are
             not retained in memory.
+            - This scale linear w.r.t the number of interaction event rather than number of edges.
+            Since _memory can contain duplicated edges.
         """
         batch_size = batch.edge_src.size(0)
 

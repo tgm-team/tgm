@@ -146,13 +146,33 @@ def test_hst_rnd(data_test_hst_rnd):
                     [PADDED_NODE_ID, PADDED_NODE_ID, PADDED_NODE_ID, PADDED_NODE_ID]
                 ),
             )
+            assert sampler._memory is not None
+            assert sampler._memory.shape == (2, 8)
+            assert sampler._count == 4
 
             batch_2 = next(batch_iter)
             assert batch_2.neg.shape == (4,)
             assert torch.equal(
                 batch_2.neg, torch.Tensor([5, 8, PADDED_NODE_ID, PADDED_NODE_ID])
             )
+            assert sampler._memory is not None
+            assert sampler._memory.shape == (2, 8)
+            assert sampler._count == 8
 
             batch_3 = next(batch_iter)
             assert batch_3.neg.shape == (1,)
             assert torch.equal(batch_3.neg, torch.Tensor([10]))
+
+            assert sampler._memory is not None
+            assert sampler._memory.shape == (2, 18)
+            assert sampler._count != 0
+            assert sampler._count == 9
+
+            sampler.reset_state()
+            assert sampler._memory is None
+            assert sampler._count == 0
+
+
+def test_invalid_strategy():
+    with pytest.raises(ValueError):
+        NegativeEdgeSamplerHook(low=0, high=6, strategy='foo')
