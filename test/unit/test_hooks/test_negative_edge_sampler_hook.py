@@ -111,10 +111,13 @@ def data_test_hst_rnd():
             [2, 8],
             [7, 8],  # 1st batch
             [1, 7],
-            [2, 9],
+            [9, 10],
             [3, 10],
-            [4, 5],  # 2nd batch
-            [3, 11],  # 3rd batch
+            [1, 9],  # 2nd batch
+            [3, 11],
+            [2, 10],
+            [7, 2],
+            [3, 5],  # 3rd batch
         ]
     )
     edge_time = torch.arange(edge_index.size(0))
@@ -153,20 +156,22 @@ def test_hst_rnd(data_test_hst_rnd):
             batch_2 = next(batch_iter)
             assert batch_2.neg.shape == (4,)
             assert torch.equal(
-                batch_2.neg, torch.Tensor([5, 8, PADDED_NODE_ID, PADDED_NODE_ID])
+                batch_2.neg, torch.Tensor([5, PADDED_NODE_ID, PADDED_NODE_ID, 5])
             )
             assert sampler._memory is not None
             assert sampler._memory.shape == (2, 8)
             assert sampler._count == 8
 
             batch_3 = next(batch_iter)
-            assert batch_3.neg.shape == (1,)
-            assert torch.equal(batch_3.neg, torch.Tensor([10]))
+            assert batch_3.neg.shape == (4,)
+            assert torch.equal(
+                batch_3.neg, torch.Tensor([10, 8, PADDED_NODE_ID, PADDED_NODE_ID])
+            )
 
             assert sampler._memory is not None
-            assert sampler._memory.shape == (2, 18)
+            assert sampler._memory.shape == (2, 24)
             assert sampler._count != 0
-            assert sampler._count == 9
+            assert sampler._count == 12
 
             sampler.reset_state()
             assert sampler._memory is None

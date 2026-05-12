@@ -82,21 +82,16 @@ class NegativeEdgeSamplerHook(StatefulHook):
                 neg_rnd, neg_time_rnd = self._random_sampling(dg, batch)
                 neg_hst, neg_time_hst = self._random_hist_sampling(dg, batch)
 
-                neg_hst_valid_mask = neg_hst != PADDED_NODE_ID
-                valid_idx = torch.where(neg_hst_valid_mask)[0]
+                original_valid_mask = neg_hst != PADDED_NODE_ID
+                valid_idx = torch.where(original_valid_mask)[0]
                 cutoff = min(hst_size, valid_idx.size(0))
-                neg_hst_valid_mask[cutoff:] = False
 
-                neg = torch.cat(
-                    [neg_hst[neg_hst_valid_mask], neg_rnd[~neg_hst_valid_mask]], dim=0
-                )
-                neg_time = torch.cat(
-                    [
-                        neg_time_hst[neg_hst_valid_mask],
-                        neg_time_rnd[~neg_hst_valid_mask],
-                    ],
-                    dim=0,
-                )
+                neg = neg_rnd.clone()
+                neg_time = neg_time_rnd.clone()
+
+                chosen = valid_idx[:cutoff]
+                neg[chosen] = neg_hst[chosen]
+                neg_time[chosen] = neg_time_hst[chosen]
 
             self._update_hst_memory(dg, batch)
 
@@ -164,32 +159,46 @@ class NegativeEdgeSamplerHook(StatefulHook):
         """
         assert self._memory is not None
 
-        batch_size = batch.edge_src.size(0)
         mask = torch.isin(self._memory[0], batch.edge_src)
         sampling_edges = self._memory[:, mask]
 
-        src_to_idx = torch.zeros(
+        # Group duplicate srcs: for each unique src, collect all batch positions
+        unique_srcs, inverse = torch.unique(batch.edge_src, return_inverse=True)
+
+        unique_src_to_idx = torch.zeros(
             (int(batch.edge_src.max().item()) + 1,), dtype=torch.long, device=dg.device
         )
+        unique_src_to_idx[unique_srcs] = torch.arange(
+            unique_srcs.size(0), device=dg.device
+        )
 
-        src_to_idx[batch.edge_src] = torch.arange(batch_size, device=dg.device)
-        edge_to_src_idx = src_to_idx[sampling_edges[0]]
+        edge_to_unique_idx = unique_src_to_idx[sampling_edges[0]]
+
         sampling_edges_random_weights = torch.rand(
             sampling_edges.size(1), device=dg.device
         )
-        best_weights = torch.full((batch.edge_src.size(0),), -1.0, device=dg.device)
+        best_weights = torch.full((unique_srcs.size(0),), -1.0, device=dg.device)
 
-        # Select a random interactions for each src from the past by picking the edge having the highest edge weight
         best_weights.scatter_reduce_(
-            0, edge_to_src_idx, sampling_edges_random_weights, reduce='amax'
+            0, edge_to_unique_idx, sampling_edges_random_weights, reduce='amax'
         )
-        best_edge_mask = sampling_edges_random_weights == best_weights[edge_to_src_idx]
-
-        neg = torch.full(
-            (batch_size,), PADDED_NODE_ID, dtype=sampling_edges.dtype, device=dg.device
+        best_edge_mask = (
+            sampling_edges_random_weights == best_weights[edge_to_unique_idx]
         )
-        neg[edge_to_src_idx[best_edge_mask]] = sampling_edges[1, best_edge_mask]
 
+        # Sample one neg per unique src
+        neg_per_unique = torch.full(
+            (unique_srcs.size(0),),
+            PADDED_NODE_ID,
+            dtype=sampling_edges.dtype,
+            device=dg.device,
+        )
+        neg_per_unique[edge_to_unique_idx[best_edge_mask]] = sampling_edges[
+            1, best_edge_mask
+        ]
+
+        # Broadcast back to all batch positions (duplicates get the same sampled neg)
+        neg = neg_per_unique[inverse]
         neg_time = batch.edge_time.clone()
         return neg, neg_time
 
