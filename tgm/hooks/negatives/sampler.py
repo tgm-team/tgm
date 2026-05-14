@@ -65,10 +65,6 @@ class HistoricalNegativeEdgeSamplerHook(StatefulHook):
     """Sample negative edges from past interactions for dynamic link prediction.
 
     Args:
-        low (int): The minimum node id to sample
-        high (int) : The maximum node id to sample
-        neg_ratio (float): The ratio of sampled negative destination nodes
-            to the number of positive destination nodes (default = 1.0).
         id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
     Notes:
