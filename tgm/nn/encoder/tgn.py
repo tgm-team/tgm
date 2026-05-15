@@ -74,6 +74,31 @@ class IdentityMessage(torch.nn.Module):
         return torch.cat([z_src, z_dst, raw_msg, t_enc], dim=-1)
 
 
+class EncodeIndexMessage(torch.nn.Module):
+    def __init__(
+        self,
+        raw_msg_dim: int,
+        memory_dim: int,
+        time_dim: int,
+        index_dim: int,
+    ) -> None:
+        super().__init__()
+        if index_dim <= 0:
+            raise ValueError('index_dim must be positive')
+        self.out_channels = raw_msg_dim + 2 * memory_dim + time_dim + 2 * index_dim
+
+    def forward(
+        self,
+        z_src: Tensor,
+        z_dst: Tensor,
+        raw_msg: Tensor,
+        t_enc: Tensor,
+        src_enc: Tensor,
+        dst_enc: Tensor,
+    ) -> torch.Tensor:
+        return torch.cat([z_src, z_dst, raw_msg, src_enc, dst_enc, t_enc], dim=-1)
+
+
 TGNMessageStoreType = Dict[int, Tuple[Tensor, Tensor, Tensor, Tensor]]
 
 
@@ -249,3 +274,59 @@ class TGNMemory(torch.nn.Module):
             self._reset_message_store()
         super().train(mode)
         return self
+
+
+class TGNv2Memory(TGNMemory):
+    def __init__(
+        self,
+        num_nodes: int,
+        raw_msg_dim: int,
+        memory_dim: int,
+        time_dim: int,
+        index_dim: int,
+        message_module: Callable,
+        aggregator_module: Callable,
+    ):
+        if index_dim <= 0:
+            raise ValueError('index_dim must be positive')
+        self.index_dim = index_dim
+        super().__init__(
+            num_nodes,
+            raw_msg_dim,
+            memory_dim,
+            time_dim,
+            message_module,
+            aggregator_module,
+        )
+        self.index_enc = Time2Vec(time_dim=index_dim)
+
+    def reset_parameters(self) -> None:
+        super().reset_parameters()
+        if hasattr(self, 'index_enc'):
+            self.index_enc.reset_parameters()
+
+    def _compute_msg(
+        self, n_id: Tensor, msg_store: TGNMessageStoreType, msg_module: Callable
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        data = [msg_store[i] for i in n_id.tolist()]
+        src_store, dst_store, t_store, raw_msg_store = list(zip(*data))
+        src_tensor = torch.cat(src_store, dim=0).to(self.device)
+        dst_tensor = torch.cat(dst_store, dim=0).to(self.device)
+        t_tensor = torch.cat(t_store, dim=0).to(self.device)
+        raw_msg_tensor = torch.cat(raw_msg_store, dim=0).to(self.device)
+        t_rel = t_tensor - self.last_update[src_tensor]
+        t_enc = self.time_enc(t_rel.to(raw_msg_tensor.dtype))
+        src_enc = self.index_enc(src_tensor.to(raw_msg_tensor.dtype))
+        dst_enc = self.index_enc(dst_tensor.to(raw_msg_tensor.dtype))
+        msg = msg_module(
+            self.memory[src_tensor],
+            self.memory[dst_tensor],
+            raw_msg_tensor,
+            t_enc,
+            src_enc,
+            dst_enc,
+        )
+        return cast(
+            Tuple[Tensor, Tensor, Tensor, Tensor],
+            (msg, t_tensor, src_tensor, dst_tensor),
+        )

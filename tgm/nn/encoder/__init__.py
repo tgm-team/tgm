@@ -4,11 +4,13 @@ from .tpnet import TPNet, RandomProjectionModule
 from .tgcn import TGCN
 from .gclstm import GCLSTM
 from .tgn import (
+    EncodeIndexMessage,
     GraphAttentionEmbedding,
+    IdentityMessage,
     LastAggregator,
     MeanAggregator,
-    IdentityMessage,
     TGNMemory,
+    TGNv2Memory,
 )
 from .roland import ROLAND
 
@@ -22,10 +24,12 @@ __all__ = [
     'RandomProjectionModule',
     'TGCN',
     'TPNet',
+    'EncodeIndexMessage',
     'GraphAttentionEmbedding',
     'LastAggregator',
     'MeanAggregator',
     'IdentityMessage',
     'TGNMemory',
+    'TGNv2Memory',
     'ROLAND',
 ]

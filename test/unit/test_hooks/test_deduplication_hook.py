@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from tgm import DGraph
+from tgm.constants import PADDED_NODE_ID
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import DeduplicationHook
 from tgm.hooks.hook_manager import HookManager
@@ -108,6 +109,29 @@ def test_dedup_with_nbrs(dg):
     )
     torch.testing.assert_close(
         processed_batch.global_to_local(batch.nbr_nids[1]), torch.IntTensor([5])
+    )
+
+
+def test_dedup_with_node_labels_and_nbrs(dg):
+    hook = DeduplicationHook(seed_nodes_keys=['node_y_nids', 'nbr_nids'])
+    batch = dg.materialize()
+    batch.node_y_nids = torch.IntTensor([5, 10])
+    batch.nbr_nids = [
+        torch.IntTensor([[1, 5], [10, PADDED_NODE_ID]]),
+    ]
+
+    processed_batch = hook(dg, batch)
+    torch.testing.assert_close(
+        processed_batch.unique_nids, torch.IntTensor([1, 2, 4, 5, 8, 10])
+    )
+    torch.testing.assert_close(
+        processed_batch.global_to_local(batch.node_y_nids), torch.IntTensor([3, 5])
+    )
+    torch.testing.assert_close(
+        processed_batch.global_to_local(
+            batch.nbr_nids[0][batch.nbr_nids[0] != PADDED_NODE_ID]
+        ),
+        torch.IntTensor([0, 3, 5]),
     )
 
 
