@@ -3,7 +3,7 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
-from tgm.hooks.node_analytics import NodeAnalyticsHook
+from tgm.hooks.analytics.node_analytics import NodeAnalyticsHook
 
 
 @pytest.fixture
