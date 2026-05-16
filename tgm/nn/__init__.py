@@ -18,7 +18,7 @@ from .modules import (
     PopTrackPredictor,
 )
 
-from .base import BaseNN, NNModule
+from .base import EncoderModule
 
 __all__ = [
     'CTAN',
@@ -38,7 +38,7 @@ __all__ = [
     'TGNMemory',
     'NCNPredictor',
     'PopTrackPredictor',
-    'BaseNN',
+    'EncoderModule',
     'NNModule',
     'ROLAND',
     'TGAT',

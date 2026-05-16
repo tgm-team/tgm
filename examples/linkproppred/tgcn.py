@@ -12,7 +12,7 @@ from tgm import DGBatch, DGraph, TimeDeltaDG
 from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager, RecipeRegistry
-from tgm.nn import TGCN, BaseNN, LinkPredictor
+from tgm.nn import TGCN, LinkPredictor
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -44,11 +44,11 @@ args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
-class RecurrentGCN(BaseNN):
+class RecurrentGCN(torch.nn.Module):
     def __init__(self, node_dim: int, embed_dim: int) -> None:
         super().__init__()
 
-        self._requires = {
+        self.requires = {
             'edge_src',
             'edge_dst',
         }
@@ -220,7 +220,7 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
-hm.validate_nnmodule_requirement(encoder)
+hm.validate_requirement(encoder)
 
 best_val = 0.0
 

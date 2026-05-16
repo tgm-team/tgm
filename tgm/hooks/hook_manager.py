@@ -9,12 +9,13 @@ from typing import Any, Dict, Iterator, List, Set
 
 from tgm import DGBatch, DGraph
 from tgm.exceptions import (
+    BadEncoderProtocolError,
     BadHookProtocolError,
     UnresolvableHookDependenciesError,
 )
 from tgm.hooks import DGHook
 from tgm.hooks.registry import list_hooks
-from tgm.nn import NNModule
+from tgm.nn import EncoderModule
 from tgm.util.logging import _get_logger, log_latency
 
 logger = _get_logger(__name__)
@@ -224,8 +225,8 @@ class HookManager:
         finally:
             self._active_key = prev_key  # Restore previous active key
 
-    def validate_nnmodule_requirement(
-        self, module: NNModule, key: str | None = None
+    def validate_requirement(
+        self, module: EncoderModule, key: str | None = None
     ) -> None:
         r"""Validate that the registered hooks satisfy the requirements of a given NNModule.
 
@@ -249,9 +250,16 @@ class HookManager:
 
         Raises:
             ValueError: If the provided key is not registered in the HookManager.
-            RequirementError: If one or more of the module's requirements are not
+            UnresolvableHookDependenciesError: If one or more of the module's requirements are not
                 satisfied by the registered hooks.
+
+            BadEncoderProtocolError: If provided encoder doesn't follow the protocol `EncoderModule`
         """
+        if not isinstance(module, EncoderModule):
+            raise BadEncoderProtocolError(
+                f'Cannot validate {type(module).__name__}: must implement __call__(self, batch: DGBatch, *args: Any, **kwargs: Any) and have `requires` attribute'
+            )
+
         keys = []
         if key is not None:
             # In the case user provide key, we validate only provided key

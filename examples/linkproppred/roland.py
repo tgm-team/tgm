@@ -268,6 +268,8 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
+hm.validate_requirement(encoder)
+
 best_val = 0.0
 
 for epoch in range(1, args.epochs + 1):

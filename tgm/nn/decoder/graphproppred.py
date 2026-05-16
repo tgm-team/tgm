@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 from torch.nn import Sequential
 
-from ..modules import BaseEmbdPooling, MeanEmbdPooling
+from tgm.exceptions import BadAggregatorProtocolError
+
+from ..modules import Aggregator, MeanEmbdPooling
 
 
 class GraphPredictor(torch.nn.Module):
@@ -13,7 +15,7 @@ class GraphPredictor(torch.nn.Module):
         out_dim (int): Dimension of output
         nlayers (int): Number of layers
         hidden_dim (int): Size of each hidden embeddings
-        graph_pooling (BaseEmbdPooling): graph pooling operation (MeanEmbdPooling by default)
+        graph_pooling (Aggregator): graph pooling operation (MeanEmbdPooling by default)
 
     Note:
         graph_pooling can be selected from [MeanEmbdPooling, SumEmbdPooling] or any custom merging operation, provided it subclasses `BaseEmbdPooling`.
@@ -25,7 +27,7 @@ class GraphPredictor(torch.nn.Module):
         out_dim: int = 1,
         nlayers: int = 2,
         hidden_dim: int = 64,
-        graph_pooling: BaseEmbdPooling | None = None,
+        graph_pooling: Aggregator | None = None,
     ) -> None:
         super().__init__()
 
@@ -39,8 +41,12 @@ class GraphPredictor(torch.nn.Module):
 
         self.model.append(nn.Linear(hidden_dim, out_dim))
         self.graph_pooling = (
-            graph_pooling if graph_pooling is not None else MeanEmbdPooling()
+            graph_pooling if graph_pooling is not None else MeanEmbdPooling(dim=in_dim)
         )
+        if not isinstance(self.graph_pooling, Aggregator):
+            raise BadAggregatorProtocolError(
+                f'Cannot validate {type(self.graph_pooling).__name__}: must implement __call__(*args: torch.Tensor, **kwargs: torch.Tensor) -> torch.Tensor and out_channels() -> int'
+            )
 
     def forward(self, z_nodes: torch.Tensor) -> torch.Tensor:
         r"""Forward pass.
