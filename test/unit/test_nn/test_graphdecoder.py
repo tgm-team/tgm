@@ -15,11 +15,11 @@ def test_pooling():
     node_embeddings = torch.tensor(
         [[1.0, 2.0, 3.0, 4.0, 5.0], [6.0, 7.0, 8.0, 9.0, 10.0]]
     )
-    result = SumEmbdPooling()(node_embeddings)
+    result = SumEmbdPooling(5)(node_embeddings)
     expected = torch.tensor([7.0, 9.0, 11.0, 13.0, 15.0])
     assert torch.equal(result, expected)
 
-    result = MeanEmbdPooling()(node_embeddings)
+    result = MeanEmbdPooling(5)(node_embeddings)
     expected = torch.tensor([3.5, 4.5, 5.5, 6.5, 7.5], dtype=torch.float32)
     assert torch.equal(result, expected)
 

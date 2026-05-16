@@ -15,7 +15,7 @@ def edge_factory():
 def test_cat_merge():
     src = torch.tensor([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]])
     dst = torch.tensor([[11, 12, 13, 14, 15], [16, 17, 18, 19, 20]])
-    merge_op = ConcatMerge(node_dim=5)
+    merge_op = ConcatMerge(dim=5)
     assert merge_op.out_channels == 5 * 2
     merge_result = merge_op(src, dst)
 
@@ -29,7 +29,7 @@ def test_cat_merge():
 def test_sum_merge():
     src = torch.tensor([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]).float()
     dst = torch.tensor([[11, 12, 13, 14, 15], [16, 17, 18, 19, 20]]).float()
-    merge_op = LearnableSumMerge(node_dim=5)
+    merge_op = LearnableSumMerge(dim=5)
     assert merge_op.out_channels == 5
     merge_result = merge_op(src, dst)
     assert list(merge_result.shape) == [2, 5]
