@@ -63,6 +63,10 @@ class RecurrentGCN(torch.nn.Module):
         tau: float = 0.5,
     ) -> None:
         super().__init__()
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+        }
         self.recurrent = ROLAND(input_channel, nhid, num_nodes, dropout, update, tau)
 
     def forward(
@@ -264,6 +268,7 @@ encoder = RecurrentGCN(
     tau=args.tau,
 ).to(args.device)
 decoder = LinkPredictor(args.embed_dim).to(args.device)
+hm.validate_requirement(encoder)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

@@ -83,6 +83,16 @@ class GraphMixerEncoder(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+            'nbr_edge_x',
+            'seed_times',
+            'nbr_edge_time',
+            'nbr_nids',
+            'time_gap_nbrs',
+            'neg',
+        }
 
         # GraphMixer edge_time encoding function is not trainable
         self.time_encoder = Time2Vec(time_dim=time_dim)
@@ -279,6 +289,7 @@ encoder = GraphMixerEncoder(
 decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device
 )
+hm.validate_requirement(encoder)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

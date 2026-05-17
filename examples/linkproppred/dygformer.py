@@ -95,6 +95,15 @@ class DyGFormer_LinkPrediction(nn.Module):
             time_encoder,
             device,
         )
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+            'nbr_nids',
+            'neg',
+            'seed_node_nbr_mask',
+            'nbr_edge_time',
+            'nbr_edge_x',
+        }
         # @TODO: Make encoder/decoder to be explicit
         self.decoder = LinkPredictor(
             node_dim=args.embed_dim, hidden_dim=args.embed_dim
@@ -285,6 +294,8 @@ model = DyGFormer_LinkPrediction(
     device=args.device,
     patch_size=args.patch_size,
 ).to(args.device)
+
+hm.validate_requirement(model)
 
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
