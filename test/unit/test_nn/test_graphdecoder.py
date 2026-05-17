@@ -1,8 +1,15 @@
 import pytest
 import torch
 
+from tgm.exceptions import BadAggregatorProtocolError
 from tgm.nn import GraphPredictor
 from tgm.nn.modules import MeanEmbdPooling, SumEmbdPooling
+
+
+class FooPooling:
+    # Bad pooling operation implementation: missing implementation of def dim() -> int:
+    def __call__(self, z: torch.Tensor):
+        return z
 
 
 @pytest.fixture
@@ -15,11 +22,15 @@ def test_pooling():
     node_embeddings = torch.tensor(
         [[1.0, 2.0, 3.0, 4.0, 5.0], [6.0, 7.0, 8.0, 9.0, 10.0]]
     )
-    result = SumEmbdPooling(5)(node_embeddings)
+    pooling_op = SumEmbdPooling(5)
+    assert pooling_op.dim == 5
+    result = pooling_op(node_embeddings)
     expected = torch.tensor([7.0, 9.0, 11.0, 13.0, 15.0])
     assert torch.equal(result, expected)
 
-    result = MeanEmbdPooling(5)(node_embeddings)
+    pooling_op = MeanEmbdPooling(5)
+    assert pooling_op.dim == 5
+    result = pooling_op(node_embeddings)
     expected = torch.tensor([3.5, 4.5, 5.5, 6.5, 7.5], dtype=torch.float32)
     assert torch.equal(result, expected)
 
@@ -47,3 +58,8 @@ def test_output(node_embedding_factory):
     ):  # exclude the first and the last layer
         assert decoder.model[i].in_features == 64
         assert decoder.model[i].out_features == 64
+
+
+def test_bad_pooling_op():
+    with pytest.raises(BadAggregatorProtocolError):
+        GraphPredictor(in_dim=128, nlayers=5, hidden_dim=64, graph_pooling=FooPooling())

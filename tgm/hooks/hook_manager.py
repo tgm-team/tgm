@@ -327,7 +327,10 @@ class HookManager:
                         )
                         error_message += f"\n\t- '{attribute}': Do you mean {closest_match_str}?. If so, please update the module requirement with the correct name and register '{hook.__name__}' with key '{key}' to resolve this."
                         found_match = True
-                    elif attribute.lower() in getattr(hook, '__doc__', '').lower():
+                    elif (
+                        attribute.lower()
+                        in (getattr(hook, '__doc__', '') or '').lower()
+                    ):
                         # keyword matches in hook documentation.
                         error_message += (
                             f"\n\t- '{attribute}': Found keyword '{attribute}' in '{hook.__name__}' documentation. "

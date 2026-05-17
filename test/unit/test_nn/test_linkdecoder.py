@@ -1,8 +1,15 @@
 import pytest
 import torch
 
+from tgm.exceptions import BadAggregatorProtocolError
 from tgm.nn import LinkPredictor
 from tgm.nn.modules import ConcatMerge, LearnableSumMerge
+
+
+class FooMerge:
+    # Bad merge operation implementation: missing implementation of def dim() -> int:
+    def __call__(self, z_src: torch.Tensor, z_dst: torch.Tensor):
+        return z_src
 
 
 @pytest.fixture
@@ -69,3 +76,8 @@ def test_output(edge_factory, merge_op_name):
     ):  # exclude the first and the last layer
         assert decoder.model[i].in_features == 64
         assert decoder.model[i].out_features == 64
+
+
+def test_bad_merge():
+    with pytest.raises(BadAggregatorProtocolError):
+        LinkPredictor(node_dim=128, nlayers=5, hidden_dim=64, merge_op=FooMerge())
