@@ -23,7 +23,7 @@ def test_pooling():
         [[1.0, 2.0, 3.0, 4.0, 5.0], [6.0, 7.0, 8.0, 9.0, 10.0]]
     )
     pooling_op = SumEmbdPooling(5)
-    assert pooling_op.dim == 5
+    assert pooling_op.out_channels == 5
     result = pooling_op(node_embeddings)
     expected = torch.tensor([7.0, 9.0, 11.0, 13.0, 15.0])
     assert torch.equal(result, expected)
