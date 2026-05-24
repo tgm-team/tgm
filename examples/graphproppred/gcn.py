@@ -317,7 +317,7 @@ for epoch in range(1, args.epochs + 1):
     log_metrics_dict(train_results, epoch=epoch)
     log_metrics_dict(val_results, epoch=epoch)
 
-    val_score = val_results['BinaryAUROC']
+    val_score = val_results['ValidationBinaryAUROC']
     if val_score > best_val:
         best_val = val_score
         test_results = eval(test_loader, test_labels, encoder, decoder, test_metrics)
