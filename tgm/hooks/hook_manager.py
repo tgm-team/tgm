@@ -210,7 +210,7 @@ class HookManager:
     def _ensure_valid_hook(self, hook: Any) -> None:
         if not isinstance(hook, DGHook):
             raise BadHookProtocolError(
-                f'Cannot register hook {type(hook).__name__}: must implement __call__(dg: DGraph, batch: DGBatch) -> DGBatch and reset_state()'
+                f'Cannot register hook {type(hook).__name__}: must implement __call__(dg: DGraph, batch: DGBatch) -> DGBatch, reset_state(), requires and produces properties.'
             )
 
     def _ensure_no_active_key(self) -> None:

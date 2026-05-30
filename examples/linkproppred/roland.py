@@ -204,7 +204,7 @@ def eval(
             except StopIteration:
                 pass
 
-    z = z.detach()
+    z[0], z[1] = z[0].detach(), z[1].detach()
     return float(np.mean(perf_list)), z
 
 
