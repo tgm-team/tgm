@@ -104,6 +104,15 @@ class TPNet_LinkPrediction(nn.Module):
         time_encoder: Callable[..., nn.Module] = Time2Vec,
     ) -> None:
         super().__init__()
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+            'nbr_nids',
+            'neg',
+            'seed_node_nbr_mask',
+            'nbr_edge_time',
+            'nbr_edge_x',
+        }
         self.encoder = TPNet(
             node_feat_dim=node_feat_dim,
             edge_x_dim=edge_x_dim,
@@ -330,6 +339,8 @@ model = TPNet_LinkPrediction(
     device=args.device,
     time_encoder=Time2Vec,
 )
+hm.validate_requirement(model)
+
 
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 

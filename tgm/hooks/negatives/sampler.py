@@ -5,11 +5,13 @@ import torch
 from tgm.constants import PADDED_NODE_ID
 from tgm.core import DGBatch, DGraph
 from tgm.hooks.base import StatefulHook, StatelessHook
+from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
+@hook
 class RandomNegativeEdgeSamplerHook(StatelessHook):
     """Random sampling negative edges for dynamic link prediction.
 
@@ -19,6 +21,8 @@ class RandomNegativeEdgeSamplerHook(StatelessHook):
         neg_ratio (float): The ratio of sampled negative destination nodes
             to the number of positive destination nodes (default = 1.0).
         id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
+
+    Key words: negative sampler, random, uniform,training, link prediction.
     """
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
@@ -61,6 +65,7 @@ class RandomNegativeEdgeSamplerHook(StatelessHook):
         return batch
 
 
+@hook
 class HistoricalNegativeEdgeSamplerHook(StatefulHook):
     """Sample negative edges from past interactions for dynamic link prediction.
 
@@ -74,6 +79,8 @@ class HistoricalNegativeEdgeSamplerHook(StatefulHook):
             corresponding node id is a valid negative; ``False`` means the entry is
             a padding placeholder (``PADDED_NODE_ID``) and should be excluded from
             loss computation and evaluation.
+
+    Key words: negative sampler, historical,training, link prediction.
     """
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}

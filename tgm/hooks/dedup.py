@@ -7,15 +7,18 @@ import torch
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import SeedableHook, StatelessHook
+from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
+@hook
 class DeduplicationHook(StatelessHook, SeedableHook):
     """Deduplicate node IDs from batch fields and create index mappings to unique node embeddings.
 
     Note: Supports batches with or without negative samples and multi-hop neighbors.
+    Key words: unique nodes, node ID mapper.
     """
 
     _cls_requires = {'edge_src', 'edge_dst'}

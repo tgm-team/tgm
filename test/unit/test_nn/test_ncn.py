@@ -20,7 +20,7 @@ def test_ncn(k, cn_time_decay):
     edge_time = torch.randint(0, B, size=(B,))
     last_update = torch.zeros(size=(B,))
 
-    h = ncn(node_feat, edge_index, edge_index, (last_update, edge_time))
+    h = ncn(node_feat, edge_index, edge_index, last_update, edge_time)
     assert h.shape[0] == (B)
     assert not torch.isnan(h).any()
 
