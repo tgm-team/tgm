@@ -27,10 +27,14 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
         id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
     Note:
-        The order of the output tensors respect the order of seed_nodes_keys.
+        - RecencyNeighborSamplerHook assumes queries occur in chronological order.
+        Query timestamp is significantly behind the buffer's current timestamp.
+        Results may be incomplete or incorrect.
+        - The order of the output tensors respect the order of seed_nodes_keys.
         For instance, for seed node keys ['edge_src', 'edge_dst', 'neg'] will have the first output index (hop 0) contain the concatenation
         of batch.edge_src, batch.edge_dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.edge_src
         followed by first-hop neighbors of batch.edge_dst, and then those of batch.neg. This pattern repeats for deeper hops.
+
 
     Raises:
         ValueError: If the num_nbrs list is empty or has non-positive entries.
@@ -61,6 +65,12 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
+
+        logger.warning(
+            "RecencyNeighborSamplerHook: query timestamp is significantly behind the buffer's "
+            'current timestamp. Results may be incomplete or incorrect. '
+            'This hook assumes queries occur in chronological order.'
+        )
 
         self._num_nodes = num_nodes
         self._num_nbrs = num_nbrs
@@ -233,6 +243,13 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
+        if query_times.min() < self._nbr_times.min():
+            logger.warning(
+                "RecencyNeighborSamplerHook: query timestamp is significantly behind the buffer's "
+                'current timestamp. Results may be incomplete or incorrect. '
+                'This hook assumes queries occur in chronological order.'
+            )
+
         assert self._nbr_feats is not None  # For mypy
         B = self._max_nbrs  # buffer size
 
