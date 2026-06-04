@@ -237,8 +237,8 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
     ) -> Tuple[torch.Tensor, ...]:
         if query_times.min() < self._nbr_times.min():
             logger.warning(
-                f"RecencyNeighborSamplerHook: query timestamp - {query_times.min()}, is behind the buffer's "
-                f'current timestamp - {self._nbr_times.min()}. Results may be incomplete or incorrect.'
+                f"RecencyNeighborSamplerHook: query timestamp ({query_times.min()}), is behind the buffer's "
+                f'current timestamp ({self._nbr_times.min()}). Results may be incomplete or incorrect.'
                 'This hook assumes queries are processed in chronological order.'
                 'Please ensure that:'
                 '(1) dataloader returns batches sorted by timestamp'
