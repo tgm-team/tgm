@@ -28,13 +28,11 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
 
     Note:
         - RecencyNeighborSamplerHook assumes queries occur in chronological order.
-        Query timestamp is significantly behind the buffer's current timestamp.
-        Results may be incomplete or incorrect.
+        If query timestamps lag behind the most recently pushed events, the computed neighbours may be incorrect.
         - The order of the output tensors respect the order of seed_nodes_keys.
         For instance, for seed node keys ['edge_src', 'edge_dst', 'neg'] will have the first output index (hop 0) contain the concatenation
         of batch.edge_src, batch.edge_dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.edge_src
         followed by first-hop neighbors of batch.edge_dst, and then those of batch.neg. This pattern repeats for deeper hops.
-
 
     Raises:
         ValueError: If the num_nbrs list is empty or has non-positive entries.
@@ -65,12 +63,6 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
             raise ValueError('num_nbrs must be non-empty')
         if not all([isinstance(x, int) and (x > 0) for x in num_nbrs]):
             raise ValueError('Each value in num_nbrs must be a positive integer')
-
-        logger.warning(
-            "RecencyNeighborSamplerHook: query timestamp is significantly behind the buffer's "
-            'current timestamp. Results may be incomplete or incorrect. '
-            'This hook assumes queries occur in chronological order.'
-        )
 
         self._num_nodes = num_nodes
         self._num_nbrs = num_nbrs
@@ -245,9 +237,13 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
     ) -> Tuple[torch.Tensor, ...]:
         if query_times.min() < self._nbr_times.min():
             logger.warning(
-                "RecencyNeighborSamplerHook: query timestamp is significantly behind the buffer's "
-                'current timestamp. Results may be incomplete or incorrect. '
-                'This hook assumes queries occur in chronological order.'
+                f"RecencyNeighborSamplerHook: query timestamp - {query_times.min()}, is behind the buffer's "
+                f'current timestamp - {self._nbr_times.min()}. Results may be incomplete or incorrect.'
+                'This hook assumes queries are processed in chronological order.'
+                'Please ensure that:'
+                '(1) dataloader returns batches sorted by timestamp'
+                '(2) batches are not being shuffled in a way that breaks temporal ordering'
+                '(3) the hook state is reset appropriately between datasets/epochs/evaluation runs'
             )
 
         assert self._nbr_feats is not None  # For mypy
