@@ -27,7 +27,9 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
         id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
     Note:
-        The order of the output tensors respect the order of seed_nodes_keys.
+        - RecencyNeighborSamplerHook assumes queries occur in chronological order.
+        If query timestamps lag behind the most recently pushed events, the computed neighbours may be incorrect.
+        - The order of the output tensors respect the order of seed_nodes_keys.
         For instance, for seed node keys ['edge_src', 'edge_dst', 'neg'] will have the first output index (hop 0) contain the concatenation
         of batch.edge_src, batch.edge_dst, batch.neg (in that order). The next index (hop 1) will contain first-hop neighbors of batch.edge_src
         followed by first-hop neighbors of batch.edge_dst, and then those of batch.neg. This pattern repeats for deeper hops.
@@ -233,6 +235,17 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
     ) -> Tuple[torch.Tensor, ...]:
+        if query_times.min() < self._nbr_times.min():
+            logger.warning(
+                f"RecencyNeighborSamplerHook: query timestamp ({query_times.min()}), is behind the buffer's "
+                f'current timestamp ({self._nbr_times.min()}). Results may be incomplete or incorrect.'
+                'This hook assumes queries are processed in chronological order.'
+                'Please ensure that:'
+                '(1) dataloader returns batches sorted by timestamp'
+                '(2) batches are not being shuffled in a way that breaks temporal ordering'
+                '(3) the hook state is reset appropriately between datasets/epochs/evaluation runs'
+            )
+
         assert self._nbr_feats is not None  # For mypy
         B = self._max_nbrs  # buffer size
 
