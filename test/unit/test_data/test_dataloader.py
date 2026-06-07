@@ -274,3 +274,111 @@ def test_iteration_with_empty_batch_raise():
 
     with pytest.raises(EmptyBatchError):
         next(it)
+
+
+def _make_interleaved_node_y_graph():
+    """
+    Global event sequence (sorted by time):
+      pos 0: edge (t=0)
+      pos 1: edge (t=1)
+      pos 2: node_y (t=1)
+      pos 3: edge (t=2)
+      pos 4: node_y (t=3)
+      pos 5: edge (t=4)
+    non_label_pos = [0, 1, 3, 5]
+    """
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
+    edge_time = torch.LongTensor([0, 1, 2])
+    node_y_time = torch.LongTensor([1, 3])
+    node_y_nids = torch.IntTensor([1, 2])
+    node_y = torch.FloatTensor([[0.1], [0.2]])
+    # Add a 4th edge at t=4 so non_label_pos = [0,1,3,5]
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4], [4, 5]])
+    edge_time = torch.LongTensor([0, 1, 2, 4])
+    data = DGData.from_raw(
+        edge_time,
+        edge_index,
+        node_y_time=node_y_time,
+        node_y_nids=node_y_nids,
+        node_y=node_y,
+    )
+    return DGraph(data)
+
+
+def test_count_node_labels_false_correct_batch_contents():
+    """Test A: correct batch contents with interleaved node_y, count_node_labels=False."""
+    dg = _make_interleaved_node_y_graph()
+    loader = DGDataLoader(dg, batch_size=2, count_node_labels=False, on_empty=None)
+    batches = list(loader)
+
+    assert len(batches) == 2
+
+    # Batch 0: slice [0, 3) → 2 edges + 1 node_y
+    b0 = batches[0]
+    assert b0.edge_src.numel() == 2
+    assert b0.node_y_nids is not None
+    assert b0.node_y_nids.numel() == 1
+    torch.testing.assert_close(b0.node_y_nids, torch.IntTensor([1]))
+
+    # Batch 1: slice [3, 6) → 2 edges + 1 node_y
+    b1 = batches[1]
+    assert b1.edge_src.numel() == 2
+    assert b1.node_y_nids is not None
+    assert b1.node_y_nids.numel() == 1
+    torch.testing.assert_close(b1.node_y_nids, torch.IntTensor([2]))
+
+
+def test_count_node_labels_false_drop_last():
+    """Test B: drop_last with count_node_labels=False."""
+    dg = _make_interleaved_node_y_graph()
+    # non_label_pos = [0, 1, 3, 5], batch_size=3 → 1 complete batch
+    loader = DGDataLoader(
+        dg, batch_size=3, count_node_labels=False, drop_last=True, on_empty=None
+    )
+    batches = list(loader)
+
+    assert len(batches) == 1
+
+    # Batch 0: slice [0, 5) → 3 non-label events (edges at pos 0,1,3) + node_y at pos 2,4
+    b0 = batches[0]
+    assert b0.edge_src.numel() == 3
+    assert b0.node_y_nids is not None
+    assert b0.node_y_nids.numel() == 2
+
+
+def test_count_node_labels_false_no_node_y_falls_back_to_uniform():
+    """Test C: no node_y — count_node_labels=False falls back to uniform batching."""
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4], [4, 5]])
+    edge_time = torch.LongTensor([0, 1, 2, 3])
+    data = DGData.from_raw(edge_time, edge_index)
+    dg = DGraph(data)
+
+    loader_default = DGDataLoader(dg, batch_size=2, on_empty=None)
+    loader_no_count = DGDataLoader(dg, batch_size=2, count_node_labels=False, on_empty=None)
+
+    batches_default = list(loader_default)
+    batches_no_count = list(loader_no_count)
+
+    assert len(batches_default) == len(batches_no_count)
+    for b_def, b_no in zip(batches_default, batches_no_count):
+        torch.testing.assert_close(b_def.edge_src, b_no.edge_src)
+        torch.testing.assert_close(b_def.edge_dst, b_no.edge_dst)
+
+
+def test_count_node_labels_true_default_unchanged():
+    """Test D: count_node_labels=True (default) — node_y events count toward batch size."""
+    dg = _make_interleaved_node_y_graph()
+    # With count_node_labels=True (default) and batch_size=3:
+    # total events = 6, so batches are [0,3) and [3,6)
+    loader = DGDataLoader(dg, batch_size=3, on_empty=None)
+    batches = list(loader)
+
+    assert len(batches) == 2
+
+    # Batch 0: slice [0, 3) → edges at pos 0,1 + node_y at pos 2 (only 2 edges)
+    b0 = batches[0]
+    assert b0.edge_src.numel() == 2
+
+    # Batch 1: slice [3, 6) → edge at pos 3,5 + node_y at pos 4 (only 2 edges)
+    b1 = batches[1]
+    assert b1.edge_src.numel() == 2
