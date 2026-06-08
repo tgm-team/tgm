@@ -85,7 +85,9 @@ class EdgeBankPredictor:
             self._window_start = ts.max() - window_ratio * (ts.max() - ts.min())
         self._window_size = self._window_end - self._window_start
 
-        self._memory = torch.zeros((N, N), dtype=ts.dtype, device=ts.device)
+        self._memory = torch.full(
+            (N, N), fill_value=-1, dtype=ts.dtype, device=ts.device
+        )
 
         self.update(src, dst, ts)
 
