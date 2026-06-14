@@ -251,7 +251,7 @@ for epoch in range(1, args.epochs + 1):
         best_val = val_metric
         with hm.activate('test'):
             test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
-        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=args.epochs)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=epochs)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
