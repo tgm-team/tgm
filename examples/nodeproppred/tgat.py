@@ -221,9 +221,9 @@ hm = HookManager(keys=['train', 'val', 'test'])
 hm.register_shared(nbr_hook)
 train_key, val_key, test_key = hm.keys
 
-train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
-val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
-test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
+train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm, count_node_labels=False)
+val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm, count_node_labels=False)
+test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm, count_node_labels=False)
 
 encoder = TGAT(
     node_dim=train_dg.static_node_x_dim,
@@ -255,7 +255,7 @@ for epoch in range(1, args.epochs + 1):
         best_val = val_mrr
         with hm.activate(test_key):
             test_mrr = eval(test_loader, encoder, decoder, evaluator)
-        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_mrr, epoch=args.epochs)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_mrr, epoch=epochs)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()

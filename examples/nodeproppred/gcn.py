@@ -193,4 +193,4 @@ for epoch in range(1, args.epochs + 1):
     if val_ndcg > best_val:
         best_val = val_ndcg
         test_ndcg = eval(test_loader, encoder, decoder, evaluator)
-        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=epochs)

@@ -259,9 +259,9 @@ hm.register('train', EdgeEventsSeenNodesTrackHook(full_data.num_nodes))
 hm.register_shared(DeduplicationHook())
 hm.register_shared(nbr_hook)
 
-train_loader = DGDataLoader(train_dg, batch_size=args.bsize, hook_manager=hm)
-val_loader = DGDataLoader(val_dg, batch_size=args.bsize, hook_manager=hm)
-test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm)
+train_loader = DGDataLoader(train_dg, batch_size=args.bsize, hook_manager=hm, count_node_labels=False)
+val_loader = DGDataLoader(val_dg, batch_size=args.bsize, hook_manager=hm, count_node_labels=False)
+test_loader = DGDataLoader(test_dg, batch_size=args.bsize, hook_manager=hm, count_node_labels=False)
 
 num_classes = train_dg.node_y_dim
 
@@ -302,7 +302,7 @@ for epoch in range(1, args.epochs + 1):
         best_val = val_ndcg
         with hm.activate('test'):
             test_ndcg = eval(test_loader, encoder, decoder, evaluator)
-        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=epochs)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()

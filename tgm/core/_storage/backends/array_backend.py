@@ -105,6 +105,13 @@ class DGStorageArrayBackend(DGStorageBase):
         lb_idx, ub_idx = self._binary_search(slice)
         return ub_idx - lb_idx
 
+    def get_node_y_event_positions(self, slice: DGSliceTracker) -> Tensor:
+        if self._data.node_y_mask is None:
+            return torch.empty(0, dtype=torch.long)
+        lb_idx, ub_idx = self._binary_search(slice)
+        in_slice = (self._data.node_y_mask >= lb_idx) & (self._data.node_y_mask < ub_idx)
+        return self._data.node_y_mask[in_slice].long()
+
     def get_nbrs(
         self,
         seed_nodes: Tensor,

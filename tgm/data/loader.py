@@ -105,6 +105,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         batch_unit: str = 'r',
         on_empty: Literal['skip', 'raise', None] = 'skip',
         hook_manager: HookManager | None = None,
+        count_node_labels: bool = True,
         **kwargs: Any,
     ) -> None:
         if batch_size <= 0:
@@ -138,32 +139,58 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         self._dg = dg
         self._batch_size = batch_size
         self._hook_manager = hook_manager
+        self._slice_ends: dict = {}
 
         if batch_time_delta.is_event_ordered:
             self._slice_op = dg.slice_events
             start_idx, stop_idx = 0, dg.num_events
+
+            if not count_node_labels and dg.num_node_labels > 0:
+                total = dg.num_events
+                node_y_pos = dg.node_y_event_positions
+                is_node_y = torch.zeros(total, dtype=torch.bool)
+                is_node_y[node_y_pos] = True
+                non_label_pos = torch.where(~is_node_y)[0]
+
+                drop_last = kwargs.get('drop_last', False)
+                if drop_last:
+                    n_complete = len(non_label_pos) // batch_size
+                    starts = [non_label_pos[i * batch_size].item() for i in range(n_complete)]
+                    ends = [non_label_pos[(i + 1) * batch_size].item() for i in range(n_complete)]
+                else:
+                    starts = non_label_pos[::batch_size].tolist()
+                    ends = non_label_pos[batch_size::batch_size].tolist() + [total]
+
+                self._slice_ends = dict(zip(starts, ends))
+                slice_start = starts
+            else:
+                if kwargs.get('drop_last', False):
+                    slice_start = range(start_idx, stop_idx - batch_size, batch_size)
+                else:
+                    slice_start = range(start_idx, stop_idx, batch_size)
         else:
             self._slice_op = dg.slice_time  # type: ignore
             start_idx, stop_idx = dg.start_time, dg.end_time + 1
 
-        if kwargs.get('drop_last', False):
-            slice_start = range(start_idx, stop_idx - batch_size, batch_size)
-        else:
-            slice_start = range(start_idx, stop_idx, batch_size)
+            if kwargs.get('drop_last', False):
+                slice_start = range(start_idx, stop_idx - batch_size, batch_size)
+            else:
+                slice_start = range(start_idx, stop_idx, batch_size)
 
         super().__init__(
             slice_start, 1, shuffle=False, collate_fn=self, on_empty=on_empty, **kwargs
         )
 
     def __call__(self, slice_start: List[int]) -> DGBatch:
-        slice_end = slice_start[0] + self._batch_size
-        dg = self._slice_op(slice_start[0], slice_end)
+        start = slice_start[0]
+        slice_end = self._slice_ends.get(start, start + self._batch_size)
+        dg = self._slice_op(start, slice_end)
         batch = dg.materialize()
         if self._hook_manager is not None:
             logger.debug(
                 'Applying hooks to batch %s [%d:%d)',
                 self._slice_op.__name__,
-                slice_start[0],
+                start,
                 slice_end,
             )
             batch = self._hook_manager.execute_active_hooks(dg, batch)
