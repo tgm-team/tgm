@@ -126,7 +126,7 @@ def train(
 def eval(
     loader: DGDataLoader,
     memory: nn.Module,
-    encoder: nn.Module,
+    encoder: Evaluator,
     decoder: nn.Module,
     evaluator: Evaluator,
 ) -> float:

@@ -9,7 +9,7 @@ from tqdm import tqdm
 from tgm import DGraph
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager
-from tgm.hooks.node_analytics import NodeAnalyticsHook
+from tgm.hooks.analytics.node_analytics import NodeAnalyticsHook
 from tgm.util.logging import enable_logging, log_latency, log_metrics_dict
 from tgm.util.seed import seed_everything
 

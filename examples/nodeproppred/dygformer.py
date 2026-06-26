@@ -91,6 +91,14 @@ class DyGFormer_NodePrediction(nn.Module):
         device: str = 'cpu',
     ) -> None:
         super().__init__()
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+            'nbr_nids',
+            'seed_node_nbr_mask',
+            'nbr_edge_time',
+            'nbr_edge_x',
+        }
         self.encoder = DyGFormer(
             node_feat_dim,
             edge_x_dim,
@@ -280,6 +288,8 @@ encoder = DyGFormer_NodePrediction(
     device=args.device,
     patch_size=args.patch_size,
 ).to(args.device)
+hm.validate_requirement(encoder)
+
 
 decoder = NodePredictor(
     in_dim=args.embed_dim, out_dim=num_classes, hidden_dim=args.embed_dim

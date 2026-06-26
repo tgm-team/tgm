@@ -52,7 +52,7 @@ class CTAN(torch.nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
+        node_x: torch.Tensor,
         last_update: torch.Tensor,
         edge_index: torch.Tensor,
         t: torch.Tensor,
@@ -61,7 +61,7 @@ class CTAN(torch.nn.Module):
         """Forward pass.
 
         Args:
-            x (PyTorch Float Tensor): Node features.
+            node_x (PyTorch Float Tensor): Node features.
             last_update (PyTorch Tensor): Last memory update timestamps.
             edge_index (PyTorch Tensor): Graph edge indices.
             t (PyTorch Tensor): Graph edge timestamps.
@@ -71,8 +71,8 @@ class CTAN(torch.nn.Module):
             (PyTorch Float Tensor): Embeddings for the batch of node ids.
         """
         rel_t = (last_update[edge_index[0]] - t).abs()
-        rel_t = ((rel_t - self.mean_delta_t) / self.std_delta_t).to(x.dtype)
-        enc_x = self.enc_x(x)
+        rel_t = ((rel_t - self.mean_delta_t) / self.std_delta_t).to(node_x.dtype)
+        enc_x = self.enc_x(node_x)
         edge_attr = torch.cat([msg, self.time_enc(rel_t)], dim=-1)
         z = self.aconv(enc_x, edge_index, edge_attr=edge_attr)
         z = torch.tanh(z)

@@ -9,8 +9,12 @@
 ::: tgm.hooks.PinMemoryHook
 ::: tgm.hooks.DeviceTransferHook
 ::: tgm.hooks.DeduplicationHook
-::: tgm.hooks.TGBNegativeEdgeSamplerHook
-::: tgm.hooks.NegativeEdgeSamplerHook
-::: tgm.hooks.RecencyNeighborHook
-::: tgm.hooks.BatchAnalyticsHook
-::: tgm.hooks.NodeAnalyticsHook
+::: tgm.hooks.negatives.TGBNegativeEdgeSamplerHook
+::: tgm.hooks.negatives.TGBTHGNegativeEdgeSamplerHook
+::: tgm.hooks.negatives.TGBTKGNegativeEdgeSamplerHook
+::: tgm.hooks.negatives.RandomNegativeEdgeSamplerHook
+::: tgm.hooks.negatives.HistoricalNegativeEdgeSamplerHook
+::: tgm.hooks.neighbors.NeighborSamplerHook
+::: tgm.hooks.neighbors.RecencyNeighborHook
+::: tgm.hooks.analytics.BatchAnalyticsHook
+::: tgm.hooks.analytics.NodeAnalyticsHook

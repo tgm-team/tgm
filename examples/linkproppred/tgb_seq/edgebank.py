@@ -1,4 +1,5 @@
 import argparse
+from typing import Set
 
 import numpy as np
 import torch
@@ -64,7 +65,13 @@ def eval(
 
 
 class TGBSEQ_NegativeEdgeSamplerHook(StatelessHook):
-    produces = {'neg', 'neg_time'}
+    @property
+    def produces(self) -> Set[str]:
+        return {'neg', 'neg_time'}
+
+    @property
+    def requires(self) -> Set[str]:
+        return {'edge_src', 'edge_dst', 'edge_time'}
 
     def __init__(
         self, dataset_name: str, split_mode: str, dgraph: DGraph, root: str = './data'

@@ -124,6 +124,14 @@ class TPNet_NodePrediction(nn.Module):
         time_encoder: Callable[..., nn.Module] = Time2Vec,
     ) -> None:
         super().__init__()
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+            'nbr_nids',
+            'seed_node_nbr_mask',
+            'nbr_edge_time',
+            'nbr_edge_x',
+        }
         self.encoder = TPNet(
             node_feat_dim=node_feat_dim,
             edge_x_dim=edge_x_dim,
@@ -324,6 +332,7 @@ encoder = TPNet_NodePrediction(
 decoder = NodePredictor(
     in_dim=args.embed_dim, out_dim=num_classes, hidden_dim=args.embed_dim
 ).to(args.device)
+hm.validate_requirement(encoder)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

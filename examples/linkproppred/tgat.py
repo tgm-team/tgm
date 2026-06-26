@@ -7,15 +7,11 @@ import torch.nn.functional as F
 from tgb.linkproppred.evaluate import Evaluator
 from tqdm import tqdm
 
-from tgm import DGBatch, DGraph
-from tgm.constants import (
-    METRIC_TGB_LINKPROPPRED,
-    PADDED_NODE_ID,
-    RECIPE_TGB_LINK_PRED,
-)
+from tgm import DGraph
+from tgm.constants import METRIC_TGB_LINKPROPPRED, RECIPE_TGB_LINK_PRED
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import NeighborSamplerHook, RecencyNeighborHook, RecipeRegistry
-from tgm.nn import LinkPredictor, TemporalAttention, Time2Vec
+from tgm.nn import TGAT, LinkPredictor
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -55,84 +51,6 @@ args = parser.parse_args()
 enable_logging(log_file_path=args.log_file_path)
 
 
-class MergeLayer(nn.Module):
-    def __init__(self, in_dim1: int, in_dim2: int, hidden_dim: int, output_dim: int):
-        super().__init__()
-        self.fc1 = nn.Linear(in_dim1 + in_dim2, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
-
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor):
-        h = self.fc1(torch.cat([x1, x2], dim=1))
-        h = h.relu()
-        return self.fc2(h)
-
-
-class TGAT(nn.Module):
-    def __init__(
-        self,
-        node_dim: int,
-        edge_dim: int,
-        time_dim: int,
-        embed_dim: int,
-        num_layers: int,
-        n_heads: int = 2,
-        dropout: float = 0.1,
-    ) -> None:
-        """In this implementation, the node embedding dimension must be the same as hidden embedding dimension."""
-        super().__init__()
-        self.num_layers = num_layers
-        self.embed_dim = embed_dim
-        self.time_encoder = Time2Vec(time_dim=time_dim)
-
-        self.attn, self.merge_layers = nn.ModuleList(), nn.ModuleList()
-        for i in range(num_layers):
-            self.attn.append(
-                TemporalAttention(
-                    n_heads=n_heads,
-                    node_dim=node_dim if i == 0 else embed_dim,
-                    edge_dim=edge_dim,
-                    time_dim=time_dim,
-                    dropout=dropout,
-                )
-            )
-            self.merge_layers.append(
-                MergeLayer(
-                    in_dim1=self.attn[-1].out_dim,
-                    in_dim2=node_dim,
-                    hidden_dim=embed_dim,
-                    output_dim=embed_dim,
-                )
-            )
-
-    def forward(self, batch: DGBatch, static_node_feat: torch.Tensor) -> torch.Tensor:
-        device = batch.edge_src.device
-        z = {j: {} for j in range(self.num_layers + 1)}  # z[j][i] = z of nbr^i at hop j
-
-        # Layer 0 (leaf nodes): z[0][i] = static_node_feat
-        z[0][0] = static_node_feat[batch.seed_nids[0]]
-        for i in range(1, self.num_layers + 1):
-            z[0][i] = static_node_feat[batch.nbr_nids[i - 1].flatten()]
-
-        # Layers 1..H: aggregate z[j][i] = agg(z[j - 1][i], z[j - 1][i + 1])
-        for j in range(1, self.num_layers + 1):
-            for i in range(self.num_layers - j + 1):
-                num_nodes = z[j - 1][i].size(0)
-                num_nbr = batch.nbr_nids[j - 1].shape[-1]
-                out = self.attn[j - 1](
-                    node_feat=z[j - 1][i],
-                    time_feat=self.time_encoder(torch.zeros(num_nodes, device=device)),
-                    nbr_node_feat=z[j - 1][i + 1].reshape(num_nodes, num_nbr, -1),
-                    edge_feat=batch.nbr_edge_x[i],
-                    valid_nbr_mask=batch.nbr_nids[i] != PADDED_NODE_ID,
-                    nbr_time_feat=self.time_encoder(
-                        batch.seed_times[i][:, None] - batch.nbr_edge_time[i]
-                    ),
-                )
-                z[j][i] = self.merge_layers[j - 1](out, z[0][i])
-
-        return z[self.num_layers][0]
-
-
 @log_gpu
 @log_latency
 def train(
@@ -149,7 +67,14 @@ def train(
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        z = encoder(batch, static_node_x)
+        z = encoder(
+            static_node_x,
+            batch.seed_nids,
+            batch.seed_times,
+            batch.nbr_nids,
+            batch.nbr_edge_x,
+            batch.nbr_edge_time,
+        )
         z_src, z_dst, z_neg = torch.chunk(z, 3)
 
         pos_out = decoder(z_src, z_dst)
@@ -178,7 +103,14 @@ def eval(
     static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        z = encoder(batch, static_node_x)
+        z = encoder(
+            static_node_x,
+            batch.seed_nids,
+            batch.seed_times,
+            batch.nbr_nids,
+            batch.nbr_edge_x,
+            batch.nbr_edge_time,
+        )
         id_map = {nid.item(): i for i, nid in enumerate(batch.seed_nids[0])}
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             dst_ids = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
