@@ -263,7 +263,7 @@ class TPNet(nn.Module):
 
     Args:
         node_feat_dim (int): Dimension of static/dynamic node features (`d_N`).
-        edge_feat_dim (int): Dimension of edge features (`d_E`).
+        edge_x_dim (int): Dimension of edge features (`d_E`).
         time_feat_dim (int): Dimension of time encodings (`d_T`).
         output_dim (int): Dimension of output embedding.
         num_neighbors (int): Number of recent temporal neighbors consider
@@ -280,7 +280,7 @@ class TPNet(nn.Module):
     def __init__(
         self,
         node_feat_dim: int,
-        edge_feat_dim: int,
+        edge_x_dim: int,
         time_feat_dim: int,
         output_dim: int,
         num_neighbors: int,
@@ -302,7 +302,7 @@ class TPNet(nn.Module):
 
         self.projection_layer = nn.Sequential(
             nn.Linear(
-                node_feat_dim + edge_feat_dim + time_feat_dim + self.random_feature_dim,
+                node_feat_dim + edge_x_dim + time_feat_dim + self.random_feature_dim,
                 output_dim * 2,
             ),
             nn.ReLU(),
@@ -323,7 +323,7 @@ class TPNet(nn.Module):
 
     def forward(
         self,
-        X: torch.Tensor,
+        node_x: torch.Tensor,
         edge_index: torch.Tensor,
         edge_time: torch.Tensor,
         neighbours: torch.Tensor,
@@ -333,7 +333,7 @@ class TPNet(nn.Module):
         f"""Forward pass.
 
         Args:
-            X (PyTorch Float Tensor): Node features.
+            node_x (PyTorch Float Tensor): Node features.
             edge_index (PyTorch Tensor): Graph edge indices.
             edge_time (PyTorch Tensor): Edge time vector.
             neighbours (PyTorch Tensor): Neighbours of src and dst nodes from edge_index
@@ -352,7 +352,7 @@ class TPNet(nn.Module):
         src = src.repeat(2)
         dst = dst.repeat(2)
         edge_time = edge_time.repeat(2)
-        neighbor_node_features = X[neighbours, :]
+        neighbor_node_features = node_x[neighbours, :]
         neighbor_node_features[neighbours == PADDED_NODE_ID] = 0
 
         neighbours_time_feats = self.time_encoder(

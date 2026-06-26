@@ -5,7 +5,7 @@ from tgm.constants import RECIPE_TGB_LINK_PRED
 from tgm.exceptions import UndefinedRecipe
 from tgm.hooks import (
     HookManager,
-    NegativeEdgeSamplerHook,
+    RandomNegativeEdgeSamplerHook,
     TGBNegativeEdgeSamplerHook,
     hook_manager,
 )
@@ -59,11 +59,11 @@ def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
     Returns:
         HookManager with registered keys: ['train', 'val', 'test']
     """
-    _, dst, _ = train_dg.edges
-
+    dst = train_dg.edge_dst
     hm = HookManager(keys=['train', 'val', 'test'])
     hm.register(
-        'train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+        'train',
+        RandomNegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())),
     )
     hm.register('val', TGBNegativeEdgeSamplerHook(dataset_name, split_mode='val'))
     hm.register('test', TGBNegativeEdgeSamplerHook(dataset_name, split_mode='test'))

@@ -10,7 +10,7 @@ from tqdm import tqdm
 from tgm import DGraph
 from tgm.constants import METRIC_TGB_NODEPROPPRED, PADDED_NODE_ID
 from tgm.data import DGData, DGDataLoader
-from tgm.hooks import HookManager, RecencyNeighborHook
+from tgm.hooks import DeduplicationHook, HookManager, RecencyNeighborHook
 from tgm.nn import NodePredictor, TGNMemory
 from tgm.nn.encoder.tgn import (
     GraphAttentionEmbedding,
@@ -72,20 +72,15 @@ def train(
     memory.reset_state()
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_y
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            #! run my own deduplication
-            all_nids = torch.cat([batch.node_ids, nbr_nodes[nbr_mask]])
-            batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-            batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_y_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_ids.repeat_interleave(num_nbrs),
+                    batch.node_y_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -93,15 +88,15 @@ def train(
                     batch.global_to_local(src_nodes[nbr_mask]),
                     batch.global_to_local(nbr_nodes[nbr_mask]),
                 ]
-            )
+            ).to(dtype=torch.int64)
 
-            nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-            nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+            nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+            nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
             z, last_update = memory(batch.unique_nids)
-            z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+            z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.global_to_local(batch.node_y_nids)
             y_pred = decoder(z[inv_src])
             loss = F.cross_entropy(y_pred, y_labels)
             loss.backward()
@@ -117,9 +112,9 @@ def train(
             perf_list.append(perf)
 
         # Update memory with ground-truth state.
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
         memory.detach()
 
@@ -142,20 +137,15 @@ def eval(
     perf_list = []
 
     for batch in tqdm(loader):
-        y_labels = batch.dynamic_node_feats
+        y_labels = batch.node_y
         if y_labels is not None:
             nbr_nodes = batch.nbr_nids[0].flatten()
             nbr_mask = nbr_nodes != PADDED_NODE_ID
 
-            #! run my own deduplication
-            all_nids = torch.cat([batch.node_ids, nbr_nodes[nbr_mask]])
-            batch.unique_nids = torch.unique(all_nids, sorted=True)  # type: ignore
-            batch.global_to_local = lambda x: torch.searchsorted(batch.unique_nids, x)  # type: ignore
-
-            num_nbrs = len(nbr_nodes) // (len(batch.node_ids))
+            num_nbrs = len(nbr_nodes) // (len(batch.node_y_nids))
             src_nodes = torch.cat(
                 [
-                    batch.node_ids.repeat_interleave(num_nbrs),
+                    batch.node_y_nids.repeat_interleave(num_nbrs),
                 ]
             )
             nbr_edge_index = torch.stack(
@@ -163,15 +153,15 @@ def eval(
                     batch.global_to_local(src_nodes[nbr_mask]),
                     batch.global_to_local(nbr_nodes[nbr_mask]),
                 ]
-            )
+            ).to(dtype=torch.int64)
 
-            nbr_times = batch.nbr_times[0].flatten()[nbr_mask]
-            nbr_feats = batch.nbr_feats[0].flatten(0, -2).float()[nbr_mask]
+            nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
+            nbr_edge_x = batch.nbr_edge_x[0].flatten(0, -2).float()[nbr_mask]
 
             z, last_update = memory(batch.unique_nids)
-            z = encoder(z, last_update, nbr_edge_index, nbr_times, nbr_feats)
+            z = encoder(z, last_update, nbr_edge_index, nbr_edge_time, nbr_edge_x)
 
-            inv_src = batch.global_to_local(batch.node_ids)
+            inv_src = batch.global_to_local(batch.node_y_nids)
             y_pred = decoder(z[inv_src])
 
             input_dict = {
@@ -182,9 +172,9 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
         # Update memory with ground-truth state.
-        if len(batch.src) > 0:
+        if len(batch.edge_src) > 0:
             memory.update_state(
-                batch.src, batch.dst, batch.time, batch.edge_feats.float()
+                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
 
     return float(np.mean(perf_list))
@@ -205,17 +195,18 @@ train_dg = DGraph(train_data, device=args.device)
 val_dg = DGraph(val_data, device=args.device)
 test_dg = DGraph(test_data, device=args.device)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_y_dim
 
 nbr_hook = RecencyNeighborHook(
     num_nbrs=args.n_nbrs,
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['node_ids'],
-    seed_times_keys=['node_times'],
+    seed_nodes_keys=['node_y_nids'],
+    seed_times_keys=['node_y_time'],
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
 hm.register_shared(nbr_hook)
+hm.register_shared(DeduplicationHook(seed_nodes_keys=['node_y_nids', 'nbr_nids']))
 
 train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
@@ -223,18 +214,16 @@ test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 memory = TGNMemory(
     full_data.num_nodes,
-    test_dg.edge_feats_dim,
+    test_dg.edge_x_dim,
     args.memory_dim,
     args.time_dim,
-    message_module=IdentityMessage(
-        test_dg.edge_feats_dim, args.memory_dim, args.time_dim
-    ),
+    message_module=IdentityMessage(test_dg.edge_x_dim, args.memory_dim, args.time_dim),
     aggregator_module=LastAggregator(),
 ).to(args.device)
 encoder = GraphAttentionEmbedding(
     in_channels=args.memory_dim,
     out_channels=args.embed_dim,
-    msg_dim=test_dg.edge_feats_dim,
+    msg_dim=test_dg.edge_x_dim,
     time_enc=memory.time_enc,
 ).to(args.device)
 decoder = NodePredictor(
@@ -244,6 +233,8 @@ opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,
 )
+
+best_val = 0.0
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
@@ -256,9 +247,11 @@ for epoch in range(1, args.epochs + 1):
     log_metric(f'Train {METRIC_TGB_NODEPROPPRED}', train_metric, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_metric, epoch=epoch)
 
+    if val_metric > best_val:
+        best_val = val_metric
+        with hm.activate('test'):
+            test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=args.epochs)
+
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
-
-with hm.activate('test'):
-    test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
-log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=args.epochs)

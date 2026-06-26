@@ -9,39 +9,215 @@ from tgm.hooks import (
     HookManager,
     TGBNegativeEdgeSamplerHook,
     TGBTHGNegativeEdgeSamplerHook,
+    TGBTKGNegativeEdgeSamplerHook,
 )
 
 
 @pytest.fixture
 def data():
     edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.LongTensor([1, 5, 20])
-    return DGData.from_raw(edge_timestamps=edge_timestamps, edge_index=edge_index)
+    edge_time = torch.LongTensor([1, 5, 20])
+    return DGData.from_raw(edge_time=edge_time, edge_index=edge_index)
 
 
 @pytest.fixture
 def thg_data():
     edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
-    edge_timestamps = torch.LongTensor([1, 5, 20])
+    edge_time = torch.LongTensor([1, 5, 20])
     edge_type = torch.IntTensor([0, 1, 2])
     node_type = torch.arange(9, dtype=torch.int32)
     return DGData.from_raw(
-        edge_timestamps=edge_timestamps,
+        edge_time=edge_time,
         edge_index=edge_index,
         edge_type=edge_type,
         node_type=node_type,
     )
 
 
-def test_hook_dependancies():
-    assert TGBNegativeEdgeSamplerHook.requires == set()
-    assert TGBNegativeEdgeSamplerHook.produces == {'neg', 'neg_batch_list', 'neg_time'}
-    assert TGBTHGNegativeEdgeSamplerHook.requires == set()
-    assert TGBTHGNegativeEdgeSamplerHook.produces == {
+@pytest.fixture
+def tkg_data():
+    edge_index = torch.IntTensor([[2, 2], [2, 4], [1, 8]])
+    edge_timestamps = torch.LongTensor([1, 5, 20])
+    edge_type = torch.IntTensor([0, 1, 2])
+    return DGData.from_raw(
+        edge_time=edge_timestamps,
+        edge_index=edge_index,
+        edge_type=edge_type,
+    )
+
+
+@patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
+def test_hook_dependancies_tgbl(MockNegSampler):
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    hook = TGBNegativeEdgeSamplerHook(dataset_name='tgbl-foo', split_mode='val')
+
+    assert hook.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook.produces == {'neg', 'neg_batch_list', 'neg_time'}
+
+    hook_with_id = TGBNegativeEdgeSamplerHook(
+        dataset_name='tgbl-foo', split_mode='val', id='foo'
+    )
+    assert hook_with_id.requires == {'edge_src', 'edge_dst', 'edge_time'}
+    assert hook_with_id.produces == {'neg_foo', 'neg_batch_list_foo', 'neg_time_foo'}
+
+
+@patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
+def test_tgb_hook_repre(MockNegSampler):
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    hook_with_id = TGBNegativeEdgeSamplerHook(
+        dataset_name='tgbl-foo', split_mode='val', id='foo'
+    )
+    assert 'foo' in hook_with_id.__repr__()
+
+
+@patch('tgb.linkproppred.thg_negative_sampler.THGNegativeEdgeSampler')
+def test_hook_dependancies_thgl(MockNegSampler):
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+    node_type = torch.arange(max_id + 1, dtype=torch.int32)
+
+    hook = TGBTHGNegativeEdgeSamplerHook(
+        dataset_name='thgl-foo',
+        split_mode='val',
+        first_node_id=min_id,
+        last_node_id=max_id,
+        node_type=node_type,
+    )
+    assert hook.requires == {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'edge_type',
+    }
+    assert hook.produces == {
         'neg',
         'neg_batch_list',
         'neg_time',
     }
+
+    hook_with_id = TGBTHGNegativeEdgeSamplerHook(
+        dataset_name='thgl-foo',
+        split_mode='val',
+        first_node_id=min_id,
+        last_node_id=max_id,
+        node_type=node_type,
+        id='foo',
+    )
+    assert hook_with_id.requires == {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'edge_type',
+    }
+    assert hook_with_id.produces == {
+        'neg_foo',
+        'neg_batch_list_foo',
+        'neg_time_foo',
+    }
+
+
+@patch('tgb.linkproppred.thg_negative_sampler.THGNegativeEdgeSampler')
+def test_thg_hook_repre(MockNegSampler):
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+    node_type = torch.arange(max_id + 1, dtype=torch.int32)
+
+    hook_with_id = TGBTHGNegativeEdgeSamplerHook(
+        dataset_name='thgl-foo',
+        split_mode='val',
+        first_node_id=min_id,
+        last_node_id=max_id,
+        node_type=node_type,
+        id='foo',
+    )
+
+    assert 'foo' in hook_with_id.__repr__()
+
+
+@patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
+def test_hook_dependancies_tkgl(MockNegSampler):
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+
+    hook = TGBTKGNegativeEdgeSamplerHook(
+        dataset_name='tkgl-foo',
+        split_mode='val',
+        first_dst_id=min_id,
+        last_dst_id=max_id,
+    )
+    assert hook.requires == {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'edge_type',
+    }
+    assert hook.produces == {
+        'neg',
+        'neg_batch_list',
+        'neg_time',
+    }
+
+    hook_with_id = TGBTKGNegativeEdgeSamplerHook(
+        dataset_name='tkgl-foo',
+        split_mode='val',
+        first_dst_id=min_id,
+        last_dst_id=max_id,
+        id='foo',
+    )
+    assert hook_with_id.requires == {
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'edge_type',
+    }
+    assert hook_with_id.produces == {
+        'neg_foo',
+        'neg_batch_list_foo',
+        'neg_time_foo',
+    }
+
+
+@patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
+def test_tkg_hook_repre(MockNegSampler):
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+
+    hook_with_id = TGBTKGNegativeEdgeSamplerHook(
+        dataset_name='tkgl-foo',
+        split_mode='val',
+        first_dst_id=min_id,
+        last_dst_id=max_id,
+        id='foo',
+    )
+    assert 'foo' in hook_with_id.__repr__()
 
 
 def test_hook_reset_state():
@@ -50,7 +226,7 @@ def test_hook_reset_state():
 
 
 class FakeNegSampler:
-    def query_batch(self, src, dst, time, split_mode='val'):
+    def query_batch(self, edge_src, edge_dst, time, split_mode='val'):
         return []
 
 
@@ -80,8 +256,27 @@ def test_negative_edge_sampler(MockNegSampler, data):
     assert isinstance(batch, DGBatch)
     assert torch.is_tensor(batch.neg)
     assert torch.is_tensor(batch.neg_time)
-    assert len(batch.neg_batch_list) == batch.src.shape[0]
+    assert len(batch.neg_batch_list) == batch.edge_src.shape[0]
     assert batch.neg_time.shape == batch.neg.shape
+
+
+@patch('tgb.linkproppred.negative_sampler.NegativeEdgeSampler')
+def test_negative_edge_sampler_with_hook_id(MockNegSampler, data):
+    dg = DGraph(data)
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    hook = TGBNegativeEdgeSamplerHook(
+        dataset_name='tgbl-foo', split_mode='val', id='foo'
+    )
+    batch = hook(dg, dg.materialize())
+    assert isinstance(batch, DGBatch)
+    assert torch.is_tensor(batch.neg_foo)
+    assert torch.is_tensor(batch.neg_time_foo)
+    assert len(batch.neg_batch_list_foo) == batch.edge_src.shape[0]
+    assert batch.neg_time_foo.shape == batch.neg_foo.shape
 
 
 @patch('tgb.utils.info.DATA_VERSION_DICT', {'tgbl-foo': 1})
@@ -98,7 +293,7 @@ def test_negative_edge_sampler_with_version_info(MockNegSampler, data):
     assert isinstance(batch, DGBatch)
     assert torch.is_tensor(batch.neg)
     assert torch.is_tensor(batch.neg_time)
-    assert len(batch.neg_batch_list) == batch.src.shape[0]
+    assert len(batch.neg_batch_list) == batch.edge_src.shape[0]
     assert batch.neg_time.shape == batch.neg.shape
 
 
@@ -120,16 +315,16 @@ def test_negative_edge_sampler_throws_value_error(MockNegSampler, data):
 @pytest.fixture
 def node_only_data():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
-    edge_timestamps = torch.IntTensor([1, 2, 3])
-    dynamic_node_feats = torch.rand(2, 5)
-    node_timestamps = torch.IntTensor([4, 5])
-    node_ids = torch.IntTensor([5, 6])
+    edge_time = torch.IntTensor([1, 2, 3])
+    node_x = torch.rand(2, 5)
+    node_x_time = torch.IntTensor([4, 5])
+    node_x_nids = torch.IntTensor([5, 6])
     return DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
-        dynamic_node_feats=dynamic_node_feats,
-        node_timestamps=node_timestamps,
-        node_ids=node_ids,
+        node_x=node_x,
+        node_x_time=node_x_time,
+        node_x_nids=node_x_nids,
     )
 
 
@@ -153,7 +348,7 @@ def test_node_only_batch_negative_edge_sampler(MockNegSampler, node_only_data):
         assert isinstance(batch_1, DGBatch)
         assert torch.is_tensor(batch_1.neg)
         assert torch.is_tensor(batch_1.neg_time)
-        assert len(batch_1.neg_batch_list) == batch_1.src.shape[0]
+        assert len(batch_1.neg_batch_list) == batch_1.edge_src.shape[0]
         assert batch_1.neg_time.shape == batch_1.neg.shape
 
         batch_2 = next(batch_iter)
@@ -259,13 +454,41 @@ def test_thg_negative_edge_sampler(MockNegSampler, thg_data):
     assert isinstance(batch, DGBatch)
     assert torch.is_tensor(batch.neg)
     assert torch.is_tensor(batch.neg_time)
-    assert len(batch.neg_batch_list) == batch.src.shape[0]
+    assert len(batch.neg_batch_list) == batch.edge_src.shape[0]
     assert batch.neg_time.shape == batch.neg.shape
+
+
+@patch('tgb.linkproppred.thg_negative_sampler.THGNegativeEdgeSampler')
+def test_thg_negative_edge_sampler_with_hook_id(MockNegSampler, thg_data):
+    dg = DGraph(thg_data)
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+    node_type = torch.arange(max_id + 1, dtype=torch.int32)
+
+    hook = TGBTHGNegativeEdgeSamplerHook(
+        dataset_name='thgl-foo',
+        split_mode='val',
+        first_node_id=min_id,
+        last_node_id=max_id,
+        node_type=node_type,
+        id='foo',
+    )
+    batch = hook(dg, dg.materialize())
+    assert isinstance(batch, DGBatch)
+    assert torch.is_tensor(batch.neg_foo)
+    assert torch.is_tensor(batch.neg_time_foo)
+    assert len(batch.neg_batch_list_foo) == batch.edge_src.shape[0]
+    assert batch.neg_time_foo.shape == batch.neg_foo.shape
 
 
 @patch('tgb.utils.info.DATA_VERSION_DICT', {'thgl-foo': 1})
 @patch('tgb.linkproppred.thg_negative_sampler.THGNegativeEdgeSampler')
-def test_tgh_negative_edge_sampler_with_version_info(MockNegSampler, thg_data):
+def test_thg_negative_edge_sampler_with_version_info(MockNegSampler, thg_data):
     dg = DGraph(thg_data)
     mock_sampler = Mock()
     mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
@@ -287,12 +510,12 @@ def test_tgh_negative_edge_sampler_with_version_info(MockNegSampler, thg_data):
     assert isinstance(batch, DGBatch)
     assert torch.is_tensor(batch.neg)
     assert torch.is_tensor(batch.neg_time)
-    assert len(batch.neg_batch_list) == batch.src.shape[0]
+    assert len(batch.neg_batch_list) == batch.edge_src.shape[0]
     assert batch.neg_time.shape == batch.neg.shape
 
 
 @patch('tgb.linkproppred.thg_negative_sampler.THGNegativeEdgeSampler')
-def test_negative_edge_sampler_throws_value_error(MockNegSampler, thg_data):
+def test_thg_negative_edge_sampler_throws_value_error(MockNegSampler, thg_data):
     dg = DGraph(thg_data)
     mock_sampler = Mock()
     mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
@@ -319,18 +542,18 @@ def test_negative_edge_sampler_throws_value_error(MockNegSampler, thg_data):
 @pytest.fixture
 def thgl_node_only_data():
     edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
-    edge_timestamps = torch.IntTensor([1, 2, 3])
+    edge_time = torch.IntTensor([1, 2, 3])
     edge_type = torch.IntTensor([0, 1, 2])
     node_type = torch.arange(7, dtype=torch.int32)
-    dynamic_node_feats = torch.rand(2, 5)
-    node_timestamps = torch.IntTensor([4, 5])
-    node_ids = torch.IntTensor([5, 6])
+    node_x = torch.rand(2, 5)
+    node_x_time = torch.IntTensor([4, 5])
+    node_x_nids = torch.IntTensor([5, 6])
     return DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
-        dynamic_node_feats=dynamic_node_feats,
-        node_timestamps=node_timestamps,
-        node_ids=node_ids,
+        node_x=node_x,
+        node_x_time=node_x_time,
+        node_x_nids=node_x_nids,
         edge_type=edge_type,
         node_type=node_type,
     )
@@ -366,7 +589,219 @@ def test_node_only_batch_negative_edge_sampler(MockNegSampler, thgl_node_only_da
         assert isinstance(batch_1, DGBatch)
         assert torch.is_tensor(batch_1.neg)
         assert torch.is_tensor(batch_1.neg_time)
-        assert len(batch_1.neg_batch_list) == batch_1.src.shape[0]
+        assert len(batch_1.neg_batch_list) == batch_1.edge_src.shape[0]
+        assert batch_1.neg_time.shape == batch_1.neg.shape
+
+        batch_2 = next(batch_iter)
+        assert isinstance(batch_2, DGBatch)
+        assert batch_2.neg.shape == (0,)
+        assert batch_2.neg_time.shape == (0,)
+        assert len(batch_2.neg_batch_list) == 0  # empty list
+
+
+def test_bad_tgb_tkg_negative_edge_sampler_init():
+    min_id = 0
+    max_id = 10
+    with pytest.raises(ValueError):
+        TGBTKGNegativeEdgeSamplerHook(
+            dataset_name='tkgl-smallpedia',
+            split_mode='invalid_mode',
+            first_dst_id=min_id,
+            last_dst_id=max_id,
+        )
+
+    with pytest.raises(ValueError):
+        TGBTKGNegativeEdgeSamplerHook(
+            dataset_name='tkgl-smallpedia',
+            split_mode='val',
+            first_dst_id=-1,
+            last_dst_id=max_id,
+        )
+
+    with pytest.raises(ValueError):
+        TGBTKGNegativeEdgeSamplerHook(
+            dataset_name='tkgl-smallpedia',
+            split_mode='val',
+            first_dst_id=min_id,
+            last_dst_id=-1,
+        )
+
+
+def test_attempt_init_tgb_tkg_negative_edge_sampler_not_tkg_dataset():
+    min_id = 0
+    max_id = 10
+    with pytest.raises(ValueError):
+        TGBTKGNegativeEdgeSamplerHook(
+            dataset_name='tgbl-wiki',
+            split_mode='val',
+            first_dst_id=min_id,
+            last_dst_id=max_id,
+        )
+
+    with pytest.raises(ValueError):
+        TGBTKGNegativeEdgeSamplerHook(
+            dataset_name='tgbn-trade',
+            split_mode='val',
+            first_dst_id=min_id,
+            last_dst_id=max_id,
+        )
+
+    with pytest.raises(ValueError):
+        TGBTKGNegativeEdgeSamplerHook(
+            dataset_name='foo',
+            split_mode='val',
+            first_dst_id=min_id,
+            last_dst_id=max_id,
+        )
+
+
+@patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
+def test_tkg_negative_edge_sampler(MockNegSampler, tkg_data):
+    dg = DGraph(tkg_data)
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+
+    hook = TGBTKGNegativeEdgeSamplerHook(
+        dataset_name='tkgl-foo',
+        split_mode='val',
+        first_dst_id=min_id,
+        last_dst_id=max_id,
+    )
+    batch = hook(dg, dg.materialize())
+    assert isinstance(batch, DGBatch)
+    assert torch.is_tensor(batch.neg)
+    assert torch.is_tensor(batch.neg_time)
+    assert len(batch.neg_batch_list) == batch.edge_src.shape[0]
+    assert batch.neg_time.shape == batch.neg.shape
+
+
+@patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
+def test_tkg_negative_edge_sampler_with_hook_id(MockNegSampler, tkg_data):
+    dg = DGraph(tkg_data)
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+
+    hook = TGBTKGNegativeEdgeSamplerHook(
+        dataset_name='tkgl-foo',
+        split_mode='val',
+        first_dst_id=min_id,
+        last_dst_id=max_id,
+        id='foo',
+    )
+    batch = hook(dg, dg.materialize())
+    assert isinstance(batch, DGBatch)
+    assert torch.is_tensor(batch.neg_foo)
+    assert torch.is_tensor(batch.neg_time_foo)
+    assert len(batch.neg_batch_list_foo) == batch.edge_src.shape[0]
+    assert batch.neg_time_foo.shape == batch.neg_foo.shape
+
+
+@patch('tgb.utils.info.DATA_VERSION_DICT', {'tkgl-foo': 1})
+@patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
+def test_tkg_negative_edge_sampler_with_version_info(MockNegSampler, tkg_data):
+    dg = DGraph(tkg_data)
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+
+    hook = TGBTKGNegativeEdgeSamplerHook(
+        dataset_name='tkgl-foo',
+        split_mode='val',
+        first_dst_id=min_id,
+        last_dst_id=max_id,
+    )
+    batch = hook(dg, dg.materialize())
+    assert isinstance(batch, DGBatch)
+    assert torch.is_tensor(batch.neg)
+    assert torch.is_tensor(batch.neg_time)
+    assert len(batch.neg_batch_list) == batch.edge_src.shape[0]
+    assert batch.neg_time.shape == batch.neg.shape
+
+
+@patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
+def test_tkg_negative_edge_sampler_throws_value_error(MockNegSampler, tkg_data):
+    dg = DGraph(tkg_data)
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    mock_sampler.query_batch.side_effect = ValueError('tkgl-foo')
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+
+    hook = TGBTKGNegativeEdgeSamplerHook(
+        dataset_name='tkgl-foo',
+        split_mode='val',
+        first_dst_id=min_id,
+        last_dst_id=max_id,
+    )
+
+    with pytest.raises(ValueError, match='`pip install --upgrade py-tgb`'):
+        hook(dg, dg.materialize())
+
+
+@pytest.fixture
+def tkgl_node_only_data():
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
+    edge_timestamps = torch.IntTensor([1, 2, 3])
+    edge_type = torch.IntTensor([0, 1, 2])
+    node_x = torch.rand(2, 5)
+    node_x_time = torch.IntTensor([4, 5])
+    node_x_nids = torch.IntTensor([5, 6])
+    return DGData.from_raw(
+        edge_timestamps,
+        edge_index,
+        node_x=node_x,
+        node_x_time=node_x_time,
+        node_x_nids=node_x_nids,
+        edge_type=edge_type,
+    )
+
+
+@patch('tgb.linkproppred.tkg_negative_sampler.TKGNegativeEdgeSampler')
+def test_node_only_batch_negative_tkg_edge_sampler(MockNegSampler, tkgl_node_only_data):
+    dg = DGraph(tkgl_node_only_data)
+    mock_sampler = Mock()
+    mock_sampler.eval_set = {'val': {'cool'}, 'test': {'cool'}}
+    mock_sampler.query_batch.return_value = [[0] for _ in range(3)]
+    MockNegSampler.return_value = mock_sampler
+
+    min_id = 0
+    max_id = 10
+
+    hm = HookManager(keys=['val', 'test'])
+    hm.register(
+        'val',
+        hook=TGBTKGNegativeEdgeSamplerHook(
+            dataset_name='tkgl-foo',
+            split_mode='val',
+            first_dst_id=min_id,
+            last_dst_id=max_id,
+        ),
+    )
+    loader = DGDataLoader(dg, batch_size=3, hook_manager=hm)
+    with hm.activate('val'):
+        batch_iter = iter(loader)
+        batch_1 = next(batch_iter)
+        assert isinstance(batch_1, DGBatch)
+        assert torch.is_tensor(batch_1.neg)
+        assert torch.is_tensor(batch_1.neg_time)
+        assert len(batch_1.neg_batch_list) == batch_1.edge_src.shape[0]
         assert batch_1.neg_time.shape == batch_1.neg.shape
 
         batch_2 = next(batch_iter)

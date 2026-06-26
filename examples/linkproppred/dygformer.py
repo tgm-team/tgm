@@ -66,7 +66,7 @@ class DyGFormer_LinkPrediction(nn.Module):
     def __init__(
         self,
         node_feat_dim: int,
-        edge_feat_dim: int,
+        edge_x_dim: int,
         time_feat_dim: int,
         channel_embedding_dim: int,
         output_dim: int = 172,
@@ -82,7 +82,7 @@ class DyGFormer_LinkPrediction(nn.Module):
         super().__init__()
         self.encoder = DyGFormer(
             node_feat_dim,
-            edge_feat_dim,
+            edge_x_dim,
             time_feat_dim,
             channel_embedding_dim,
             output_dim,
@@ -95,6 +95,15 @@ class DyGFormer_LinkPrediction(nn.Module):
             time_encoder,
             device,
         )
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+            'nbr_nids',
+            'neg',
+            'seed_node_nbr_mask',
+            'nbr_edge_time',
+            'nbr_edge_x',
+        }
         # @TODO: Make encoder/decoder to be explicit
         self.decoder = LinkPredictor(
             node_dim=args.embed_dim, hidden_dim=args.embed_dim
@@ -103,43 +112,43 @@ class DyGFormer_LinkPrediction(nn.Module):
     def forward(
         self, batch: DGBatch, static_node_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        src = batch.src
-        dst = batch.dst
+        edge_src = batch.edge_src
+        edge_dst = batch.edge_dst
         neg = batch.neg
-        time = batch.time
+        time = batch.edge_time
         nbr_nids = batch.nbr_nids[0]
-        nbr_times = batch.nbr_times[0]
-        nbr_feats = batch.nbr_feats[0]
-        src_nbr_idx = batch.seed_node_nbr_mask['src']
-        dst_nbr_idx = batch.seed_node_nbr_mask['dst']
+        nbr_edge_time = batch.nbr_edge_time[0]
+        nbr_edge_x = batch.nbr_edge_x[0]
+        src_nbr_idx = batch.seed_node_nbr_mask['edge_src']
+        dst_nbr_idx = batch.seed_node_nbr_mask['edge_dst']
         neg_nbr_idx = batch.seed_node_nbr_mask['neg']
-        pos_batch_size = dst.shape[0]
+        pos_batch_size = edge_dst.shape[0]
         neg_batch_size = neg.shape[0]
 
         # positive edge
-        edge_idx_pos = torch.stack((src, dst), dim=0)
+        edge_idx_pos = torch.stack((edge_src, edge_dst), dim=0)
         pos_nbr_idx = torch.cat([src_nbr_idx, dst_nbr_idx])
         z_src_pos, z_dst_pos = self.encoder(
             static_node_feat,
             edge_idx_pos,
             time,
             nbr_nids[pos_nbr_idx],
-            nbr_times[pos_nbr_idx],
-            nbr_feats[pos_nbr_idx],
+            nbr_edge_time[pos_nbr_idx],
+            nbr_edge_x[pos_nbr_idx],
         )
         pos_out = self.decoder(z_src_pos, z_dst_pos)
 
         neg_nbr_nids = nbr_nids[
             neg_nbr_idx
         ]  # @TODO: Assume that batch.neg doesn't have duplicated records
-        neg_nbr_times = nbr_times[neg_nbr_idx]
-        neg_nbr_feats = nbr_feats[neg_nbr_idx]
+        neg_nbr_times = nbr_edge_time[neg_nbr_idx]
+        neg_nbr_feats = nbr_edge_x[neg_nbr_idx]
         src_nbr_nids = nbr_nids[src_nbr_idx]
-        src_nbr_times = nbr_times[src_nbr_idx]
-        src_nbr_feats = nbr_feats[src_nbr_idx]
+        src_nbr_times = nbr_edge_time[src_nbr_idx]
+        src_nbr_feats = nbr_edge_x[src_nbr_idx]
 
-        if src.shape[0] != neg_batch_size:
-            src = torch.repeat_interleave(src, repeats=neg_batch_size, dim=0)
+        if edge_src.shape[0] != neg_batch_size:
+            edge_src = torch.repeat_interleave(edge_src, repeats=neg_batch_size, dim=0)
             time = torch.repeat_interleave(time, repeats=neg_batch_size, dim=0)
             src_nbr_nids = torch.repeat_interleave(
                 src_nbr_nids, repeats=neg_batch_size, dim=0
@@ -156,10 +165,10 @@ class DyGFormer_LinkPrediction(nn.Module):
             neg = neg.repeat(pos_batch_size)
         else:
             src_nbr_nids = nbr_nids[src_nbr_idx]
-            src_nbr_times = nbr_times[src_nbr_idx]
-            src_nbr_feats = nbr_feats[src_nbr_idx]
+            src_nbr_times = nbr_edge_time[src_nbr_idx]
+            src_nbr_feats = nbr_edge_x[src_nbr_idx]
 
-        edge_idx_neg = torch.stack((src, neg), dim=0)
+        edge_idx_neg = torch.stack((edge_src, neg), dim=0)
 
         # negative edge
         z_src_neg, z_dst_neg = self.encoder(
@@ -180,11 +189,11 @@ class DyGFormer_LinkPrediction(nn.Module):
 def train(loader: DGDataLoader, model: nn.Module, opt: torch.optim.Optimizer) -> float:
     model.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        pos_out, neg_out = model(batch, static_node_feats)
+        pos_out, neg_out = model(batch, static_node_x)
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
@@ -204,26 +213,30 @@ def eval(
 ) -> float:
     model.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         copy_batch = copy.deepcopy(batch)
         for idx, neg_batch in enumerate(batch.neg_batch_list):
             idx = torch.tensor([idx], device=args.device)
-            copy_batch.src = batch.src[idx]
-            copy_batch.dst = batch.dst[idx]
-            copy_batch.time = batch.time[idx]
+            copy_batch.edge_src = batch.edge_src[idx]
+            copy_batch.edge_dst = batch.edge_dst[idx]
+            copy_batch.edge_time = batch.edge_time[idx]
             copy_batch.neg = neg_batch
             neg_idx = (batch.neg == neg_batch[:, None]).nonzero(as_tuple=True)[1]
 
             # Update nbr map to only indices that are used
-            copy_batch.seed_node_nbr_mask['src'] = batch.seed_node_nbr_mask['src'][idx]
-            copy_batch.seed_node_nbr_mask['dst'] = batch.seed_node_nbr_mask['dst'][idx]
+            copy_batch.seed_node_nbr_mask['edge_src'] = batch.seed_node_nbr_mask[
+                'edge_src'
+            ][idx]
+            copy_batch.seed_node_nbr_mask['edge_dst'] = batch.seed_node_nbr_mask[
+                'edge_dst'
+            ][idx]
             copy_batch.seed_node_nbr_mask['neg'] = batch.seed_node_nbr_mask['neg'][
                 neg_idx
             ]
 
-            pos_out, neg_out = model(copy_batch, static_node_feats)
+            pos_out, neg_out = model(copy_batch, static_node_x)
             pos_out, neg_out = pos_out.sigmoid(), neg_out.sigmoid()
 
             input_dict = {
@@ -240,8 +253,8 @@ seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
-if full_data.static_node_feats is None:
-    full_data.static_node_feats = torch.randn(
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
         (full_data.num_nodes, args.node_dim), device=args.device
     )
 
@@ -253,8 +266,8 @@ test_dg = DGraph(test_data, device=args.device)
 nbr_hook = RecencyNeighborHook(
     num_nbrs=[args.max_sequence_length - 1],  # 1 remaining for seed node itself
     num_nodes=full_data.num_nodes,
-    seed_nodes_keys=['src', 'dst', 'neg'],
-    seed_times_keys=['time', 'time', 'neg_time'],
+    seed_nodes_keys=['edge_src', 'edge_dst', 'neg'],
+    seed_times_keys=['edge_time', 'edge_time', 'neg_time'],
 )
 
 hm = RecipeRegistry.build(
@@ -268,8 +281,8 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = DyGFormer_LinkPrediction(
-    node_feat_dim=train_dg.static_node_feats_dim,
-    edge_feat_dim=train_dg.edge_feats_dim,
+    node_feat_dim=train_dg.static_node_x_dim,
+    edge_x_dim=train_dg.edge_x_dim,
     time_feat_dim=args.time_dim,
     channel_embedding_dim=args.channel_embedding_dim,
     output_dim=args.embed_dim,
@@ -282,7 +295,11 @@ model = DyGFormer_LinkPrediction(
     patch_size=args.patch_size,
 ).to(args.device)
 
+hm.validate_requirement(model)
+
 opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+
+best_val = 0.0
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
@@ -292,11 +309,12 @@ for epoch in range(1, args.epochs + 1):
 
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
+    if val_mrr > best_val:
+        best_val = val_mrr
+        with hm.activate(test_key):
+            test_mrr = eval(evaluator, test_loader, model)
+        log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
 
     # Clear memory state between epochs, except last epoch
     if epoch < args.epochs:
         hm.reset_state()
-
-with hm.activate(test_key):
-    test_mrr = eval(evaluator, test_loader, model)
-log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

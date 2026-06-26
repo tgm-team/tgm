@@ -17,8 +17,9 @@ def dg():
 
 
 def test_hook_dependancies():
-    assert PinMemoryHook.requires == set()
-    assert PinMemoryHook.produces == set()
+    hook = PinMemoryHook()
+    assert hook.requires == set()
+    assert hook.produces == set()
 
 
 def test_hook_reset_state():
@@ -30,7 +31,7 @@ def test_pin_memory_hook_no_gpu_available(dg):
         hook = PinMemoryHook()
         batch = dg.materialize()
         processed_batch = hook(dg, batch)
-        assert torch.equal(batch.src, processed_batch.src)
+        assert torch.equal(batch.edge_src, processed_batch.edge_src)
 
 
 @pytest.mark.gpu
@@ -45,9 +46,9 @@ def test_pin_memory_hook_cpu(dg):
 
     processed_batch = hook(dg, batch)
     assert batch == processed_batch
-    assert processed_batch.src.is_pinned()
-    assert processed_batch.dst.is_pinned()
-    assert processed_batch.time.is_pinned()
+    assert processed_batch.edge_src.is_pinned()
+    assert processed_batch.edge_dst.is_pinned()
+    assert processed_batch.edge_time.is_pinned()
     assert processed_batch.foo.is_pinned()
 
 

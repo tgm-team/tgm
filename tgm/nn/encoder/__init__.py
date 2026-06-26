@@ -1,3 +1,4 @@
+from .ctan import CTAN, CTANMemory
 from .dygformer import DyGFormer
 from .tpnet import TPNet, RandomProjectionModule
 from .tgcn import TGCN
@@ -10,9 +11,12 @@ from .tgn import (
     TGNMemory,
 )
 from .roland import ROLAND
+from .tgat import TGAT
 
 
 __all__ = [
+    'CTAN',
+    'CTANMemory',
     'DyGFormer',
     'GCLSTM',
     'MLPMixer',
@@ -25,4 +29,5 @@ __all__ = [
     'IdentityMessage',
     'TGNMemory',
     'ROLAND',
+    'TGAT',
 ]

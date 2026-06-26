@@ -36,7 +36,7 @@ parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument(
     '--snapshot-time-gran',
     type=str,
-    default='h',
+    default='D',
     help='time granularity to operate on for snapshots',
 )
 parser.add_argument(
@@ -57,6 +57,10 @@ class GCNEncoder(torch.nn.Module):
         dropout: float,
     ):
         super().__init__()
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+        }
         self.in_channels = in_channels
         self.dropout = dropout
         self.convs = torch.nn.ModuleList()
@@ -77,7 +81,7 @@ class GCNEncoder(torch.nn.Module):
             bn.reset_parameters()
 
     def forward(self, batch: DGBatch, node_feat: torch.Tensor) -> torch.Tensor:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         x = node_feat
         for i, conv in enumerate(self.convs[:-1]):
             x = conv(x, edge_index)
@@ -101,30 +105,32 @@ def train(
     encoder.train()
     decoder.train()
     total_loss = 0
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
-    z = encoder(snapshot_batch, static_node_feats)
+    z = encoder(snapshot_batch, static_node_x)
     z = z.detach()
 
     for batch in tqdm(loader):
         opt.zero_grad()
 
-        pos_out = decoder(z[batch.src], z[batch.dst])
-        neg_out = decoder(z[batch.src], z[batch.neg])
+        pos_out = decoder(z[batch.edge_src], z[batch.edge_dst])
+        neg_out = decoder(z[batch.edge_src], z[batch.neg])
 
         loss = F.binary_cross_entropy_with_logits(pos_out, torch.ones_like(pos_out))
         loss += F.binary_cross_entropy_with_logits(neg_out, torch.zeros_like(neg_out))
         loss.backward()
         opt.step()
-        total_loss += float(loss) / batch.src.shape[0]
+        total_loss += float(loss) / batch.edge_src.shape[0]
 
         # update the model if the prediction batch has moved to next snapshot.
-        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+        while (
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+        ):
             try:
                 snapshot_batch = next(snapshots_iterator)
-                z = encoder(snapshot_batch, static_node_feats)
+                z = encoder(snapshot_batch, static_node_x)
                 z = z.detach()
             except StopIteration:
                 pass
@@ -147,7 +153,7 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     snapshots_iterator = iter(snapshots_loader)
     snapshot_batch = next(snapshots_iterator)
@@ -155,8 +161,8 @@ def eval(
     for batch in tqdm(loader):
         neg_batch_list = batch.neg_batch_list
         for idx, neg_batch in enumerate(neg_batch_list):
-            query_src = batch.src[idx].repeat(len(neg_batch) + 1)
-            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            query_src = batch.edge_src[idx].repeat(len(neg_batch) + 1)
+            query_dst = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
 
             y_pred = decoder(z[query_src], z[query_dst]).sigmoid()
             input_dict = {
@@ -167,22 +173,25 @@ def eval(
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
 
         # update the model if the prediction batch has moved to next snapshot.
-        while batch.time[-1] > (snapshot_batch.time[-1] + 1) * conversion_rate:
+        while (
+            batch.edge_time[-1] > (snapshot_batch.edge_time[-1] + 1) * conversion_rate
+        ):
             try:
                 snapshot_batch = next(snapshots_iterator)
-                z = encoder(snapshot_batch, static_node_feats)
+                z = encoder(snapshot_batch, static_node_x)
             except StopIteration:
                 pass
+    z = z.detach()
 
-    return float(np.mean(perf_list))
+    return float(np.mean(perf_list)), z
 
 
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
-if full_data.static_node_feats is None:
-    full_data.static_node_feats = torch.randn(
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
         (full_data.num_nodes, args.node_dim), device=args.device
     )
 
@@ -219,7 +228,7 @@ test_snapshots_loader = DGDataLoader(test_snapshots, batch_unit=args.snapshot_ti
 
 
 encoder = GCNEncoder(
-    in_channels=train_dg.static_node_feats_dim,
+    in_channels=train_dg.static_node_x_dim,
     embed_dim=args.embed_dim,
     out_channels=args.embed_dim,
     num_layers=args.n_layers,
@@ -228,9 +237,13 @@ encoder = GCNEncoder(
 decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device
 )
+
+hm.validate_requirement(encoder)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
+
+best_val = 0.0
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate(train_key):
@@ -244,7 +257,7 @@ for epoch in range(1, args.epochs + 1):
         )
 
     with hm.activate(val_key):
-        val_mrr = eval(
+        val_mrr, z = eval(
             val_loader,
             val_snapshots_loader,
             z,
@@ -253,18 +266,19 @@ for epoch in range(1, args.epochs + 1):
             evaluator,
             conversion_rate,
         )
+
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_LINKPROPPRED}', val_mrr, epoch=epoch)
-
-
-with hm.activate(test_key):
-    test_mrr = eval(
-        test_loader,
-        test_snapshots_loader,
-        z,
-        encoder,
-        decoder,
-        evaluator,
-        conversion_rate,
-    )
-log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)
+    if val_mrr > best_val:
+        best_val = val_mrr
+        with hm.activate(test_key):
+            test_mrr, z = eval(
+                test_loader,
+                test_snapshots_loader,
+                z,
+                encoder,
+                decoder,
+                evaluator,
+                conversion_rate,
+            )
+        log_metric(f'Test {METRIC_TGB_LINKPROPPRED}', test_mrr, epoch=args.epochs)

@@ -9,7 +9,7 @@ from tqdm import tqdm
 from tgm import DGraph
 from tgm.data import DGData, DGDataLoader
 from tgm.hooks import HookManager
-from tgm.hooks.node_analytics import NodeAnalyticsHook
+from tgm.hooks.analytics.node_analytics import NodeAnalyticsHook
 from tgm.util.logging import enable_logging, log_latency, log_metrics_dict
 from tgm.util.seed import seed_everything
 
@@ -37,13 +37,13 @@ seed_everything(args.seed)
 dg = DGraph(DGData.from_tgb(args.dataset))
 logger.info(f'Loaded dataset: {args.dataset}')
 logger.info(f'Number of nodes: {dg.num_nodes}')
-logger.info(f'Number of edges: {dg.num_edges}')
+logger.info(f'Number of edges: {dg.num_edge_events}')
 
 
 # Select top N most frequent nodes to track
 def get_most_frequent_nodes(dg: DGraph, n: int) -> torch.Tensor:
     """Get the n most frequently appearing nodes in the graph."""
-    src, dst, _ = dg.edges
+    src, dst = dg.edge_src, dg.edge_dst
     edge_nodes = torch.cat([src, dst], dim=0)
     unique_nodes, counts = torch.unique(edge_nodes, return_counts=True)
 

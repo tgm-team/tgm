@@ -10,23 +10,38 @@ from tgm.hooks.hook_manager import HookManager
 @pytest.fixture
 def dg():
     edge_index = torch.IntTensor([[2, 3], [2, 5]])
-    edge_timestamps = torch.LongTensor([1, 5])
-    node_timestamps = torch.LongTensor([2, 3, 5, 5, 5])
-    node_ids = torch.IntTensor([4, 2, 5, 1, 2])
+    edge_time = torch.LongTensor([1, 5])
+    node_y_time = torch.LongTensor([2, 3, 5, 5, 5])
+    node_y_nids = torch.IntTensor([4, 2, 5, 1, 2])
 
     # Can't actually get node events without dynamic node feats
-    dynamic_node_feats = torch.rand(5, 3)
+    node_y = torch.rand(5, 3)
     data = DGData.from_raw(
-        edge_timestamps,
+        edge_time,
         edge_index,
-        node_timestamps=node_timestamps,
-        node_ids=node_ids,
-        dynamic_node_feats=dynamic_node_feats,
+        node_y_time=node_y_time,
+        node_y_nids=node_y_nids,
+        node_y=node_y,
         time_delta='s',
     )
 
     dg = DGraph(data)
     return dg
+
+
+def test_hook_dependancies():
+    hook = EdgeEventsSeenNodesTrackHook(1)
+    assert hook.requires == {'edge_src', 'edge_dst'}
+    assert hook.produces == {'seen_nodes', 'batch_nodes_mask'}
+
+    hook_with_id = EdgeEventsSeenNodesTrackHook(1, id='foo')
+    assert hook_with_id.requires == {'edge_src', 'edge_dst'}
+    assert hook_with_id.produces == {'seen_nodes_foo', 'batch_nodes_mask_foo'}
+
+
+def test_hook_repre():
+    hook_with_id = EdgeEventsSeenNodesTrackHook(1, id='foo')
+    assert 'foo' in hook_with_id.__repr__()
 
 
 def test_seen_nodes_track_hook(dg):
@@ -52,6 +67,31 @@ def test_seen_nodes_track_hook(dg):
     assert batch_4.seen_nodes[0].item() == 5
     assert batch_4.seen_nodes[1].item() == 2
     assert torch.equal(batch_4.batch_nodes_mask, torch.Tensor([0, 2]))
+
+
+def test_seen_nodes_track_hook_with_hook_id(dg):
+    hm = HookManager(keys=['unit'])
+    seen_nodes_track_hook = EdgeEventsSeenNodesTrackHook(6, id='foo')
+    hm.register('unit', seen_nodes_track_hook)
+    hm.set_active_hooks('unit')
+
+    loader = DGDataLoader(dg, batch_unit='s', hook_manager=hm)
+    batch_iter = iter(loader)
+    batch_1 = next(batch_iter)
+    assert len(batch_1.seen_nodes_foo) == 0
+
+    batch_2 = next(batch_iter)
+    assert len(batch_2.seen_nodes_foo) == 0
+
+    batch_3 = next(batch_iter)
+    assert len(batch_3.seen_nodes_foo) == 1
+    assert batch_3.seen_nodes_foo[0].item() == 2
+
+    batch_4 = next(batch_iter)
+    assert len(batch_4.seen_nodes_foo) == 2
+    assert batch_4.seen_nodes_foo[0].item() == 5
+    assert batch_4.seen_nodes_foo[1].item() == 2
+    assert torch.equal(batch_4.batch_nodes_mask_foo, torch.Tensor([0, 2]))
 
 
 def test_reset_state_seen_nodes_track_hook():

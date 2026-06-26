@@ -2,16 +2,9 @@ import torch
 import torch.nn as nn
 from torch.nn import Sequential
 
+from tgm.exceptions import BadAggregatorProtocolError
 
-def cat_merge(z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
-    r"""Default merging operation: Concat."""
-    # @TODO: we can define this in different module and have a base class for this
-    return torch.cat([z_src, z_dst], dim=1)
-
-
-MERGE_OP = {
-    'concat': cat_merge,
-}
+from ..modules import Aggregator, ConcatMerge
 
 
 class LinkPredictor(torch.nn.Module):
@@ -22,7 +15,10 @@ class LinkPredictor(torch.nn.Module):
         out_dim (int): Dimension of output
         nlayers (int): Number of layers
         hidden_dim (int): Size of each hidden embedding
-        merge_op (str): Operation to merge 2 node embeddings (concat)
+        merge_op (Aggregator): Operation to merge 2 node embeddings (ConcatMerge by default)
+
+    Note:
+        merge_op can be selected from [ConcatMerge, LearnableSumMerge] or any custom merging operation, provided it subclasses `BaseMerge`.
     """
 
     def __init__(
@@ -31,28 +27,27 @@ class LinkPredictor(torch.nn.Module):
         out_dim: int = 1,
         nlayers: int = 2,
         hidden_dim: int = 64,
-        merge_op: str = 'concat',
+        merge_op: Aggregator | None = None,
     ) -> None:
         super().__init__()
 
-        if merge_op not in MERGE_OP:
-            raise ValueError(
-                f'{merge_op} merge operations is not support. Please choose from {list(MERGE_OP.keys())}'
+        self.merge = merge_op if merge_op is not None else ConcatMerge(dim=node_dim)
+        if not isinstance(self.merge, Aggregator):
+            raise BadAggregatorProtocolError(
+                f'Cannot validate {type(self.merge).__name__}: must implement __call__(*args: torch.Tensor, **kwargs: torch.Tensor) -> torch.Tensor and out_channels() -> int'
             )
 
-        if merge_op == 'concat':
-            node_dim = node_dim * 2
+        in_dim = self.merge.out_channels
 
         self.model = Sequential()
-        self.model.append(nn.Linear(node_dim, hidden_dim))
+        self.model.append(nn.Linear(in_dim, hidden_dim))
         self.model.append(nn.ReLU())
 
-        for i in range(1, nlayers - 1):
+        for _ in range(1, nlayers - 1):
             self.model.append(nn.Linear(hidden_dim, hidden_dim))
             self.model.append(nn.ReLU())
 
         self.model.append(nn.Linear(hidden_dim, out_dim))
-        self.merge_op = MERGE_OP[merge_op]
 
     def forward(self, z_src: torch.Tensor, z_dst: torch.Tensor) -> torch.Tensor:
         r"""Forward pass.
@@ -61,4 +56,5 @@ class LinkPredictor(torch.nn.Module):
             z_src (torch.Tensor): embedding of src node
             z_dst (torch.Tensor): embedding of dst node
         """
-        return self.model(self.merge_op(z_src, z_dst)).view(-1)
+        h = self.merge(z_src, z_dst)
+        return self.model(h).view(-1)

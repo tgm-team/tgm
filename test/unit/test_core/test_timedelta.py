@@ -179,6 +179,7 @@ def test_tgb_native_time_deltas():
         'tgbl-wiki': TimeDeltaDG('s'),
         'tgbl-subreddit': TimeDeltaDG('s'),
         'tgbl-lastfm': TimeDeltaDG('s'),
+        'tgbl-mooc': TimeDeltaDG('s'),
         'tgbl-review': TimeDeltaDG('s'),
         'tgbl-coin': TimeDeltaDG('s'),
         'tgbl-flight': TimeDeltaDG('s'),
@@ -191,6 +192,10 @@ def test_tgb_native_time_deltas():
         'thgl-forum': TimeDeltaDG('s'),
         'thgl-github': TimeDeltaDG('s'),
         'thgl-myket': TimeDeltaDG('s'),
+        'tkgl-smallpedia': TimeDeltaDG('Y'),
+        'tkgl-polecat': TimeDeltaDG('D'),
+        'tkgl-icews': TimeDeltaDG('D'),
+        'tkgl-wikidata': TimeDeltaDG('Y'),
     }
     assert TGB_TIME_DELTAS == exp_dict
 

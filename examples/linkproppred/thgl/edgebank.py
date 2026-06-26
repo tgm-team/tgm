@@ -46,8 +46,8 @@ def eval(
     perf_list = []
     for batch in tqdm(loader):
         for idx, neg_batch in enumerate(batch.neg_batch_list):
-            query_src = batch.src[idx].repeat(len(neg_batch) + 1)
-            query_dst = torch.cat([batch.dst[idx].unsqueeze(0), neg_batch])
+            query_src = batch.edge_src[idx].repeat(len(neg_batch) + 1)
+            query_dst = torch.cat([batch.edge_dst[idx].unsqueeze(0), neg_batch])
 
             y_pred = model(query_src, query_dst)
             input_dict = {
@@ -56,7 +56,7 @@ def eval(
                 'eval_metric': [METRIC_TGB_LINKPROPPRED],
             }
             perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_LINKPROPPRED])
-        model.update(batch.src, batch.dst, batch.time)
+        model.update(batch.edge_src, batch.edge_dst, batch.edge_time)
 
     return float(np.mean(perf_list))
 
@@ -101,9 +101,9 @@ val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm)
 test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm)
 
 model = EdgeBankPredictor(
-    train_data.src,
-    train_data.dst,
-    train_data.time,
+    train_data.edge_src,
+    train_data.edge_dst,
+    train_data.edge_time,
     memory_mode=args.memory_mode,
     window_ratio=args.window_ratio,
     pos_prob=args.pos_prob,

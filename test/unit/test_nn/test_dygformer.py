@@ -9,7 +9,7 @@ def test_dygformer():
     node_dim, edge_dim, time_dim = 16, 17, 18
     dygformer = DyGFormer(
         node_feat_dim=node_dim,
-        edge_feat_dim=edge_dim,
+        edge_x_dim=edge_dim,
         time_feat_dim=time_dim,
         output_dim=edge_dim,
         channel_embedding_dim=H,
@@ -33,7 +33,7 @@ def test_dygformer_bad_init_patch_size():
     with pytest.raises(ValueError):
         DyGFormer(
             node_feat_dim=1,
-            edge_feat_dim=1,
+            edge_x_dim=1,
             time_feat_dim=1,
             channel_embedding_dim=1,
             max_input_sequence_length=8,

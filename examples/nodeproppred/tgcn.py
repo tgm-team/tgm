@@ -55,7 +55,7 @@ class RecurrentGCN(torch.nn.Module):
         node_feat: torch.tensor,
         h: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        edge_index = torch.stack([batch.src, batch.dst], dim=0)
+        edge_index = torch.stack([batch.edge_src, batch.edge_dst], dim=0)
         edge_weight = batch.edge_weight if hasattr(batch, 'edge_weight') else None  # type: ignore
 
         h_0 = self.recurrent(node_feat, edge_index, edge_weight, h)
@@ -76,16 +76,16 @@ def train(
     decoder.train()
     total_loss = 0
     h_0 = None
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
         opt.zero_grad()
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_y
         if y_true is None:
             continue
 
-        z, h_0 = encoder(batch, static_node_feats)
-        z_node = z[batch.node_ids]
+        z, h_0 = encoder(batch, static_node_x)
+        z_node = z[batch.node_y_nids]
         y_pred = decoder(z_node)
 
         loss = F.cross_entropy(y_pred, y_true)
@@ -111,15 +111,15 @@ def eval(
     encoder.eval()
     decoder.eval()
     perf_list = []
-    static_node_feats = loader.dgraph.static_node_feats
+    static_node_x = loader.dgraph.static_node_x
 
     for batch in tqdm(loader):
-        y_true = batch.dynamic_node_feats
+        y_true = batch.node_y
         if y_true is None:
             continue
 
-        z, h_0 = encoder(batch, static_node_feats, h_0)
-        z_node = z[batch.node_ids]
+        z, h_0 = encoder(batch, static_node_x, h_0)
+        z_node = z[batch.node_y_nids]
         y_pred = decoder(z_node)
 
         input_dict = {
@@ -129,15 +129,16 @@ def eval(
         }
         perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
-    return float(np.mean(perf_list))
+    h_0 = h_0.detach()
+    return float(np.mean(perf_list)), h_0
 
 
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
 full_data = DGData.from_tgb(args.dataset)
-if full_data.static_node_feats is None:
-    full_data.static_node_feats = torch.randn(
+if full_data.static_node_x is None:
+    full_data.static_node_x = torch.randn(
         (full_data.num_nodes, args.node_dim), device=args.device
     )
 
@@ -150,10 +151,10 @@ train_loader = DGDataLoader(train_dg, batch_unit=args.snapshot_time_gran)
 val_loader = DGDataLoader(val_dg, batch_unit=args.snapshot_time_gran)
 test_loader = DGDataLoader(test_dg, batch_unit=args.snapshot_time_gran)
 
-num_classes = train_dg.dynamic_node_feats_dim
+num_classes = train_dg.node_y_dim
 
 encoder = RecurrentGCN(
-    node_dim=train_dg.static_node_feats_dim, embed_dim=args.embed_dim
+    node_dim=train_dg.static_node_x_dim, embed_dim=args.embed_dim
 ).to(args.device)
 decoder = NodePredictor(
     in_dim=args.embed_dim, out_dim=num_classes, hidden_dim=args.embed_dim
@@ -162,11 +163,15 @@ opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )
 
+best_val = 0.0
+
 for epoch in range(1, args.epochs + 1):
     loss, h_0 = train(train_loader, encoder, decoder, opt)
-    val_ndcg = eval(val_loader, h_0, encoder, decoder, evaluator)
+    val_ndcg, h_0 = eval(val_loader, h_0, encoder, decoder, evaluator)
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_ndcg, epoch=epoch)
 
-test_ndcg = eval(test_loader, h_0, encoder, decoder, evaluator)
-log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)
+    if val_ndcg > best_val:
+        best_val = val_ndcg
+        test_ndcg, h_0 = eval(test_loader, h_0, encoder, decoder, evaluator)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_ndcg, epoch=args.epochs)

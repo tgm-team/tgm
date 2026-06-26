@@ -1,5 +1,6 @@
 ## Encoders
 
+::: tgm.nn.encoder.ctan
 ::: tgm.nn.encoder.dygformer
 ::: tgm.nn.encoder.tpnet
 ::: tgm.nn.encoder.gclstm
