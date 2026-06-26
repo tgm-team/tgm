@@ -1,20 +1,38 @@
 from __future__ import annotations
 
+import difflib
 import logging
 import time
 from collections import defaultdict, deque
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, Set
 
 from tgm import DGBatch, DGraph
 from tgm.exceptions import (
+    BadEncoderProtocolError,
     BadHookProtocolError,
     UnresolvableHookDependenciesError,
 )
 from tgm.hooks import DGHook
+from tgm.hooks.registry import list_hooks
+from tgm.nn import EncoderModule
 from tgm.util.logging import _get_logger, log_latency
 
 logger = _get_logger(__name__)
+
+CORE_ATTRIBUTE: Set[str] = set(
+    [
+        'edge_src',
+        'edge_dst',
+        'edge_time',
+        'edge_type',
+        'node_x_time',
+        'node_x_nids',
+        'node_y_time',
+        'node_y_nids',
+        'node_type',
+    ]
+)
 
 
 class HookManager:
@@ -207,6 +225,151 @@ class HookManager:
         finally:
             self._active_key = prev_key  # Restore previous active key
 
+    def validate_requirement(
+        self, module: EncoderModule, key: str | None = None
+    ) -> None:
+        r"""Validate that the registered hooks satisfy the requirements of a given NNModule.
+
+        Checks whether the hooks registered under the specified key (or all keys if none
+        is provided) fulfill the module's declared requirements. Shared hooks are always
+        included in the validation. Logs a confirmation message if all requirements are met.
+        If one or more of the module's requirements are not satisfied by the registered hooks,
+        This method will return error with suggestion to fix. For example:
+
+        Cannot resolve the following requirements {'foo', 'neighbour', 'num_edge_eventss'} from any hook registered under key 'train'.
+        Suggestions:
+                - 'foo': Can not find any existing hooks that satisfy this requirement.
+                - 'neighbour': Found keyword 'neighbour' in 'NeighborSamplerHook' documentation. If this hook produces what you are looking for, update the module requirement with the correct name and register 'NeighborSamplerHook' with key 'train'.
+                - 'num_edge_eventss': Do you mean 'num_edge_events' or 'num_node_events'?. If so, please update the module requirement with the correct name and register 'BatchAnalyticsHook' with key 'train' to resolve this.
+
+        Args:
+            module (NNModule): The module whose requirements are to be validated.
+            key (str | None): The key to validate against. If provided, only hooks
+                registered under that key are checked. If None, all registered keys
+                are validated. Defaults to None.
+
+        Raises:
+            ValueError: If the provided key is not registered in the HookManager.
+            UnresolvableHookDependenciesError: If one or more of the module's requirements are not
+                satisfied by the registered hooks.
+
+            BadEncoderProtocolError: If provided encoder doesn't follow the protocol `EncoderModule`
+        """
+        if not isinstance(module, EncoderModule):
+            raise BadEncoderProtocolError(
+                f'Cannot validate {type(module).__name__}: must implement __call__(self, batch: DGBatch, *args: Any, **kwargs: Any) and have `requires` attribute'
+            )
+
+        keys = []
+        if key is not None:
+            # In the case user provide key, we validate only provided key
+            self._ensure_valid_key(key)
+            keys.append(key)
+        else:
+            # In the case user provide no key, we validdate all registered keys
+            keys.extend(self._key_to_hooks.keys())
+
+        for k in keys:
+            hooks_by_key = self._key_to_hooks[k] + self._shared_hooks
+            self._resolve_requirements_against_hooks(module.requires, hooks_by_key, k)
+
+        logger.info(
+            f'HookManager satisfies all requirements for {module.__class__.__name__}.'
+        )
+
+    def _resolve_requirements_against_hooks(
+        self, module_requirements: Set[str], registered_hooks: List[DGHook], key: str
+    ) -> None:
+        """Verify that all module requirements are satisfied by the registered hooks and core attributes.
+
+        For each unsatisfied requirement, searches all available hooks for suggestions
+        and builds a detailed error message to guide the user toward a resolution. The
+        search checks for exact matches and close matches with names of produced artifacts of all hooks,
+        and keyword matches in hook documentation.
+
+        Args:
+            module_requirements (Set[str]): The set of attributes required by the module.
+            registered_hooks (List[DGHook]): Hooks registered under the given key,
+                including shared hooks.
+            key (str): The key under which the hooks are registered. Used in error
+                messages to guide the user toward the correct registration.
+
+        Raises:
+            UnresolvableHookDependenciesError: If one or more requirements cannot be
+                satisfied by the registered hooks or core attributes. The error includes
+                suggestions for each missing attribute based on:
+                - Exact match: a hook that directly produces the attribute.
+                - Close match: a hook that produces a similarly named attribute.
+                - Documentation match: a hook whose docstring contains the attribute keyword.
+        """
+        all_produced = CORE_ATTRIBUTE.union(*(h.produces for h in registered_hooks))
+        missing = module_requirements - all_produced
+        if missing:
+            all_hooks = list_hooks()
+            error_message = f"""Cannot resolve the following requirements {missing} from any hook registered under key '{key}'.\nSuggestions:"""
+
+            for attribute in missing:
+                found_match = False
+
+                for hook in all_hooks:
+                    hook_produces: Set[str] = getattr(hook, '_cls_produces', set())
+
+                    if attribute in hook_produces:
+                        # exact match
+                        error_message += f"\n\t- '{attribute}': Found hook that produces '{attribute}'. To resolve this, please register '{hook.__name__}' with key '{key}'"
+                        found_match = True
+                    elif closest_match_produce := self._get_close_match_produce(
+                        attribute, hook_produces
+                    ):
+                        # closest match
+                        closest_match_str = ' or '.join(
+                            f"'{m}'" for m in closest_match_produce
+                        )
+                        error_message += f"\n\t- '{attribute}': Do you mean {closest_match_str}?. If so, please update the module requirement with the correct name and register '{hook.__name__}' with key '{key}' to resolve this."
+                        found_match = True
+                    elif (
+                        attribute.lower()
+                        in (getattr(hook, '__doc__', '') or '').lower()
+                    ):
+                        # keyword matches in hook documentation.
+                        error_message += (
+                            f"\n\t- '{attribute}': Found keyword '{attribute}' in '{hook.__name__}' documentation. "
+                            f'If this hook produces what you are looking for, update the module requirement with the correct name '
+                            f"and register '{hook.__name__}' with key '{key}'."
+                        )
+                        found_match = True
+
+                if not found_match:
+                    # Can't find hook matches users defined nn module requirement
+                    error_message += f"\n\t- '{attribute}': Can not find any existing hooks that satisfy this requirement."
+
+            raise UnresolvableHookDependenciesError(error_message)
+
+    def _get_close_match_produce(self, attribute: str, produces: Set[str]) -> List[str]:
+        """Find closely matching attribute names from a set of produced attributes.
+
+        Uses fuzzy string matching to suggest likely alternatives when an exact match
+        is not found, helping to identify potential typos or naming inconsistencies
+        in module requirements.
+
+        Args:
+            attribute (str): The attribute name to match against.
+            produces (Set[str]): The set of attribute names produced by a hook.
+
+        Returns:
+            List[str]: Up to 2 closely matching attribute names with a similarity
+                score of 0.6 or above. Returns an empty list if no close matches
+                are found.
+
+        Notes:
+            Similarity cutoff is set to 0.6 (difflib default), which balances
+            catching common typos without introducing noisy suggestions:
+            - 0.8+ strict, only near-exact matches.
+            - 0.6  default, catches most common typos.
+            - 0.4- loose, may return irrelevant suggestions.
+        """
+        return difflib.get_close_matches(attribute, produces, n=2, cutoff=0.6)
+
     def _ensure_valid_hook(self, hook: Any) -> None:
         if not isinstance(hook, DGHook):
             raise BadHookProtocolError(
@@ -237,19 +400,7 @@ class HookManager:
         # does not have, e.g. node events but they are marked as required by a registered hook.
         # We cannot guard against this here since determining whether or not a batch has
         # edge/node events can only be inferred during data loading.
-        all_produced = set(
-            [
-                'edge_src',
-                'edge_dst',
-                'edge_time',
-                'edge_type',
-                'node_x_time',
-                'node_x_nids',
-                'node_y_time',
-                'node_y_nids',
-                'node_type',
-            ]
-        ).union(*(h.produces for h in hooks))
+        all_produced = CORE_ATTRIBUTE.union(*(h.produces for h in hooks))
         missing = set()
         for h in hooks:
             missing |= h.requires - all_produced

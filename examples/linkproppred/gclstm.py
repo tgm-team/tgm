@@ -49,6 +49,10 @@ class RecurrentGCN(torch.nn.Module):
         super().__init__()
         self.recurrent = GCLSTM(in_channels=node_dim, out_channels=embed_dim, K=K)
         self.linear = nn.Linear(embed_dim, embed_dim)
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+        }
 
     def forward(
         self,
@@ -210,6 +214,8 @@ encoder = RecurrentGCN(
 decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device
 )
+hm.validate_requirement(encoder)
+
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

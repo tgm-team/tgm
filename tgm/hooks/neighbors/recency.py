@@ -8,11 +8,13 @@ import torch
 from tgm import DGBatch, DGraph
 from tgm.constants import PADDED_NODE_ID
 from tgm.hooks import SeedableHook, StatefulHook
+from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
+@hook
 class RecencyNeighborHook(StatefulHook, SeedableHook):
     """Load neighbors from DGraph using a recency sampling. Each node maintains a fixed number of recent neighbors.
 
@@ -37,6 +39,8 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
     Raises:
         ValueError: If the num_nbrs list is empty or has non-positive entries.
         ValueError: If len(seed_nodes_keys) != len(seed_times_keys).
+
+    Key words: k-hop neighbour, recency, historical.
     """
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}

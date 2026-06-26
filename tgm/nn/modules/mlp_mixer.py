@@ -80,19 +80,19 @@ class MLPMixer(nn.Module):
             dropout=dropout,
         )
 
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
+    def forward(self, node_x: torch.Tensor) -> torch.Tensor:
         f"""Forward pass.
         Eq. 6 (Section  3.2)
 
         Args:
-            X (PyTorch Float Tensor): Input tensor
+            node_x (PyTorch Float Tensor): Input tensor
 
         Returns:
             H : Output tensor
         """
-        H_l_tilde = self.token_norm(X.permute(0, 2, 1))
+        H_l_tilde = self.token_norm(node_x.permute(0, 2, 1))
         H_l_tilde = self.token_feedforward(H_l_tilde).permute(0, 2, 1)
-        Z_l_tilde = X + H_l_tilde
+        Z_l_tilde = node_x + H_l_tilde
 
         H_l = self.channel_norm(Z_l_tilde)
         H_l = self.channel_feedforward(H_l)
