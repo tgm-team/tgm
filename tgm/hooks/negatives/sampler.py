@@ -242,7 +242,7 @@ class HistoricalNegativeEdgeSamplerHook(StatefulHook):
 
 @hook
 class NodeTypeNegativeSamplerHook(StatefulHook):
-    """Sample negative destinations matching the node type of each postive edge's destination node.
+    """Sample negative destinations matching the node type of each positive edge's destination node.
 
     For each edge in the batch, samples a negative destination node from previously
     observed destination nodes that share the same node type as the current destination.
