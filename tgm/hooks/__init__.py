@@ -7,6 +7,7 @@ from .negatives import (
     TGBNegativeEdgeSamplerHook,
     TGBTHGNegativeEdgeSamplerHook,
     TGBTKGNegativeEdgeSamplerHook,
+    NodeTypeNegativeSamplerHook,
 )
 from .neighbors import NeighborSamplerHook, RecencyNeighborHook
 from .hook_manager import HookManager

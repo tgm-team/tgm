@@ -271,11 +271,16 @@ class NodeTypeNegativeSamplerHook(StatefulHook):
 
     def __init__(
         self,
+        num_nodes: int,
         id: str | None = None,
     ) -> None:
         super().__init__()
+        if num_nodes <= 0:
+            raise ValueError('num_nodes must be a positive integer.')
+
         self._id = id
         self._memory: torch.Tensor | None = None
+        self._num_nodes = num_nodes
 
         self.__post_init__()
 
@@ -288,6 +293,9 @@ class NodeTypeNegativeSamplerHook(StatefulHook):
                 'dg.node_type is None. NodeTypeNegativeSamplerHook requires node type information in the DGraph.'
             )
         if self._memory is None:
+            logger.debug(
+                f'NodeTypeNegativeSamplerHook: Empty node label memory on first batch. All negatives will be set to PADDED_NODE_ID ({PADDED_NODE_ID}).'
+            )
             neg = torch.full(
                 (batch.edge_dst.size(0),),
                 PADDED_NODE_ID,
@@ -370,8 +378,11 @@ class NodeTypeNegativeSamplerHook(StatefulHook):
             has not yet appeared as a destination and is not eligible for sampling.
         """
         if self._memory is None:
+            logger.debug(
+                f'Initializing memory for NodeTypeNegativeSamplerHook with shape ({dg.num_nodes},) on device {dg.device}.'
+            )
             self._memory = torch.full(
-                (dg.num_nodes,),
+                (self._num_nodes,),
                 -1,
                 dtype=torch.int32,
                 device=dg.device,
