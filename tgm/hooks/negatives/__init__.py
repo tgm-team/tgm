@@ -1,10 +1,10 @@
-from .sampler import (
-    RandomNegativeEdgeSamplerHook,
-    HistoricalNegativeEdgeSamplerHook,
+from .heterogeneous_sampler import (
+    TGBTHGNegativeEdgeSamplerHook,
     NodeTypeNegativeSamplerHook,
 )
-from .tgb_sampler import (
+from .knowledge_sampler import TGBTKGNegativeEdgeSamplerHook
+from .homogeneous_sampler import (
+    RandomNegativeEdgeSamplerHook,
+    HistoricalNegativeEdgeSamplerHook,
     TGBNegativeEdgeSamplerHook,
-    TGBTHGNegativeEdgeSamplerHook,
-    TGBTKGNegativeEdgeSamplerHook,
 )
