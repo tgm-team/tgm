@@ -11,7 +11,6 @@ See README.md for details.
 """
 
 import argparse
-import json
 import logging
 
 import numpy as np
@@ -24,6 +23,7 @@ from tgtalker_utils import (
     make_multihop_user_prompt,
     make_system_prompt,
     predict_link,
+    extract_destination_node,
 )
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -148,7 +148,7 @@ def main() -> None:
 
                 try:
                     output = model(prompt, schema)
-                    pred_dst = int(json.loads(output)['destination_node'])
+                    pred_dst = extract_destination_node(output)
                     query_dst = torch.cat(
                         [batch.edge_dst[i].unsqueeze(0), batch.neg_batch_list[i]]
                     )

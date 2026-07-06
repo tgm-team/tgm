@@ -10,6 +10,8 @@ tested without an LLM runtime installed. The structured-output schemas live in
 from __future__ import annotations
 
 import collections
+import json
+import re
 from typing import Iterable, List, Sequence, Tuple
 
 import numpy as np
@@ -220,6 +222,38 @@ def predict_link(query_dst: torch.Tensor, llm_dst: int) -> torch.Tensor:
     picks a negative (or a node outside the candidate set).
     """
     return (query_dst == llm_dst).float()
+
+
+def extract_destination_node(output: object) -> int:
+    """Extract ``destination_node`` from model output.
+
+    Tries default strict JSON parse, with a minimal
+    fallback for slightly malformed text that still contains the key/value.
+    """
+    if output is None:
+        raise ValueError('Model output is None')
+
+    text = output if isinstance(output, str) else str(output)
+    text = text.strip()
+    if not text:
+        raise ValueError('Model output is empty')
+
+    try:
+        return int(json.loads(text)['destination_node'])
+    except Exception:
+        pass
+        
+    if isinstance(output, dict) and 'destination_node' in output:
+        return int(output['destination_node'])
+    if hasattr(output, 'destination_node'):
+        return int(getattr(output, 'destination_node'))
+
+    # Fallback for partially malformed JSON/text containing the key-value pair.
+    m = re.search(r'"destination_node"\s*:\s*(-?\d+)', text)
+    if m:
+        return int(m.group(1))
+
+    raise ValueError(f'Could not extract destination_node from output: {text[:160]}')
 
 
 class BackgroundBuffer:

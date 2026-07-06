@@ -17,7 +17,6 @@ See README.md for the full method description and how it maps onto tgm.
 """
 
 import argparse
-import json
 import logging
 
 import numpy as np
@@ -31,6 +30,7 @@ from tgtalker_utils import (
     make_system_prompt,
     make_user_prompt,
     predict_link,
+    extract_destination_node,
 )
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -207,7 +207,7 @@ def main() -> None:
 
                 try:
                     output = model(prompt, schema)
-                    pred_dst = int(json.loads(output)['destination_node'])
+                    pred_dst = extract_destination_node(output)
                     # Candidates: true destination followed by TGB negatives.
                     query_dst = torch.cat(
                         [batch.edge_dst[i].unsqueeze(0), batch.neg_batch_list[i]]
