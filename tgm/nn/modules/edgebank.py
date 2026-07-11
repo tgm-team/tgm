@@ -106,7 +106,10 @@ class EdgeBankPredictor:
         self._check_input_data(src, dst, ts)
         self._window_end = torch.max(self._window_end, ts.max())
         self._window_start = self._window_end - self._window_size
-        self._memory[src, dst] = torch.maximum(self._memory[src, dst], ts)
+
+        idx = src.long() * self._memory.shape[1] + dst.long()
+        flat = self._memory.view(-1)
+        flat.scatter_reduce_(0, idx, ts, reduce='amax')
 
     def __call__(
         self, query_src: torch.Tensor, query_dst: torch.Tensor
@@ -123,9 +126,11 @@ class EdgeBankPredictor:
                   its probability is ``self.pos_prob``.
                 - Otherwise, the probability is ``0.0``.
         """
-        return (
-            self._memory[query_src, query_dst] >= self.window_start
-        ).float() * self.pos_prob
+        mem = self._memory[query_src, query_dst]
+        hit = mem != -1
+        if self._fixed_memory:
+            hit &= mem >= self.window_start
+        return hit.float() * self.pos_prob
 
     @property
     def window_start(self) -> int | float:
