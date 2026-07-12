@@ -247,14 +247,14 @@ class EdgeBankPredictor:
         self._window_size = self._window_end - self._window_start
 
         if backend == 'vectorized':
-            assert N is not None  # already validated above; narrows N to int for mypy
+            assert N is not None
             self.backend: _EdgeBankBackend = _EdgeBankVectorizedBackend(
                 N, ts.dtype, ts.device, self._fixed_memory, self.pos_prob
             )
         else:
             self.backend = _EdgeBankLookupBackend(self._fixed_memory, self.pos_prob)
 
-            self.update(src, dst, ts)
+        self.update(src, dst, ts)
 
     def update(self, src: torch.Tensor, dst: torch.Tensor, ts: torch.Tensor) -> None:
         """Update EdgeBank memory with a batch of edges.
