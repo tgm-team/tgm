@@ -14,6 +14,7 @@
 ::: tgm.hooks.negatives.TGBTKGNegativeEdgeSamplerHook
 ::: tgm.hooks.negatives.RandomNegativeEdgeSamplerHook
 ::: tgm.hooks.negatives.HistoricalNegativeEdgeSamplerHook
+::: tgm.hooks.negatives.NodeTypeNegativeSamplerHook
 ::: tgm.hooks.neighbors.NeighborSamplerHook
 ::: tgm.hooks.neighbors.RecencyNeighborHook
 ::: tgm.hooks.analytics.BatchAnalyticsHook
