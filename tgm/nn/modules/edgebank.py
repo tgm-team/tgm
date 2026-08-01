@@ -114,7 +114,7 @@ class _EdgeBankLookupBackend(_EdgeBankBackend):
             'EdgeBank will be slow if events are added/updated out of order.'
         )
 
-    def _clean_up(self, window_start: float) -> None:
+    def _evict_out_of_window_events(self, window_start: float) -> None:
         """Clean up edges that are out of window in memory."""
         while self._head and self._head.ts < window_start:
             curr_event = self._head
@@ -137,7 +137,7 @@ class _EdgeBankLookupBackend(_EdgeBankBackend):
             and self._tail is not None
             and self._head.ts < window_start
         ):
-            self._clean_up(window_start)
+            self._evict_out_of_window_events(window_start)
 
         for src_, dst_, ts_ in zip(src, dst, ts):
             src_, dst_, ts_ = src_.item(), dst_.item(), ts_.item()
