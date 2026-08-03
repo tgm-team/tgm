@@ -1831,7 +1831,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 analytics = [
     { name = "networkx", specifier = ">=3.2.1" },
-    { name = "py-tgb", specifier = ">=2.2.0" },
+    { name = "py-tgb", specifier = ">=2.3.0" },
     { name = "scipy", specifier = ">=1.15.2" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
@@ -1840,7 +1840,7 @@ dev = [
     { name = "mypy", specifier = ">=1.13.0" },
     { name = "pandas", specifier = ">=1.5.3" },
     { name = "pre-commit", specifier = ">=4.0.1" },
-    { name = "py-tgb", specifier = ">=2.2.0" },
+    { name = "py-tgb", specifier = ">=2.3.0" },
     { name = "pytest", specifier = ">=8.3.3" },
     { name = "pytest-benchmark", specifier = ">=5.1.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
@@ -1855,7 +1855,7 @@ docs = [
 ]
 examples = [
     { name = "pandas", specifier = ">=2.3.0" },
-    { name = "py-tgb", specifier = ">=2.2.0" },
+    { name = "py-tgb", specifier = ">=2.3.0" },
     { name = "tgb-seq", specifier = ">=0.1.2" },
     { name = "torchmetrics", specifier = ">=1.7.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
