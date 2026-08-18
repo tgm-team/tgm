@@ -2380,7 +2380,8 @@ def test_from_bad_thgl(mock_dataset_cls, bad_tkgl_dataset_factory):
 def test_sort_is_stable_edges_before_labels_at_equal_time():
     """When edges and node labels share a timestamp, the global event order
     must keep edges before labels (TGB predicts labels at t after ingesting
-    the edges at t)."""
+    the edges at t).
+    """
     edge_index = torch.IntTensor([[0, 1], [1, 2]])
     edge_time = torch.LongTensor([3, 1])  # unsorted on purpose to trigger reordering
     node_y_time = torch.LongTensor([3])

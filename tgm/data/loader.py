@@ -140,6 +140,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
         self._batch_size = batch_size
         self._hook_manager = hook_manager
         self._slice_ends: dict = {}
+        slice_start: List[int] | range
 
         if batch_time_delta.is_event_ordered:
             self._slice_op = dg.slice_events
@@ -155,8 +156,13 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
                 drop_last = kwargs.get('drop_last', False)
                 if drop_last:
                     n_complete = len(non_label_pos) // batch_size
-                    starts = [non_label_pos[i * batch_size].item() for i in range(n_complete)]
-                    ends = [non_label_pos[(i + 1) * batch_size].item() for i in range(n_complete)]
+                    starts = [
+                        non_label_pos[i * batch_size].item() for i in range(n_complete)
+                    ]
+                    ends = [
+                        non_label_pos[(i + 1) * batch_size].item()
+                        for i in range(n_complete)
+                    ]
                 else:
                     starts = non_label_pos[::batch_size].tolist()
                     ends = non_label_pos[batch_size::batch_size].tolist() + [total]

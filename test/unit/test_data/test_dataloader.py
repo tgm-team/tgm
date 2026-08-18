@@ -277,8 +277,8 @@ def test_iteration_with_empty_batch_raise():
 
 
 def _make_interleaved_node_y_graph():
-    """
-    Global event sequence (sorted by time):
+    """Global event sequence (sorted by time).
+
       pos 0: edge (t=0)
       pos 1: edge (t=1)
       pos 2: node_y (t=1)
@@ -351,7 +351,9 @@ def test_count_node_labels_false_no_node_y_falls_back_to_uniform():
     dg = DGraph(data)
 
     loader_default = DGDataLoader(dg, batch_size=2, on_empty=None)
-    loader_no_count = DGDataLoader(dg, batch_size=2, count_node_labels=False, on_empty=None)
+    loader_no_count = DGDataLoader(
+        dg, batch_size=2, count_node_labels=False, on_empty=None
+    )
 
     batches_default = list(loader_default)
     batches_no_count = list(loader_no_count)
@@ -386,8 +388,7 @@ def test_count_node_labels_true_default_unchanged():
 
 
 def _make_leading_node_y_graph():
-    """
-    node_y at t=0 precedes every edge, like TGBSplit pulling the previous
+    """node_y at t=0 precedes every edge, like TGBSplit pulling the previous
     label timestamp to the front of the val/test splits.
 
     Global event sequence (sorted by time):

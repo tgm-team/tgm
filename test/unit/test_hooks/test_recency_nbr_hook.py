@@ -1032,7 +1032,8 @@ def _make_node_y_seeded_graph():
 
 def test_hook_updates_buffers_on_batches_without_seeds():
     """Edges from label-free batches must be ingested into the circular buffers
-    even when the seed keys (e.g. node_y_nids) are absent from those batches."""
+    even when the seed keys (e.g. node_y_nids) are absent from those batches.
+    """
     dg = _make_node_y_seeded_graph()
     hook = RecencyNeighborHook(
         num_nbrs=[2],
@@ -1057,7 +1058,8 @@ def test_hook_updates_buffers_on_batches_without_seeds():
 def test_hook_tgb_parity_same_timestamp_edges():
     """With update_buffers_before_sampling and inclusive_time_filter, edges at
     the seed's own timestamp (including ones in the current batch) are sampled,
-    matching TGB's LastNeighborLoader semantics."""
+    matching TGB's LastNeighborLoader semantics.
+    """
     edge_index = torch.IntTensor([[0, 1], [0, 2]])
     edge_time = torch.LongTensor([1, 5])
     edge_x = torch.Tensor([[1.0], [2.0]])

@@ -240,9 +240,13 @@ hm = HookManager(keys=['train', 'val', 'test'])
 hm.register_shared(nbr_hook)
 hm.register_shared(DeduplicationHook(seed_nodes_keys=['node_y_nids', 'nbr_nids']))
 
-train_loader = DGDataLoader(train_dg, args.bsize, hook_manager=hm, count_node_labels=False)
+train_loader = DGDataLoader(
+    train_dg, args.bsize, hook_manager=hm, count_node_labels=False
+)
 val_loader = DGDataLoader(val_dg, args.bsize, hook_manager=hm, count_node_labels=False)
-test_loader = DGDataLoader(test_dg, args.bsize, hook_manager=hm, count_node_labels=False)
+test_loader = DGDataLoader(
+    test_dg, args.bsize, hook_manager=hm, count_node_labels=False
+)
 
 memory = TGNMemory(
     full_data.num_nodes,
@@ -292,5 +296,11 @@ for epoch in range(1, args.epochs + 1):
         hm.reset_state()
 
 best_epoch = int(np.argmax(val_curve))
-log_metric(f'Best Validation {METRIC_TGB_NODEPROPPRED}', val_curve[best_epoch], epoch=best_epoch + 1)
-log_metric(f'Best Test {METRIC_TGB_NODEPROPPRED}', test_curve[best_epoch], epoch=best_epoch + 1)
+log_metric(
+    f'Best Validation {METRIC_TGB_NODEPROPPRED}',
+    val_curve[best_epoch],
+    epoch=best_epoch + 1,
+)
+log_metric(
+    f'Best Test {METRIC_TGB_NODEPROPPRED}', test_curve[best_epoch], epoch=best_epoch + 1
+)
