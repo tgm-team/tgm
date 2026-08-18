@@ -57,7 +57,7 @@ class DGStorageBase(ABC):
         """Return the total number of events in the slice."""
 
     @abstractmethod
-    def get_node_y_event_positions(self, slice: DGSliceTracker) -> Tensor:
+    def get_node_y_event_index(self, slice: DGSliceTracker) -> Tensor:
         """Return absolute event-array positions of node_y events within the slice."""
 
     @abstractmethod

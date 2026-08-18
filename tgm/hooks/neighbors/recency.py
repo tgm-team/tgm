@@ -24,6 +24,17 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
                                                If not specified, defaults to batch seed_times: ['time', 'time']
         seed_nodes_keys ([List[str]): List of batch attribute keys to identify the initial seed nodes to sample for.
         seed_times_keys ([List[str]): List of batch attribute keys to identify the initial seed times to sample for.
+        update_buffers_before_sampling (bool): If True, the current batch's edges are ingested into the
+                                               circular buffers before sampling neighbors, so seeds can see
+                                               edges from their own batch (TGB's process-then-predict ordering).
+                                               Default False: buffers are updated after sampling.
+                                               WARNING: this leaks same-batch (and, with inclusive_time_filter,
+                                               same-timestamp) information into the sampled neighborhoods. Only
+                                               enable it to reproduce reference pipelines (e.g. TGB nodeproppred)
+                                               that define evaluation this way.
+        inclusive_time_filter (bool): If True, neighbors with time == query time are sampled (TGB's
+                                      LastNeighborLoader applies no time filter). Default False: strict t < query time.
+                                      Carries the same leakage caveat as update_buffers_before_sampling.
         id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
 
     Note:
@@ -56,6 +67,8 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
         seed_nodes_keys: List[str],
         seed_times_keys: List[str],
         directed: bool = False,
+        update_buffers_before_sampling: bool = False,
+        inclusive_time_filter: bool = False,
         id: str | None = None,
     ) -> None:
         super().__init__()
@@ -68,6 +81,8 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
         self._num_nbrs = num_nbrs
         self._max_nbrs = max(num_nbrs)
         self._directed = directed
+        self._update_buffers_before_sampling = update_buffers_before_sampling
+        self._inclusive_time_filter = inclusive_time_filter
         self._device = torch.device('cpu')
 
         if len(seed_nodes_keys) != len(seed_times_keys):
@@ -128,6 +143,11 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
             batch_nbr_edge_x.append(torch.empty(0, dg.edge_x_dim).float())  # type: ignore[arg-type]
 
         seed_nodes, seed_times, seed_node_mask = self._get_seed_tensors(batch)
+
+        if self._update_buffers_before_sampling and batch.edge_src.numel():
+            logger.debug('Updating circular buffers before sampling')
+            self._update(batch)
+
         if not seed_nodes.numel():
             logger.debug('No seed_nodes found, appending empty hop information')
             for _ in self.num_nbrs:
@@ -154,9 +174,9 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
                 batch_nbr_edge_time.append(nbr_edge_time)
                 batch_nbr_edge_x.append(nbr_edge_x)
 
-            if batch.edge_src.numel():
-                logger.debug('Updating circular buffers')
-                self._update(batch)
+        if not self._update_buffers_before_sampling and batch.edge_src.numel():
+            logger.debug('Updating circular buffers')
+            self._update(batch)
 
         self.add_batch_attribute(batch, 'seed_nids', batch_seed_nids)
         self.add_batch_attribute(batch, 'seed_times', batch_seed_times)
@@ -261,7 +281,10 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
 
         # Read the neighbor seed_times in that unrolled order, and get query_times mask
         candidate_times = torch.gather(nbr_edge_time, 1, candidate_idx)  # (N, B)
-        time_mask = candidate_times < query_times[:, None]  # (N, B)
+        if self._inclusive_time_filter:
+            time_mask = candidate_times <= query_times[:, None]  # (N, B)
+        else:
+            time_mask = candidate_times < query_times[:, None]  # (N, B)
         time_mask[torch.gather(nbr_nids, 1, candidate_idx) == PADDED_NODE_ID] = False
 
         # For each node, find the rightmost valid entry, i.e the last index which

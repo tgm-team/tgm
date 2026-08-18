@@ -2375,3 +2375,25 @@ def test_from_bad_thgl(mock_dataset_cls, bad_tkgl_dataset_factory):
     mock_dataset_cls.return_value = dataset
     with pytest.raises(ValueError):
         data = DGData.from_tgb(name='tkgl-smallpedia')
+
+
+def test_sort_is_stable_edges_before_labels_at_equal_time():
+    """When edges and node labels share a timestamp, the global event order
+    must keep edges before labels (TGB predicts labels at t after ingesting
+    the edges at t)."""
+    edge_index = torch.IntTensor([[0, 1], [1, 2]])
+    edge_time = torch.LongTensor([3, 1])  # unsorted on purpose to trigger reordering
+    node_y_time = torch.LongTensor([3])
+    node_y_nids = torch.IntTensor([0])
+    node_y = torch.FloatTensor([[1.0]])
+    data = DGData.from_raw(
+        edge_time,
+        edge_index,
+        node_y_time=node_y_time,
+        node_y_nids=node_y_nids,
+        node_y=node_y,
+    )
+
+    # Sorted order must be: edge(t=1), edge(t=3), node_y(t=3)
+    assert data.node_y_mask.tolist() == [2]
+    assert sorted(data.edge_mask.tolist()) == [0, 1]

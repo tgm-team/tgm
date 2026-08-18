@@ -211,9 +211,9 @@ class DGraph:
         return len(self.node_y_time)
 
     @_logged_cached_property
-    def node_y_event_positions(self) -> Tensor:
+    def node_y_event_index(self) -> Tensor:
         """Absolute event-array positions of node_y events in the current slice."""
-        return self._storage.get_node_y_event_positions(self._slice)
+        return self._storage.get_node_y_event_index(self._slice)
 
     @_logged_cached_property
     def num_edge_events(self) -> int:

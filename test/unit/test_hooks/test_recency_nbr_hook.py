@@ -261,7 +261,10 @@ def test_bad_sample_with_non_existent_seeds(basic_sample_graph):
 def test_sample_with_none_seeds(basic_sample_graph):
     dg = DGraph(basic_sample_graph)
     hook = RecencyNeighborHook(
-        num_nbrs=[1], num_nodes=2, seed_nodes_keys=['foo'], seed_times_keys=['bar']
+        num_nbrs=[1],
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['foo'],
+        seed_times_keys=['bar'],
     )
     batch = dg.materialize()
     batch.foo, batch.bar = None, None
@@ -1002,3 +1005,101 @@ def test_hook_nbr_mask(basic_sample_graph):
 
     assert nbr_mask['edge_src'] == np.array([0])
     assert nbr_mask['edge_dst'] == np.array([1])
+
+
+def _make_node_y_seeded_graph():
+    """Edges at t=1,2 in a label-free batch, then a node_y (node 0) at t=4
+    followed by an edge at t=5.
+
+    Global event order: edge(0,1,t=1), edge(0,2,t=2), node_y(0,t=4), edge(3,4,t=5)
+    """
+    edge_index = torch.IntTensor([[0, 1], [0, 2], [3, 4]])
+    edge_time = torch.LongTensor([1, 2, 5])
+    edge_x = torch.Tensor([[1.0], [2.0], [7.0]])
+    node_y_time = torch.LongTensor([4])
+    node_y_nids = torch.IntTensor([0])
+    node_y = torch.FloatTensor([[1.0]])
+    data = DGData.from_raw(
+        edge_time,
+        edge_index,
+        edge_x,
+        node_y_time=node_y_time,
+        node_y_nids=node_y_nids,
+        node_y=node_y,
+    )
+    return DGraph(data)
+
+
+def test_hook_updates_buffers_on_batches_without_seeds():
+    """Edges from label-free batches must be ingested into the circular buffers
+    even when the seed keys (e.g. node_y_nids) are absent from those batches."""
+    dg = _make_node_y_seeded_graph()
+    hook = RecencyNeighborHook(
+        num_nbrs=[2],
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['node_y_nids'],
+        seed_times_keys=['node_y_time'],
+    )
+
+    # Batch 1: two edges, no node_y events (seed tensors are None)
+    batch_1 = dg.slice_events(0, 2).materialize()
+    with pytest.warns(UserWarning):
+        hook(dg, batch_1)
+
+    # Batch 2: node_y seed for node 0 at t=4, plus an unrelated edge
+    batch_2 = dg.slice_events(2, 4).materialize()
+    batch_2 = hook(dg, batch_2)
+
+    nbr_nids = batch_2.nbr_nids[0].flatten()
+    assert set(nbr_nids.tolist()) == {1, 2}
+
+
+def test_hook_tgb_parity_same_timestamp_edges():
+    """With update_buffers_before_sampling and inclusive_time_filter, edges at
+    the seed's own timestamp (including ones in the current batch) are sampled,
+    matching TGB's LastNeighborLoader semantics."""
+    edge_index = torch.IntTensor([[0, 1], [0, 2]])
+    edge_time = torch.LongTensor([1, 5])
+    edge_x = torch.Tensor([[1.0], [2.0]])
+    node_y_time = torch.LongTensor([5])
+    node_y_nids = torch.IntTensor([0])
+    node_y = torch.FloatTensor([[1.0]])
+    data = DGData.from_raw(
+        edge_time,
+        edge_index,
+        edge_x,
+        node_y_time=node_y_time,
+        node_y_nids=node_y_nids,
+        node_y=node_y,
+    )
+    dg = DGraph(data)
+
+    def _run(hook):
+        with pytest.warns(UserWarning):
+            hook(dg, dg.slice_events(0, 1).materialize())
+        batch = hook(dg, dg.slice_events(1, 3).materialize())
+        return batch.nbr_nids[0].flatten()
+
+    strict_hook = RecencyNeighborHook(
+        num_nbrs=[2],
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['node_y_nids'],
+        seed_times_keys=['node_y_time'],
+    )
+    parity_hook = RecencyNeighborHook(
+        num_nbrs=[2],
+        num_nodes=dg.num_nodes,
+        seed_nodes_keys=['node_y_nids'],
+        seed_times_keys=['node_y_time'],
+        update_buffers_before_sampling=True,
+        inclusive_time_filter=True,
+    )
+
+    # Strict (default): the same-timestamp edge (0,2,t=5) is invisible
+    strict_nbrs = set(_run(strict_hook).tolist())
+    assert 2 not in strict_nbrs
+    assert 1 in strict_nbrs
+
+    # Parity: the same-timestamp edge in the current batch is visible
+    parity_nbrs = set(_run(parity_hook).tolist())
+    assert parity_nbrs == {1, 2}

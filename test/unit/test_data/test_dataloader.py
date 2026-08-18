@@ -287,14 +287,11 @@ def _make_interleaved_node_y_graph():
       pos 5: edge (t=4)
     non_label_pos = [0, 1, 3, 5]
     """
-    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4]])
-    edge_time = torch.LongTensor([0, 1, 2])
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4], [4, 5]])
+    edge_time = torch.LongTensor([0, 1, 2, 4])
     node_y_time = torch.LongTensor([1, 3])
     node_y_nids = torch.IntTensor([1, 2])
     node_y = torch.FloatTensor([[0.1], [0.2]])
-    # Add a 4th edge at t=4 so non_label_pos = [0,1,3,5]
-    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4], [4, 5]])
-    edge_time = torch.LongTensor([0, 1, 2, 4])
     data = DGData.from_raw(
         edge_time,
         edge_index,
@@ -378,7 +375,76 @@ def test_count_node_labels_true_default_unchanged():
     # Batch 0: slice [0, 3) → edges at pos 0,1 + node_y at pos 2 (only 2 edges)
     b0 = batches[0]
     assert b0.edge_src.numel() == 2
+    assert b0.node_y_nids is not None
+    assert b0.node_y_nids.numel() == 1
 
     # Batch 1: slice [3, 6) → edge at pos 3,5 + node_y at pos 4 (only 2 edges)
     b1 = batches[1]
     assert b1.edge_src.numel() == 2
+    assert b1.node_y_nids is not None
+    assert b1.node_y_nids.numel() == 1
+
+
+def _make_leading_node_y_graph():
+    """
+    node_y at t=0 precedes every edge, like TGBSplit pulling the previous
+    label timestamp to the front of the val/test splits.
+
+    Global event sequence (sorted by time):
+      pos 0: node_y (t=0)
+      pos 1: edge (t=1)
+      pos 2: edge (t=2)
+      pos 3: edge (t=3)
+      pos 4: edge (t=4)
+    non_label_pos = [1, 2, 3, 4]
+    """
+    edge_index = torch.IntTensor([[1, 2], [2, 3], [3, 4], [4, 5]])
+    edge_time = torch.LongTensor([1, 2, 3, 4])
+    node_y_time = torch.LongTensor([0])
+    node_y_nids = torch.IntTensor([1])
+    node_y = torch.FloatTensor([[0.5]])
+    data = DGData.from_raw(
+        edge_time,
+        edge_index,
+        node_y_time=node_y_time,
+        node_y_nids=node_y_nids,
+        node_y=node_y,
+    )
+    return DGraph(data)
+
+
+def test_count_node_labels_false_includes_leading_node_y():
+    """Leading node_y events (before the first edge) must not be dropped."""
+    dg = _make_leading_node_y_graph()
+    loader = DGDataLoader(dg, batch_size=2, count_node_labels=False, on_empty=None)
+    batches = list(loader)
+
+    assert len(batches) == 2
+
+    # Batch 0: slice [0, 3) -> node_y at pos 0 + 2 edges
+    b0 = batches[0]
+    assert b0.edge_src.numel() == 2
+    assert b0.node_y_nids is not None
+    assert b0.node_y_nids.numel() == 1
+    torch.testing.assert_close(b0.node_y_nids, torch.IntTensor([1]))
+
+    # Batch 1: slice [3, 5) -> 2 edges, no node_y
+    b1 = batches[1]
+    assert b1.edge_src.numel() == 2
+    assert b1.node_y_nids is None or b1.node_y_nids.numel() == 0
+
+
+def test_count_node_labels_false_drop_last_includes_leading_node_y():
+    """Leading node_y events are kept with drop_last=True as well."""
+    dg = _make_leading_node_y_graph()
+    # non_label_pos = [1, 2, 3, 4], batch_size=3 -> 1 complete batch
+    loader = DGDataLoader(
+        dg, batch_size=3, count_node_labels=False, drop_last=True, on_empty=None
+    )
+    batches = list(loader)
+
+    assert len(batches) == 1
+    b0 = batches[0]
+    assert b0.edge_src.numel() == 3
+    assert b0.node_y_nids is not None
+    assert b0.node_y_nids.numel() == 1

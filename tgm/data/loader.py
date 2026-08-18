@@ -147,7 +147,7 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
 
             if not count_node_labels and dg.num_node_labels > 0:
                 total = dg.num_events
-                node_y_pos = dg.node_y_event_positions
+                node_y_pos = dg.node_y_event_index
                 is_node_y = torch.zeros(total, dtype=torch.bool)
                 is_node_y[node_y_pos] = True
                 non_label_pos = torch.where(~is_node_y)[0]
@@ -160,6 +160,12 @@ class DGDataLoader(_SkippableDataLoaderMixin, torch.utils.data.DataLoader):  # t
                 else:
                     starts = non_label_pos[::batch_size].tolist()
                     ends = non_label_pos[batch_size::batch_size].tolist() + [total]
+
+                # Node label events that precede the first non-label event (e.g. the
+                # previous label timestamp that TGBSplit pulls into val/test splits)
+                # must land in the first batch rather than being silently dropped.
+                if starts:
+                    starts[0] = 0
 
                 self._slice_ends = dict(zip(starts, ends))
                 slice_start = starts
