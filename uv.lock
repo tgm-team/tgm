@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version < '3.11'",
@@ -1409,7 +1409,7 @@ wheels = [
 
 [[package]]
 name = "py-tgb"
-version = "2.2.0"
+version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "clint" },
@@ -1417,12 +1417,11 @@ dependencies = [
     { name = "pandas" },
     { name = "requests" },
     { name = "scikit-learn" },
-    { name = "torch-geometric" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/92/ad/9aa5963f598cd0e908c39f9471e63e08ae9913cab7463e97754e1edfb891/py_tgb-2.2.0.tar.gz", hash = "sha256:f8873a5621beba637db60d16ac12774aef81272b184ed3a310d7ea1952f17001", size = 107987, upload-time = "2025-10-05T17:36:14.059Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1b/92/5bd1459f0355a57278c96e721b30eb8b61729c11ce1a3de1cbc90a30d578/py_tgb-2.3.0.tar.gz", hash = "sha256:769984eb825d85624fec8e7136565ce149866fa490ef9a6f739cee2d769dd3e4", size = 111223, upload-time = "2026-07-27T00:23:45.874Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/78/b2/87ff16174a8ffe660d19742a23f826142ae94fd47c66bb09ffc0e4e36ec2/py_tgb-2.2.0-py3-none-any.whl", hash = "sha256:67b704a71606cc18cee7944b151da66b900b78026124a235bf410ac425cfd742", size = 154353, upload-time = "2025-10-05T17:36:13.1Z" },
+    { url = "https://files.pythonhosted.org/packages/97/bf/29df7eb22596db3fa4523f9a5dd67a52c53d9a11b58a352f63b4ec282d7c/py_tgb-2.3.0-py3-none-any.whl", hash = "sha256:2d230d869741964ac6382ab83de534d539c0e4e56d5a49f7542bc16a2e1e1839", size = 156192, upload-time = "2026-07-27T00:23:47.049Z" },
 ]
 
 [[package]]
