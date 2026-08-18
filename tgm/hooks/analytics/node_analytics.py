@@ -6,11 +6,13 @@ from torch import Tensor
 from tgm.core.batch import DGBatch
 from tgm.core.graph import DGraph
 from tgm.hooks.base import StatefulHook
+from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
+@hook
 class NodeAnalyticsHook(StatefulHook):
     """Compute node-centric statistics for a specific set of tracked nodes.
 
@@ -37,6 +39,8 @@ class NodeAnalyticsHook(StatefulHook):
             - edge_novelty: Fraction of new edges in the batch, that is not seen in previous batches.
             - edge_density: Edges this batch / possible edges based on unique nodes
             - new_edge_count: Number of new edges in the batch, that is not seen in previous batches.
+
+    Key words: node-level statistics.
     """
 
     _cls_requires = {

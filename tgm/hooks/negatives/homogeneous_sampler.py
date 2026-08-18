@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 
 from tgm.constants import PADDED_NODE_ID
 from tgm.core import DGBatch, DGraph
 from tgm.hooks.base import StatefulHook, StatelessHook
+from tgm.hooks.negatives.tgb_base_sampler import TGBNegativeEdgeSamplerBase
+from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
+@hook
 class RandomNegativeEdgeSamplerHook(StatelessHook):
     """Random sampling negative edges for dynamic link prediction.
 
@@ -19,6 +24,8 @@ class RandomNegativeEdgeSamplerHook(StatelessHook):
         neg_ratio (float): The ratio of sampled negative destination nodes
             to the number of positive destination nodes (default = 1.0).
         id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
+
+    Key words: negative sampler, random, uniform,training, link prediction.
     """
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
@@ -61,6 +68,7 @@ class RandomNegativeEdgeSamplerHook(StatelessHook):
         return batch
 
 
+@hook
 class HistoricalNegativeEdgeSamplerHook(StatefulHook):
     """Sample negative edges from past interactions for dynamic link prediction.
 
@@ -74,6 +82,8 @@ class HistoricalNegativeEdgeSamplerHook(StatefulHook):
             corresponding node id is a valid negative; ``False`` means the entry is
             a padding placeholder (``PADDED_NODE_ID``) and should be excluded from
             loss computation and evaluation.
+
+    Key words: negative sampler, historical,training, link prediction.
     """
 
     _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
@@ -229,3 +239,41 @@ class HistoricalNegativeEdgeSamplerHook(StatefulHook):
         self._memory[1, self._count : self._count + batch_size] = batch.edge_dst
 
         self._count += batch_size
+
+
+@hook
+class TGBNegativeEdgeSamplerHook(TGBNegativeEdgeSamplerBase):
+    """Load data from DGraph using pre-generated TGB negative samples.
+    Make sure to perform `dataset.load_val_ns()` or `dataset.load_test_ns()` before using this hook.
+
+    Args:
+        dataset_name (str): The name of the TGB dataset to produce sampler for.
+        split_mode (str): The split mode to use for sampling, either 'val' or 'test'.
+        id (str): A unique identifier for the hook. The hook’s name and all attributes it produces will be suffixed with this `id`.
+
+    Raises:
+        ValueError: If neg_sampler is not provided.
+
+    Key words: negative sampler, evaluation, tgbl, link prediction.
+    """
+
+    _cls_requires = {'edge_src', 'edge_dst', 'edge_time'}
+    _cls_produces = {'neg', 'neg_batch_list', 'neg_time'}
+    _dataset_prefix = 'tgbl'
+
+    def _build_sampler(self, dataset_name: str) -> Any:
+        try:
+            from tgb.linkproppred.negative_sampler import NegativeEdgeSampler
+        except ImportError:
+            raise ImportError(
+                f'TGB required for {self.__class__.__name__}, try `pip install py-tgb`'
+            )
+        return NegativeEdgeSampler(dataset_name=dataset_name)
+
+    def _query_batch(self, batch: DGBatch) -> list:
+        return self.neg_sampler.query_batch(
+            batch.edge_src,
+            batch.edge_dst,
+            batch.edge_time,
+            split_mode=self.split_mode,
+        )

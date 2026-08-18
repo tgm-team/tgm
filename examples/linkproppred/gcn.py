@@ -57,6 +57,10 @@ class GCNEncoder(torch.nn.Module):
         dropout: float,
     ):
         super().__init__()
+        self.requires = {
+            'edge_src',
+            'edge_dst',
+        }
         self.in_channels = in_channels
         self.dropout = dropout
         self.convs = torch.nn.ModuleList()
@@ -233,6 +237,8 @@ encoder = GCNEncoder(
 decoder = LinkPredictor(node_dim=args.embed_dim, hidden_dim=args.embed_dim).to(
     args.device
 )
+
+hm.validate_requirement(encoder)
 opt = torch.optim.Adam(
     set(encoder.parameters()) | set(decoder.parameters()), lr=float(args.lr)
 )

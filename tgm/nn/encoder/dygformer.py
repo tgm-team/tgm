@@ -242,7 +242,7 @@ class DyGFormer(nn.Module):
 
     def forward(
         self,
-        X: torch.Tensor,
+        node_x: torch.Tensor,
         edge_index: torch.Tensor,
         edge_time: torch.Tensor,
         neighbours: torch.Tensor,
@@ -252,7 +252,7 @@ class DyGFormer(nn.Module):
         f"""Forward pass.
 
         Args:
-            X (PyTorch Float Tensor): Node features.
+            node_x (PyTorch Float Tensor): Node features.
             edge_index (PyTorch Tensor): Graph edge indices.
             edge_feat (PyTorch Tensor): Edge feature vector.
             neighbours (PyTorch Tensor): Neighbours of src and dst nodes from edge_index
@@ -295,8 +295,8 @@ class DyGFormer(nn.Module):
         dst_neighbours_edge_feat = torch.cat([padding, dst_neighbours_edge_feat], dim=1)
 
         # Get node feat and time feat using Time Encoder
-        src_neighbours_node_feats = X[src_neighbours, :]
-        dst_neighbours_node_feats = X[dst_neighbours, :]
+        src_neighbours_node_feats = node_x[src_neighbours, :]
+        dst_neighbours_node_feats = node_x[dst_neighbours, :]
         src_neighbours_node_feats[src_neighbours == PADDED_NODE_ID] = 0
         dst_neighbours_node_feats[dst_neighbours == PADDED_NODE_ID] = 0
 

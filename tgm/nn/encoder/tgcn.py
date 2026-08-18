@@ -39,7 +39,7 @@ class TGCN(torch.nn.Module):
 
     def forward(
         self,
-        X: torch.Tensor,
+        node_x: torch.Tensor,
         edge_index: torch.Tensor,
         edge_weight: torch.Tensor | None = None,
         H: torch.Tensor | None = None,
@@ -47,7 +47,7 @@ class TGCN(torch.nn.Module):
         f"""Forward pass.
 
         Args:
-            X (PyTorch Tensor): Node features.
+            node_x (PyTorch Tensor): Node features.
             edge_index (PyTorch Long Tensor): Graph edge indices.
             edge_weight (PyTorch Long Tensor, optional): Edge weight vector.
             H (PyTorch Tensor, optional): Hidden state matrix for all nodes.
@@ -59,16 +59,16 @@ class TGCN(torch.nn.Module):
         Note: If edge weights are not present the forward pass defaults to an unweighted graph.
         """
         edge_index = edge_index.to(torch.int64)
-        H = self._set_hidden_state(X, H)
+        H = self._set_hidden_state(node_x, H)
 
         # Eq.3 (Section 3.3.3)
-        U_t = self._calculate_update_gate(X, edge_index, edge_weight, H)
+        U_t = self._calculate_update_gate(node_x, edge_index, edge_weight, H)
 
         # Eq.4 (Section 3.3.3)
-        R_t = self._calculate_reset_gate(X, edge_index, edge_weight, H)
+        R_t = self._calculate_reset_gate(node_x, edge_index, edge_weight, H)
 
         # Eq.5 (Section 3.3.3)
-        C_t = self._calculate_candidate_state(X, edge_index, edge_weight, H, R_t)
+        C_t = self._calculate_candidate_state(node_x, edge_index, edge_weight, H, R_t)
 
         # Eq.6 (Section 3.3.3)
         H_t = self._calculate_hidden_state(U_t, H, C_t)
