@@ -6,6 +6,7 @@ from tgm import DGraph
 from tgm.data import DGDataLoader
 from tgm.hooks import (
     HookManager,
+    NeighborSamplerHook,
     RandomNegativeEdgeSamplerHook,
     RecencyNeighborHook,
     TGBNegativeEdgeSamplerHook,
@@ -48,7 +49,7 @@ def setup_tgb_negs(dg, data, dataset, sampler_type=None, num_nbrs=None):
         )
     elif sampler_type == 'uniform':
         hooks.append(
-            RandomNegativeEdgeSamplerHook(
+            NeighborSamplerHook(
                 num_nbrs=num_nbrs,
                 seed_nodes_keys=seed_nodes_keys,
                 seed_times_keys=seed_times_keys,
