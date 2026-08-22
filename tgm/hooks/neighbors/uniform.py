@@ -203,8 +203,8 @@ class NeighborSamplerHook(StatelessHook, SeedableHook):
                     seed_times.append(time.to(device))
 
         if seeds and seed_times:
-            seed_nodes, seed_times = torch.cat(seeds), torch.cat(seed_times)  # type: ignore
+            seed_nodes, seed_times = torch.cat(seeds), torch.cat(seed_times)
         else:
             seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
-            seed_times = torch.empty(0, dtype=torch.int64, device=device)  # type: ignore
-        return seed_nodes, seed_times, seed_node_mask  # type: ignore
+            seed_times = torch.empty(0, dtype=torch.int64, device=device)
+        return seed_nodes, seed_times, seed_node_mask

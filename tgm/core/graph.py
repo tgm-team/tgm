@@ -8,6 +8,7 @@ from typing import Any, Optional, Tuple
 import torch
 from torch import Tensor
 
+from tgm.core._storage.base import DGStorageBase
 from tgm.util.logging import _get_logger, _logged_cached_property, log_latency
 
 from ._storage import DGSliceTracker, DGStorage
@@ -85,7 +86,7 @@ class DGraph:
         batch = DGBatch(self.edge_src, self.edge_dst, self.edge_time)
         if materialize_features and self.node_x is not None:
             batch.node_x_time, batch.node_x_nids = self.node_x._indices()
-            batch.node_x_nids = batch.node_x_nids.to(torch.int32)  # type: ignore
+            batch.node_x_nids = batch.node_x_nids.to(torch.int32)
             batch.node_x = self.node_x._values()
 
         if materialize_features and self.edge_x is not None:
@@ -93,7 +94,7 @@ class DGraph:
 
         if materialize_features and self.node_y is not None:
             batch.node_y_time, batch.node_y_nids = self.node_y._indices()
-            batch.node_y_nids = batch.node_y_nids.to(torch.int32)  # type: ignore
+            batch.node_y_nids = batch.node_y_nids.to(torch.int32)
             batch.node_y = self.node_y._values()
 
         if self.edge_type is not None:
@@ -164,7 +165,7 @@ class DGraph:
 
     @property
     def time_delta(self) -> TimeDeltaDG:
-        return self._time_delta  # type: ignore
+        return self._time_delta
 
     def to(self, device: str | torch.device) -> DGraph:
         """Return a copy of the DGraph view on a different device.
@@ -406,7 +407,7 @@ class DGraph:
     @classmethod
     def _from_storage(
         cls,
-        storage: DGStorage,
+        storage: DGStorageBase,
         time_delta: TimeDeltaDG,
         device: torch.device,
         slice: DGSliceTracker,

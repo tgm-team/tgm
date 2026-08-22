@@ -1,4 +1,4 @@
-from typing import Callable, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -94,7 +94,11 @@ class CTANMemory(torch.nn.Module):
     """
 
     def __init__(
-        self, num_nodes: int, memory_dim: int, aggr_module: Callable, init_time: int = 0
+        self,
+        num_nodes: int,
+        memory_dim: int,
+        aggr_module: nn.Module,
+        init_time: int = 0,
     ) -> None:
         super().__init__()
 

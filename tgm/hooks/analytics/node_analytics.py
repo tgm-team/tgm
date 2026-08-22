@@ -266,9 +266,9 @@ class NodeAnalyticsHook(StatefulHook):
         if not all_batch_nodes:
             node_batch_stats = self._compute_node_statistics(batch)
             edge_batch_stats = self._compute_edge_statistics(batch)
-            batch.node_stats = {}  # type: ignore[attr-defined]
-            batch.node_macro_stats = node_batch_stats  # type: ignore[attr-defined]
-            batch.edge_stats = {**edge_batch_stats}  # type: ignore[attr-defined]
+            batch.node_stats = {}  # ty: ignore[unresolved-attribute]
+            batch.node_macro_stats = node_batch_stats  # ty: ignore[unresolved-attribute]
+            batch.edge_stats = {**edge_batch_stats}  # ty: ignore[unresolved-attribute]
             return batch
 
         batch_nodes = torch.cat(all_batch_nodes, dim=0).unique()
