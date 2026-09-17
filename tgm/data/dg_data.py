@@ -354,8 +354,9 @@ class DGData:
                 '(edge_index, edge_x, node_x_nids, etc.) to match sorted time order'
             )
 
-            # Sort timestamps
-            sort_idx = torch.argsort(self.time).int()
+            # Stable sort so that same-timestamp events keep construction order
+            # (edges before node events before node labels)
+            sort_idx = torch.argsort(self.time, stable=True).int()
             inverse_sort_idx = torch.empty_like(sort_idx)
             inverse_sort_idx[sort_idx] = torch.arange(len(sort_idx), dtype=torch.int32)
             self.time = self.time[sort_idx]
