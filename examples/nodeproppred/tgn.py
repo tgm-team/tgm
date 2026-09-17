@@ -30,12 +30,6 @@ parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
-parser.add_argument(
-    '--tgb-parity',
-    action='store_true',
-    help='match TGB reference semantics: ingest edges at the label timestamp '
-    'into memory and neighbor buffers before predicting that label',
-)
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
 parser.add_argument('--memory-dim', type=int, default=100, help='memory dimension')
@@ -83,7 +77,7 @@ def train(
 
         # In parity mode, edges up to and including the label timestamp are
         # ingested into memory before predicting, matching TGB's process_edges.
-        if args.tgb_parity and has_edges:
+        if has_edges:
             memory.update_state(
                 batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
@@ -130,11 +124,6 @@ def train(
                 perf = evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED]
                 perf_list.append(perf)
 
-        # Update memory with ground-truth state.
-        if not args.tgb_parity and has_edges:
-            memory.update_state(
-                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
-            )
         memory.detach()
 
     return total_loss, float(np.mean(perf_list))
@@ -159,7 +148,7 @@ def eval(
         y_labels = batch.node_y
         has_edges = len(batch.edge_src) > 0
 
-        if args.tgb_parity and has_edges:
+        if has_edges:
             memory.update_state(
                 batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
             )
@@ -201,12 +190,6 @@ def eval(
                 }
                 perf_list.append(evaluator.eval(input_dict)[METRIC_TGB_NODEPROPPRED])
 
-        # Update memory with ground-truth state.
-        if not args.tgb_parity and has_edges:
-            memory.update_state(
-                batch.edge_src, batch.edge_dst, batch.edge_time, batch.edge_x.float()
-            )
-
     return float(np.mean(perf_list))
 
 
@@ -232,8 +215,8 @@ nbr_hook = RecencyNeighborHook(
     num_nodes=full_data.num_nodes,
     seed_nodes_keys=['node_y_nids'],
     seed_times_keys=['node_y_time'],
-    update_buffers_before_sampling=args.tgb_parity,
-    inclusive_time_filter=args.tgb_parity,
+    update_buffers_before_sampling=True,
+    inclusive_time_filter=True,
 )
 
 hm = HookManager(keys=['train', 'val', 'test'])
@@ -270,9 +253,9 @@ opt = torch.optim.Adam(
     lr=args.lr,
 )
 
-# TGB protocol: evaluate test every epoch, report the test score at the
-# epoch with the best validation score.
-val_curve, test_curve = [], []
+
+best_epoch = 0
+best_val = 0
 
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
@@ -281,26 +264,24 @@ for epoch in range(1, args.epochs + 1):
     with hm.activate('val'):
         val_metric = eval(val_loader, memory, encoder, decoder, evaluator)
 
-    with hm.activate('test'):
-        test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
-
-    val_curve.append(val_metric)
-    test_curve.append(test_metric)
+    if val_metric > best_val:
+        best_val = val_metric
+        best_epoch = epoch
+        with hm.activate('test'):
+            test_metric = eval(test_loader, memory, encoder, decoder, evaluator)
+        log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=epoch)
 
     log_metric('Loss', loss, epoch=epoch)
     log_metric(f'Train {METRIC_TGB_NODEPROPPRED}', train_metric, epoch=epoch)
     log_metric(f'Validation {METRIC_TGB_NODEPROPPRED}', val_metric, epoch=epoch)
-    log_metric(f'Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=epoch)
 
     if epoch < args.epochs:  # Reset hooks after each epoch, except last epoch
         hm.reset_state()
 
-best_epoch = int(np.argmax(val_curve))
+
 log_metric(
     f'Best Validation {METRIC_TGB_NODEPROPPRED}',
-    val_curve[best_epoch],
-    epoch=best_epoch + 1,
+    best_val,
+    epoch=best_epoch,
 )
-log_metric(
-    f'Best Test {METRIC_TGB_NODEPROPPRED}', test_curve[best_epoch], epoch=best_epoch + 1
-)
+log_metric(f'Best Test {METRIC_TGB_NODEPROPPRED}', test_metric, epoch=best_epoch)
