@@ -42,8 +42,8 @@ class DeduplicationHook(StatelessHook, SeedableHook):
                 raise ValueError(f'Missing seed node attribute {node_attr}')
 
             if 'nbr_nids' in node_attr:
-                for hop in range(len(batch.nbr_nids)):  # type: ignore[attr-defined]
-                    nbr_nodes = batch.nbr_nids[hop].flatten()  # type: ignore[attr-defined]
+                for hop in range(len(batch.nbr_nids)):  # ty: ignore[unresolved-attribute]
+                    nbr_nodes = batch.nbr_nids[hop].flatten()  # ty: ignore[unresolved-attribute]
                     nbr_mask = nbr_nodes != PADDED_NODE_ID
                     nids.append(nbr_nodes[nbr_mask].flatten().to(batch.edge_src.device))
             else:

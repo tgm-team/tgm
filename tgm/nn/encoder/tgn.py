@@ -107,8 +107,8 @@ class TGNMemory(torch.nn.Module):
         raw_msg_dim: int,
         memory_dim: int,
         time_dim: int,
-        message_module: Callable,
-        aggregator_module: Callable,
+        message_module: torch.nn.Module,
+        aggregator_module: torch.nn.Module,
     ):
         super().__init__()
 
@@ -121,7 +121,7 @@ class TGNMemory(torch.nn.Module):
         self.msg_d_module = copy.deepcopy(message_module)
         self.aggr_module = aggregator_module
         self.time_enc = Time2Vec(time_dim=time_dim)
-        self.memory_updater = GRUCell(message_module.out_channels, memory_dim)  # type: ignore
+        self.memory_updater = GRUCell(message_module.out_channels, memory_dim)
 
         self.register_buffer('memory', torch.empty(num_nodes, memory_dim))
         self.register_buffer('last_update', torch.empty(num_nodes, dtype=torch.long))
@@ -233,12 +233,12 @@ class TGNMemory(torch.nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         data = [msg_store[i] for i in n_id.tolist()]
         src, dst, t, raw_msg = list(zip(*data))
-        src = torch.cat(src, dim=0).to(self.device)  # type: ignore
-        dst = torch.cat(dst, dim=0).to(self.device)  # type: ignore
-        t = torch.cat(t, dim=0).to(self.device)  # type: ignore
-        raw_msg = torch.cat(raw_msg, dim=0).to(self.device)  # type: ignore
+        src = torch.cat(src, dim=0).to(self.device)
+        dst = torch.cat(dst, dim=0).to(self.device)
+        t = torch.cat(t, dim=0).to(self.device)
+        raw_msg = torch.cat(raw_msg, dim=0).to(self.device)
         t_rel = t - self.last_update[src]
-        t_enc = self.time_enc(t_rel.to(raw_msg.dtype))  # type: ignore
+        t_enc = self.time_enc(t_rel.to(raw_msg.dtype))
         msg = msg_module(self.memory[src], self.memory[dst], raw_msg, t_enc)
         return cast(Tuple[Tensor, Tensor, Tensor, Tensor], (msg, t, src, dst))
 

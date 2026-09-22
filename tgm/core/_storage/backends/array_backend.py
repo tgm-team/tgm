@@ -179,8 +179,8 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_node_x(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.node_x is None:
             return None
-        assert self._data.node_x_mask is not None  # for mypy
-        assert self._data.node_x_nids is not None  # for mypy
+        assert self._data.node_x_mask is not None
+        assert self._data.node_x_nids is not None
 
         lb_idx, ub_idx = self._binary_search(slice)
         node_x_mask = (self._data.node_x_mask >= lb_idx) & (
@@ -221,8 +221,8 @@ class DGStorageArrayBackend(DGStorageBase):
     def get_node_y(self, slice: DGSliceTracker) -> Optional[Tensor]:
         if self._data.node_y is None:
             return None
-        assert self._data.node_y_mask is not None  # for mypy
-        assert self._data.node_y_nids is not None  # for mypy
+        assert self._data.node_y_mask is not None
+        assert self._data.node_y_nids is not None
 
         lb_idx, ub_idx = self._binary_search(slice)
         node_y_mask = (self._data.node_y_mask >= lb_idx) & (

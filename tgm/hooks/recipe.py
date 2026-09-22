@@ -38,7 +38,7 @@ class RecipeRegistry:
         return decorator
 
     @classmethod
-    def build(cls, name: str, **kwargs) -> Any:  # type: ignore
+    def build(cls, name: str, **kwargs) -> Any:
         if name not in cls._recipes:
             raise UndefinedRecipe(
                 f'Undefined or not yet registered recipe: {name}. Please select from {cls._recipes}'

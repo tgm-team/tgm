@@ -7,13 +7,11 @@ import torch
 
 from tgm.core import DGBatch, DGraph
 from tgm.hooks.base import StatelessHook
-from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
-@hook
 class TGBNegativeEdgeSamplerBase(StatelessHook):
     """Base class for TGB pre-generated negative edge sampler hooks.
 

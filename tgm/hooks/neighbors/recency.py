@@ -98,7 +98,7 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
 
         # Wait until first __call__ to infer the edge_x_dim on the underlying graph
         self._need_to_initialize_nbr_feats = True
-        self._edge_x_dim = None
+        self._edge_x_dim = 0
         self._nbr_feats = None
         self._id = id
         self.seed_keys = seed_nodes_keys
@@ -129,7 +129,7 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
             batch_seed_times.append(torch.empty(0, dtype=torch.int64))
             batch_nbr_nids.append(torch.empty(0, dtype=torch.int32))
             batch_nbr_edge_time.append(torch.empty(0, dtype=torch.int64))
-            batch_nbr_edge_x.append(torch.empty(0, dg.edge_x_dim).float())  # type: ignore[arg-type]
+            batch_nbr_edge_x.append(torch.empty(0, dg.edge_x_dim).float())  # ty: ignore[invalid-argument-type]
 
         seed_nodes, seed_times, seed_node_mask = self._get_seed_tensors(batch)
         if not seed_nodes.numel():
@@ -230,11 +230,11 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
                     seed_times.append(time.to(device))
 
         if seeds and seed_times:
-            seed_nodes, seed_times = torch.cat(seeds), torch.cat(seed_times)  # type: ignore
+            seed_nodes, seed_times = torch.cat(seeds), torch.cat(seed_times)
         else:
             seed_nodes = torch.empty(0, dtype=torch.int32, device=device)
-            seed_times = torch.empty(0, dtype=torch.int64, device=device)  # type: ignore
-        return seed_nodes, seed_times, seed_node_mask  # type: ignore
+            seed_times = torch.empty(0, dtype=torch.int64, device=device)
+        return seed_nodes, seed_times, seed_node_mask
 
     def _get_recency_neighbors(
         self, node_ids: torch.Tensor, query_times: torch.Tensor, k: int
@@ -250,7 +250,7 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
                 '(3) the hook state is reset appropriately between datasets/epochs/evaluation runs'
             )
 
-        assert self._nbr_feats is not None  # For mypy
+        assert self._nbr_feats is not None
         B = self._max_nbrs  # buffer size
 
         nbr_nids = self._nbr_ids[node_ids]  # (N, B)
@@ -321,7 +321,7 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
         return out_nbrs, out_times, out_feats
 
     def _update(self, batch: DGBatch) -> None:
-        assert self._nbr_feats is not None  # For mypy
+        assert self._nbr_feats is not None
         if batch.edge_x is None:
             edge_feats = torch.zeros(
                 (len(batch.edge_src), self._edge_x_dim), device=self._device
@@ -399,7 +399,7 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
         self._write_pos.scatter_add_(0, sorted_nodes.long(), num_writes)
 
     def _move_queues_to_device_if_needed(self, device: torch.device) -> None:
-        assert self._nbr_feats is not None  # For mypy
+        assert self._nbr_feats is not None
         if device != self._device:
             self._device = device
             self._nbr_ids = self._nbr_ids.to(device)
@@ -409,8 +409,8 @@ class RecencyNeighborHook(StatefulHook, SeedableHook):
 
     def _initialize_nbr_feats_if_needed(self, dg: DGraph) -> None:
         if self._need_to_initialize_nbr_feats:
-            self._edge_x_dim = dg.edge_x_dim or 0  # type: ignore
+            self._edge_x_dim = dg.edge_x_dim or 0
             self._nbr_feats = torch.zeros(
-                (self._num_nodes, self._max_nbrs, self._edge_x_dim)  # type: ignore
+                (self._num_nodes, self._max_nbrs, self._edge_x_dim)
             )
             self._need_to_initialize_nbr_feats = False

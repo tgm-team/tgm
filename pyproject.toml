@@ -24,16 +24,16 @@ analytics = [
 ]
 dev = [
     "isort>=5.13.2",
-    "mypy>=1.13.0",
     "pre-commit>=4.0.1",
     "pytest-cov>=6.0.0",
     "pytest>=8.3.3",
-    "ruff==0.11.1",
+    "ruff==0.14.7",
     "py-tgb>=2.3.0",
     "pandas>=1.5.3",
     "pytest-xdist>=3.7.0",
     "pytest-benchmark>=5.1.0",
     "tgb-seq>=0.1.2",
+    "ty>=0.0.74",
 ]
 docs = [
     "mkdocs-material>=9.6.9",
@@ -58,17 +58,17 @@ torch-backend = "auto"
 [tool.flit.module]
 name = "tgm"
 
-[tool.mypy]
-files = ["tgm"]
-install_types = true
-non_interactive = true
-ignore_missing_imports = true
-show_error_codes = true
-warn_redundant_casts = true
-warn_unused_configs = true
-warn_unused_ignores = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+[tool.ty.src]
+include = ["tgm"]
+
+[tool.ty.environment]
+python-version = "3.10"
+
+[tool.ty.rules]
+unresolved-import = "ignore"
+redundant-cast = "warn"
+unused-ignore-comment = "warn"
+unused-type-ignore-comment = "warn"
 
 [tool.isort]
 multi_line_output = 3

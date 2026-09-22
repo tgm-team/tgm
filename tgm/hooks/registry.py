@@ -1,11 +1,13 @@
-from typing import List, Type
+from typing import List, Type, TypeVar
 
-from tgm.hooks import DGHook
+from tgm.hooks.base import DGHook
+
+T = TypeVar('T', bound=type)
 
 _HOOK_REGISTRY: List[Type[DGHook]] = []
 
 
-def hook(cls: Type[DGHook]) -> Type[DGHook]:
+def hook(cls: T) -> T:
     """Decorator to register a hook class into the global registry.
 
     Example:
@@ -13,7 +15,7 @@ def hook(cls: Type[DGHook]) -> Type[DGHook]:
         class BatchAnalyticsHook(StatelessHook):
             ...
     """
-    _HOOK_REGISTRY.append(cls)
+    _HOOK_REGISTRY.append(cls)  # ty: ignore[invalid-argument-type]
     return cls
 
 
