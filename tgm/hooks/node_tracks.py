@@ -4,11 +4,13 @@ import torch
 
 from tgm import DGBatch, DGraph
 from tgm.hooks import StatefulHook
+from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
+@hook
 class EdgeEventsSeenNodesTrackHook(StatefulHook):
     """This hook return all nodes appearing in node labels of the current batch that have seen in the past edge events.
     This hook is for the use case of nodeproppred for models computing node embeddings according to edges such as `DyGFormer` and `TPNet`.
@@ -19,6 +21,8 @@ class EdgeEventsSeenNodesTrackHook(StatefulHook):
 
     Raises:
         ValueError: If the num_nodes list is negative.
+
+    Key words: node appearance, node property prediction, nodeproppred.
     """
 
     _cls_requires = {'edge_src', 'edge_dst'}

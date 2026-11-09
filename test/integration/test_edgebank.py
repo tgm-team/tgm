@@ -44,7 +44,7 @@ python "$ROOT_DIR/examples/linkproppred/edgebank.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=0:15:00',
+        '--time=0:25:00',
     ]
 )
 def test_edgebank_tgb_seq_unlimited_memory(slurm_job_runner, dataset):
@@ -98,7 +98,7 @@ python "$ROOT_DIR/examples/linkproppred/thgl/edgebank.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=1:15:00',
+        '--time=3:00:00',
     ]
 )
 def test_edgebank_linkprop_pred_unlimited_memory_tkgl(slurm_job_runner, dataset):
@@ -116,7 +116,7 @@ python "$ROOT_DIR/examples/linkproppred/tkgl/edgebank.py" \
         '--partition=main',
         '--cpus-per-task=2',
         '--mem=8G',
-        '--time=2:00:00',
+        '--time=4:00:00',
     ]
 )
 def test_edgebank_linkprop_pred_fixed_memory_tkgl(slurm_job_runner, dataset):

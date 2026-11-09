@@ -10,7 +10,7 @@ from tgm.data import DGData
 from tgm.exceptions import UndefinedRecipe
 from tgm.hooks import (
     HookManager,
-    NegativeEdgeSamplerHook,
+    RandomNegativeEdgeSamplerHook,
     RecipeRegistry,
     TGBNegativeEdgeSamplerHook,
 )
@@ -59,7 +59,7 @@ def test_build_recipe_tgb_link_pred(mock_dataset_cls, tgb_dataset_factory, dg):
         and register_keys[2] == 'test'
     )
     assert len(train_hooks) == len(val_hooks) == len(test_hooks) == 1
-    assert isinstance(train_hooks[0], NegativeEdgeSamplerHook)
+    assert isinstance(train_hooks[0], RandomNegativeEdgeSamplerHook)
     assert isinstance(val_hooks[0], TGBNegativeEdgeSamplerHook)
     assert isinstance(test_hooks[0], TGBNegativeEdgeSamplerHook)
 

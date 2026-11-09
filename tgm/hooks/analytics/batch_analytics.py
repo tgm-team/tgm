@@ -3,13 +3,18 @@ import torch
 from tgm.core.batch import DGBatch
 from tgm.core.graph import DGraph
 from tgm.hooks.base import StatelessHook
+from tgm.hooks.registry import hook
 from tgm.util.logging import _get_logger
 
 logger = _get_logger(__name__)
 
 
+@hook
 class BatchAnalyticsHook(StatelessHook):
-    """Compute simple batch-level statistics."""
+    r"""Compute simple batch-level statistics.
+
+    Key words: global statistics, degree, number of events and repeated events.
+    """
 
     _cls_requires = {
         'edge_src',

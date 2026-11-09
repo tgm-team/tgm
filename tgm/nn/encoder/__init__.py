@@ -13,6 +13,7 @@ from .tgn import (
     TGNv2Memory,
 )
 from .roland import ROLAND
+from .tgat import TGAT
 
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     'TGNMemory',
     'TGNv2Memory',
     'ROLAND',
+    'TGAT',
 ]

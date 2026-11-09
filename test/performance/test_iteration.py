@@ -6,8 +6,8 @@ from tgm import DGraph
 from tgm.data import DGDataLoader
 from tgm.hooks import (
     HookManager,
-    NegativeEdgeSamplerHook,
     NeighborSamplerHook,
+    RandomNegativeEdgeSamplerHook,
     RecencyNeighborHook,
     TGBNegativeEdgeSamplerHook,
 )
@@ -21,7 +21,7 @@ def setup_no_hooks(dg, data, dataset):
 
 def setup_random_negs(dg, data, dataset):
     dst = dg.edge_dst
-    hook = NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+    hook = RandomNegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
     return create_hook_manager(hooks=[hook])
 
 

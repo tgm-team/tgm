@@ -14,6 +14,10 @@ _TGM_LOGGING_ENABLED: bool = os.getenv('TGM_LOGGING_ENABLED', '0').lower() in (
 )
 
 
+def _callable_name(func: Callable[..., Any]) -> str:
+    return getattr(func, '__name__', type(func).__name__)
+
+
 def enable_logging(
     *,
     console_log_level: int = logging.INFO,
@@ -84,13 +88,12 @@ def log_latency(_func: Callable | None = None, *, level: int = logging.INFO) -> 
             start_time = time.perf_counter()
             result = func(*args, **kwargs)
             latency = time.perf_counter() - start_time
-            util_logger.log(
-                level, 'Function %s executed in %.4fs', func.__name__, latency
-            )
+            name = _callable_name(func)
+            util_logger.log(level, 'Function %s executed in %.4fs', name, latency)
 
             if util_logger.isEnabledFor(logging.DEBUG):
                 log_entry = {
-                    'metric': f'{func.__name__} latency',
+                    'metric': f'{name} latency',
                     'value': latency,
                 }
                 util_logger.debug(json.dumps(log_entry))
@@ -141,21 +144,22 @@ def log_gpu(_func: Callable | None = None, *, level: int = logging.INFO) -> Any:
             util_logger.log(
                 level,
                 'Function %s GPU memory (CUDA available=%s) [MB]: peak=%.2f, alloc=%.2f',
-                func.__name__,
+                _callable_name(func),
                 cuda_available,
                 peak_mem,
                 mem_diff,
             )
 
             if util_logger.isEnabledFor(logging.DEBUG):
+                name = _callable_name(func)
                 log_entry = {
-                    'metric': f'{func.__name__} peak_gpu_mb',
+                    'metric': f'{name} peak_gpu_mb',
                     'value': peak_mem,
                 }
                 util_logger.debug(json.dumps(log_entry))
 
                 log_entry = {
-                    'metric': f'{func.__name__} alloc_gpu_mb',
+                    'metric': f'{name} alloc_gpu_mb',
                     'value': mem_diff,
                 }
                 util_logger.debug(json.dumps(log_entry))

@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  mypy:
+  ty:
     env:
       UV_CACHE_DIR: /tmp/.uv-cache
     runs-on: ubuntu-latest
@@ -41,7 +41,7 @@ jobs:
         run: uv sync --all-extras --dev --frozen
 
       - name: Test with pytest
-        run: uv run mypy
+        run: uv run ty check
 
       - name: Minimize uv cache
         run: uv cache prune --ci

@@ -1,13 +1,18 @@
+from unittest.mock import patch
+
 import pytest
 import torch
 
 from tgm import DGBatch, DGraph
 from tgm.data import DGData
 from tgm.exceptions import (
+    BadEncoderProtocolError,
     BadHookProtocolError,
     UnresolvableHookDependenciesError,
 )
 from tgm.hooks import HookManager, StatefulHook, StatelessHook
+
+LIST_HOOKS_PATH = 'tgm.hooks.hook_manager.list_hooks'
 
 
 class MockHook(StatelessHook):
@@ -60,6 +65,41 @@ class MockHookWithState(StatefulHook):
 
     def reset_state(self) -> None:
         self.x = 1
+
+
+# class ProducesFooHook(StatelessHook):
+#     """Hook that produces 'foo'."""
+
+#     _cls_produces = {"foo"}
+
+#     def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+#         return batch
+
+
+class DocumentedNeighbourHook(StatelessHook):
+    """Hook whose docstring mentions 'neighbour'.
+
+    This hook samples neighbours from the graph.
+    """
+
+    _cls_produces = {'sampled_nodes'}
+
+    def __call__(self, dg: DGraph, batch: DGBatch) -> DGBatch:
+        return batch
+
+
+class ValidEncoder:
+    """Minimal EncoderModule-compliant stub."""
+
+    def __init__(self, requires):
+        self.requires = set(requires)
+
+    def __call__(self, batch: 'DGBatch', *args, **kwargs):
+        return batch
+
+
+class NotAnEncoder:
+    """Does NOT implement the EncoderModule protocol."""
 
 
 @pytest.fixture
@@ -410,3 +450,99 @@ def test_resolve_hooks_with_id_by_key():
     hm.resolve_hooks('train')
     assert len(hm._key_to_hooks['train']) == 2
     assert hm._key_to_hooks['train'].index(h1) < hm._key_to_hooks['train'].index(h2)
+
+
+def test_validate_requirement_raises_bad_encoder_protocol_for_non_encoder():
+    hm = HookManager(keys=['foo'])
+    with pytest.raises(BadEncoderProtocolError):
+        hm.validate_requirement(NotAnEncoder(), key='foo')
+
+
+def test_validate_requirement_raises_for_unknown_key():
+    hm = HookManager(keys=['foo'])
+    encoder = ValidEncoder(set())
+    with pytest.raises(KeyError):
+        hm.validate_requirement(encoder, key='nonexistent')
+
+
+def test_validate_requirement_passes_when_no_requirements():
+    hm = HookManager(keys=['foo'])
+    encoder = ValidEncoder(set())
+    hm.validate_requirement(encoder, key='foo')
+
+
+def test_validate_requirement_passes_with_matching_hook_under_key():
+    hm = HookManager(keys=['train'])
+    encoder = ValidEncoder({'foo'})
+    hm.register('train', MockHook())
+    hm.validate_requirement(encoder, key='train')
+
+
+def test_validate_requirement_passes_with_shared_hook():
+    hm = HookManager(keys=['train', 'val'])
+    encoder = ValidEncoder({'foo'})
+    hm.register_shared(MockHook())
+    hm.validate_requirement(encoder, key='train')
+    hm.validate_requirement(encoder, key='val')
+
+
+def test_validate_requirement_passes_across_all_keys_when_key_is_none():
+    hm = HookManager(keys=['train', 'val'])
+    encoder = ValidEncoder({'foo'})
+    hm.register('train', MockHook())
+    hm.register('val', MockHook())
+    hm.validate_requirement(encoder)
+
+
+def test_validate_requirement_shared_hook_satisfies_all_keys_when_key_is_none():
+    hm = HookManager(keys=['train', 'val'])
+    encoder = ValidEncoder({'foo'})
+    hm.register_shared(MockHook())
+    hm.validate_requirement(encoder)
+
+
+def test_validate_requirement_unresolved_requirement():
+    hm = HookManager(keys=['train', 'val'])
+    encoder = ValidEncoder({'foo'})
+    hm.register('val', MockHook())
+    with pytest.raises(
+        UnresolvableHookDependenciesError, match='foo.*train|train.*foo'
+    ):
+        hm.validate_requirement(encoder, key='train')
+
+
+def test_error_suggests_exact_match_hook():
+    hm = HookManager(keys=['train', 'val'])
+    encoder = ValidEncoder(requires=['foo'])
+    with patch(LIST_HOOKS_PATH, return_value=[MockHook]):
+        with pytest.raises(UnresolvableHookDependenciesError, match='MockHook'):
+            hm.validate_requirement(encoder, key='train')
+
+
+def test_error_suggests_close_match_for_typo():
+    hm = HookManager(keys=['train', 'val'])
+    encoder = ValidEncoder(requires=['foe'])
+    with patch(LIST_HOOKS_PATH, return_value=[MockHook]):
+        with pytest.raises(UnresolvableHookDependenciesError, match='foo'):
+            hm.validate_requirement(encoder, key='train')
+
+
+def test_error_suggests_doc_match():
+    hm = HookManager(keys=['train', 'val'])
+    encoder = ValidEncoder(requires=['neighbour'])
+    with patch(LIST_HOOKS_PATH, return_value=[DocumentedNeighbourHook]):
+        with pytest.raises(
+            UnresolvableHookDependenciesError, match='DocumentedNeighbourHook'
+        ):
+            hm.validate_requirement(encoder, key='train')
+
+
+def test_error_reports_no_match_for_completely_unknown_requirement():
+    hm = HookManager(keys=['train', 'val'])
+    encoder = ValidEncoder(requires=['completely_unknown'])
+    with patch(LIST_HOOKS_PATH, return_value=[MockHook]):
+        with pytest.raises(
+            UnresolvableHookDependenciesError,
+            match='Can not find any existing hooks',
+        ):
+            hm.validate_requirement(encoder, key='train')

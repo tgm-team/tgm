@@ -5,7 +5,7 @@ from tgm.constants import RECIPE_TGB_LINK_PRED
 from tgm.exceptions import UndefinedRecipe
 from tgm.hooks import (
     HookManager,
-    NegativeEdgeSamplerHook,
+    RandomNegativeEdgeSamplerHook,
     TGBNegativeEdgeSamplerHook,
     hook_manager,
 )
@@ -38,7 +38,7 @@ class RecipeRegistry:
         return decorator
 
     @classmethod
-    def build(cls, name: str, **kwargs) -> Any:  # type: ignore
+    def build(cls, name: str, **kwargs) -> Any:
         if name not in cls._recipes:
             raise UndefinedRecipe(
                 f'Undefined or not yet registered recipe: {name}. Please select from {cls._recipes}'
@@ -62,7 +62,8 @@ def build_tgb_link_pred(dataset_name: str, train_dg: DGraph) -> HookManager:
     dst = train_dg.edge_dst
     hm = HookManager(keys=['train', 'val', 'test'])
     hm.register(
-        'train', NegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max()))
+        'train',
+        RandomNegativeEdgeSamplerHook(low=int(dst.min()), high=int(dst.max())),
     )
     hm.register('val', TGBNegativeEdgeSamplerHook(dataset_name, split_mode='val'))
     hm.register('test', TGBNegativeEdgeSamplerHook(dataset_name, split_mode='test'))

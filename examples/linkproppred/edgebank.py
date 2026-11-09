@@ -64,7 +64,8 @@ def eval(
 seed_everything(args.seed)
 evaluator = Evaluator(name=args.dataset)
 
-train_data, val_data, test_data = DGData.from_tgb(args.dataset).split()
+full_data = DGData.from_tgb(args.dataset)
+train_data, val_data, test_data = full_data.split()
 train_dg = DGraph(train_data)
 val_dg = DGraph(val_data)
 test_dg = DGraph(test_data)
@@ -82,6 +83,7 @@ model = EdgeBankPredictor(
     train_data.edge_src,
     train_data.edge_dst,
     train_data.edge_time,
+    N=full_data.num_nodes,
     memory_mode=args.memory_mode,
     window_ratio=args.window_ratio,
     pos_prob=args.pos_prob,

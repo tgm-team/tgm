@@ -6,6 +6,14 @@ class BadHookProtocolError(TGMError):
     """Raised when a DGHook does not correctly implement the required protocol for execution by the HookManager."""
 
 
+class BadEncoderProtocolError(TGMError):
+    """Raised when a Encoder does not correctly implement the required protocol for execution by the HookManager."""
+
+
+class BadAggregatorProtocolError(TGMError):
+    """Raised when a Aggregator does not correctly implement the required protocol for execution."""
+
+
 class UnresolvableHookDependenciesError(TGMError):
     """Raised when no valid execution ordering of hooks can be found, due to conflicting or cyclic requires/produces dependencies."""
 

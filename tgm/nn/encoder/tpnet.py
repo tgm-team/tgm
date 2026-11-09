@@ -323,7 +323,7 @@ class TPNet(nn.Module):
 
     def forward(
         self,
-        X: torch.Tensor,
+        node_x: torch.Tensor,
         edge_index: torch.Tensor,
         edge_time: torch.Tensor,
         neighbours: torch.Tensor,
@@ -333,7 +333,7 @@ class TPNet(nn.Module):
         f"""Forward pass.
 
         Args:
-            X (PyTorch Float Tensor): Node features.
+            node_x (PyTorch Float Tensor): Node features.
             edge_index (PyTorch Tensor): Graph edge indices.
             edge_time (PyTorch Tensor): Edge time vector.
             neighbours (PyTorch Tensor): Neighbours of src and dst nodes from edge_index
@@ -352,7 +352,7 @@ class TPNet(nn.Module):
         src = src.repeat(2)
         dst = dst.repeat(2)
         edge_time = edge_time.repeat(2)
-        neighbor_node_features = X[neighbours, :]
+        neighbor_node_features = node_x[neighbours, :]
         neighbor_node_features[neighbours == PADDED_NODE_ID] = 0
 
         neighbours_time_feats = self.time_encoder(
