@@ -299,11 +299,19 @@ class TGNv2Memory(TGNMemory):
             aggregator_module,
         )
         self.index_enc = Time2Vec(time_dim=index_dim)
+        self._reset_index_enc()
+
+    def _reset_index_enc(self) -> None:
+        # Node indices are small integers (unlike timestamps), so the geometric
+        # DyGLib time init would collapse most dimensions to cos(~0) = 1 and make
+        # nodes nearly indistinguishable. Match upstream TGNv2, which uses the
+        # default nn.Linear init (w, b ~ U(-1, 1)) for its index encoder.
+        self.index_enc.w.reset_parameters()
 
     def reset_parameters(self) -> None:
         super().reset_parameters()
         if hasattr(self, 'index_enc'):
-            self.index_enc.reset_parameters()
+            self._reset_index_enc()
 
     def _compute_msg(
         self, n_id: Tensor, msg_store: TGNMessageStoreType, msg_module: Callable

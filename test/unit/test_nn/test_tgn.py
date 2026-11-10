@@ -159,3 +159,29 @@ def test_tgnv2_memory():
 
     assert z.shape == (B, Z)
     assert not torch.isnan(z).any()
+
+
+def test_tgnv2_index_encoding_distinguishes_nodes():
+    num_nodes, I = 256, 100
+    memory = TGNv2Memory(
+        num_nodes,
+        7,
+        5,
+        2,
+        I,
+        message_module=EncodeIndexMessage(7, 5, 2, I),
+        aggregator_module=LastAggregator(),
+    )
+
+    # Index encoder must not use the geometric time init (which collapses most
+    # dims to ~1 for small integer ids); it should use default nn.Linear init.
+    time_init = (1 / 10 ** torch.linspace(0, 9, I, dtype=torch.float64)).float()
+    assert not torch.allclose(memory.index_enc.w.weight.view(-1), time_init)
+
+    enc = memory.index_enc(torch.arange(num_nodes).float())
+    near_constant_dims = (enc.std(dim=0) < 1e-2).sum().item()
+    assert near_constant_dims < I // 10
+
+    weight = memory.index_enc.w.weight.detach().clone()
+    memory.reset_parameters()
+    assert not torch.allclose(memory.index_enc.w.weight, weight)

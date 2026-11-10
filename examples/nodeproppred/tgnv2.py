@@ -29,7 +29,18 @@ parser.add_argument('--dataset', type=str, default='tgbn-trade', help='Dataset n
 parser.add_argument('--bsize', type=int, default=200, help='batch size')
 parser.add_argument('--device', type=str, default='cpu', help='torch device')
 parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
-parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+parser.add_argument(
+    '--lr-scheduler',
+    type=str,
+    default='none',
+    choices=['none', 'step'],
+    help='learning rate schedule (TGNv2 paper uses step on tgbn-trade)',
+)
+parser.add_argument(
+    '--lr-step-size', type=int, default=250, help='StepLR step size (epochs)'
+)
+parser.add_argument('--lr-gamma', type=float, default=0.5, help='StepLR decay factor')
 parser.add_argument('--time-dim', type=int, default=100, help='time encoding dimension')
 parser.add_argument('--embed-dim', type=int, default=100, help='attention dimension')
 parser.add_argument('--memory-dim', type=int, default=100, help='memory dimension')
@@ -266,6 +277,13 @@ opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,
 )
+scheduler = (
+    torch.optim.lr_scheduler.StepLR(
+        opt, step_size=args.lr_step_size, gamma=args.lr_gamma
+    )
+    if args.lr_scheduler == 'step'
+    else None
+)
 
 
 best_epoch = 0
@@ -274,6 +292,8 @@ best_val = 0
 for epoch in range(1, args.epochs + 1):
     with hm.activate('train'):
         loss, train_metric = train(train_loader, memory, encoder, decoder, opt)
+    if scheduler is not None:
+        scheduler.step()
 
     with hm.activate('val'):
         val_metric = eval(val_loader, memory, encoder, decoder, evaluator)
