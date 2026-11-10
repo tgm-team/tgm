@@ -166,6 +166,7 @@ submitit*
 
 # Benchmarks
 .benchmarks
+.claude/
 
 # TGB-seq data cache
 data/

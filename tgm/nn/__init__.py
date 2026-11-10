@@ -1,4 +1,14 @@
-from .encoder import CTAN, CTANMemory, DyGFormer, TPNet, TGCN, GCLSTM, TGNMemory
+from .encoder import (
+    CTAN,
+    CTANMemory,
+    DyGFormer,
+    EncodeIndexMessage,
+    TPNet,
+    TGCN,
+    GCLSTM,
+    TGNMemory,
+    TGNv2Memory,
+)
 from .decoder import GraphPredictor, NodePredictor, LinkPredictor, NCNPredictor
 from .encoder import (
     DyGFormer,
@@ -24,6 +34,7 @@ __all__ = [
     'CTAN',
     'CTANMemory',
     'DyGFormer',
+    'EncodeIndexMessage',
     'EdgeBankPredictor',
     'GCLSTM',
     'GraphPredictor',
@@ -36,6 +47,7 @@ __all__ = [
     'Time2Vec',
     'tCoMemPredictor',
     'TGNMemory',
+    'TGNv2Memory',
     'NCNPredictor',
     'PopTrackPredictor',
     'EncoderModule',
