@@ -284,8 +284,8 @@ class TGNv2Memory(TGNMemory):
         memory_dim: int,
         time_dim: int,
         index_dim: int,
-        message_module: Callable,
-        aggregator_module: Callable,
+        message_module: torch.nn.Module,
+        aggregator_module: torch.nn.Module,
     ):
         if index_dim <= 0:
             raise ValueError('index_dim must be positive')
