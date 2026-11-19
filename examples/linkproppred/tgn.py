@@ -86,8 +86,8 @@ def train(
         )
         nbr_edge_index = torch.stack(
             [
-                batch.global_to_local(src_nodes[nbr_mask]),
                 batch.global_to_local(nbr_nodes[nbr_mask]),
+                batch.global_to_local(src_nodes[nbr_mask]),
             ]
         ).to(dtype=torch.int64)
 
@@ -151,8 +151,8 @@ def eval(
         )
         nbr_edge_index = torch.stack(
             [
-                batch.global_to_local(src_nodes[nbr_mask]),
                 batch.global_to_local(nbr_nodes[nbr_mask]),
+                batch.global_to_local(src_nodes[nbr_mask]),
             ]
         ).to(dtype=torch.int64)
         nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
