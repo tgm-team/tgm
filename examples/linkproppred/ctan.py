@@ -18,6 +18,7 @@ from tgm.data import DGData, DGDataLoader
 from tgm.hooks import DeduplicationHook, RecencyNeighborHook, RecipeRegistry
 from tgm.nn import LinkPredictor
 from tgm.nn.encoder import CTAN, CTANMemory, LastAggregator
+from tgm.nn.modules import LearnableSumMerge
 from tgm.util.logging import enable_logging, log_gpu, log_latency, log_metric
 from tgm.util.seed import seed_everything
 
@@ -89,8 +90,8 @@ def train(
         )
         nbr_edge_index = torch.stack(
             [
-                batch.global_to_local(src_nodes[nbr_mask]),
                 batch.global_to_local(nbr_nodes[nbr_mask]),
+                batch.global_to_local(src_nodes[nbr_mask]),
             ]
         ).to(dtype=torch.int64)
 
@@ -156,8 +157,8 @@ def eval(
         )
         nbr_edge_index = torch.stack(
             [
-                batch.global_to_local(src_nodes[nbr_mask]),
                 batch.global_to_local(nbr_nodes[nbr_mask]),
+                batch.global_to_local(src_nodes[nbr_mask]),
             ]
         ).to(dtype=torch.int64)
         nbr_edge_time = batch.nbr_edge_time[0].flatten()[nbr_mask]
@@ -257,7 +258,9 @@ encoder = CTAN(
     epsilon=args.epsilon,
     gamma=args.gamma,
 ).to(args.device)
-decoder = LinkPredictor(node_dim=args.memory_dim, merge_op='sum').to(args.device)
+decoder = LinkPredictor(
+    node_dim=args.memory_dim, merge_op=LearnableSumMerge(args.memory_dim)
+).to(args.device)
 opt = torch.optim.Adam(
     set(memory.parameters()) | set(encoder.parameters()) | set(decoder.parameters()),
     lr=args.lr,
